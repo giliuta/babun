@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type Ref } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
@@ -8,9 +8,7 @@ import { iconPreset } from "@/components/ui/icon-set";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { MapPicker } from "@/features/clients/MapPicker";
 import {
-  formatCoords,
   googleMapsSearchUrl,
   type Coords,
 } from "@/features/clients/location-request-form";
@@ -18,13 +16,8 @@ import {
   AddressDetailsFields,
   AddressDetailsToggle,
 } from "@/features/clients/AddressPartsFields";
-import {
-  composeAddress,
-  composeDetails,
-  hasAddressPlace,
-} from "@/features/clients/object-address";
+import { composeDetails } from "@/features/clients/object-address";
 import { geocodeAddress } from "@/features/clients/geocode";
-import { isLikelyUrl, parseAddress } from "@babun/shared/common/utils/map-links";
 import {
   objectTypeKey,
   objectTypeVocabulary,
@@ -33,6 +26,11 @@ import {
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { ObjectMapPanel } from "@/features/clients/object-fields/ObjectMapPanel";
+import { coordsOf, objectGeoQuery } from "@/features/clients/object-fields/object-geo";
+
+// The map panel and the pure map helpers live in `object-fields/`.
+export { coordsOf } from "@/features/clients/object-fields/object-geo";
 
 // ТЕЛО ФОРМЫ ОБЪЕКТА — ОДНО НА СОЗДАНИЕ И НА ПРАВКУ (владелец 2026-09-10:
 // «если я показываю в одном месте, значит то же самое будет показывать в
@@ -147,13 +145,7 @@ export function ObjectFields({
   // точный адрес»). Ищем только пока карта раскрыта и не чаще раза в 800 мс
   // после последней буквы: служба чужая и бесплатная. Ссылку не геокодируем —
   // у неё координаты уже внутри.
-  const geoQuery = mapOpen
-    ? hasAddressPlace(value.parts)
-      ? composeAddress(value.parts, { forRoute: true })
-      : isLikelyUrl(value.target.trim())
-        ? ""
-        : value.target.trim()
-    : "";
+  const geoQuery = mapOpen ? objectGeoQuery(value) : "";
   useEffect(() => {
     if (!geoQuery) return;
     const abort = new AbortController();
@@ -269,48 +261,17 @@ export function ObjectFields({
             тянулась голая ссылка Google Maps — ровно на это ругался разбор
             ссылок 2026-07-26. */}
         {mapOpen ? (
-          <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
-            <MapPicker
-              value={pinCoords ?? coordsOf(value.target)}
-              follow={found}
-              // Точка НЕ коммитится в том же кадре: в режиме правки значение
-              // ещё не доехало до состояния, и запись ушла бы с прежним пином.
-              // Её запишет следующая точка коммита — уход с поля, «Применить»
-              // или закрытие листа, как и у полей «Точного адреса».
-              onChange={(coords) => onChange({ pin: googleMapsSearchUrl(coords) })}
-            />
-            {pinCoords ? (
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  marginTop: 8,
-                  fontSize: 13,
-                  color: t.sub,
-                  textAlign: "center",
-                }}
-              >
-                {`Точка отмечена · ${formatCoords(pinCoords)}`}
-              </Text>
-            ) : null}
-            <Pressable
-              onPress={() => {
-                haptics.tap();
-                setMapOpen(false);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Свернуть карту"
-              style={({ pressed }) => ({
-                minHeight: 40,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: pressed ? 0.5 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "600", color: t.accent }}>
-                Готово
-              </Text>
-            </Pressable>
-          </View>
+          <ObjectMapPanel
+            value={pinCoords ?? coordsOf(value.target)}
+            pinCoords={pinCoords}
+            follow={found}
+            // Точка НЕ коммитится в том же кадре: в режиме правки значение
+            // ещё не доехало до состояния, и запись ушла бы с прежним пином.
+            // Её запишет следующая точка коммита — уход с поля, «Применить»
+            // или закрытие листа, как и у полей «Точного адреса».
+            onPick={(coords) => onChange({ pin: googleMapsSearchUrl(coords) })}
+            onDone={() => setMapOpen(false)}
+          />
         ) : null}
 
         {/* ТОЧНЫЙ АДРЕС — маленькой синей строкой: это уточнение адреса, а не
@@ -404,12 +365,4 @@ export function ObjectFields({
       />
     </>
   );
-}
-
-/** Координаты из строки-ссылки, если они в ней есть: с них открывается карта,
- *  когда точку ставят повторно. */
-export function coordsOf(value: string): Coords | null {
-  const raw = value.trim();
-  if (!raw) return null;
-  return parseAddress(raw).coords ?? null;
 }

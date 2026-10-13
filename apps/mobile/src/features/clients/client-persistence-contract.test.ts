@@ -3,11 +3,20 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { clientCardSource } from "./card/source-for-tests";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) =>
   readFileSync(resolve(here, relative), "utf8");
+// Components split into an entry and a parts folder (rule of 400 lines):
+// negative guards read both, so moved code stays guarded.
+const PARTS: Record<string, string> = {
+  "blocks/ObjectsBlock.tsx": "blocks/objects-block",
+  "ClientExtraContacts.tsx": "extra-contacts",
+};
+const readWithParts = (relative: string) =>
+  readModuleSource(resolve(here, relative), PARTS[relative] && resolve(here, PARTS[relative]));
 
 describe("client native persistence contract", () => {
   test("attachments use UUIDs, tenant-scoped cache keys and DB-returned delete paths", () => {
@@ -107,7 +116,7 @@ describe("client native persistence contract", () => {
     // Экраны и блоки не собирают массив сами.
     assert.doesNotMatch(read("ObjectEditSheet.tsx"), /update\(\{\s*locations:/);
     assert.doesNotMatch(
-      read("blocks/ObjectsBlock.tsx"),
+      readWithParts("blocks/ObjectsBlock.tsx"),
       /update\(\{\s*locations:/,
     );
     assert.match(read("use-location-writer.ts"), /useJsonArrayWriter/);
@@ -132,7 +141,7 @@ describe("client native persistence contract", () => {
     // вернулось»: список людей внутри карточки — это копия чужих контактов,
     // из-за которой номер жены жил в двух местах сразу.
     for (const file of ["ClientHeader.tsx", "ClientExtraContacts.tsx"]) {
-      assert.doesNotMatch(read(file), /update\(\{\s*people:/);
+      assert.doesNotMatch(readWithParts(file), /update\(\{\s*people:/);
     }
     // Теги и заметки — те же jsonb-массивы: собственных копий механики быть
     // не должно, иначе расхождение вернётся с другой стороны.

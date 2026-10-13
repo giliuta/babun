@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { usePathname, useRouter, type Href } from "expo-router";
 import type {
@@ -6,7 +6,6 @@ import type {
   ClientMembership,
   Location,
 } from "@babun/shared/local/clients";
-import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { clientCardHref } from "@/features/clients/clients-company";
@@ -14,7 +13,6 @@ import {
   useClientsCapabilities,
   useClientsScopeOrNull,
 } from "@/features/clients/company-scope";
-import { MemberOfLine } from "@/features/clients/MemberOfLine";
 import {
   ClientLinkRows,
   type ClientLinkItem,
@@ -31,6 +29,18 @@ import {
   draftLinkParams,
   type DraftLinkParams,
 } from "@/features/clients/useClientDraft";
+import { newClientDraftHref } from "@/features/clients/people-door/draft-href";
+import { MemberOfRows } from "@/features/clients/people-door/MemberOfRows";
+import {
+  residentsLineOf,
+  type ClientPeople,
+  type ResidentProps,
+} from "@/features/clients/people-door/people-types";
+
+// The draft href, the result shapes and the «чей он» rows live in
+// `people-door/`; the draft href and the shapes are re-exported here.
+export { newClientDraftHref } from "@/features/clients/people-door/draft-href";
+export type { ClientPeople, ResidentProps } from "@/features/clients/people-door/people-types";
 
 // ЛЮДИ КАРТОЧКИ И ДВЕРЬ СВЯЗИ СТРАНИЦЫ КЛИЕНТА (STORY-086).
 //
@@ -59,54 +69,8 @@ function linkPlaceId(item: ClientLinkItem): string | null {
   return parseLinkKey(item.key)?.locationId ?? null;
 }
 
-/** Черновик нового клиента — ТОЙ ЖЕ дорогой, которой открыта карточка.
- *  Одна на обе двери черновика со связью: «Создать клиента» в шторке людей и
- *  «Разделить клиента» в «⋯» (`use-split-client.ts`) — разойдись они, одна из
- *  них положила бы вторую копию табов поверх записи. */
-export function newClientDraftHref(
-  pathname: string,
-  scope: { tenantId: string; isActive: boolean } | null,
-  params: DraftLinkParams & { split?: string },
-): Href {
-  return pathname === "/client"
-    ? { pathname: "/client", params: { id: "new", ...params } }
-    : scope && !scope.isActive
-      ? {
-          pathname: "/clients/[id]",
-          params: { id: "new", tenant: scope.tenantId, ...params },
-        }
-      : { pathname: "/clients/[id]", params: { id: "new", ...params } };
-}
-
-/** Пропы жильцов для `ClientProfileBlocks`: под объектом на странице —
- *  показание, в листе объекта — строки с ролью и единственная дверь. */
-export interface ResidentProps {
-  residentsLine?: (loc: Location) => string | undefined;
-  residentsAt?: (loc: Location) => readonly ClientLinkItem[];
-  onAddResident?: (loc: Location) => void;
-  onOpenResident: (item: ClientLinkItem) => void;
-  onResidentRole?: (item: ClientLinkItem, role: string) => void;
-  onRemoveResident?: (item: ClientLinkItem) => void;
-}
-
 /** Сколько людей показывает карточка; остальные — за дверью «Все люди». */
 export const PEOPLE_ON_CARD = 3;
-
-export interface ClientPeople {
-  /** Строки «чей он» под именем. */
-  memberOfRows: ReactNode;
-  /** Люди карточки в блоке «Клиент». */
-  peopleRows: ReactNode;
-  /** Сколько людей у карточки всего и сколько не поместилось: по ним
-   *  страница рисует дверь «Все люди · N» (владелец 22.09). */
-  peopleTotal: number;
-  peopleHidden: number;
-  /** Пункт «Человек» в листе «Добавить»; нет — пункта нет. */
-  onAddPerson?: () => void;
-  residents: ResidentProps;
-  /** Шторка выбора человека — ставится в конец экрана, вне прокрутки. */
-  door: ReactNode;
-}
 
 export function useClientPeople({
   id,
@@ -187,17 +151,9 @@ export function useClientPeople({
     (loc: Location) => members.data.filter((item) => linkPlaceId(item) === loc.id),
     [members.data],
   );
-  // ПОКАЗАНИЕ ПОД ОБЪЕКТОМ — «Мария Спиру · жилец, Андреас · жилец». Имя и
-  // роль через «·», люди через запятую: та же анатомия, что у строки связи,
-  // только без места — место здесь и есть сама строка объекта.
+  // Показание под объектом — `residentsLineOf` (people-door/people-types.ts).
   const residentsLine = useCallback(
-    (loc: Location) => {
-      const rows = residentsAt(loc);
-      if (rows.length === 0) return undefined;
-      return rows
-        .map((r) => [r.name.trim(), r.role.trim()].filter(Boolean).join(" · "))
-        .join(", ");
-    },
+    (loc: Location) => residentsLineOf(residentsAt(loc)),
     [residentsAt],
   );
 
@@ -293,34 +249,13 @@ export function useClientPeople({
   // ЧЕЙ ОН САМ — строки сразу под именем. В черновике шеврона нет: карточки,
   // на которую он указывает, отсюда ещё не открыть; зато связь можно снять.
   const memberOfRows =
-    memberOf.unnamed ? (
-      // Связи есть, назвать нечем — говорим словами, тише обычной строки, и
-      // без шеврона: вести пока некуда.
-      <MemberOfLine
-        line={memberOf.unnamed === "failed" ? "Связи не загрузились" : "Связи загружаются…"}
+    memberOf.unnamed || memberOf.data.length > 0 ? (
+      <MemberOfRows
+        memberOf={memberOf}
+        isDraft={isDraft}
+        removeDraftLink={removeDraftLink}
+        openGroup={(groupId) => router.push(cardHref(groupId))}
       />
-    ) :     memberOf.data.length > 0 ? (
-      <>
-        {memberOf.data.map((row) =>
-          isDraft ? (
-            <SwipeRow
-              key={row.key}
-              label="Убрать"
-              color={t.danger}
-              onAction={() => removeDraftLink(row.groupId)}
-              accessibilityLabel={`Убрать связь ${row.line}`}
-            >
-              <MemberOfLine line={row.line} />
-            </SwipeRow>
-          ) : (
-            <MemberOfLine
-              key={row.key}
-              line={row.line}
-              onOpen={() => router.push(cardHref(row.groupId))}
-            />
-          ),
-        )}
-      </>
     ) : null;
 
   // ЛЮДИ КАРТОЧКИ И ИХ ДВЕРЬ — В ПЕРВОМ БЛОКЕ, ПОД ДВЕРЬЮ КОНТАКТОВ (владелец

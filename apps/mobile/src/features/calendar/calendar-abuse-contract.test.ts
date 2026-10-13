@@ -452,8 +452,12 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("шестерёнка: тип события и метка не теряют набранное молча", () => {
-    for (const file of ["../reference/screens/EventTypeSheet.tsx", "../reference/screens/LabelsScreen.tsx"]) {
-      const src = readFileSync(resolve(here, file), "utf8");
+    // The label editor lives in `labels/` next to `LabelsScreen.tsx`.
+    for (const [file, parts] of [
+      ["../reference/screens/EventTypeSheet.tsx"],
+      ["../reference/screens/LabelsScreen.tsx", "../reference/screens/labels"],
+    ]) {
+      const src = readModuleSource(resolve(here, file), parts && resolve(here, parts));
       assert.match(src, /onClose=\{guard\.close\}/, file);
       assert.match(src, /onExited=\{guard\.onExited\}/, file);
     }

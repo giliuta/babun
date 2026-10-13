@@ -94,7 +94,8 @@ describe("код страны — в самом поле (владелец 12.10
   });
   test("строки номера без выбора страны: код начинает поле", () => {
     const header = read("ClientHeader.tsx");
-    const extras = read("ClientExtraContacts.tsx");
+    // Entry + parts folder: the messenger rows live in `extra-contacts/`.
+    const extras = readModuleSource(resolve(here, "ClientExtraContacts.tsx"), resolve(here, "extra-contacts"));
     for (const src of [header, extras]) {
       assert.doesNotMatch(src, /onPrefixPress|CountryPickerSheet|prefix=\{/);
     }

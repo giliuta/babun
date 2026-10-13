@@ -218,8 +218,8 @@
 
 **Канон:** `src/features/appointments/book-form/WorkObjectBlock.tsx` (запись),
 `src/features/appointments/book-form/EventObjectBlock.tsx` (событие) — части
-формы `app/book/index.tsx`, `src/features/clients/blocks/ObjectsBlock.tsx:126`
-(`ObjectRow` — строка).
+формы `app/book/index.tsx`, `src/features/clients/blocks/objects-block/ObjectRow.tsx`
+(`ObjectRow` — строка; импортируется через `src/features/clients/blocks/ObjectsBlock.tsx`).
 
 Строка объекта не копируется, а берётся та же: `ObjectRow`. В записи объект
 ВЫБИРАЮТ, поэтому справа шеврон, а заметка объекта — своей плашкой под строкой.
@@ -522,7 +522,8 @@
 | Действие («Добавить», «Как связаться») | строка-дверь | `ui/PickerSheet` | нет |
 
 **Справочники** — все по рецепту «Метки»
-(`src/features/reference/screens/LabelsScreen.tsx`): `BottomSheet`-редактор,
+(`src/features/reference/screens/LabelsScreen.tsx`, редактор —
+`src/features/reference/screens/labels/LabelEditSheet.tsx`): `BottomSheet`-редактор,
 `GradientButton` внизу, `ReorderList`, `EmptyState`, `NameColorField`.
 
 **Порядок — ручкой В САМОМ СПИСКЕ** (владелец 2026-09-12: «шесть точек справа

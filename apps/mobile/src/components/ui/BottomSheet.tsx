@@ -7,33 +7,18 @@ import {
   useState,
 } from "react";
 import {
-  Keyboard,
   Modal,
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import Animated, {
-  Easing,
-  ReduceMotion,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/lib/haptics";
-import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 import { GUTTER } from "@/components/ui/tokens";
 import { useReduceMotion } from "@/lib/reduce-motion";
@@ -44,10 +29,13 @@ import {
   newSheetId,
   pushSheet,
   removeSheet,
-  setOverlay,
   topSheet,
   useSheetStackVersion,
 } from "@/components/ui/sheet-overlay";
+import { OverlayLayers } from "@/components/ui/bottom-sheet/OverlayLayers";
+import { SheetFooter } from "@/components/ui/bottom-sheet/SheetFooter";
+import { SheetHeader } from "@/components/ui/bottom-sheet/SheetHeader";
+import { useSheetMotion } from "@/components/ui/bottom-sheet/use-sheet-motion";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
 // ЕДИНСТВЕННЫЙ способ показать выезжающую снизу панель. Заменяет собой
@@ -57,10 +45,9 @@ import {
 // Здесь скрим проявляется opacity-ом НА МЕСТЕ, а лист отдельно выезжает
 // пружиной снизу и так же уезжает вниз. Всё гейтится на Reduce Motion.
 // Правило: любой новый нижний лист = <BottomSheet>. См. DESIGN-SYSTEM.md.
-
-// Пружина входа: почти критически задемпфирована — плавный «доводчик» без
-// дешёвого пружинения. Выход — короткий ease-in вниз.
-const SPRING = { damping: 28, stiffness: 300, mass: 1 } as const;
+//
+// Parts live in `bottom-sheet/`: motion and drag gesture (`use-sheet-motion`),
+// header, footer and the overlay portal. The stack logic stays here.
 
 /** Сколько лист уезжает вниз. Экспортируется, потому что действие, которое
  *  открывает СВОЁ окно поверх (второй лист, Alert, «Поделиться»), обязано
@@ -68,11 +55,6 @@ const SPRING = { damping: 28, stiffness: 300, mass: 1 } as const;
 export const SHEET_EXIT_MS = 260;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-/** Обычная JS-функция для `runOnJS`: жест не должен захватывать `Keyboard`. */
-function dismissKeyboard() {
-  Keyboard.dismiss();
-}
 
 export function BottomSheet({
   visible,
@@ -231,10 +213,6 @@ export function BottomSheet({
     if (!isSheetOpen(host)) closeRef.current();
   }, [stackVersion, visible]);
 
-  const ty = useSharedValue(SCREEN_H); // сдвиг листа вниз (0 = на месте)
-  const scrim = useSharedValue(0); // прозрачность затемнения (0…1)
-  const sheetH = useSharedValue(0); // измеренная высота листа
-
   useEffect(() => {
     if (visible) setMounted(true);
   }, [visible]);
@@ -245,78 +223,17 @@ export function BottomSheet({
     if (!visible) target.current = null;
   }, [mounted, visible]);
 
-  useEffect(() => {
-    if (!mounted) return;
-    if (visible) {
-      // Вход: лист пружиной из-за нижнего края. Стартуем с ИЗМЕРЕННОЙ
-      // высоты (фолбэк — экран): телепорт на весь экран делал вход и
-      // выход несимметричными, вход «прилетал» из-под таб-бара.
-      ty.value = sheetH.value > 0 ? sheetH.value : screenH.current;
-      ty.value = reduced
-        ? withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) })
-        : withSpring(0, SPRING);
-      scrim.value = withTiming(1, {
-        duration: reduced ? 200 : 260,
-        easing: Easing.out(Easing.quad),
-      });
-    } else {
-      // Выход: лист вниз на свою высоту, скрим гаснет; затем размонтируем.
-      const target = sheetH.value > 0 ? sheetH.value : screenH.current;
-      ty.value = withTiming(target, {
-        duration: reduced ? 160 : 240,
-        easing: Easing.in(Easing.cubic),
-      });
-      scrim.value = withTiming(
-        0,
-        // 240 — в такт листу (было 220, скрим гас раньше панели).
-        { duration: reduced ? 160 : 240, easing: Easing.in(Easing.quad) },
-        (fin) => {
-          if (fin) runOnJS(setMounted)(false);
-        },
-      );
-    }
-  }, [mounted, visible, reduced, ty, scrim, sheetH]);
-
-  const scrimStyle = useAnimatedStyle(() => ({ opacity: scrim.value }));
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: ty.value }],
-  }));
-
-  // Свайп вниз по граберу закрывает лист (грабер это и обещает). Жест
-  // живёт только на верхней зоне — не конфликтует со скроллом тела.
-  // Тянем лист за пальцем; отпустили за порогом (или рывком) — закрываем,
-  // иначе пружиной возвращаем на место.
-  const drag = Gesture.Pan()
-    // Тянут лист вниз — клавиатура уходит первой. Иначе панель уползает ПОД
-    // клавиатуру (отдельное окно выше приложения), палец идёт, а порог
-    // закрытия не достигается: жест читается как сломанный.
-    .onStart(() => {
-      // СВОЯ ФУНКЦИЯ, А НЕ `Keyboard.dismiss` (2026-09-22): ссылка на метод
-      // тянула в worklet весь объект `Keyboard`, и вызов на потоке UI падал
-      // нативным abort — любой лист ронял приложение при свайпе за грабер.
-      runOnJS(dismissKeyboard)();
-    })
-    .onChange((e) => {
-      ty.value = Math.max(0, ty.value + e.changeY);
-      // Скрим следует за пальцем: панель уезжала, а затемнение стояло
-      // на месте до самого отпускания.
-      const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
-      scrim.value = Math.max(0, 1 - ty.value / h);
-    })
-    .onEnd((e) => {
-      const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
-      if (ty.value > h * 0.3 || e.velocityY > 800) {
-        runOnJS(onClose)();
-      } else {
-        // Возврат за пальцем не должен телепортироваться при Reduce
-        // Motion — это прямой отклик на жест, а не декорация.
-        ty.value = withSpring(0, {
-          ...SPRING,
-          reduceMotion: ReduceMotion.Never,
-        });
-        scrim.value = withTiming(1, { duration: 160 });
-      }
-    });
+  // Enter/exit animation and the drag gesture; its effect runs after the two
+  // above, in the same order as before the split.
+  const { sheetH, scrimStyle, sheetStyle, drag } = useSheetMotion({
+    mounted,
+    visible,
+    reduced,
+    screenH,
+    SCREEN_H,
+    setMounted,
+    onClose,
+  });
 
   if (!mounted) return null;
 
@@ -354,77 +271,13 @@ export function BottomSheet({
           всегда. Заголовок ничего не нажимает, поэтому конфликта нет, а
           площадь жеста вырастает до нормальной. */}
       {grabber || shown.title ? (
-        <GestureDetector gesture={drag}>
-          <View>
-            {grabber ? (
-              <View className="items-center pb-1 pt-2.5">
-                <View
-                  style={{
-                    width: 36,
-                    height: 5,
-                    borderRadius: 3,
-                    // «Чёрное не серое»: separator на surface ~1.1:1 — жест
-                    // обещан, а язычка не видно. Ink+alpha, как у системного.
-                    backgroundColor: "rgba(11,18,32,0.14)",
-                  }}
-                />
-              </View>
-            ) : null}
-            {shown.title ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingTop: grabber ? 4 : 12,
-                  paddingBottom: 12,
-                }}
-              >
-                {/* Заголовок остаётся ПО ЦЕНТРУ ЛИСТА: пустышка слева той же
-                    ширины, что действие справа, иначе имя уезжает влево тем
-                    сильнее, чем крупнее системный шрифт. */}
-                <View style={{ width: 44 }} />
-                <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
-                  <Text
-                    accessibilityRole="header"
-                    maxFontSizeMultiplier={1.2}
-                    numberOfLines={1}
-                    style={{
-                      fontSize: 17,
-                      fontWeight: "600",
-                      textAlign: "center",
-                      color: t.ink,
-                    }}
-                  >
-                    {shown.title}
-                  </Text>
-                  {shown.subtitle ? (
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      numberOfLines={1}
-                      style={{
-                        marginTop: 2,
-                        fontSize: 13,
-                        textAlign: "center",
-                        color: t.sub,
-                      }}
-                    >
-                      {shown.subtitle}
-                    </Text>
-                  ) : null}
-                </View>
-                <View
-                  style={{
-                    width: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {shown.headerAction}
-                </View>
-              </View>
-            ) : null}
-          </View>
-        </GestureDetector>
+        <SheetHeader
+          drag={drag}
+          grabber={grabber}
+          title={shown.title}
+          subtitle={shown.subtitle}
+          headerAction={shown.headerAction}
+        />
       ) : null}
       {scroll ? (
         <ScrollView
@@ -513,44 +366,5 @@ export function BottomSheet({
         <SheetOverlayOutlet id={sheetId} />
       </GestureHandlerRootView>
     </Modal>
-  );
-}
-
-/** Слои листа-накладки уходят в окно листа под ним (`SheetOverlayOutlet`). */
-function OverlayLayers({ target, layers }: { target: string; layers: ReactNode }) {
-  useLayoutEffect(() => {
-    setOverlay(target, layers);
-  });
-  useEffect(() => () => clearOverlay(target), [target]);
-  return null;
-}
-
-/** Подвал листа — ЕДИНСТВЕННОЕ место, где лист платит нижний безопасный
- *  отступ. Отдельным компонентом, чтобы подписка на клавиатуру жила только у
- *  листов с подвалом: `BottomSheet` смонтирован у экрана всегда (закрытый он
- *  просто рисует null), и общий хук подписал бы на события клавиатуры все
- *  листы экрана разом.
- *
- *  Под клавиатурой отступ меньше: её кадр на iOS уже включает полосу
- *  home-индикатора, и обе высоты вместе давали ~34pt пустоты, которые потолок
- *  листа отбирал у содержимого. */
-function SheetFooter({
-  children,
-  padded,
-}: {
-  children: ReactNode;
-  padded?: boolean;
-}) {
-  const insets = useSafeAreaInsets();
-  const keyboardShown = useKeyboardShown();
-  return (
-    <View
-      style={{
-        paddingHorizontal: padded ? GUTTER : 0,
-        paddingBottom: keyboardShown ? 12 : Math.max(insets.bottom, 16),
-      }}
-    >
-      {children}
-    </View>
   );
 }

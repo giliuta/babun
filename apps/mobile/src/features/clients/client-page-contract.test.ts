@@ -16,7 +16,8 @@ const page = () => clientCardSource();
 const cardPage = () => clientCardPageSource();
 // Люди карточки, жильцы и дверь связи вынесены со страницы (правило 400 строк):
 // сторожа ниже смотрят туда, где этот код живёт теперь.
-const people = () => read("ClientPeopleDoor.tsx");
+// Its result shapes, draft href and «чей он» rows live in `people-door/`.
+const people = () => readModuleSource(resolve(here, "ClientPeopleDoor.tsx"), resolve(here, "people-door"));
 const door = () => read("ClientLinkDoor.tsx");
 
 // СТРАНИЦА КЛИЕНТА: ФУТЕР, ЛЮДИ КАРТОЧКИ, ЖИЛЬЦЫ (STORY-086, волна 2).
@@ -109,8 +110,10 @@ describe("люди карточки — только у сохранённой �
     assert.match(src, /onDraftAddPerson: \(\) => onDraftDoor\("person"\)/, "дверь в черновике не создаёт клиента");
     assert.match(src, /void saveDraft\(\{ open \}\)/, "дверь черновика не создаёт клиента");
     assert.match(src, /openPersonOnArrive: !isDraft && openOnArrive === "person"/, "карточка после создания не поднимает «Кто это»");
-    for (const file of ["AddContactSheet.tsx", "ClientExtraContacts.tsx"]) {
-      assert.ok(!/onPerson|onAddPerson|label: "Человек"/.test(read(file)), `${file} снова прячет людей в лист контактов`);
+    // `ClientExtraContacts` is read with its parts folder `extra-contacts/`.
+    for (const [file, parts] of [["AddContactSheet.tsx"], ["ClientExtraContacts.tsx", "extra-contacts"]]) {
+      const src = readModuleSource(resolve(here, file), parts && resolve(here, parts));
+      assert.ok(!/onPerson|onAddPerson|label: "Человек"/.test(src), `${file} снова прячет людей в лист контактов`);
     }
   });
 
@@ -671,7 +674,11 @@ describe("дубль номера не заводится — плашка св�
     assert.doesNotMatch(src, /footer: \(\s*<ClientDraftNotice/);
   });
   test("страницы «Дубли» больше нет", () => {
-    assert.doesNotMatch(read("../../../app/(dashboard)/clients/settings.tsx"), /clients\/duplicates/);
+    // The route is thin; the page lives in `settings-page/`.
+    assert.doesNotMatch(
+      readModuleSource(resolve(here, "../../../app/(dashboard)/clients/settings.tsx"), resolve(here, "settings-page")),
+      /clients\/duplicates/,
+    );
   });
   test("создать при найденном дубле нельзя", () => {
     assert.match(read("useClientDraft.ts"), /gate\.duplicate/);

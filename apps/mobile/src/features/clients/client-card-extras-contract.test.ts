@@ -14,6 +14,10 @@ import { clientCardPageSource, clientCardSource } from "./card/source-for-tests"
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
+// Split into an entry and a parts folder (rule of 400 lines): the guards read both.
+const objectsBlock = () =>
+  readModuleSource(resolve(here, "blocks/ObjectsBlock.tsx"), resolve(here, "blocks/objects-block"));
+const peopleDoor = () => readModuleSource(resolve(here, "ClientPeopleDoor.tsx"), resolve(here, "people-door"));
 
 describe("«был …» у объекта", () => {
   test("карточка клиента считает дату по записям и отдаёт блоку", () => {
@@ -24,7 +28,7 @@ describe("«был …» у объекта", () => {
   });
 
   test("дата стоит в третьей строке рядом с заметкой, а не этажом ниже", () => {
-    const row = read("blocks/ObjectsBlock.tsx");
+    const row = objectsBlock();
     assert.match(row, /\[visited, note\]\.filter\(Boolean\)\.join\(" · "\)/);
     assert.match(row, /lastVisit=\{lastVisitFor\?\.\(loc\)\}/);
   });
@@ -103,7 +107,7 @@ describe("убираем свайпом, без вопросов", () => {
     const links = read("blocks/ClientLinksBlock.tsx");
     assert.doesNotMatch(links, /confirmThen/);
     assert.match(links, /onAction=\{\(\) => \{\s*\/\/[\s\S]{0,200}suppressRoleCommit\(item\.key\);\s*onRemove\(item\);/);
-    assert.doesNotMatch(read("ClientPeopleDoor.tsx"), /confirmThen/);
+    assert.doesNotMatch(peopleDoor(), /confirmThen/);
     const req = read("blocks/RequisitesBlock.tsx");
     assert.doesNotMatch(req, /confirmThen/);
     assert.match(req, /void writer\.removeRequisites\(set\.id\)\.then/);
@@ -111,7 +115,7 @@ describe("убираем свайпом, без вопросов", () => {
   test("…но с «Отменить» в подсказке (аудит 23.09)", () => {
     const req = read("blocks/RequisitesBlock.tsx");
     assert.match(req, /label: "Отменить"/);
-    const door = read("ClientPeopleDoor.tsx");
+    const door = peopleDoor();
     assert.match(door, /onPress: \(\) => void linkWriter\.restore\(item\)/);
     assert.match(read("use-link-writer.ts"), /restore\(item: ClientLinkItem\): Promise<boolean>;/);
   });
@@ -133,7 +137,7 @@ describe("заметки: клиента — наверху, объекта — 
     assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /<NotesBlock/);
   });
   test("у каждого объекта своя плашка заметки", () => {
-    const objects = read("blocks/ObjectsBlock.tsx");
+    const objects = objectsBlock();
     assert.match(objects, /<ObjectNote loc=\{loc\} ownerKey=\{client\.id\} onSave=\{onNote\} \/>/);
     assert.match(objects, /useInlineNote<string>/);
     assert.match(objects, /placeholder="Заметка объекта"/);
@@ -154,7 +158,7 @@ describe("длинные списки — своей страницей", () => 
     const section = read("ClientObjectsSection.tsx");
     assert.match(section, /cardObjectId\(client\.locations \?\? EMPTY_LOCATIONS, lastVisits\)/);
     assert.match(read("ClientProfileBlocks.tsx"), /single=\{!draft\}/);
-    const objects = read("blocks/ObjectsBlock.tsx");
+    const objects = objectsBlock();
     assert.match(objects, /single \? onOpenAll : onOpen \? \(\) => onOpen\(loc\.id\) : undefined/);
     // «Все объекты» остаются у списка с пределом.
     assert.match(objects, /rest > 0 && onOpenAll \?/);
@@ -175,7 +179,7 @@ describe("длинные списки — своей страницей", () => 
 describe("люди и реквизиты — тоже своими страницами", () => {
   // Владелец 22.09: «то же самое можно сделать с людьми и с реквизитами».
   test("на карточке первые строки и дверь «Все …»", () => {
-    assert.match(read("ClientPeopleDoor.tsx"), /export const PEOPLE_ON_CARD = 3;/);
+    assert.match(peopleDoor(), /export const PEOPLE_ON_CARD = 3;/);
     // Реквизиты с 03.10 — как «История»: на карточке один набор, основной,
     // тап по нему — страница всех (двери «Все реквизиты» нет).
     assert.match(read("blocks/RequisitesBlock.tsx"), /const shown = single \? ordered\.slice\(0, 1\) : ordered;/);
@@ -222,7 +226,7 @@ describe("аудит 23.09 — то, что чинили", () => {
     assert.match(read("RequisitesSheet.tsx"), /const ok = await onSave\(fieldsOf\(form\)\);\s*setSaving\(false\);\s*if \(!ok\) return;/);
   });
   test("на своей странице блок без второй шапки", () => {
-    assert.match(read("blocks/ObjectsBlock.tsx"), /<SectionCard\s+title=\{bare \? undefined : "Объекты"\}/);
+    assert.match(objectsBlock(), /<SectionCard\s+title=\{bare \? undefined : "Объекты"\}/);
     // Своя страница реквизитов (03.10) — плашки без карточки и шапки.
     assert.match(read("blocks/RequisitesBlock.tsx"), /if \(bare\) \{\s*return \(\s*<>/);
   });
