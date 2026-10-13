@@ -1904,7 +1904,7 @@
  "Мне должны": "Owed to me",
  "Многоэтажка": "Block of flats",
  "Мобильный": "Mobile",
- "Модуль экспорта ещё не установлен в текущую сборку. Обновите iOS-приложение и попробуйте снова.": "The export module isn't in this build yet. Update the iOS app and try again.",
+ "Модуль экспорта ещё не установлен в текущую сборку. Обновите приложение и попробуйте снова.": "The export module isn't in this build yet. Update the app and try again.",
  "Может": "Allowed",
  "Можно вернуть до {0}": "Up to {0} can be refunded",
  "Можно выбрать несколько": "You can select several",

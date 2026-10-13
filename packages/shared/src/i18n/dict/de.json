@@ -1904,7 +1904,7 @@
  "Мне должны": "Man schuldet mir",
  "Многоэтажка": "Wohnblock",
  "Мобильный": "Mobil",
- "Модуль экспорта ещё не установлен в текущую сборку. Обновите iOS-приложение и попробуйте снова.": "Das Exportmodul ist in diesem Build noch nicht enthalten. Aktualisieren Sie die iOS-App und versuchen Sie es erneut.",
+ "Модуль экспорта ещё не установлен в текущую сборку. Обновите приложение и попробуйте снова.": "Das Exportmodul ist in diesem Build noch nicht enthalten. Aktualisieren Sie die App und versuchen Sie es erneut.",
  "Может": "Erlaubt",
  "Можно вернуть до {0}": "Bis zu {0} erstattbar",
  "Можно выбрать несколько": "Mehrfachauswahl möglich",
