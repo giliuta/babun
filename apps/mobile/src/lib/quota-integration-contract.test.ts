@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 
 const MOBILE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -22,7 +23,7 @@ function ordered(sourceText: string, first: string, second: string): void {
 
 describe("mobile create quota integration", () => {
   test("client and appointment hooks preflight before the cached create", () => {
-    const clients = source("src/features/clients/queries.ts");
+    const clients = readModuleSource(path.join(MOBILE_ROOT, "src/features/clients/queries.ts"));
     const appointments = source("src/features/calendar/mutations.ts");
 
     ordered(clients, "await preflightQuotaForCreate", "return createClientCached");

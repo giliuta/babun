@@ -31,6 +31,7 @@ import { getActiveTenantId } from "@/lib/active-tenant";
 import { notify } from "./notify";
 import { queryClient } from "@/lib/query-client";
 import { quotaGate } from "@/lib/quota-gate";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // Infer the options from the public function so this host adapter stays in
 // lockstep with the shared replayer contract.
@@ -60,8 +61,8 @@ function buildReplayerOptions(
     },
     onChanged: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["client-tags"] });
+      queryClient.invalidateQueries({ queryKey: clientKeys.all() });
+      queryClient.invalidateQueries({ queryKey: clientKeys.tagAll() });
     },
   };
 }

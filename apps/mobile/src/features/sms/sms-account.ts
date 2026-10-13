@@ -24,6 +24,7 @@ import {
   type SmsTeamTemplate,
   type TemplateDraft,
 } from "./sms-team-templates";
+import { clientKeys } from "@/features/clients/query-keys";
 
 export * from "./sms-model";
 export * from "./sms-team-templates";
@@ -488,8 +489,8 @@ export function useSetClientSmsOptOut() {
     // одного `["clients"]` шторка трубки ещё предлагала «Отправить от
     // компании» клиенту, который просил не писать, — сервер отвечал отказом.
     onSettled: (_value, _error, input) => {
-      void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["client", input.clientId] });
+      void qc.invalidateQueries({ queryKey: clientKeys.all() });
+      void qc.invalidateQueries({ queryKey: clientKeys.card(input.clientId) });
     },
     meta: { errorHandled: true },
   });

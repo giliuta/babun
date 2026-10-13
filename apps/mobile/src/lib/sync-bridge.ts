@@ -38,6 +38,7 @@ import {
   subscribeClaimSettled,
 } from "@/lib/claim-resync-plan";
 import { isKnownChange, ownWindowEndsAt, takeMissedChange } from "@/lib/own-writes";
+import { clientKeys } from "@/features/clients/query-keys";
 
 /** Строки записей во всех списках кэша — версия каждой (`updated_at`). */
 function* cachedAppointmentRows(
@@ -72,7 +73,7 @@ function invalidate(qc: QueryClient, table: CachedTable): void {
   // marks matching queries stale and refetches the ACTIVE tenant's row via RLS,
   // so there is no cross-tenant read and no cost when no card is open.
   if (table === "clients") {
-    void qc.invalidateQueries({ queryKey: ["client"] });
+    void qc.invalidateQueries({ queryKey: clientKeys.cardAll() });
   }
 }
 

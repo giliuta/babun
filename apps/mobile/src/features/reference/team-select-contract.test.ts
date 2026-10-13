@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "@/lib/module-source";
 
 // КОМАНДА ЖИВЁТ ТОЛЬКО В `select`.
 //
@@ -21,8 +21,9 @@ function stripComments(source: string): string {
     .replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 }
 
+// Split data layers (barrel + folder) are read whole: see `module-source.ts`.
 const sourceOf = (rel: string): string =>
-  stripComments(readFileSync(join(here, rel), "utf8"));
+  stripComments(readModuleSource(join(here, rel)));
 
 /** Тело хука до следующего `export`, пробелы схлопнуты. */
 function hookBody(source: string, hook: string): string {
@@ -61,7 +62,7 @@ describe("метки дня: ключ компании, команда — selec
     );
     assert.match(
       source,
-      /import \{[^}]*\bpickTeamLabels\b[^}]*\} from "\.\/reference-select"/,
+      /import \{[^}]*\bpickTeamLabels\b[^}]*\} from "\.\.\/reference-select"/,
     );
   });
 

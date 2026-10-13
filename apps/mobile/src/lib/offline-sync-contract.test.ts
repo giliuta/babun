@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 
 // АУДИТ РАБОТЫ БЕЗ СЕТИ 03.10. Мутация react-query по умолчанию
 // (`networkMode: "online"`) без сети ставится НА ПАУЗУ В ПАМЯТИ: обёртки
@@ -29,7 +30,7 @@ describe("работа без сети: правки не ждут в памят
   });
 
   test("мутации клиентов и тегов не встают на паузу без сети", () => {
-    const src = read("features/clients/queries.ts");
+    const src = readModuleSource(resolve(here, "..", "features/clients/queries.ts"));
     const { mutations, neverPause } = unpausedCount(src);
     assert.ok(mutations > 0);
     assert.ok(neverPause >= mutations, `${neverPause} < ${mutations}`);

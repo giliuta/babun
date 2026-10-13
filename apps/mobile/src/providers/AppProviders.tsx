@@ -21,6 +21,7 @@ import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
 import type { MemberAccessMap } from "@/features/access/access-map";
 import { isNewerAccess } from "@/features/access/my-access";
 import { myAccessQueryKey } from "@/lib/company-query-keys";
+import { referenceKeys } from "@/features/reference/query-keys";
 
 /** Mounts the offline-sync replayer subscription for the app lifetime.
  *  Native-only: the replayer drains the SQLite queue via getSql(), which is
@@ -116,7 +117,7 @@ function AccessSignalsMount() {
         ?.tenant_id;
       if (typeof tenantId === "string") {
         void queryClient.invalidateQueries({ queryKey: ["calendar-members", tenantId] });
-        void queryClient.invalidateQueries({ queryKey: ["masters", tenantId] });
+        void queryClient.invalidateQueries({ queryKey: referenceKeys.mastersOfTenant(tenantId) });
       }
     });
     // ПРАВА МЕНЯЮТСЯ СРАЗУ (владелец 15.09: «чтоб всё сразу менялось в живом

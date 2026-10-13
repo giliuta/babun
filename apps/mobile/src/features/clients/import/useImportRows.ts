@@ -27,6 +27,7 @@ import {
   type ImportResumeState,
 } from "./resume";
 import { importClientId, rowToClient } from "./import-client";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // Parallel round-trips per chunk. Same 10 the existing importer uses — the
 // repo has no array-insert, so «batch» on mobile = a bounded Promise.all.
@@ -204,7 +205,7 @@ export function useImportRows() {
     },
     // Refresh the list even on partial failure so the rows that WERE created
     // show up (and a retry sees them as duplicates).
-    onSettled: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: clientKeys.all() }),
     meta: { errorHandled: true }, // the wizard surfaces errors in its result step
   });
 }

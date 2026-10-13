@@ -38,6 +38,7 @@ import { useTenantId } from "@/lib/tenant";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
+import { clientKeys } from "@/features/clients/query-keys";
 
 const MAX_ATTEMPTS = 3;
 
@@ -137,8 +138,8 @@ export default function SyncStatusScreen() {
             }
             await Promise.all([
               queryClient.invalidateQueries({ queryKey: ["appointments"] }),
-              queryClient.invalidateQueries({ queryKey: ["clients"] }),
-              queryClient.invalidateQueries({ queryKey: ["client-tags"] }),
+              queryClient.invalidateQueries({ queryKey: clientKeys.all() }),
+              queryClient.invalidateQueries({ queryKey: clientKeys.tagAll() }),
             ]);
             await refresh();
           } catch (error) {

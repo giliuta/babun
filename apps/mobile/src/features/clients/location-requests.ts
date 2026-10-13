@@ -7,6 +7,7 @@ import {
   locationRequestState,
   type LocationRequest,
 } from "@/features/clients/location-request-link";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» — данные (STORY-077). Чистые правила —
 // в location-request-link.ts, действия с тостами и «Поделиться» — в
@@ -64,8 +65,8 @@ export function useLocationRequests(clientId: string | null) {
       else if (state === "used" && seenPending.current.delete(r.id)) arrived = true;
     }
     if (!arrived) return;
-    void qc.invalidateQueries({ queryKey: ["clients"] });
-    void qc.invalidateQueries({ queryKey: ["client"] });
+    void qc.invalidateQueries({ queryKey: clientKeys.all() });
+    void qc.invalidateQueries({ queryKey: clientKeys.cardAll() });
     toast("Клиент прислал адрес", "success");
   }, [query.data, qc, toast]);
 

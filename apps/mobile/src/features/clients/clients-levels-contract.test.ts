@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // КЛИЕНТЫ СЛУШАЮТСЯ УРОВНЕЙ — СТОРОЖ ПРАВИЛА (STORY-082, владелец 19.09).
 //
@@ -1083,7 +1084,7 @@ describe("экраны: вкладка «Клиенты» открывается
   });
 
   test("хуки клиентов читают источник, а не активную компанию", () => {
-    const queries = readFileSync(join(here, "queries.ts"), "utf8");
+    const queries = readModuleSource(join(here, "queries.ts"));
     for (const hook of ["useClients", "useClient", "useClientTags", "useCreateClient", "useArchiveClients"]) {
       const at = queries.indexOf(`export function ${hook}(`);
       assert.ok(at >= 0, `нет хука ${hook}`);

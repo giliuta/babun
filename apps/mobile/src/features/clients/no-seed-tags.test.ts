@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ГОТОВЫХ ТЕГОВ НЕТ (владелец 30.09 и 1.10: «не надо делать стандартные теги
 // типа „Постоянные“ — пользователь системы сам разрабатывает свои теги»).
@@ -27,7 +28,7 @@ describe("готовых тегов клиентов нет", () => {
     const app = resolve(here, "../../../app");
     const tags = readFileSync(join(app, "(dashboard)/clients/tags.tsx"), "utf8");
     assert.match(tags, /useCreateClientTag\(\)/);
-    const queries = readFileSync(join(here, "queries.ts"), "utf8");
+    const queries = readModuleSource(join(here, "queries.ts"));
     assert.doesNotMatch(queries, /["']Постоянн|["']VIP["']/);
   });
 });

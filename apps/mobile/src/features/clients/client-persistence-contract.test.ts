@@ -24,7 +24,7 @@ describe("client native persistence contract", () => {
     );
     assert.match(
       source,
-      /queryKey: \["client-attachments", tenantId, clientId\]/,
+      /queryKey: clientKeys\.attachments\(tenantId, clientId\)/,
     );
   });
 

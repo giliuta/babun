@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { uploadAttachment } from "@/features/clients/card-attachments";
 import { RetryableAppointmentPhotoUploadError, uploadAppointmentAssets } from "./appointment-photos";
 import type { PendingFile } from "./appointment-files";
+import { clientKeys } from "@/features/clients/query-keys";
 
 export { pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
 
@@ -58,6 +59,6 @@ export async function uploadPendingFiles(args: {
     }
   }
   void args.queryClient.invalidateQueries({ queryKey: ["appointment-photos"] });
-  void args.queryClient.invalidateQueries({ queryKey: ["client-attachments"] });
+  void args.queryClient.invalidateQueries({ queryKey: clientKeys.attachmentAll() });
   return failed;
 }
