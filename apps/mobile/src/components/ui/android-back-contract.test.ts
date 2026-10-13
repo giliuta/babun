@@ -31,15 +31,21 @@ test("кнопки мессенджеров клиента не молчат, к
   assert.match(src, /Linking\.openURL\(url\)\.catch\(\(\) =>\s*notify\(/);
 });
 
-test("экраны над табами (`(shared)`) не прячут подвал под навигацию Android", () => {
-  const layout = read("../../../app/(shared)/_layout.tsx");
-  assert.match(layout, /paddingBottom: Platform\.OS === "android" \? insets\.bottom : 0/);
+test("экраны над табами держат низ над навигацией Android — ровно один раз", () => {
+  // Стек группы говорит экрану «ты над табами», а низ экран берёт сам: отступ
+  // стека поверх удваивался у экранов, которые над табами и так берут низ.
+  for (const f of ["../../../app/(shared)/_layout.tsx", "../../../app/invoices/_layout.tsx", "../../../app/documents/_layout.tsx"]) {
+    const layout = read(f);
+    assert.match(layout, /<OverTabs value>/, f);
+    assert.doesNotMatch(layout, /insets\.bottom/, f);
+  }
+  const screen = read("Screen.tsx");
+  assert.match(screen, /useContext\(OverTabsContext\) && Platform\.OS === "android"/);
+  assert.match(screen, /edge === "bottom" && overTabs/);
 });
 
-test("инвойсы и чеки над табами тоже держат отступ навигации Android", () => {
-  for (const f of ["../../../app/invoices/_layout.tsx", "../../../app/documents/_layout.tsx"]) {
-    assert.match(read(f), /paddingBottom: Platform\.OS === "android" \? insets\.bottom : 0/, f);
-  }
+test("корень вкладки «Офис» не берёт низ: его закрывает таб-бар", () => {
+  assert.match(read("../../../app/(dashboard)/cabinet/index.tsx"), /<Screen edges=\{\["top"\]\}>/);
 });
 
 test("«Назад» выходит из режима корневой вкладки, а не сворачивает приложение", () => {
