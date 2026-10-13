@@ -122,7 +122,13 @@ export default function NewInvoiceScreen() {
   const submit = async (value: InvoiceEditorValue) => {
     if (editId) {
       const { link_to_tx_id: _link, ...draft } = value;
-      await update.mutateAsync(draft);
+      const saved = await update.mutateAsync(draft);
+      if (value.language && saved.language !== value.language) {
+        notify(
+          "Изменения сохранены, язык бумаги не сохранился",
+          "Документ на прежнем языке. Смените его ещё раз через «Изменить инвойс» в «⋯».",
+        );
+      }
       // Сохранён — тот же номер, назад к его странице.
       leavingRef.current = true;
       back();
