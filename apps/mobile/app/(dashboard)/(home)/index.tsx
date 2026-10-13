@@ -102,7 +102,6 @@ import {
   type SlotDraft,
 } from "@/features/calendar/BookSlotSheet";
 import { CalendarNotice } from "@/features/calendar/CalendarNotice";
-import { dayMonthLabel } from "@/features/calendar/day-month-label";
 import {
   useDayCities,
   useSetDayCity,
@@ -220,9 +219,6 @@ import {
 } from "@babun/shared/local/schedule";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { useSession } from "@/providers/SessionProvider";
-
-/** Сколько живёт плашка «время прошло / нерабочее — всё равно записать?». */
-const NOTICE_LIFETIME_MS = 8000;
 
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
 // Персист выбранного вида и команды (mode/teamId) между запусками — ПО
@@ -1421,21 +1417,15 @@ export default function CalendarTab() {
   const [slotDraft, setSlotDraft] = useState<SlotDraft | null>(null);
   /** Вопрос, накрывший шапку: «время нерабочее / уже прошло — всё равно?» */
   const [notice, setNotice] = useState<{
-    /** Новый тап — новая плашка: время на ней сменилось, полоска жизни и
-     *  таймер начинаются заново (владелец 13.10: «если тапаю ещё раз — время
-     *  должно обновляться»). */
-    id: number;
-    /** Какое время тапнули: «11:00» сегодня, «12 октября, 11:00» — в другой день. */
-    when: string;
     message: string;
     onAction: () => void;
   } | null>(null);
-  // «Временно перекрывает» — значит уходит сама. Восемь секунд (владелец
-  // 13.10: плашку не замечали — ей нужно время, чтобы её увидели и успели
-  // нажать «Записать»); не ждать — смахнуть вверх.
+  // «Временно перекрывает» — значит уходит сама. Пять секунд: столько живёт
+  // тост с кнопкой, и месяц с переключателем вида не должны быть закрыты
+  // дольше, чем человек читает одну строку.
   useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), NOTICE_LIFETIME_MS);
+    const timer = setTimeout(() => setNotice(null), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
   // Вопрос задан про КОНКРЕТНУЮ сетку: чужая команда, другой вид или
@@ -3012,13 +3002,7 @@ export default function CalendarTab() {
         : null;
     if (reason) {
       haptics.warning();
-      const [ny, nm, nd] = dateYmd.split("-").map(Number);
       setNotice({
-        id: Date.now(),
-        when:
-          dateYmd === todayYmd
-            ? timeStart
-            : `${dayMonthLabel(new Date(ny, nm - 1, nd))}, ${timeStart}`,
         message: reason,
         onAction: () => {
           setNotice(null);
@@ -3290,12 +3274,9 @@ export default function CalendarTab() {
       />
       {notice ? (
         <CalendarNotice
-          key={notice.id}
-          when={notice.when}
           message={notice.message}
           actionLabel="Записать"
           onAction={notice.onAction}
-          onDismiss={() => setNotice(null)}
         />
       ) : null}
       </View>
