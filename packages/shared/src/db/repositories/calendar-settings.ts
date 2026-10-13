@@ -25,22 +25,7 @@ import {
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["calendar_settings"]["Row"];
-
-/** Колонки цвета записи. Сгенерированный `database.types.ts` отстал от базы
- *  (в нём нет ни `start_minute`, ни `show_day_finance`, ни этих трёх), и
- *  соседние поля здесь читаются через `as any`. Для новых — узкий тип: канон
- *  запрещает `any`, а делать вид, что колонок нет, нельзя. Уйдёт сам, когда
- *  типы перегенерируют. */
-type RecordColorColumns = {
-  record_color_rule: string | null;
-  record_color_palette: unknown;
-  record_color_fallback: string | null;
-};
-/** Функции компании и порядок блоков записи (миграция 20260924140000). */
-type FeatureColumns = {
-  disabled_features: string[] | null;
-  booking_block_order: string[] | null;
-};
+type Insert = Database["public"]["Tables"]["calendar_settings"]["Insert"];
 
 const blockOrderOf = (raw: unknown): string[] | undefined =>
   Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : undefined;
@@ -67,65 +52,38 @@ function repositoryError(
 }
 
 function rowToSettings(r: Row): CalendarSettings {
-  // Validate grid_step at the type boundary — the DB check constraint
-  // already restricts to 15/30/60, so the cast is safe.
-  // v493 — personal_labels round-trip. Old rows (pre-migration
-  // 20260513_001) lack the column; the typed Row may not even have
-  // it. Read defensively via an indexed cast so the repo still works
-  // against an outdated Supabase project.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawLabels = (r as any).personal_labels;
+  // `personal_labels` is jsonb: keep only the string entries.
+  const rawLabels = r.personal_labels;
   const personalLabels: string[] | undefined = Array.isArray(rawLabels)
-    ? rawLabels.filter((x: unknown): x is string => typeof x === "string")
+    ? rawLabels.filter((x): x is string => typeof x === "string")
     : undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawDefault = (r as any).personal_default_label;
   const personalDefaultLabel: string | undefined =
-    typeof rawDefault === "string" && rawDefault.length > 0
-      ? rawDefault
-      : undefined;
+    r.personal_default_label || undefined;
   return {
     startHour: r.start_hour,
     endHour: r.end_hour,
-    // Отставший проект типов: колонка приезжает с сервера, но в
-    // database.types.ts её ещё нет. `?? false` — действующий тенант
-    // остаётся в РУЧНОМ режиме: его зона уже отвечает про его бизнес,
-    // и переписывать её задним числом нельзя.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    // Минуты окна приезжают отдельным полем (миграция
-    // 20260817090000_calendar_window_minutes): час остался часом, чтобы
-    // не переписанный читатель не принял 510 минут за 510-й час.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    startMinute: (r as any).start_minute ?? 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    endMinute: (r as any).end_minute ?? 0,
+    // Minutes of the window are a separate column (migration
+    // 20260817090000_calendar_window_minutes): the hour stays an hour, so a
+    // reader that ignores minutes never takes 510 minutes for hour 510.
+    startMinute: r.start_minute,
+    endMinute: r.end_minute,
     timezone: r.timezone,
     bufferMinutes: r.buffer_minutes,
     hideCancelled: r.hide_cancelled,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    showDayFinance: (r as any).show_day_finance ?? true,
-    // v449 — round-trip work / scroll-open hours through Supabase.
-    // Older rows return null here; the caller's sanitizer fills them
-    // with the visible-range defaults so the form never crashes.
-    // Cast to any: post-Sprint #3 migrations regen dropped these
-    // columns from the generated Database type even though the live
-    // schema still carries them on older tenants. Graceful-fallback
-    // below (line 142) handles the «column does not exist» 42703 case.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    workStartHour: (r as any).work_start_hour ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    workEndHour: (r as any).work_end_hour ?? undefined,
+    showDayFinance: r.show_day_finance,
+    // NULL work hours: the caller's sanitizer fills them with the visible
+    // range, so the form never sees a hole.
+    workStartHour: r.work_start_hour ?? undefined,
+    workEndHour: r.work_end_hour ?? undefined,
     personalLabels,
     personalDefaultLabel,
     ...sanitizeRecordColorSettings({
-      rule: (r as Row & Partial<RecordColorColumns>).record_color_rule,
-      palette: (r as Row & Partial<RecordColorColumns>).record_color_palette,
-      fallback: (r as Row & Partial<RecordColorColumns>).record_color_fallback,
+      rule: r.record_color_rule,
+      palette: r.record_color_palette,
+      fallback: r.record_color_fallback,
     }),
-    disabledFeatures: sanitizeDisabledFeatures(
-      (r as Row & Partial<FeatureColumns>).disabled_features,
-    ),
-    bookingBlockOrder: blockOrderOf((r as Row & Partial<FeatureColumns>).booking_block_order),
+    disabledFeatures: sanitizeDisabledFeatures(r.disabled_features),
+    bookingBlockOrder: blockOrderOf(r.booking_block_order),
   };
 }
 
@@ -167,13 +125,8 @@ export async function getOperationalCalendarSettings(
   return {
     startHour: row.start_hour,
     endHour: row.end_hour,
-    // Мастерский срез приходит из RPC, и минут в его сигнатуре пока нет —
-    // рельс мастера просто встаёт на целый час. Добавить их в
-    // `read_operational_calendar_settings_safe` можно тем же приёмом.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    startMinute: (row as any).start_minute ?? 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    endMinute: (row as any).end_minute ?? 0,
+    startMinute: row.start_minute ?? 0,
+    endMinute: row.end_minute ?? 0,
     timezone: row.timezone,
     bufferMinutes: row.buffer_minutes,
     hideCancelled: row.hide_cancelled,
@@ -186,19 +139,14 @@ export async function getOperationalCalendarSettings(
     // С 24.09 (STORY-088) функция отдаёт сотруднику и это: без него у
     // мастера были заводские цвета записи, полоса денег не слушала
     // настройку, а выключенные у компании блоки стояли в его записи.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    showDayFinance: (row as any).show_day_finance ?? true,
+    showDayFinance: row.show_day_finance ?? true,
     ...sanitizeRecordColorSettings({
-      rule: (row as OperationalRow & Partial<RecordColorColumns>).record_color_rule,
-      palette: (row as OperationalRow & Partial<RecordColorColumns>).record_color_palette,
-      fallback: (row as OperationalRow & Partial<RecordColorColumns>).record_color_fallback,
+      rule: row.record_color_rule,
+      palette: row.record_color_palette,
+      fallback: row.record_color_fallback,
     }),
-    disabledFeatures: sanitizeDisabledFeatures(
-      (row as OperationalRow & Partial<FeatureColumns>).disabled_features,
-    ),
-    bookingBlockOrder: blockOrderOf(
-      (row as OperationalRow & Partial<FeatureColumns>).booking_block_order,
-    ),
+    disabledFeatures: sanitizeDisabledFeatures(row.disabled_features),
+    bookingBlockOrder: blockOrderOf(row.booking_block_order),
   };
 }
 
@@ -210,44 +158,27 @@ export async function updateCalendarSettings(
   tenantId: string,
   patch: Partial<CalendarSettings>,
 ): Promise<CalendarSettings> {
-  const insert: Database["public"]["Tables"]["calendar_settings"]["Insert"] = {
+  const insert: Insert = {
     tenant_id: tenantId,
   };
   if (patch.startHour !== undefined) insert.start_hour = patch.startHour;
   if (patch.endHour !== undefined) insert.end_hour = patch.endHour;
-  if (patch.startMinute !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).start_minute = patch.startMinute;
-  if (patch.endMinute !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).end_minute = patch.endMinute;
+  if (patch.startMinute !== undefined) insert.start_minute = patch.startMinute;
+  if (patch.endMinute !== undefined) insert.end_minute = patch.endMinute;
   if (patch.timezone !== undefined) insert.timezone = patch.timezone;
   if (patch.bufferMinutes !== undefined) insert.buffer_minutes = patch.bufferMinutes;
   if (patch.hideCancelled !== undefined) insert.hide_cancelled = patch.hideCancelled;
-  if (patch.showDayFinance !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).show_day_finance = patch.showDayFinance;
-  // Cast through any — see rowToSettings comment for context.
-  if (patch.workStartHour !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).work_start_hour = patch.workStartHour;
-  if (patch.workEndHour !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).work_end_hour = patch.workEndHour;
-  // v493 — round-trip personalLabels / personalDefaultLabel. Written
-  // through an indexed cast since older builds of `database.types`
-  // may not have the columns yet.
+  if (patch.showDayFinance !== undefined) insert.show_day_finance = patch.showDayFinance;
+  if (patch.workStartHour !== undefined) insert.work_start_hour = patch.workStartHour;
+  if (patch.workEndHour !== undefined) insert.work_end_hour = patch.workEndHour;
   if (patch.personalLabels !== undefined) {
-    // Empty array → null so the Supabase column reads as «no
-    // personal labels» on next fetch. Without this an explicit
-    // delete-all action left the column = [...stale] forever.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).personal_labels =
+    // Empty array → NULL, so «delete all labels» really clears the column
+    // instead of leaving the stale list behind.
+    insert.personal_labels =
       patch.personalLabels.length > 0 ? patch.personalLabels : null;
   }
   if (patch.personalDefaultLabel !== undefined) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).personal_default_label =
+    insert.personal_default_label =
       patch.personalDefaultLabel && patch.personalDefaultLabel.length > 0
         ? patch.personalDefaultLabel
         : null;
@@ -256,26 +187,23 @@ export async function updateCalendarSettings(
   // «владелец не выбирал, действуют заводские». Поэтому пустая палитра и
   // пустой запасной цвет пишутся именно NULL: иначе «сбросить к заводскому»
   // было бы невозможно выразить.
-  const colorInsert = insert as typeof insert & Partial<RecordColorColumns>;
   if (patch.recordColorRule !== undefined) {
-    colorInsert.record_color_rule = patch.recordColorRule ?? "team";
+    insert.record_color_rule = patch.recordColorRule ?? "team";
   }
   if (patch.recordColorPalette !== undefined) {
-    colorInsert.record_color_palette =
+    insert.record_color_palette =
       patch.recordColorPalette && Object.keys(patch.recordColorPalette).length > 0
         ? patch.recordColorPalette
         : null;
   }
   if (patch.recordColorFallback !== undefined) {
-    colorInsert.record_color_fallback = patch.recordColorFallback || null;
+    insert.record_color_fallback = patch.recordColorFallback || null;
   }
-
-  const featureInsert = insert as typeof insert & Partial<FeatureColumns>;
   if (patch.disabledFeatures !== undefined) {
-    featureInsert.disabled_features = sanitizeDisabledFeatures(patch.disabledFeatures);
+    insert.disabled_features = sanitizeDisabledFeatures(patch.disabledFeatures);
   }
   if (patch.bookingBlockOrder !== undefined) {
-    featureInsert.booking_block_order =
+    insert.booking_block_order =
       patch.bookingBlockOrder && patch.bookingBlockOrder.length > 0
         ? patch.bookingBlockOrder
         : null;
@@ -289,8 +217,7 @@ export async function updateCalendarSettings(
 
   if (error) {
     const isMissingCol =
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (error as any).code === "42703" ||
+      error.code === "42703" ||
       /work_start_hour|work_end_hour|scroll_open_hour|personal_labels|personal_default_label/i.test(
         error.message,
       );

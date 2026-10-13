@@ -103,9 +103,9 @@ export function rowToAppointment(r: Row): Appointment {
     // пишет дверь `set_appointment_vat_mode`.
     vat_mode: (r.vat_mode ?? null) as Appointment["vat_mode"],
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
-    // Колонка новее сгенерированных типов (миграция 20260930235800); пишет
-    // её только сервер, в запись на сервер она не уходит.
-    material_lines: (r as { material_lines?: unknown }).material_lines ?? null,
+    // Пишет только сервер (миграция 20260930235800); в запись на сервер
+    // поле не уходит.
+    material_lines: r.material_lines ?? null,
     paid_amount:
       r.paid_amount === null || r.paid_amount === undefined
         ? undefined
@@ -135,29 +135,16 @@ export function rowToAppointment(r: Row): Appointment {
     status: r.status as AppointmentStatus,
     created_at: r.created_at,
     updated_at: r.updated_at,
-    // v665 — event_* fields. Live on the DB as of the
-    // add_event_fields_to_appointments migration; before that they
-    // were localStorage-only and silently dropped on cross-device
-    // sync. Older Supabase deployments without the columns fall
-    // through to undefined via the indexed cast (same pattern as
-    // calendar_settings.work_*_hour).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_all_day: (r as any).event_all_day ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_notes: (r as any).event_notes ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_url: (r as any).event_url ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_push_enabled: (r as any).event_push_enabled ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_push_offsets: Array.isArray((r as any).event_push_offsets)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? (r as any).event_push_offsets
+    // Personal-calendar event fields.
+    event_all_day: r.event_all_day ?? undefined,
+    event_notes: r.event_notes ?? undefined,
+    event_url: r.event_url ?? undefined,
+    event_push_enabled: r.event_push_enabled ?? undefined,
+    event_push_offsets: Array.isArray(r.event_push_offsets)
+      ? asArray<number>(r.event_push_offsets)
       : undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_push_at: (r as any).event_push_at ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_repeat: (r as any).event_repeat ?? undefined,
+    event_push_at: r.event_push_at ?? undefined,
+    event_repeat: (r.event_repeat ?? undefined) as Appointment["event_repeat"],
   };
 }
 
@@ -225,22 +212,15 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     total_duration: a.total_duration,
     created_at: a.created_at || undefined,
     // updated_at handled by the DB trigger.
-    // v665 — event_* fields. Indexed cast so older Supabase deploys
-    // without the columns get a graceful 42703 retry below (added).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_all_day !== undefined ? { event_all_day: a.event_all_day } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_notes !== undefined ? { event_notes: a.event_notes } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_url !== undefined ? { event_url: a.event_url } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_push_enabled !== undefined ? { event_push_enabled: a.event_push_enabled } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_push_offsets !== undefined ? { event_push_offsets: a.event_push_offsets as unknown as Json } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_push_at !== undefined ? { event_push_at: a.event_push_at } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_repeat !== undefined ? { event_repeat: a.event_repeat as unknown as Json } as any : {}),
+    // Personal-calendar event fields: sent only when set, so the column
+    // defaults apply to work records.
+    ...(a.event_all_day !== undefined ? { event_all_day: a.event_all_day } : {}),
+    ...(a.event_notes !== undefined ? { event_notes: a.event_notes } : {}),
+    ...(a.event_url !== undefined ? { event_url: a.event_url } : {}),
+    ...(a.event_push_enabled !== undefined ? { event_push_enabled: a.event_push_enabled } : {}),
+    ...(a.event_push_offsets !== undefined ? { event_push_offsets: a.event_push_offsets as unknown as Json } : {}),
+    ...(a.event_push_at !== undefined ? { event_push_at: a.event_push_at } : {}),
+    ...(a.event_repeat !== undefined ? { event_repeat: a.event_repeat as unknown as Json } : {}),
   };
 }
 
@@ -314,50 +294,18 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
   // doesn't exist anymore. PhotoBlock writes via the dedicated repo.
   if (patch.global_discount !== undefined)
     out.global_discount = patch.global_discount as unknown as Json | null;
-  // v665 — event_* fields. Indexed cast so older Supabase deploys
-  // without the columns gracefully skip via the 42703 retry below.
-  if (patch.event_all_day !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_all_day = patch.event_all_day;
-  if (patch.event_notes !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_notes = patch.event_notes;
-  if (patch.event_url !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_url = patch.event_url;
+  // Personal-calendar event fields.
+  if (patch.event_all_day !== undefined) out.event_all_day = patch.event_all_day;
+  if (patch.event_notes !== undefined) out.event_notes = patch.event_notes;
+  if (patch.event_url !== undefined) out.event_url = patch.event_url;
   if (patch.event_push_enabled !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_push_enabled = patch.event_push_enabled;
+    out.event_push_enabled = patch.event_push_enabled;
   if (patch.event_push_offsets !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_push_offsets = patch.event_push_offsets;
-  if (patch.event_push_at !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_push_at = patch.event_push_at;
+    out.event_push_offsets = patch.event_push_offsets as unknown as Json;
+  if (patch.event_push_at !== undefined) out.event_push_at = patch.event_push_at;
   if (patch.event_repeat !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_repeat = patch.event_repeat;
+    out.event_repeat = patch.event_repeat as unknown as Json;
   return out;
-}
-
-/** v665 — strip event_* columns from a payload when the DB returns
- *  42703 (column does not exist). Keeps older Supabase deploys
- *  compatible; the localStorage path still carries the data, so a
- *  user can edit on the same device, just not cross-sync. */
-function stripEventFields<T extends Record<string, unknown>>(payload: T): T {
-  const out: Record<string, unknown> = { ...payload };
-  for (const key of [
-    "event_all_day",
-    "event_notes",
-    "event_url",
-    "event_push_enabled",
-    "event_push_offsets",
-    "event_push_at",
-    "event_repeat",
-  ] as const) {
-    delete out[key];
-  }
-  return out as T;
 }
 
 // ─── Public API ────────────────────────────────────────────────
@@ -400,35 +348,13 @@ export async function createAppointment(
   tenantId: string,
 ): Promise<Appointment> {
   const ins = appointmentToInsert(input, tenantId);
-  const first = await supabase
+  const { data, error } = await supabase
     .from("appointments")
     .insert(ins)
     .select("*")
     .single();
-  // v665 — graceful fallback for older Supabase deploys missing the
-  // event_* columns. Strip them and retry once; localStorage still
-  // carries the data so the user's edits aren't lost.
-  if (first.error && isMissingEventColumn(first.error)) {
-    const retry = await supabase
-      .from("appointments")
-      .insert(stripEventFields(ins) as typeof ins)
-      .select("*")
-      .single();
-    if (retry.error) throw new Error(`createAppointment: ${retry.error.message}`);
-    return rowToAppointment(retry.data);
-  }
-  if (first.error) throw new Error(`createAppointment: ${first.error.message}`);
-  return rowToAppointment(first.data);
-}
-
-/** Match the Supabase error shape that indicates a missing column
- *  in the appointments table. Used by the graceful-fallback retry. */
-function isMissingEventColumn(error: { code?: string; message?: string }): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const code = (error as any).code;
-  const msg = String(error.message ?? "").toLowerCase();
-  if (code === "42703") return true;
-  return /event_(all_day|notes|url|push_enabled|push_offsets|push_at|repeat)/i.test(msg);
+  if (error) throw new Error(`createAppointment: ${error.message}`);
+  return rowToAppointment(data);
 }
 
 /** Запись изменилась на сервере после того, как телефон её видел, а правка
@@ -493,18 +419,6 @@ export async function updateAppointment(
     .eq("tenant_id", tenantId)
     .select("*")
     .single();
-  if (error && isMissingEventColumn(error)) {
-    // v665 — graceful fallback (see createAppointment).
-    const retry = await supabase
-      .from("appointments")
-      .update(stripEventFields(upd) as typeof upd)
-      .eq("id", id)
-      .eq("tenant_id", tenantId)
-      .select("*")
-      .single();
-    if (retry.error) throw new Error(`updateAppointment: ${retry.error.message}`);
-    return rowToAppointment(retry.data);
-  }
   if (error && (error as { code?: string }).code === "PGRST116") {
     throw new GoneAppointmentError();
   }
