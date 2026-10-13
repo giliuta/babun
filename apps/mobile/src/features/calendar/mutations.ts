@@ -13,7 +13,7 @@ import {
   deleteAppointment,
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
-import { isOnline, randomUuid } from "@babun/shared/sync";
+import { isOnline, isUuid, randomUuid } from "@babun/shared/sync";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import {
   GoneAppointmentError,
@@ -47,16 +47,6 @@ import {
   memberWriteRefusal,
 } from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "./queries";
-
-// Mirror of the wrapper's UUID guard. createBlankAppointment falls back to a
-// NON-uuid `apt-…` id when `crypto.randomUUID` is missing — the RN/Hermes case
-// (react-native-get-random-values only polyfills getRandomValues). We stamp a
-// real RN-safe UUID before handing the blank to the offline wrapper so an
-// offline create + subsequent offline edit both key on the same valid UUID:
-// otherwise the edit lands in the update-op path with a non-uuid row_id and
-// the replayer silently drops it, losing the edit.
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Сотрудник пишет запись только дверями сервера (STORY-088): каждое поле там
  *  проверяется своим блоком в календаре записи. Отказ — словами, с названием
@@ -121,7 +111,14 @@ export function useCreateAppointment() {
         // Квоту месяца держит серверный триггер вставки; предпроверка —
         // удобство владельца, сотруднику она не нужна. Без сети дверь
         // сервера не откроется — офлайн-очереди у сотрудника нет.
-        const stamped = UUID_RE.test(input.id) ? input : { ...input, id: randomUuid() };
+        // Same UUID guard as the offline wrapper. createBlankAppointment falls back to a
+        // NON-uuid `apt-…` id when `crypto.randomUUID` is missing — the RN/Hermes case
+        // (react-native-get-random-values only polyfills getRandomValues). We stamp a
+        // real RN-safe UUID before handing the blank to the offline wrapper so an
+        // offline create + subsequent offline edit both key on the same valid UUID:
+        // otherwise the edit lands in the update-op path with a non-uuid row_id and
+        // the replayer silently drops it, losing the edit.
+        const stamped = isUuid(input.id) ? input : { ...input, id: randomUuid() };
         const { error } = await supabase.rpc("member_appointment_create", {
           p_row: memberCreateRow(stamped) as Json,
         });
@@ -154,7 +151,7 @@ export function useCreateAppointment() {
         input.kind === "event" || input.kind === "personal"
           ? { ...input, created_by: session?.user.id ?? null }
           : input;
-      const stampedOwn = UUID_RE.test(authoredInput.id)
+      const stampedOwn = isUuid(authoredInput.id)
         ? authoredInput
         : { ...authoredInput, id: randomUuid() };
       try {

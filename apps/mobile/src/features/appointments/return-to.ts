@@ -22,6 +22,8 @@
 // «finances:accounts:<uuid>@team-x». Команда — тот же закрытый набор знаков,
 // что в адресе вкладки (`finance-route.ts`).
 
+import { isUuid } from "@babun/shared/sync/uuid";
+
 /** Разрезы вкладки денег, которые дорога назад умеет восстановить. Список
  *  закрытый: `from` приходит из адреса, и собирать по нему произвольный путь
  *  или произвольный параметр нельзя. */
@@ -34,7 +36,6 @@ const FINANCE_VIEWS = new Set([
 ]);
 
 /** Счёт из адреса — только uuid: тот же закрытый словарь, что у разрезов. */
-const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Команда — буквы, цифры, «_» и «-»: в адрес не уедет ни «&», ни пробел. */
 const TEAM_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -61,7 +62,7 @@ export function resolveReturnTo(from: string | undefined): string | null {
   // Страница чека (04.10): запись, открытую с чека, закрывают обратно в чек.
   if (from.startsWith("receipt:")) {
     const receipt = from.slice("receipt:".length).trim();
-    return ACCOUNT_ID.test(receipt) ? `/documents/receipt/${receipt}` : null;
+    return isUuid(receipt) ? `/documents/receipt/${receipt}` : null;
   }
   if (!from.startsWith("invoice:")) return null;
   const id = from.slice("invoice:".length).trim();
@@ -85,7 +86,7 @@ function financesPath(from: string): string {
     // И ВЫБРАННЫЙ СЧЁТ (2026-09-15): запись открыли из ленты «Наличных» под
     // «Счетами» — закрыв её, человек возвращается к «Наличным», а не ко всем
     // счетам.
-    return view === "accounts" && ACCOUNT_ID.test(accountId)
+    return view === "accounts" && isUuid(accountId)
       ? `/finances?view=accounts&account=${accountId}`
       : `/finances?view=${view}`;
   }

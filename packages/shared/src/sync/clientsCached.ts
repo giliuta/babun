@@ -94,6 +94,7 @@ import {
 } from "./queue-events";
 import { emitRevalidated } from "./revalidate-events";
 import { randomUuid } from "./uuid";
+import { isTransientNetworkError } from "./transient-error";
 import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -106,23 +107,6 @@ export function setSyncToast(fn: ToastFn): void {
   toastWarning = fn;
 }
 
-// Only transport failures belong in the offline replay queue. A server-side
-// RLS, validation or business-rule rejection is permanent for this payload;
-// queueing it would make the optimistic UI lie and retry forever.
-function isTransientNetworkError(err: unknown): boolean {
-  const withStatus = err as { status?: unknown; statusCode?: unknown };
-  const status =
-    typeof withStatus?.status === "number"
-      ? withStatus.status
-      : typeof withStatus?.statusCode === "number"
-        ? withStatus.statusCode
-        : 0;
-  if (status >= 500) return true;
-  const message = err instanceof Error ? err.message : String(err);
-  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
-    message,
-  );
-}
 
 /** Опции записи. ЗАПИСЬ В НЕАКТИВНУЮ КОМПАНИЮ — ТОЛЬКО ОНЛАЙН: очередь
  *  выгружается под активной компанией, и отложенная операция уехала бы под

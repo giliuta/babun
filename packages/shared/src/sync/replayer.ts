@@ -47,6 +47,8 @@ import { rowToClient } from "../db/repositories/clients";
 // moment the replayer succeeds/fails an op, instead of waiting for the 5-s
 // safety poll.
 import { writesBlocked } from "./write-guard";
+import { isTransientNetworkError } from "./transient-error";
+import { isUuid } from "./uuid";
 import {
   removeOpAndEmit as removeOp,
   bumpAttemptAndEmit as bumpAttempt,
@@ -77,18 +79,6 @@ function isQuotaError(err: unknown): err is { quota: true; message?: string } {
     (err as { quota?: unknown }).quota === true
   );
 }
-
-// v452 — every cached table targets a Supabase relation whose `id`
-// column is uuid. Ops carrying a non-uuid `row_id` are local orphans
-// (insert never succeeded server-side — typically because the row
-// included a column the migration hadn't reached yet). Replaying
-// them spends three retry windows on guaranteed-failure ops and
-// surfaces an unactionable error in SyncQueuePanel. Detect them up
-// front and mark them permanently failed so the user can drop them
-// from the panel.
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isUuid = (s: string): boolean => UUID_RE.test(s);
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -274,27 +264,6 @@ let pendingFollowup = false;
 export const TRANSIENT_RETRY_MS = 30_000;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Та же граница, что у обёрток кэша (`isTransientNetworkError`): 5xx шлюза
- *  и рестарта, сетевые сбои fetch, таймауты, аборты. */
-export function isTransientReplayError(err: unknown): boolean {
-  const withStatus = err as { status?: unknown; statusCode?: unknown };
-  const httpStatus =
-    typeof withStatus?.status === "number"
-      ? withStatus.status
-      : typeof withStatus?.statusCode === "number"
-        ? withStatus.statusCode
-        : 0;
-  if (httpStatus >= 500) return true;
-  const msg =
-    err instanceof Error
-      ? err.message
-      : typeof (err as { message?: unknown })?.message === "string"
-        ? (err as { message: string }).message
-        : String(err);
-  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
-    msg,
-  );
-}
 
 function scheduleTransientRetry(opts: ReplayerOptions): void {
   if (retryTimer) return;
@@ -678,7 +647,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       const msg = err instanceof Error ? err.message : String(err);
       hold(op);
       // Обрыв — попытку не тратим: строка ждёт следующего прохода.
-      if (isTransientReplayError(err)) {
+      if (isTransientNetworkError(err)) {
         transientFailure = true;
         continue;
       }

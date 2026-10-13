@@ -5,6 +5,7 @@ import {
   type CloseDecision,
 } from "../close-decision";
 import { routeParam } from "../finance-route";
+import { isUuid } from "@babun/shared/sync/uuid";
 
 // СТРАНИЦА «СЧЕТА» ЗА ШЕСТЕРЁНКОЙ — ЕЁ РЕШЕНИЯ ЧИСТЫМИ ФУНКЦИЯМИ.
 //
@@ -84,8 +85,6 @@ export function trashDecisionAfterTransfer<A extends ClosableAccount>(
   };
 }
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Счёт из `?edit=<uuid>`: так на страницу с открытой шторкой правки приводят
@@ -97,7 +96,7 @@ export function accountEditParam(
   param: string | string[] | undefined,
 ): string | null {
   const value = routeParam(param);
-  return value && UUID.test(value) ? value : null;
+  return value && isUuid(value) ? value : null;
 }
 
 /**

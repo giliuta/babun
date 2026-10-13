@@ -55,23 +55,10 @@ import {
 } from "./queue-events";
 import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
+import { isTransientNetworkError } from "./transient-error";
 
 type DbSupabase = SupabaseClient<Database>;
 
-function isTransientNetworkError(err: unknown): boolean {
-  const withStatus = err as { status?: unknown; statusCode?: unknown };
-  const status =
-    typeof withStatus?.status === "number"
-      ? withStatus.status
-      : typeof withStatus?.statusCode === "number"
-        ? withStatus.statusCode
-        : 0;
-  if (status >= 500) return true;
-  const message = err instanceof Error ? err.message : String(err);
-  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
-    message,
-  );
-}
 
 // ─── Read ─────────────────────────────────────────────────────────
 

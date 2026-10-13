@@ -1,5 +1,6 @@
 import type { HomeView } from "./FinanceOverview";
 import { NO_TEAM } from "./accounts-sections";
+import { isUuid } from "@babun/shared/sync/uuid";
 
 // АДРЕС «ФИНАНСОВ» — ЗАКРЫТЫЙ СЛОВАРЬ.
 //
@@ -34,8 +35,6 @@ const VIEWS: ReadonlySet<string> = new Set<HomeView>([
   "profit",
 ]);
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Форма id команды в базе. `NO_TEAM` («__no_team__») в неё тоже входит. */
 const TEAM_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -74,7 +73,7 @@ export function financeRoute(params: FinanceRouteParams): FinanceRoute | null {
   return {
     view,
     team,
-    account: account && UUID.test(account) ? account : null,
+    account: account && isUuid(account) ? account : null,
   };
 }
 

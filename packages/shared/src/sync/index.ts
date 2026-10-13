@@ -32,7 +32,7 @@ export {
 // reachable via their own module paths.
 export { setSyncToast } from "./clientsCached";
 
-export { randomUuid } from "./uuid";
+export { isUuid, randomUuid } from "./uuid";
 
 export {
   COLD_OFFLINE_CACHE_MISS,

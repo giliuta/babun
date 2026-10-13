@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 import type { TeamFilledByTrigger } from "../team-filled-by-trigger";
 import { rpcArgs } from "../rpc-args";
-import { randomUuid } from "../../sync/uuid";
+import { isUuid, randomUuid } from "../../sync/uuid";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type {
   FinanceTransaction,
@@ -159,7 +159,6 @@ export async function listTransactionsForRange(
 
 /** Сколько id записей уходит в один запрос: 150 uuid — около 5,6 КБ адреса. */
 const APPOINTMENT_IDS_PER_REQUEST = 150;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Все операции, привязанные к этим записям, — в какой бы день их ни внесли.
@@ -175,7 +174,7 @@ export async function listTransactionsForAppointments(
   tenantId: string,
   appointmentIds: readonly string[],
 ): Promise<FinanceTransaction[]> {
-  const ids = [...new Set(appointmentIds.filter((id) => UUID.test(id)))];
+  const ids = [...new Set(appointmentIds.filter(isUuid))];
   const rows: Row[] = [];
   for (let i = 0; i < ids.length; i += APPOINTMENT_IDS_PER_REQUEST) {
     const { data, error } = await supabase
