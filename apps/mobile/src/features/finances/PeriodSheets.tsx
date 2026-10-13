@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
@@ -239,14 +239,9 @@ export function PeriodWheelsModal({
 
         {/* one wheel edits the active endpoint */}
         <View className="items-center">
-          <DateTimeInput
-            themeVariant="light"
+          <DateSpinner
             value={parseYMD(side === "from" ? from : to)}
-            mode="date"
-            display="spinner"
-            locale="ru-RU"
-            onChange={(_, d) => {
-              if (!d) return;
+            onChange={(d) => {
               if (side === "from") setFrom(formatYMD(d));
               else setTo(formatYMD(d));
             }}

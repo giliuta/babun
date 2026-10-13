@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 import { ArrowUpDown, CalendarDays, Wallet } from "lucide-react-native";
 import {
   formatMoneyForInput,
@@ -459,15 +459,11 @@ export function TransferSheet({
                 известна, компактный DateTimeInput навсегда запоминает
                 «1 янв. 1970» — здесь `dateDraft` уже посчитан, а сам шаг
                 существует только когда его открыли. */}
-            <DateTimeInput
+            <DateSpinner
               value={parseYMD(dateDraft)}
               minimumDate={parseYMD(dateFloor)}
               maximumDate={parseYMD(businessToday)}
-              mode="date"
-              display="spinner"
-              locale="ru-RU"
-              themeVariant="light"
-              onChange={(_, date) => date && setDateDraft(formatYMD(date))}
+              onChange={(date) => setDateDraft(formatYMD(date))}
             />
           </View>
         </View>

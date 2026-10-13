@@ -32,7 +32,7 @@ export const MINUTES = Array.from({ length: 60 / MINUTE_STEP }, (_, i) =>
   pad2(i * MINUTE_STEP),
 );
 
-function WheelWithLines({ children }: { children: React.ReactNode }) {
+export function WheelWithLines({ children }: { children: React.ReactNode }) {
   return (
     <View style={{ position: "relative" }}>
       {children}
@@ -122,10 +122,15 @@ export function LoopWheelColumn({
   // намеренно недостижимый индекс, поэтому на монтировании эффект СРАБОТАЕТ и
   // поставит ленту на ЦЕНТРАЛЬНУЮ копию: без этого кольцо крутится только вниз.
   const settledRef = useRef(-1);
+  // Длина цикла тоже двигает ленту: у дня в барабане даты она меняется с
+  // месяцем (31 → 28), центральная копия съезжает, и без перестановки под
+  // линией стояло другое число, чем в значении (13.10).
+  const settledMid = useRef(mid);
 
   useEffect(() => {
-    if (settledRef.current === value) return;
+    if (settledRef.current === value && settledMid.current === mid) return;
     settledRef.current = value;
+    settledMid.current = mid;
     setLive(mid + value);
     const id = requestAnimationFrame(() =>
       ref.current?.scrollTo({ y: (mid + value) * ITEM_H, animated: false }),
@@ -175,6 +180,10 @@ export function LoopWheelColumn({
   return (
     <ScrollView
       ref={ref}
+      // ANDROID: колесо стоит в прокручиваемой шторке (форма услуги, тип
+      // события, график команды). Без этого внешняя прокрутка забирала
+      // вертикальный жест, и барабан не крутился — крутился весь лист (13.10).
+      nestedScrollEnabled
       showsVerticalScrollIndicator={false}
       snapToInterval={ITEM_H}
       decelerationRate="fast"
