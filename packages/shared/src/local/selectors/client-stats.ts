@@ -24,99 +24,17 @@ import type { Appointment } from "../appointments";
 import { getPaidAmount, getDebtAmount } from "../appointments";
 import type { Client } from "../clients";
 
-export interface ClientStats {
-  /** Number of completed visits. */
-  visits: number;
-  /** Lifetime money paid by the client. */
-  totalSpent: number;
-  /** YYYY-MM-DD of the most recent completed visit, or "" if none. */
-  lastVisitDate: string;
-  /** Number of days since lastVisitDate, or null if never visited. */
-  lastVisitDays: number | null;
-  /** Next future appointment, scheduled OR in_progress. */
-  nextApt: { date: string; time: string } | null;
-  /** Days until nextApt (0 = today, 1 = tomorrow), or null. */
-  nextAptDays: number | null;
-  /** ЛИЧНЫЙ РИТМ КЛИЕНТА — медиана промежутков между его завершёнными
-   *  визитами, в днях. null, когда визитов меньше двух: ритма ещё нет.
-   *
-   *  Нужен вместо общего порога «давно не был». Один порог на всех врёт в
-   *  обе стороны: клининг ездит раз в неделю, кондиционеры — раз в полгода,
-   *  и 60 дней для первого катастрофа, а для второго норма. Медиана, а не
-   *  среднее: один сезонный пропуск не должен сдвигать норму. */
-  medianGapDays: number | null;
-  /** ПРОШЕДШИЕ НЕЗАКРЫТЫЕ ВИЗИТЫ: запись стоит «запланирована», а дата уже
-   *  прошла. Работу почти наверняка сделали, но её никто не закрыл — значит
-   *  визит не считается визитом, деньги не попали ни в долг, ни в выручку,
-   *  а клиент выглядит тем, кто «так и не приехал».
-   *
-   *  Календарь это состояние знает и красит янтарём; список клиентов до
-   *  сих пор не знал (аудит 2026-08-07). */
-  unclosedVisits: number;
-  /** YYYY-MM-DD самого позднего ПРОШЕДШЕГО НЕЗАКРЫТОГО визита, или "".
-   *  Строка списка красит дату последнего визита жёлтым, если последним был
-   *  именно такой (владелец 01.10: «последний визит не закрыт — жёлтым»). */
-  lastUnclosedDate: string;
-  /** Неполученные деньги: завершённые визиты с недоплатой ПЛЮС прошедшие
-   *  записи, по которым команда не отчиталась, — для владельца это одно и
-   *  то же «нам не заплатили». */
-  debt: number;
-  /** Expected revenue — Σ total_amount of FUTURE scheduled/in-progress
-   *  appointments (today or later). Powers the card's grey «ожидаемая
-   *  прибыль» figure. 0 when the client has no upcoming bookings. */
-  expectedRevenue: number;
-  /** team_id of the client's most-recent COMPLETED visit that carried one
-   *  — drives the «команда» segment on the list card. null if the client
-   *  has no completed visits with a team (future-only bookings don't count). */
-  lastTeamId: string | null;
-  /** Days since the client record was created. */
-  ageDays: number;
-  /** Days until the next birthday (0–365), or null when no birthday. */
-  birthdayInDays: number | null;
-}
+import { EMPTY_STATS, type ClientStats } from "./client-stats/types";
+import {
+  birthdayInDays,
+  daysBetween,
+  isoToDate,
+  medianGap,
+  parseKey,
+  todayKey,
+} from "./client-stats/dates";
 
-const EMPTY_STATS: ClientStats = {
-  visits: 0,
-  totalSpent: 0,
-  lastVisitDate: "",
-  lastVisitDays: null,
-  nextApt: null,
-  nextAptDays: null,
-  medianGapDays: null,
-  unclosedVisits: 0,
-  lastUnclosedDate: "",
-  debt: 0,
-  expectedRevenue: 0,
-  lastTeamId: null,
-  ageDays: 0,
-  birthdayInDays: null,
-};
-
-// ─── Date helpers ─────────────────────────────────────────────────
-
-/** Today as YYYY-MM-DD, in local time. */
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function parseKey(key: string): Date | null {
-  const [y, m, d] = key.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-}
-
-function daysBetween(a: Date, b: Date): number {
-  const ms = b.getTime() - a.getTime();
-  return Math.round(ms / 86400000);
-}
-
-function isoToDate(iso: string): Date | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-}
+export type { ClientStats } from "./client-stats/types";
 
 // ─── Public — single client ────────────────────────────────────────
 
@@ -311,17 +229,6 @@ function computeNonAptFields(
   };
 }
 
-function birthdayInDays(birthday: string): number | null {
-  if (!birthday) return null;
-  const [, mm, dd] = birthday.split("-").map(Number);
-  if (!mm || !dd) return null;
-  const today = new Date();
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  let target = new Date(today.getFullYear(), mm - 1, dd);
-  if (target < t0) target = new Date(today.getFullYear() + 1, mm - 1, dd);
-  return daysBetween(t0, target);
-}
-
 // ─── Public — full map (the fast path the page uses) ───────────────
 
 /**
@@ -382,29 +289,6 @@ export function buildStatsMap(
  *
  *  Порог сравнивается через `>=`: ряд называется «60+ дней», а строгое
  *  `>` означало 61 — подпись обязана описывать РОВНО предикат. */
-/** Медиана промежутков между визитами (дни). Меньше двух визитов — ритма
- *  ещё нет, возвращаем null: по одному приезду судить не о чем. */
-function medianGap(dates: readonly string[]): number | null {
-  if (dates.length < 2) return null;
-  const days = [...dates]
-    .sort()
-    .map((d) => parseKey(d))
-    .filter((d): d is Date => d !== null);
-  if (days.length < 2) return null;
-  const gaps: number[] = [];
-  for (let i = 1; i < days.length; i += 1) {
-    const gap = daysBetween(days[i - 1], days[i]);
-    // Два визита в один день — не промежуток, а один выезд из двух работ.
-    if (gap > 0) gaps.push(gap);
-  }
-  if (gaps.length === 0) return null;
-  gaps.sort((a, b) => a - b);
-  const mid = Math.floor(gaps.length / 2);
-  return gaps.length % 2 === 1
-    ? gaps[mid]
-    : Math.round((gaps[mid - 1] + gaps[mid]) / 2);
-}
-
 export function isLongSilence(s: ClientStats, days = 60): boolean {
   return (
     s.visits > 0 &&

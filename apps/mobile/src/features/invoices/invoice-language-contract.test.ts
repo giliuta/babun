@@ -44,7 +44,7 @@ describe("язык бумаги инвойса", () => {
   // принимают любой язык приложения, а не «ru» | «en».
   test("выставление и запись языка принимают любой язык приложения", () => {
     assert.match(read("queries.ts"), /\}: IssueInvoiceDraft & \{ language\?: InvoiceLanguage \}\) => \{/);
-    assert.match(read("../../../../../packages/shared/src/db/repositories/invoices.ts"), /language: UiLocale,\n\): Promise<void>/);
+    assert.match(readModuleSource(resolve(here, "../../../../../packages/shared/src/db/repositories/invoices.ts")), /language: UiLocale,\n\): Promise<void>/);
   });
 
   // ВСЕ ЯЗЫКИ ПРИЛОЖЕНИЯ — ЯЗЫКИ БУМАГИ (владелец 2026-10-04). Словарь у
