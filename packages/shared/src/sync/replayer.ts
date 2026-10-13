@@ -92,6 +92,14 @@ const isUuid = (s: string): boolean => UUID_RE.test(s);
 
 type DbSupabase = SupabaseClient<Database>;
 
+/** The queue stores payloads as plain JSON and picks the table at run time,
+ *  so no static row type exists for a relayed write. This view of the client
+ *  erases the per-table types for those writes — the only place in the
+ *  replayer that does. Reads keep the typed client. */
+function relayClient(supabase: DbSupabase): SupabaseClient {
+  return supabase as unknown as SupabaseClient;
+}
+
 // Экспорт: appointmentsCached придерживает авторитарный cacheReplaceTenant,
 // пока в очереди есть ещё реплеящиеся (attempts < MAX_ATTEMPTS) опы.
 export const MAX_ATTEMPTS = 3;
@@ -878,8 +886,7 @@ async function dispatch(
       payload = rest;
       stripped = true;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from(tableName).insert(payload as any);
+    const { error } = await relayClient(supabase).from(tableName).insert(payload);
     if (error) {
       // v502 — idempotent insert: a duplicate-key error means the row
       // is already on the server (the previous attempt's HTTP response
@@ -940,15 +947,12 @@ async function dispatch(
   void _tenantForGate;
 
   if (op.expected_updated_at) {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const filter = (
-      supabase.from(tableName).update(updatePayload as any) as any
-    )
+    const { data, error } = await relayClient(supabase)
+      .from(tableName)
+      .update(updatePayload)
       .eq("id", op.row_id)
       .eq("updated_at", op.expected_updated_at)
       .select("id, updated_at");
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-    const { data, error } = await filter;
     if (error) throw new Error(`replay update: ${error.message}`);
     if (data && data.length > 0) {
       // Matched cleanly. Свежий `updated_at` — следующим правкам строки и
@@ -999,10 +1003,9 @@ async function dispatch(
     // the cache stays consistent. Without this re-fetch, IDB would
     // hold the pre-conflict updated_at and falsely conflict on the
     // next edit.
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const forceFilter = (
-      supabase.from(tableName).update(updatePayload as any) as any
-    )
+    const forceFilter = relayClient(supabase)
+      .from(tableName)
+      .update(updatePayload)
       .eq("id", op.row_id)
       .select()
       // maybeSingle, NOT single. When the force-update matches 0 rows —
@@ -1014,7 +1017,6 @@ async function dispatch(
       // later writes never synced → silent cross-device desync
       // (user-reported). maybeSingle returns { data: null } instead.
       .maybeSingle();
-    /* eslint-enable @typescript-eslint/no-explicit-any */
     const { data: forced, error: forceErr } = await forceFilter;
     if (forceErr)
       throw new Error(`replay force-update: ${forceErr.message}`);
@@ -1065,10 +1067,9 @@ async function dispatch(
 
   // No expected_updated_at — unconditional update (e.g. queued from
   // a context where we didn't have the cached row yet).
-  const { error: plainErr } = await supabase
+  const { error: plainErr } = await relayClient(supabase)
     .from(tableName)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update(updatePayload as any)
+    .update(updatePayload)
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;
