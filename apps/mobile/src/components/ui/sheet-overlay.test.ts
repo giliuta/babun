@@ -58,3 +58,11 @@ test("уезжающий лист не тянется, отклонённый с
   assert.match(sheet, /runOnJS\(closeFromDrag\)\(\);/);
   assert.match(sheet, /if \(!visibleRef\.current\) return;\s*ty\.value = withSpring\(0/);
 });
+
+test("массовая SMS поднимается над клавиатурой и не глотает тап мимо", () => {
+  // Сырой Modal edge-to-edge: поле текста и кнопки отправки уходили под
+  // клавиатуру Android, печатали вслепую (13.10).
+  const sheet = read("../../features/clients/BulkSmsSheet.tsx");
+  assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
+  assert.doesNotMatch(sheet, /className="absolute bottom-0 left-0 right-0/);
+});
