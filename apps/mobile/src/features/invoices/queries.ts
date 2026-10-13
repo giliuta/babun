@@ -16,6 +16,7 @@ import {
   type RecordInvoicePaymentDraft,
 } from "@babun/shared/db/repositories/invoice-payments";
 import { supabase } from "@/lib/supabase";
+import { rpcArgs } from "@babun/shared/db/rpc-args";
 import { useTenantId } from "@/lib/tenant";
 import {
   invoicePaymentsQueryKey,
@@ -92,11 +93,14 @@ export function useNextInvoiceSeries(
     // Свежесть важнее кэша: номер меняется от каждого выставленного счёта.
     staleTime: 0,
     queryFn: async (): Promise<NextInvoiceNumber | null> => {
-      const { data, error } = await supabase.rpc("peek_document_number", {
-        p_legal_entity_id: companyId ?? null,
-        p_doc_type: docType,
-        p_year: year,
-      });
+      const { data, error } = await supabase.rpc(
+        "peek_document_number",
+        rpcArgs<"peek_document_number">({
+          p_legal_entity_id: companyId ?? null,
+          p_doc_type: docType,
+          p_year: year,
+        }),
+      );
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : null;
       return row

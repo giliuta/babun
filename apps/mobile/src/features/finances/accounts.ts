@@ -26,7 +26,6 @@ import {
 } from "@babun/shared/db/repositories/finance-transactions";
 import type {
   Account,
-  AccountScope,
 } from "@babun/shared/local/finance/account";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -362,15 +361,12 @@ export function useReorderAccounts() {
  * счетов незаведённой — и лечится повтором: план считает `planAccountSeeds`,
  * который пропускает уже существующие имена, включая закрытые.
  */
-function useSeedAccounts(
-  seeds: readonly AccountSeed[],
-  scope: AccountScope,
-) {
+function useSeedAccounts(seeds: readonly AccountSeed[]) {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: async (brigadeId: string | null): Promise<Account[]> => {
+    mutationFn: async (brigadeId: string): Promise<Account[]> => {
       const tenant = tenantId as string;
       // Полный список, включая закрытые: имя занято и закрытым счётом.
       const existing = await listAccounts(supabase, tenant, {
@@ -383,7 +379,7 @@ function useSeedAccounts(
       for (const item of plan) {
         created.push(
           await insertAccount(supabase, tenant, {
-            scope,
+            scope: "team",
             brigade_id: brigadeId,
             name: item.name,
             kind: item.kind,
@@ -400,7 +396,7 @@ function useSeedAccounts(
 
 /** «Наличные» и «Карта» новой команде. Аргумент мутации — id команды. */
 export function useCreateTeamAccounts() {
-  return useSeedAccounts(TEAM_ACCOUNT_SEEDS, "team");
+  return useSeedAccounts(TEAM_ACCOUNT_SEEDS);
 }
 
 /** Закрытие счёта. «Основного» больше нет (владелец 2026-09-29), и

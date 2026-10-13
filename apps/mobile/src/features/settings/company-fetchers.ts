@@ -43,6 +43,7 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   contact_whatsapp: null,
   country: "",
   created_at: "",
+  created_by: null,
   currency: "",
   current_period_end: null,
   iban: null,
@@ -56,10 +57,13 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   invoice_line_source: "services",
   invoice_default_line_title: "Услуги",
   invoice_footer_note: null,
+  kind: "company",
   legal_name: null,
   logo_url: null,
   onboarded_at: null,
+  paid_calendars: null,
   personal_calendar_enabled: false,
+  personal_of: null,
   // НДС: по умолчанию выключен — бизнес без налога не должен видеть его нигде.
   vat_mode: "off",
   vat_rate: 0,
@@ -72,8 +76,11 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   subscription_status: null,
   track_units: true,
   trial_ends_at: null,
+  trial_started_at: null,
+  trial_tier: null,
   vat_number: null,
   vertical: null,
+  working_team_ids: null,
 };
 
 export function parseTenantProfile(value: Json | null): Tenant {

@@ -7,11 +7,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import type { TeamFilledByTrigger } from "../team-filled-by-trigger";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type { Debt, DebtDirection } from "../../local/finance/debt";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["debts"]["Row"];
+type Insert = Database["public"]["Tables"]["debts"]["Insert"];
+type Update = Database["public"]["Tables"]["debts"]["Update"];
 
 const DEBTS_PAGE_SIZE = 1000;
 
@@ -172,22 +175,23 @@ export async function insertDebt(
   draft: NewDebt,
 ): Promise<Debt> {
   assertDebtDraft(draft);
+  const insert: TeamFilledByTrigger<Insert> = {
+    ...(draft.id ? { id: draft.id } : {}),
+    tenant_id: tenantId,
+    direction: draft.direction,
+    counterparty: draft.counterparty.trim(),
+    amount: draft.amount,
+    occurred_on: draft.occurred_on,
+    occurred_time: draft.occurred_time ?? null,
+    client_id: draft.client_id ?? null,
+    category_id: draft.category_id ?? null,
+    note: draft.note?.trim() || null,
+    receipt_url: draft.receipt_url ?? null,
+    team_id: draft.team_id ?? null,
+  };
   const { data, error } = await supabase
     .from("debts")
-    .insert({
-      ...(draft.id ? { id: draft.id } : {}),
-      tenant_id: tenantId,
-      direction: draft.direction,
-      counterparty: draft.counterparty.trim(),
-      amount: draft.amount,
-      occurred_on: draft.occurred_on,
-      occurred_time: draft.occurred_time ?? null,
-      client_id: draft.client_id ?? null,
-      category_id: draft.category_id ?? null,
-      note: draft.note?.trim() || null,
-      receipt_url: draft.receipt_url ?? null,
-      team_id: draft.team_id ?? null,
-    })
+    .insert(insert as Insert)
     .select("*")
     .single();
   if (error && draft.id && (error as { code?: string }).code === "23505") {
@@ -215,7 +219,7 @@ export async function updateDebt(
   id: string,
   patch: DebtPatch,
 ): Promise<void> {
-  const update: Database["public"]["Tables"]["debts"]["Update"] = {
+  const update: TeamFilledByTrigger<Update> = {
     updated_at: new Date().toISOString(),
   };
   if (patch.direction !== undefined) update.direction = patch.direction;
@@ -244,7 +248,7 @@ export async function updateDebt(
 
   const { data, error } = await supabase
     .from("debts")
-    .update(update)
+    .update(update as Update)
     .eq("id", id)
     .select("id")
     .maybeSingle();

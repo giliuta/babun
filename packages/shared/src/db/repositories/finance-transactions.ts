@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import type { TeamFilledByTrigger } from "../team-filled-by-trigger";
 import { rpcArgs } from "../rpc-args";
 import { randomUuid } from "../../sync/uuid";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
@@ -21,6 +22,7 @@ import type {
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["finance_transactions"]["Row"];
 type Insert = Database["public"]["Tables"]["finance_transactions"]["Insert"];
+type Update = Database["public"]["Tables"]["finance_transactions"]["Update"];
 const LEDGER_PAGE_SIZE = 1000;
 
 function localTodayYmd(now = new Date()): string {
@@ -353,7 +355,7 @@ export async function insertTransaction(
   const businessToday = draft.business_today ?? localTodayYmd();
   const occurredOn = draft.occurred_on ?? businessToday;
   rejectFutureLedgerDate(occurredOn, businessToday);
-  const insert: Insert & { from_calendar?: boolean } = {
+  const insert: TeamFilledByTrigger<Insert> = {
     ...(draft.request_id ? { id: draft.request_id } : {}),
     ...(draft.from_calendar ? { from_calendar: true } : {}),
     tenant_id: tenantId,
@@ -381,7 +383,6 @@ export async function insertTransaction(
   };
   const { data, error } = await supabase
     .from("finance_transactions")
-    // `from_calendar` ещё нет в сгенерированных типах — колонка в базе есть.
     .insert(insert as Insert)
     .select("*")
     .single();
@@ -415,7 +416,7 @@ export async function updateTransaction(
       patch.business_today ?? localTodayYmd(),
     );
   }
-  const update: Partial<Database["public"]["Tables"]["finance_transactions"]["Update"]> = {};
+  const update: TeamFilledByTrigger<Update> = {};
   if (patch.amount !== undefined) update.amount = patch.amount;
   if (patch.category_id !== undefined) update.category_id = patch.category_id;
   if (patch.account_id !== undefined) update.account_id = patch.account_id;
@@ -437,7 +438,7 @@ export async function updateTransaction(
   if (patch.debt_id !== undefined) update.debt_id = patch.debt_id;
   const { data, error } = await supabase
     .from("finance_transactions")
-    .update(update)
+    .update(update as Update)
     .eq("id", id)
     .eq("source", "manual")
     .in("type", ["income", "expense"])

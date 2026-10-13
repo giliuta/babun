@@ -431,7 +431,6 @@ describe("отбор операций команды", () => {
     { id: "acc-1", brigade_id: "team-a" },
     { id: "acc-2", brigade_id: "team-b" },
     { id: "acc-3", brigade_id: "team-a" },
-    { id: "acc-4", brigade_id: null },
   ];
 
   test("строки команды плюс строки без команды на её счетах", () => {

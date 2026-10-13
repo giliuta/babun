@@ -629,12 +629,15 @@ export async function cacheServerAppointment(
   await cacheUpsert("appointments", makeCachedRow(appointment, tenantId));
 }
 
+/** `material_lines` is left out: the column belongs to the server
+ *  (`freeze_appointment_materials`), and its trigger discards any value the
+ *  app sends. */
 function makeServerRow(
   input: Appointment,
   tenantId: string,
   id: string,
   nowIso: string,
-): CachedAppointment {
+): Omit<CachedAppointment, "material_lines"> {
   return {
     id,
     tenant_id: tenantId,

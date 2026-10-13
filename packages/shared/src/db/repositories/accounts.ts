@@ -136,11 +136,10 @@ export async function listAccounts(
 }
 
 export interface AccountDraft {
-  scope: AccountScope;
-  /** Required for scope === "team", must be null for "company". */
-  brigade_id: string | null;
-  /** Teams attached to a company account; ignored for scope === "team". */
-  team_ids?: string[];
+  /** Always "team": the database CHECK rejects anything else. */
+  scope: "team";
+  /** Owning team. NOT NULL in the database. */
+  brigade_id: string;
   name: string;
   kind: AccountKind;
   owner_master_id?: string | null;
@@ -176,23 +175,14 @@ function assertOpeningBalance(amount: number | undefined): void {
   }
 }
 
-function assertScopeConsistency(
-  scope: AccountScope,
-  brigadeId: string | null,
-): void {
-  if (scope === "team" && !brigadeId) {
-    throw new Error("Выберите команду счёта");
-  }
-  if (scope === "company" && brigadeId) {
-    throw new Error("У счёта нескольких команд не бывает команды-владельца");
-  }
+function assertAccountTeam(brigadeId: string): void {
+  if (!brigadeId) throw new Error("Выберите команду счёта");
 }
 
 /**
  * Следующая позиция в пределах (тенант, команда) — счёт встаёт в конец своего
- * списка. У каждой команды нумерация своя, у счетов компании (brigade_id NULL)
- * — отдельная: список сгруппирован по командам, и сквозной счёт по тенанту
- * перемешивал бы соседние секции.
+ * списка. У каждой команды нумерация своя: список сгруппирован по командам, и
+ * сквозной счёт по тенанту перемешивал бы соседние секции.
  *
  * Два устройства, создающие счёт одновременно, получат одну позицию — их
  * разведёт вторичный ключ сортировки, см. {@link compareAccounts}.
@@ -200,19 +190,16 @@ function assertScopeConsistency(
 async function nextAccountPosition(
   supabase: DbSupabase,
   tenantId: string,
-  brigadeId: string | null,
+  brigadeId: string,
 ): Promise<number> {
-  const scoped = supabase
+  const { data, error } = await supabase
     .from("accounts")
     .select("position")
     .eq("tenant_id", tenantId)
+    .eq("brigade_id", brigadeId)
     .order("position", { ascending: false })
-    .limit(1);
-  const { data, error } = await (
-    brigadeId === null
-      ? scoped.is("brigade_id", null)
-      : scoped.eq("brigade_id", brigadeId)
-  ).maybeSingle();
+    .limit(1)
+    .maybeSingle();
   if (error) throw new Error(`nextAccountPosition: ${error.message}`);
   // Закрытые счета из нумерации не выпадают: их можно открыть обратно.
   return (data?.position ?? -1) + 1;
@@ -224,7 +211,7 @@ export async function insertAccount(
   draft: AccountDraft,
 ): Promise<Account> {
   assertOpeningBalance(draft.opening_balance);
-  assertScopeConsistency(draft.scope, draft.brigade_id);
+  assertAccountTeam(draft.brigade_id);
   const position = draft.position
     ?? (await nextAccountPosition(supabase, tenantId, draft.brigade_id));
   const { data, error } = await supabase
@@ -255,20 +242,7 @@ export async function insertAccount(
       }),
     );
   }
-  const account = rowToAccount(data as Row);
-  const teamIds = draft.scope === "company" ? (draft.team_ids ?? []) : [];
-  if (teamIds.length === 0) return account;
-  try {
-    return {
-      ...account,
-      team_ids: await setAccountTeams(supabase, tenantId, account.id, teamIds),
-    };
-  } catch (attachError) {
-    // A company account without its teams is unusable and invisible to
-    // payment pickers — roll the fresh row back instead of leaving it.
-    await supabase.from("accounts").delete().eq("id", account.id);
-    throw attachError;
-  }
+  return rowToAccount(data as Row);
 }
 
 export async function updateAccount(
@@ -305,64 +279,6 @@ export async function updateAccount(
       ? duplicateAccountNameMessage(patch.name)
       : undefined,
   });
-}
-
-/**
- * Replace the team membership of a company account (diff-based: the
- * `account_teams` rows themselves are immutable). Returns the final list.
- */
-async function setAccountTeams(
-  supabase: DbSupabase,
-  tenantId: string,
-  accountId: string,
-  teamIds: string[],
-): Promise<string[]> {
-  const target = [...new Set(teamIds)];
-  const { data, error } = await supabase
-    .from("account_teams")
-    .select("team_id")
-    .eq("account_id", accountId);
-  if (error) {
-    throw new Error(
-      accountWriteErrorMessage(error, {
-        fallback: "Не удалось прочитать команды счёта",
-      }),
-    );
-  }
-  const current = new Set((data ?? []).map((r) => r.team_id));
-  const toAdd = target.filter((teamId) => !current.has(teamId));
-  const toRemove = [...current].filter((teamId) => !target.includes(teamId));
-  if (toAdd.length > 0) {
-    const { error: addError } = await supabase.from("account_teams").insert(
-      toAdd.map((teamId) => ({
-        account_id: accountId,
-        tenant_id: tenantId,
-        team_id: teamId,
-      })),
-    );
-    if (addError) {
-      throw new Error(
-        accountWriteErrorMessage(addError, {
-          fallback: "Не удалось подключить команду к счёту",
-        }),
-      );
-    }
-  }
-  if (toRemove.length > 0) {
-    const { error: removeError } = await supabase
-      .from("account_teams")
-      .delete()
-      .eq("account_id", accountId)
-      .in("team_id", toRemove);
-    if (removeError) {
-      throw new Error(
-        accountWriteErrorMessage(removeError, {
-          fallback: "Не удалось отключить команду от счёта",
-        }),
-      );
-    }
-  }
-  return target;
 }
 
 /**

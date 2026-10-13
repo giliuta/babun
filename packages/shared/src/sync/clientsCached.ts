@@ -830,12 +830,14 @@ async function refetchAndCacheOne(
   await cacheUpsert("clients", makeCachedRow(client, tenantId, updatedAt));
 }
 
+/** `created_by` is left out on purpose: the column default `auth.uid()`
+ *  stamps the creator, and an explicit NULL would override it. */
 function makeServerRow(
   input: Client,
   tenantId: string,
   id: string,
   nowIso: string,
-): CachedClient {
+): Omit<CachedClient, "created_by"> {
   // RAW DB-column projection for the queue payload the replayer INSERTs.
   // Fill required Row columns with safe defaults matching the DB schema;
   // NO tag_ids here (that's a junction table, written online by the repo).
