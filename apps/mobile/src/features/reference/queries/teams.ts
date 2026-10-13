@@ -1,4 +1,4 @@
-import { syncCalendarBilling } from "@/features/tariffs/sync-calendars";
+import { syncCalendarBilling } from "@/lib/sync-calendars";
 import { useCallback } from "react";
 import {
   useMutation,
@@ -10,8 +10,8 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { firstCalendarFromRpc } from "@/features/reference/first-calendar";
 import { teamsQueryKey } from "@/lib/company-query-keys";
-import { useDataRole, type UserRole } from "@/features/settings/tenant";
-import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useDataRole, type UserRole } from "@/session/tenant";
+import { useMirror } from "@/session/mirror-state";
 import { operationalTeamJsonToTeam } from "@/features/settings/master-reference";
 import { pickLiveTeams } from "../reference-select";
 import { referenceKeys } from "../query-keys";

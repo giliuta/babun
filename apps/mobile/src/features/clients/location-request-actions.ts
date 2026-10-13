@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { afterChoiceSheet, chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { useTenant } from "@/features/settings/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useTenant } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   locationRequestLink,
   locationRequestShareText,

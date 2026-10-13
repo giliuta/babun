@@ -1,7 +1,7 @@
 // What the rights page shows: folded/visible levels, the area word and the
 // access changes that leave with an invitation.
 
-import { LEVEL_WORD, type AccessBlock, type AccessChange, type AccessLevel } from "../../access-map";
+import { LEVEL_WORD, type AccessBlock, type AccessChange, type AccessLevel } from "@/session/access-map";
 import { offeredBlocks } from "../rights-copy";
 import { RECORDS_KEY, isBlockFolded } from "./dependants";
 import { defaultLevel, draftLevel, type MasterDraft, type RightsArea } from "./draft";

@@ -10,7 +10,7 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
-import { durationLabel } from "@/features/services/format";
+import { durationLabel } from "@/lib/service-format";
 import { Card } from "@/components/ui/Card";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {

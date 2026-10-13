@@ -1,5 +1,5 @@
 import type { Client } from "@babun/shared/local/clients";
-import type { ClientsCapabilities } from "./clients-company";
+import type { ClientsCapabilities } from "@/session/clients-company";
 import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 
 // ЧТО ВИДНО И ЧТО ПРАВИТСЯ НА КАРТОЧКЕ КЛИЕНТА — ОДНИМ ОТВЕТОМ (30.09).

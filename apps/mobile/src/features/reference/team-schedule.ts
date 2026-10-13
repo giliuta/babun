@@ -17,7 +17,7 @@ import {
 import { type ScheduleMap, type TeamSchedule } from "@babun/shared/local/schedule";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { allTeamSchedulesQueryKey } from "@/lib/company-query-keys";
 import {
   pickTeamSchedule,

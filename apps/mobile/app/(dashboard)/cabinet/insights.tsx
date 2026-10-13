@@ -4,7 +4,7 @@ import {
   AnalyticsScreen as InsightsScreen,
   type AnalyticsStart,
 } from "@/features/finances/analytics/AnalyticsScreen";
-import { makePeriod, type PeriodKind } from "@/features/finances/period";
+import { makePeriod, type PeriodKind } from "@/lib/period";
 
 // «АНАЛИТИКА» (бывшая «Сводка») — экран живёт в `features/finances/analytics`
 // (владелец 2026-09-24: «градация по услугам, по всем мастерам, по месяцам —

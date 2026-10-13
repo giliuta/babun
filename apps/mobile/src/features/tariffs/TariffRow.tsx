@@ -2,9 +2,9 @@ import { useRouter, type Href } from "expo-router";
 import { BadgeCheck } from "lucide-react-native";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { accountHref } from "@/features/cabinet/CabinetAccountRoute";
+import { accountHref } from "@/session/CabinetAccountRoute";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
-import { tierLine } from "./tiers";
+import { tierLine } from "@/session/tiers";
 import { TARIFF_HREF, useTariff } from "./use-tariff";
 
 // СТРОКА «ТАРИФ» В КАБИНЕТЕ (владелец 01.10: «выбор тарифа — в кабинете»).

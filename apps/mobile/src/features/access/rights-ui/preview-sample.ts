@@ -11,7 +11,7 @@ import {
 } from "@/features/appointments/record-blocks";
 import type { RecordRow } from "@/features/finances/record-rows";
 
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "../access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
 
 // ПРИМЕР ДЛЯ ВИДА БЛОКА В ШТОРКЕ ПРАВА (владелец 29.09: «сам этот блок
 // вставить визуально в этой шторке»). В шторке стоит НАСТОЯЩИЙ блок продукта

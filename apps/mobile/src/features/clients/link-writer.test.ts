@@ -14,7 +14,7 @@ import {
   memberScope,
   type ClientsScope,
   type CompanyAccess,
-} from "./clients-company";
+} from "@/session/clients-company";
 
 // СТОРОЖА ПИСАТЕЛЯ СВЯЗЕЙ (STORY-086).
 //

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { MyCalendar } from "../settings/workspaces";
+import type { MyCalendar } from "@/session/workspaces";
 import {
   grantsSummary,
   groupMemberships,

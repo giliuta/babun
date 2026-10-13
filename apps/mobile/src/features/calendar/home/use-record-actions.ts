@@ -17,7 +17,7 @@ import {
 import {
   selfReminderLabel,
   type SelfReminder,
-} from "@/features/calendar/reminder-time";
+} from "@/lib/reminder-time";
 import { isCalendarEvent } from "@/features/calendar/event-access";
 import {
   useCreateAppointment,

@@ -1,5 +1,5 @@
-import type { MemberAccessMap } from "../access/access-map";
-import { accessGate } from "../access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate } from "@/session/my-access";
 
 // «НАСТРОЙКИ КЛИЕНТОВ» ПО ПРАВАМ (владелец 01.10: «в настройках он может
 // редактировать или не может редактировать… поблочно, как форма записи»).

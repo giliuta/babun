@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { syncCalendarBilling } from "@/features/tariffs/sync-calendars";
+import { syncCalendarBilling } from "@/lib/sync-calendars";
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import { listInvoices } from "@babun/shared/db/repositories/invoices";
 import { useUpdateTeam } from "@/features/reference/queries";

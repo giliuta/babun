@@ -7,7 +7,7 @@ import {
   dialPrefix,
   formatPhoneAsYouType,
   formatPhoneForDisplay,
-} from "@/features/clients/phone";
+} from "@/lib/phone";
 
 // КОД СТРАНЫ — ЧАСТЬ НАБРАННОГО НОМЕРА (владелец 12.10: «сделай запись номера
 // так, чтоб можно было писать код страны, не нужно выбирать, а стандартный

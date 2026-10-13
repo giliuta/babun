@@ -1,10 +1,10 @@
 import type { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { notify } from "@/lib/notify";
-import type { AccessBlock, AccessChange } from "../access-map";
+import type { AccessBlock, AccessChange } from "@/session/access-map";
 import { copyCalendarLevels, starterCalendarChanges, type MasterDraft } from "./master-draft";
 import { memberRefusalText } from "./member-rights-writer";
-import type { PartnerManager } from "./partner-manager";
+import type { PartnerManager } from "@/session/partner-manager";
 
 export interface CalendarTogglerDeps {
   manager: PartnerManager;

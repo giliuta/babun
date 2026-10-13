@@ -1,4 +1,4 @@
-import { ObjectTypesScreen } from "@/features/reference/screens/ObjectTypesScreen";
+import { ObjectTypesScreen } from "@/features/clients/ObjectTypesScreen";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 
 // Типы объектов («Вилла», «Дом») — тот же экран, что в Кабинете, но ВНУТРИ

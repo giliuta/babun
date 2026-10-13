@@ -20,7 +20,7 @@ import { randomUuid } from "@babun/shared/sync/uuid";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { getSelfReminder } from "@/features/calendar/reminders";
-import type { SelfReminder } from "@/features/calendar/reminder-time";
+import type { SelfReminder } from "@/lib/reminder-time";
 import { useUpdateClientById } from "@/features/clients/queries";
 import { useCities } from "@/features/reference/queries";
 import { useTeamSchedule } from "@/features/reference/team-schedule";

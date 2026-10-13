@@ -10,7 +10,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useAppointments } from "@/features/calendar/queries";
-import { useActorChanges, useCanReadHistory } from "@/features/cabinet/use-change-log";
+import { useActorChanges, useCanReadHistory } from "@/lib/use-change-log";
 import type { Master } from "@/features/reference/queries";
 
 import { monthWorkOf, workLine } from "./master-work";

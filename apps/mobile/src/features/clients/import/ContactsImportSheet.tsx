@@ -5,9 +5,9 @@ import type { CountryCode } from "libphonenumber-js";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
 import { useClients, useCreateClient } from "@/features/clients/queries";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { phoneKey } from "@/features/clients/merge-clients";
-import { formatPhoneAsYouType, tryToE164 } from "@/features/clients/phone";
+import { formatPhoneAsYouType, tryToE164 } from "@/lib/phone";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 

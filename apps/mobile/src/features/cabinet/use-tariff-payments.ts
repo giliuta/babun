@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useAccountGate, useAccountScope } from "./account-scope";
+import { useAccountGate, useAccountScope } from "@/session/account-scope";
 import { buildPayments, type TariffPayment } from "./tariff-payments";
 
 // ОПЛАТЫ ТАРИФА — события Stripe, которые пишет вебхук (логика разбора и

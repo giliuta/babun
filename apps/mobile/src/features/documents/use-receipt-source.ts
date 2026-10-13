@@ -3,16 +3,16 @@ import { newCustomServiceId, type AppointmentService } from "@babun/shared/local
 import { lineTotal } from "@babun/shared/local/finance/appointment-calc";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { useInvoice } from "@/features/invoices/queries";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { useInvoice } from "@/features/finances/invoices-queries";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { ReceiptDraftState } from "./ReceiptComposer";
-import { paymentReceiptLines } from "./receipt-for-payment";
+import { paymentReceiptLines } from "@/features/finances/receipt-for-payment";
 import {
   useReceipt,
   useReceiptAppointment,
   useReceiptTransaction,
-} from "./receipts-queries";
+} from "@/features/finances/receipts-queries";
 
 // ОТКУДА ЧЕК БЕРЁТ СЕБЯ (владелец 2026-10-03/04): с нуля; на принятую оплату
 // (`transactionId` — значок чека в записи, «Выписать чек» инвойса); правка

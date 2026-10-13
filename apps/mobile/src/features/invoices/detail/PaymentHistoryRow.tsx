@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import type { InvoicePaymentLedger } from "@babun/shared/local/finance/invoice-ledger";
 import { useThemeColors } from "@/theme/colors";
-import { formatInvoiceMoney } from "../format";
+import { formatInvoiceMoney } from "@/lib/paper/format";
 import { paymentMeta } from "./payment-meta";
 
 export function PaymentHistoryRow({

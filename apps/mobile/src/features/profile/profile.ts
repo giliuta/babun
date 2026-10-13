@@ -10,7 +10,7 @@
 // Лист без React и без сети: разбор метаданных и решение «что сохранить из
 // поля телефона» проверяются тестом.
 
-import { DEFAULT_COUNTRY, isDialOnly, tryToE164 } from "../clients/phone";
+import { DEFAULT_COUNTRY, isDialOnly, tryToE164 } from "@/lib/phone";
 
 export interface PersonalProfile {
   name: string;

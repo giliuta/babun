@@ -8,11 +8,11 @@ import type {
 } from "@babun/shared/local/clients";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import { clientCardHref } from "@/features/clients/clients-company";
+import { clientCardHref } from "@/session/clients-company";
 import {
   useClientsCapabilities,
   useClientsScopeOrNull,
-} from "@/features/clients/company-scope";
+} from "@/session/company-scope";
 import {
   ClientLinkRows,
   type ClientLinkItem,

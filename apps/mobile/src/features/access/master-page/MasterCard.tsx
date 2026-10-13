@@ -4,14 +4,14 @@ import { Stack, useRouter, type Href } from "expo-router";
 
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 import { isInvitationEmail } from "@/features/settings/invitation-flow";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 
-import { useAccessBlocks } from "../queries";
+import { useAccessBlocks } from "@/session/access-queries";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import {
   closeMasterDraft,
@@ -36,7 +36,7 @@ import {
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { useDraftTeamAccess } from "./draft-team-access";
-import { useStepAllowed, useTeamsAllowed } from "./use-partner-manager";
+import { useStepAllowed, useTeamsAllowed } from "@/session/use-partner-manager";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).

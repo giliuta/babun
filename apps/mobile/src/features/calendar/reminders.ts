@@ -1,5 +1,5 @@
 import type { Appointment } from "@babun/shared/local/appointments";
-import { eventReminderOccurrences } from "@/features/calendar/reminder-time";
+import { eventReminderOccurrences } from "@/lib/reminder-time";
 import {
   getNotificationsModule,
   removeBabunNotificationOwners,

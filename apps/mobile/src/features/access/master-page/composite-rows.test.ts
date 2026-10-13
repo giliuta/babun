@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { draftLevel, emptyMasterDraft, withLevel } from "./master-draft";
 import { levelChanges, rightsSections } from "./rights-rows";
 

@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import type { Account } from "@babun/shared/local/finance/account";
 import type { Debt } from "@babun/shared/local/finance/debt";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import type { AccessLevel, MemberAccessMap } from "@/session/access-map";
 import { NO_TEAM } from "./accounts-sections";
 import { financePageAccess, VIEW_ONLY_REASON } from "./finance-page-access";
 

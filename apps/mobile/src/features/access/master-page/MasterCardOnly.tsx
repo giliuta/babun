@@ -7,7 +7,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { usePendingInvitations } from "@/features/settings/team-access";
 import {

@@ -6,10 +6,10 @@ import { isOnline, randomUuid } from "@babun/shared/sync";
 import { OnlineOnlyWriteError } from "@babun/shared/sync/cache-errors";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { preflightQuotaForCreate } from "@/lib/quota";
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
-import { offlineForeignWriteMessage } from "../clients-company";
-import { clientKeys } from "../query-keys";
+import { offlineForeignWriteMessage } from "@/session/clients-company";
+import { clientKeys } from "@/lib/client-query-keys";
 import { useQueryScope, writeClientOf } from "./scope";
 
 export function useCreateClient() {

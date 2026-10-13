@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useAccessBlocks, useMyAccess } from "@/features/access/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useAccessBlocks, useMyAccess } from "@/session/access-queries";
+import { useCurrentRole } from "@/session/tenant";
 import {
   calendarActions,
   eventBlocks,

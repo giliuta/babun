@@ -1,4 +1,4 @@
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 
 // ЯЗЫК ЧЕКА — ЯЗЫК ЕГО ИНВОЙСА (аудит инвойсов 03.10). Чек с 30.09 выписывают
 // только на оплаченный инвойс, а новый инвойс по умолчанию английский:

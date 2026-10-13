@@ -4,7 +4,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { useLocationRequestActions } from "@/features/clients/location-request-actions";
 import { visibleLocationRequests } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
 import { bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";

@@ -49,12 +49,12 @@ import {
   fetchMyCalendars,
   myCalendarsQueryKey,
   type MyCalendar,
-} from "@/features/settings/workspaces";
-import { can, isUserRole, type UserRole } from "@/features/settings/role-policy";
+} from "@/session/workspaces";
+import { can, isUserRole, type UserRole } from "@/session/role-policy";
 import {
   fetchCalendarSettings,
   fetchTenantProfile,
-} from "@/features/settings/company-fetchers";
+} from "@/session/company-fetchers";
 import {
   fetchCities,
   fetchMasters,
@@ -64,7 +64,7 @@ import { fetchServices } from "@/features/services/queries";
 import { pagingClient } from "@/features/calendar/queries";
 import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appointments";
 import { listMasterClientsSafe } from "@/features/clients/queries";
-import { defaultPeriod } from "@/features/finances/period";
+import { defaultPeriod } from "@/lib/period";
 
 // ПРОГРЕВ КОМПАНИЙ — ЧТОБЫ ПЕРЕХОД БЫЛ ПЕРВЫМ КАДРОМ С ДАННЫМИ.
 //

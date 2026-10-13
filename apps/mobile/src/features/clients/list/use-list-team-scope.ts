@@ -8,7 +8,7 @@ import {
   capabilitiesOf,
   type ClientsCapabilities,
   type ClientsScope,
-} from "@/features/clients/clients-company";
+} from "@/session/clients-company";
 import type { GuestSources } from "@/features/clients/guest-sources";
 import {
   ALL_TEAMS,

@@ -1,5 +1,5 @@
 import { getStorage } from "@babun/shared/storage";
-import { makePeriod } from "@/features/finances/period";
+import { makePeriod } from "@/lib/period";
 import { EMPTY_FILTER, SEGMENT_OPTIONS, todayYMD, type ClientsFilter } from "./filter";
 
 // ОДИН живой набор фильтров, переживающий выход из приложения — и ничего

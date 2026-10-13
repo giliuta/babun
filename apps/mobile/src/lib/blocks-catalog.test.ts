@@ -61,9 +61,9 @@ describe("библиотека блоков указывает на живой �
       "src/features/appointments/AppointmentFilesBlock.tsx",
       "src/features/appointments/AppointmentFileTiles.tsx",
       "src/features/appointments/FileAddSheet.tsx",
-      "src/features/appointments/InlineNoteField.tsx",
+      "src/components/blocks/InlineNoteField.tsx",
       "src/features/appointments/BookingSummary.tsx",
-      "src/features/appointments/TeamLabelRow.tsx",
+      "src/components/blocks/TeamLabelRow.tsx",
       "src/features/appointments/ServicesBlock.tsx",
       "src/features/appointments/ClientBlock.tsx",
       "src/features/clients/blocks/ObjectsBlock.tsx",
@@ -188,7 +188,7 @@ describe("библиотека блоков указывает на живой �
       "пропала защита от rgba-токена: подложка кружка станет чёрной",
     );
 
-    const note = readFileSync(resolve(APP, "src/features/appointments/InlineNoteField.tsx"), "utf8");
+    const note = readFileSync(resolve(APP, "src/components/blocks/InlineNoteField.tsx"), "utf8");
     assert.match(note, /marginHorizontal: 12,/);
     assert.match(note, /paddingVertical: 7,/);
     assert.match(note, /fontSize: 13,/);

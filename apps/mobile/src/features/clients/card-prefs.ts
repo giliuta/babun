@@ -2,7 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { getStorage } from "@babun/shared/storage";
 import { tenantPrefKey } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { useDesignBase } from "@/features/appointments/booking-prefs";
 import {
   useSaveTeamDesign,

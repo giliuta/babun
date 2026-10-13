@@ -56,7 +56,7 @@ describe("готовых типов нет нигде", () => {
     const sources: [string, string?][] = [
       ["object-types.ts"],
       ["location-request-form.ts"],
-      ["../reference/screens/ObjectTypesScreen.tsx", "../reference/screens/object-types"],
+      ["ObjectTypesScreen.tsx", "object-types"],
       ["../../../app/l/[token].tsx", "location-link"],
       ["../../../../../packages/shared/src/local/location-labels.ts"],
     ];

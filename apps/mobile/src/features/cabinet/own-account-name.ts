@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useMirror } from "@/features/access/mirror/mirror-state";
-import { useMyMemberships } from "@/features/settings/my-memberships";
+import { useMirror } from "@/session/mirror-state";
+import { useMyMemberships } from "@/session/my-memberships";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 
 // ИМЯ СВОЕГО АККАУНТА — «КОМПАНИЯ» НА КАРТЕ ЧЕЛОВЕКА И В «ПРОФИЛЕ» (владелец

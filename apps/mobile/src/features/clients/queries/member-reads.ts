@@ -7,7 +7,7 @@ import {
   contactsHiddenOf,
   parseMemberContacts,
   type MemberContactsAnswer,
-} from "@/features/clients/member-contacts";
+} from "@/session/member-contacts";
 
 /** Клиент — параметром: прогрев чужой компании зовёт ту же функцию клиентом,
  *  привязанным к ней (`bind-tenant.ts`). */

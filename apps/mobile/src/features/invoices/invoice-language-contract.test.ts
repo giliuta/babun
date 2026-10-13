@@ -8,8 +8,8 @@ import { invoiceEditorSource } from "./invoice-editor/editor-source";
 import { UI_LOCALES } from "@babun/shared/i18n/locales";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
 import { RECEIPT_WORDS } from "../documents/receipt-words";
-import { invoiceDictionary } from "./dictionary";
-import { buildInvoiceDocument } from "./document";
+import { invoiceDictionary } from "@/lib/paper/dictionary";
+import { buildInvoiceDocument } from "@/lib/paper/document";
 
 // ЯЗЫК БУМАГИ НЕ ОСТАЁТСЯ РУССКИМ МОЛЧА (аудит 03.10). Язык пишется вторым
 // запросом после выставления, ошибка глоталась, а переключателя на странице
@@ -20,7 +20,7 @@ const read = (path: string) => readFileSync(resolve(here, path), "utf8");
 
 describe("язык бумаги инвойса", () => {
   test("запись языка после выставления — вторая попытка, документ несёт записанный язык", () => {
-    const queries = read("queries.ts");
+    const queries = read("../finances/invoices-queries.ts");
     assert.match(queries, /for \(let attempt = 0; attempt < 2; attempt\+\+\) \{\s*try \{\s*await setInvoiceLanguage\(supabase, invoice\.id, language\);\s*return \{ \.\.\.invoice, language \};/);
   });
 
@@ -35,7 +35,7 @@ describe("язык бумаги инвойса", () => {
     const page = readModuleSource(resolve(here, "../../../app/invoices/[id].tsx"), resolve(here, "detail"));
     assert.doesNotMatch(page, /useSetInvoiceLanguage|Бумага на (русском|английском)/);
     assert.match(page, /useInvoiceMenu\(\)/);
-    assert.match(read("invoice-menu.ts"), /label: "Изменить инвойс",[^}]*run: edit/);
+    assert.match(read("../finances/invoice-menu.ts"), /label: "Изменить инвойс",[^}]*run: edit/);
   });
 
   // ЯЗЫК ВЫСТАВЛЕННОГО ИНВОЙСА НЕ МЕНЯЮТ (владелец 04.10: «если надо поменять —
@@ -43,7 +43,7 @@ describe("язык бумаги инвойса", () => {
   // «Изменить инвойс». Отсюда — только то, что выставление и запись языка
   // принимают любой язык приложения, а не «ru» | «en».
   test("выставление и запись языка принимают любой язык приложения", () => {
-    assert.match(read("queries.ts"), /\}: IssueInvoiceDraft & \{ language\?: InvoiceLanguage \}\) => \{/);
+    assert.match(read("../finances/invoices-queries.ts"), /\}: IssueInvoiceDraft & \{ language\?: InvoiceLanguage \}\) => \{/);
     assert.match(readModuleSource(resolve(here, "../../../../../packages/shared/src/db/repositories/invoices.ts")), /language: UiLocale,\n\): Promise<void>/);
   });
 
@@ -121,7 +121,7 @@ describe("язык бумаги инвойса", () => {
     const editor = invoiceEditorSource();
     // Новый — English, правка выставленного — на его языке, любом из семи.
     assert.match(editor, /useState<InvoiceLanguage>\(\s*isUiLocale\(existingLanguage\) \? existingLanguage : "en",\s*\)/);
-    assert.match(read("queries.ts"), /link_to_tx_id"> & \{ language\?: InvoiceLanguage \}\) => \{/);
+    assert.match(read("../finances/invoices-queries.ts"), /link_to_tx_id"> & \{ language\?: InvoiceLanguage \}\) => \{/);
     assert.match(read("../documents/use-receipt-source.ts"), /isUiLocale\(rowLanguage\) \? rowLanguage : "en"/);
     assert.match(editor, /language=\{\{ value: localeInfo\(language\)\.name, onPress: \(\) => setLanguageOpen\(true\) \}\}/);
     assert.match(editor, /<PaperLanguageSheet\s+visible=\{languageOpen\}\s+value=\{language\}\s+onChange=\{setLanguage\}/);

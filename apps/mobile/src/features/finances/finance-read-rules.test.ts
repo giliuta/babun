@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import type { FinanceDocument } from "./documents";
 import {
   financeReadRules,

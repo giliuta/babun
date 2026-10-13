@@ -8,7 +8,7 @@ import {
   type LinkGroup,
 } from "@babun/shared/local/selectors/client-links";
 import type { ClientLinkItem } from "./blocks/ClientLinksBlock";
-import { capabilitiesOf } from "./clients-company";
+import { capabilitiesOf } from "@/session/clients-company";
 import {
   memberClientJsonToClient,
   useClient,

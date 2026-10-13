@@ -15,8 +15,8 @@ import {
   formatPhoneAsYouType,
   formatPhoneForDisplay,
   isDialOnly,
-} from "@/features/clients/phone";
-import { useDefaultCountry } from "@/features/clients/default-country";
+} from "@/lib/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { FieldRow } from "@/components/ui/card-rows";
 import {
   AddContactSheet,

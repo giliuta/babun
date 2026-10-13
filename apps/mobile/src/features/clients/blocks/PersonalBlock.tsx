@@ -18,7 +18,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { Cake, Circle, Users } from "lucide-react-native";
 import { GUTTER } from "@/components/ui/tokens";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
+import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { formatShortDateRu } from "@/features/clients/format";

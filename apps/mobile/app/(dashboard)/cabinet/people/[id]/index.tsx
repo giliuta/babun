@@ -12,7 +12,7 @@ import {
 } from "@/features/access/master-page/draft-store";
 import { invitationIdFromSegment } from "@/features/access/master-page/master-draft";
 import { cardTeamIds } from "@/features/access/masters-list";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { useMaster, useTeams } from "@/features/reference/queries";
 
 // ОДНА ДВЕРЬ НА ЧЕЛОВЕКА (STORY-087; владелец 23.09: «страница мастера в

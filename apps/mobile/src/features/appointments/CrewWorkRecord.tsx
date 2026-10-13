@@ -15,10 +15,10 @@ import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesB
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
-import { contactsLocked } from "@/features/clients/member-contacts";
-import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
+import { contactsLocked } from "@/session/member-contacts";
+import { useRevealedClient } from "@/session/revealed-contacts";
 import { useOpenMemberContacts } from "@/features/clients/use-member-contacts";
 import { useTenantId } from "@/lib/tenant";
 

@@ -20,8 +20,8 @@ import type { Client } from "@babun/shared/local/clients";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { clientsQueryKey, sourceClientsQueryKey } from "@/lib/company-query-keys";
-import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
-import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
+import { inMirrorView, mirrorMemberClient } from "@/session/mirror-client";
+import { useMirrorClientScope } from "@/session/use-mirror-client-scope";
 import { listMasterClientsSafe, listMemberClients, withRecordClients } from "./member-reads";
 import { useMirroredMemberMap, useQueryScope } from "./scope";
 

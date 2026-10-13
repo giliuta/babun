@@ -5,8 +5,8 @@ import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
 import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
 import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
-import { clientsInsightsHref, type ClientsScope } from "@/features/clients/clients-company";
-import { ClientsScopeProvider } from "@/features/clients/company-scope";
+import { clientsInsightsHref, type ClientsScope } from "@/session/clients-company";
+import { ClientsScopeProvider } from "@/session/company-scope";
 import { teamForNewClient } from "@/features/clients/team-scope";
 import type { ClientsList } from "./use-clients-list";
 

@@ -444,7 +444,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` (тело — `src/features/services/price-list/ServicesList.tsx`) | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
-| Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `cabinet/`, `clients/`, `(shared)/` |
+| Типы объектов | `src/features/clients/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `cabinet/`, `clients/`, `(shared)/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
 | Запись и событие (форма) | `app/book/index.tsx` (тело — `src/features/appointments/book-form/`, проводка — `use-book-form.ts`) | — |
 | Вид и состав записи и события («Записи») | `src/features/calendar/design/DesignScreen.tsx` | `app/(dashboard)/(home)/calendar/design.tsx` |
@@ -485,6 +485,9 @@ Babun/
 │   └── mobile/                  # Expo SDK 54 / React Native — ЕДИНСТВЕННОЕ приложение
 │       ├── app/                 # expo-router: экраны и маршруты
 │       ├── src/components/      # UI-примитивы (BottomSheet, PickerSheet, SwipeRow …)
+│       │   └── blocks/          # блоки, общие для нескольких фич (ActionMenuSheet, InlineNoteField …)
+│       ├── src/session/         # кто вошёл и что ему можно: компания, роль, права, «его глазами»
+│       ├── src/lib/             # общие помощники без фич (период, телефон, бумага документов …)
 │       ├── src/features/        # calendar, clients, finances, services, invoices …
 │       ├── docs/DESIGN-SYSTEM.md# Дизайн-канон «Halo Cobalt»
 │       ├── .env.example         # Шаблон EXPO_PUBLIC_* → копировать в .env.local
@@ -501,6 +504,13 @@ Babun/
 ├── mockups/                     # HTML-прототипы экранов
 └── .github/workflows/ci.yml     # bun install --frozen-lockfile + typecheck / test / lint / build:web
 ```
+
+**Слои (2026-10-13).** Фича берёт из `session/`, `lib/`, `components/` — те
+из фич не берут ничего (исключения названы в тесте ниже). Две фичи не
+импортируют друг друга в обе стороны: общий кусок уезжает вниз — в
+`session/`, `lib/`, `components/blocks/` или в ту фичу, что ниже. Сторож —
+`apps/mobile/src/lib/feature-cycles.test.ts`: новая пара валит тест, а пара
+из его списка `ALLOWED`, которой больше нет, — тоже (список только сжимается).
 
 CI повторяет те же гейты, что и локальный `/test`, и все четыре блокируют:
 `bun run typecheck` (приложение и отдельно весь `packages/shared` с тестами),

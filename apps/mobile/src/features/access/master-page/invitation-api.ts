@@ -3,7 +3,7 @@ import type { Database } from "@babun/shared/db/database.types";
 
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { sendInvitationEmail } from "@/features/access/invitation-email";
+import { sendInvitationEmail } from "@/features/settings/invitation-email";
 
 import {
   createInvitationArgs,

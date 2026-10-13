@@ -8,7 +8,7 @@ import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { cardObjectId, lastVisitByObject } from "@/features/clients/object-last-visit";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
-import { useClientsCapabilities, useScopeCompany } from "@/features/clients/company-scope";
+import { useClientsCapabilities, useScopeCompany } from "@/session/company-scope";
 
 // ОБЪЕКТЫ КЛИЕНТА — ОДИН КУСОК НА ДВА МЕСТА (владелец 22.09: «блок объекты —
 // нажимаю, и открывается страница, где все объекты… если у клиента 12

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { MemberAccessMap } from "../access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import {
   anyClientSetting,
   clientSettingLevels,

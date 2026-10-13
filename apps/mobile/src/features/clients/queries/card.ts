@@ -10,9 +10,9 @@ import {
   sourceClientQueryKey,
   sourceClientsQueryKey,
 } from "@/lib/company-query-keys";
-import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
-import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { inMirrorView, mirrorMemberClient } from "@/session/mirror-client";
+import { useMirrorClientScope } from "@/session/use-mirror-client-scope";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 import { listMasterClientsSafe, listMemberClients } from "./member-reads";
 import { useMirroredMemberMap, useQueryScope } from "./scope";
 

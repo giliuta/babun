@@ -18,7 +18,7 @@ import type { AccountWithBalance } from "@/features/finances/accounts";
 import { accountIcon } from "@/features/finances/account-ui";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { formatInvoiceMoney, parseMoneyAmount } from "./format";
+import { formatInvoiceMoney, parseMoneyAmount } from "@/lib/paper/format";
 
 // ПРИНЯТЬ ОПЛАТУ ПО ИНВОЙСУ — НАШИМИ БЛОКАМИ (владелец 2026-10-04: «сам вид
 // принятия оплаты отвратительный, переделать»; «когда я нажимаю кнопку

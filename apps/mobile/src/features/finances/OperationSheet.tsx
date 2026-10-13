@@ -17,7 +17,7 @@ import {
   useInsertTransaction,
   useUpdateTransaction,
 } from "./queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import {
   operationCanSave,
   operationInputReason,

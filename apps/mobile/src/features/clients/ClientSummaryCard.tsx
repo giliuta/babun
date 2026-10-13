@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { todayYMD } from "@/features/clients/filter";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 import { useTeams } from "@/features/reference/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 

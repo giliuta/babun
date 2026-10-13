@@ -18,7 +18,7 @@ import {
 import { objectTarget, primaryLine } from "@/features/clients/object-address";
 import { useAddressPartsEdit } from "@/features/clients/use-address-parts-edit";
 import { snapObjectType } from "@/features/clients/object-types";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useReferenceHref } from "@/lib/reference-href";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmAction } from "@/lib/confirm";

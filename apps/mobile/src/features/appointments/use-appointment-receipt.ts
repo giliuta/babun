@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useAppointmentLedger } from "@/features/finances/queries";
-import { useReceipts } from "@/features/documents/receipts-queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
 import {
   incomesAwaitingInvoice,
   incomesAwaitingReceipt,
-} from "@/features/documents/receipt-for-payment";
+} from "@/features/finances/receipt-for-payment";
 
 // ЧЕК ЗАПИСИ ДЛЯ ЗНАЧКА В «ОПЛАТЕ» (владелец 2026-10-03: «оплатили — запись
 // становится оплачена, и открывается возможность делать чек; нажимаю на

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 
 // ЗАМЕТКА С ЧЕРНОВИКОМ ВНУТРИ ПОЛЯ (аудит Android 13.10). Заметка записи жила
 // состоянием всей формы записи: каждая буква перерисовывала экран в четыре

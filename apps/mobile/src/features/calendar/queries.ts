@@ -18,11 +18,11 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
-import { useDataRole } from "@/features/settings/tenant";
-import { accessGate, moneyKey } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useDataRole } from "@/session/tenant";
+import { accessGate, moneyKey } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   appointmentsQueryKey,
   dayExtrasQueryKey,

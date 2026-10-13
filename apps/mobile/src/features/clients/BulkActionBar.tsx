@@ -15,7 +15,7 @@ import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MessageSquare, Share2, Trash2 } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 export function BulkActionBar({

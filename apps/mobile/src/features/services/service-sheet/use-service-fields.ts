@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { type Service } from "@/features/services/queries";
-import { roundToStep } from "@/features/services/format";
+import { roundToStep } from "@/lib/service-format";
 import {
   economicsDraftFromService,
   type ServiceEconomicsDraft,

@@ -5,8 +5,8 @@ import {
   removeBabunNotificationOwners,
   replaceBabunNotificationOwner,
 } from "@/lib/notifications";
-import { clockParts } from "@/features/cabinet/notification-prefs";
-import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
+import { clockParts } from "@/lib/notification-prefs";
+import { readTeamNotifyPrefs } from "@/lib/notification-prefs-cache";
 
 const Notifications = getNotificationsModule();
 

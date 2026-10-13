@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import type { ClientsScope } from "@/session/clients-company";
 import type { Team } from "@/features/reference/queries";
 import type { GuestSources } from "@/features/clients/guest-sources";
 import { withClientHistory } from "@/features/clients/member-history";
 import { useMemberClientHistory } from "@/features/clients/use-member-history";
-import { useCalendarVisibility } from "@/features/settings/workspaces";
+import { useCalendarVisibility } from "@/session/workspaces";
 import { useTenantId } from "@/lib/tenant";
 import { uniqueById } from "./list-derive";
 

@@ -1,6 +1,6 @@
 // Server error shapes shared by the calendar and event-type settings reads.
 
-import type { ServerReadError } from "@/features/settings/server-read-fallback";
+import type { ServerReadError } from "@/lib/server-read-fallback";
 
 export function asServerReadError(error: unknown): ServerReadError {
   if (error && typeof error === "object") {

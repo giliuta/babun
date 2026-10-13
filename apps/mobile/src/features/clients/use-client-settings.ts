@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useClientsCapabilities, useClientsScopeOrNull } from "./company-scope";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/session/company-scope";
 import {
   clientSettingLevels,
   type ClientSettingLevel,

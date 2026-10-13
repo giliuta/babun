@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { Linking, Platform } from "react-native";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { useTenantId } from "@/lib/tenant";
 import { smsUrlWithBody, type SmsVars } from "./sms-compose";
 import { useSmsAccount } from "./sms-account";

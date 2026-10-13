@@ -1,6 +1,6 @@
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { CalendarOfferSheet } from "@/features/tariffs/CalendarOfferSheet";
-import { CALENDAR_PRICE, euro } from "@/features/tariffs/calendar-price";
+import { CALENDAR_PRICE, euro } from "@/session/calendar-price";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";

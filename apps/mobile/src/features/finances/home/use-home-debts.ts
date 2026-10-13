@@ -8,7 +8,7 @@ import {
 import { NO_TEAM } from "../accounts-sections";
 import { invoiceDebtRows, manualDebtRows } from "../debt-rows";
 import { readableDebts, type FinanceReadRules } from "../finance-read-rules";
-import type { Period } from "../period";
+import type { Period } from "@/lib/period";
 import { forClient } from "./home-scope";
 import type { HomeReferences } from "./use-home-references";
 

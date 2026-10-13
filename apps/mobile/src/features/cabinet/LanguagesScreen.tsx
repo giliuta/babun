@@ -6,7 +6,7 @@ import { LanguageOptionList } from "@/components/ui/LanguageOptionList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 
-import { reloadApp } from "./reload-app";
+import { reloadApp } from "@/lib/reload-app";
 
 // СТРАНИЦА «ЯЗЫКИ» (Кабинет → «Этот телефон», владелец 03.10: «в кабинете
 // добавь новую страницу языки, чтоб можно было выбирать языки»).

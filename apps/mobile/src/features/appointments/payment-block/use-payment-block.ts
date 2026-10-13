@@ -6,9 +6,9 @@ import { usePaymentRights } from "../usePaymentRights";
 import { useAppointmentInvoicePay } from "../use-appointment-invoice-pay";
 import { useToast } from "@/components/ui/Toast";
 import { useAppointmentReceipt } from "../use-appointment-receipt";
-import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
-import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
-import { usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { useCreditNoteLinks, useInvoices } from "@/features/finances/invoices-queries";
+import { liveAppointmentInvoices } from "@/features/finances/appointment-invoices";
+import { usePlanAllows, useTenant } from "@/session/tenant";
 import { useBusinessNow } from "../business-now";
 import { useTeamPaymentAccounts } from "../payment-accounts";
 import {

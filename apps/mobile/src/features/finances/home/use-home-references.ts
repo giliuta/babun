@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { useTenantId } from "@/lib/tenant";
-import { useCalendarVisibility } from "@/features/settings/workspaces";
+import { useCalendarVisibility } from "@/session/workspaces";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
+import { useInvoicePayments, useInvoices } from "@/features/finances/invoices-queries";
 import { useAccountsWithBalances } from "../accounts";
 import { useFinanceCategories } from "../queries";
 

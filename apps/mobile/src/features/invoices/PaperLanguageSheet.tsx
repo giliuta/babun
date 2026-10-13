@@ -3,7 +3,7 @@ import type { UiLocale } from "@babun/shared/i18n/locales";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { LanguageOptionList } from "@/components/ui/LanguageOptionList";
 
-import type { InvoiceLanguage } from "./dictionary";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 
 // ЯЗЫК БУМАГИ ДОКУМЕНТА — инвойса и чека (владелец 2026-10-04: язык выбирают
 // шторкой со всеми языками). Язык — свойство документа; дверь к шторке —

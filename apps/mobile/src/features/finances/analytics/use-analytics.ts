@@ -4,14 +4,14 @@ import {
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
 import { summarizeVat } from "@babun/shared/local/finance/vat";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 import { useAppointments, useFinanceServices } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useAccountsWithBalances } from "../accounts";
 import {
   financeReadRules,
@@ -19,7 +19,7 @@ import {
   moneySides,
   readableTransactions,
 } from "../finance-read-rules";
-import { makePeriod, type Period } from "../period";
+import { makePeriod, type Period } from "@/lib/period";
 import { useFinanceCategories, useTransactions } from "../queries";
 import { awaitingAnswer } from "../ledger-select";
 import {

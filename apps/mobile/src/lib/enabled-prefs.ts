@@ -5,7 +5,7 @@ import {
   type EnabledPrefsOptions,
 } from "@/lib/enabled-prefs-core";
 import { useTenantId } from "@/lib/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 
 // «ЧТО ВООБЩЕ ПРЕДЛАГАТЬ И В КАКОМ ПОРЯДКЕ» — один механизм на все такие
 // наборы: способы связи, что можно добавить, карты для маршрута.

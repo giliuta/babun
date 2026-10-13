@@ -7,15 +7,15 @@ import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useCreateClient, useUpdateClientById } from "@/features/clients/queries";
 import { splitSourceStep, type SplitRef } from "@/features/clients/split-client";
 import { notify } from "@/lib/notify";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
-import { clientCardHref } from "@/features/clients/clients-company";
+import { useClientsScopeOrNull } from "@/session/company-scope";
+import { clientCardHref } from "@/session/clients-company";
 import {
   countryDialCode,
   formatPhoneAsYouType,
   isDialOnly,
   tryToE164,
-} from "@/features/clients/phone";
-import { useDefaultCountry } from "@/features/clients/default-country";
+} from "@/lib/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { splitNameAndPhone } from "@/features/clients/name-phone-paste";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -23,7 +23,7 @@ import { haptics } from "@/lib/haptics";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
 import { friendlyCreateError, isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { clientMembersQueryKey } from "@/features/clients/use-link-writer";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import {
   draftCanSave,
   draftHasInput,

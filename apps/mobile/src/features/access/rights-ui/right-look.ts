@@ -57,7 +57,7 @@ import {
 
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 
 // ПЛИТКА СТРОКИ ПРАВА (владелец 29.09, на настройках календаря: «вот так»).
 // Права команды стоят теми же строками, что настройки календаря: цветная

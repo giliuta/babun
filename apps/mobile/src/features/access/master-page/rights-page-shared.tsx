@@ -6,10 +6,10 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useTenantId } from "@/lib/tenant";
 import type { Team } from "@/features/reference/queries";
 
-import type { AccessBlock } from "../access-map";
+import type { AccessBlock } from "@/session/access-map";
 import { mirrorMapOf } from "../mirror/mirror-map";
-import { useMirrorMode } from "../mirror/mirror-state";
-import { returnHrefOf, stackHrefsOf } from "../mirror/mirror-return";
+import { useMirrorMode } from "@/session/mirror-state";
+import { returnHrefOf, stackHrefsOf } from "@/session/mirror-return";
 import type { RightsArea } from "./master-draft";
 
 // ОБЩЕЕ ТРЁМ РЕЖИМАМ СТРАНИЦЫ ПРАВ: вход в зеркало, экран «едет/отказ» и два

@@ -6,7 +6,7 @@ import { DateSpinner } from "@/components/ui/DateSpinner";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { WhenRow } from "@/features/appointments/BookingSummary";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
-import { dmyShort } from "@/features/finances/period";
+import { dmyShort } from "@/lib/period";
 import { useThemeColors } from "@/theme/colors";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 

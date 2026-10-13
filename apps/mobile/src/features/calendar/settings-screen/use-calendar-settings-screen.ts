@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { readTenantPref } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
-import { useSaveCalendarOrder } from "@/features/settings/use-calendar-order";
-import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
+import { useSaveCalendarOrder } from "@/session/use-calendar-order";
+import { useCalendarChips, useCalendarVisibility } from "@/session/workspaces";
 import { useLeaveCalendar } from "@/features/settings/leave-calendar";
 import {
   AUTO_COLOR_RULES,
@@ -18,20 +18,20 @@ import {
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCities, useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
-import { schedulePreview } from "@/features/calendar/schedule-days";
+import { schedulePreview } from "@/features/reference/schedule-days";
 import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { calendarSettingsRows } from "@/features/calendar/settings-rows";
 import { readGridZoom, readViewportH, writeGridZoom, zoomToPct, type GridZoom } from "@/features/calendar/grid-memory";
-import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows } from "@/session/tenant";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { useMemberUpdateTeam } from "@/features/calendar/mutations";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { accessGate } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
 import { effectiveCalendarWindow } from "@/features/calendar/window";
 import { effectiveWorkHours, hourLabel } from "@/features/calendar/setting-options";
-import { canAddTeam } from "@/features/tariffs/tiers";
+import { canAddTeam } from "@/session/tiers";
 import { useTariff } from "@/features/tariffs/use-tariff";
 import { bookingSubtitle, labelsSubtitle, windowSpanHours } from "./settings-subs";
 

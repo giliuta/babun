@@ -14,9 +14,9 @@ import {
   telUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
-import { isMessagingReady } from "@/features/chats/readiness";
+import { isMessagingReady } from "@/lib/messaging-readiness";
 import type { CountryCode } from "libphonenumber-js";
-import { tryToE164 } from "@/features/clients/phone";
+import { tryToE164 } from "@/lib/phone";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // СПОСОБЫ СВЯЗИ — один список на весь продукт (владелец 2026-07-26:

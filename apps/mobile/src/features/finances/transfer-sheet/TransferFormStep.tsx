@@ -11,11 +11,11 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
 import { GUTTER } from "@/components/ui/tokens";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { AmountBlock } from "../AmountBlock";
 import { accountIcon } from "../account-ui";
 import type { AccountWithBalance } from "../accounts";
-import { dayPhrase } from "../period";
+import { dayPhrase } from "@/lib/period";
 import { transferSourceCaption } from "./transfer-rules";
 import type { TransferView } from "./transfer-view";
 

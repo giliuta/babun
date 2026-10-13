@@ -3,7 +3,7 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import { useClients, useClientTags, useUpdateClientById } from "@/features/clients/queries";
 import { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import { DEFAULT_SORT } from "@/features/clients/filter";
-import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/session/company-scope";
 import { useClientsSources } from "@/features/clients/sources";
 import { useGuestSources } from "@/features/clients/guest-sources";
 import { useClientsSort, useSetClientsSort } from "@/features/clients/sort-pref";

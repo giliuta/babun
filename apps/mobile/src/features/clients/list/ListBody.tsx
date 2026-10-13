@@ -5,7 +5,7 @@ import { LoadingBar } from "@/components/ui/LoadingBar";
 import { Spinner } from "@/components/ui/Spinner";
 import ClientRow from "@/features/clients/ClientRow";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
-import { clientCardHref, ownClientCardHref } from "@/features/clients/clients-company";
+import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
 import { useThemeColors } from "@/theme/colors";
 import type { ClientsList } from "./use-clients-list";

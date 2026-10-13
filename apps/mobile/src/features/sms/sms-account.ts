@@ -1,8 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
-import { useAccountScope } from "@/features/cabinet/account-scope";
+import { useDataRole } from "@/session/tenant";
+import { useAccountScope } from "@/session/account-scope";
 import {
   applyPatch,
   parseSmsAccount,
@@ -12,7 +12,7 @@ import {
   type SmsHistoryItem,
   type SmsSettingsPatch,
 } from "./sms-model";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import {
   clientOf,
   smsAccountKey,

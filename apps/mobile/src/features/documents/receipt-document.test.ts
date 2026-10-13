@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Appointment, AppointmentService } from "@babun/shared/local/appointments";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { formatInvoiceDate, formatInvoiceMoney } from "@/features/invoices/format";
+import { formatInvoiceDate, formatInvoiceMoney } from "@/lib/paper/format";
 import {
   buildReceiptDocument,
   receiptCoversFullAmount,

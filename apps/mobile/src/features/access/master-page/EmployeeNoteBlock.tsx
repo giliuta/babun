@@ -1,6 +1,6 @@
 import { SectionCard } from "@/components/ui/SectionCard";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
+import { useInlineNote } from "@/components/blocks/use-inline-note";
 import type { Master } from "@/features/reference/queries";
 
 import { useMasterProfileWrite } from "./use-profile-write";

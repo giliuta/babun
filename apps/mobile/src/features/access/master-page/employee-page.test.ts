@@ -88,7 +88,7 @@ describe("одна дверь на человека", () => {
     assert.match(member, /teamLine=\{\(id\) => draftTeamBrief\(blocks, draft, id\)\}/);
   });
   test("права названы словами про человека", () => {
-    const map = read("../access-map.ts");
+    const map = read("../../../session/access-map.ts");
     assert.match(map, /off: "Не видит",\s*read: "Видит",\s*write: "Меняет"/);
     assert.match(readModuleSource(resolve(here, "master-draft.ts")), /export const MIXED_WORD = "Частично";/);
   });

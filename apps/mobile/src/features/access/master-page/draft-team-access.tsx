@@ -4,7 +4,7 @@ import { useRouter, type Href } from "expo-router";
 
 import type { Team } from "@/features/reference/queries";
 
-import type { AccessBlock } from "../access-map";
+import type { AccessBlock } from "@/session/access-map";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { CALENDAR_GROUPS } from "./access-summary";
 import { visibleLevel, type MasterDraft } from "./master-draft";

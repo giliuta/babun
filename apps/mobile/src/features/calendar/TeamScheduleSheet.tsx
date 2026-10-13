@@ -27,7 +27,7 @@ import {
   dayOf,
   WEEKDAY_FULL,
   withDay,
-} from "@/features/calendar/schedule-days";
+} from "@/features/reference/schedule-days";
 import {
   effectiveWorkHours,
   hourLabel,

@@ -8,8 +8,8 @@ import type {
   PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
 
-import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
-import { useMyAccess } from "@/features/access/queries";
+import { MirrorBanner } from "@/components/blocks/MirrorBanner";
+import { useMyAccess } from "@/session/access-queries";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -17,7 +17,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { crewAddress, crewBlocks } from "@/features/appointments/crew-blocks";
 import { crewMoney, crewWorkLines } from "@/features/appointments/crew-work";

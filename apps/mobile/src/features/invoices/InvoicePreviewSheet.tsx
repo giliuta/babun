@@ -9,8 +9,8 @@ import { SelectRow } from "@/components/ui/select-rows";
 import { StepBack } from "@/components/ui/StepBack";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import type { InvoiceLanguage } from "./dictionary";
-import type { InvoiceDocument } from "./document";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import type { InvoiceDocument } from "@/lib/paper/document";
 import { InvoicePaper } from "./InvoicePaper";
 
 // ПЕРЕД ВЫСТАВЛЕНИЕМ — ВСЕГДА ПОКАЗАТЬ БУМАГУ.

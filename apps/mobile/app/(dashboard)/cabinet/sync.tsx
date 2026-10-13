@@ -38,7 +38,7 @@ import { useTenantId } from "@/lib/tenant";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 const MAX_ATTEMPTS = 3;
 

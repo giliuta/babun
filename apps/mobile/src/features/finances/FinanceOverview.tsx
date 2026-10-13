@@ -9,7 +9,7 @@ import {
 } from "@babun/shared/common/utils/plural-ru";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
-import type { Period } from "./period";
+import type { Period } from "@/lib/period";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
 import { SummaryToggle } from "./finance-overview/SummaryToggle";

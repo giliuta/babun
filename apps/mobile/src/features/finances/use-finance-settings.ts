@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useMyAccess } from "@/features/access/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useMyAccess } from "@/session/access-queries";
+import { useCurrentRole } from "@/session/tenant";
 import {
   financeSettingLevels,
   type FinanceSettingLevel,

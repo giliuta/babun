@@ -5,8 +5,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useDocumentLevel } from "@/features/documents/document-rights";
+import { useCurrentRole } from "@/session/tenant";
+import { useDocumentLevel } from "@/session/document-rights";
 
 // Хаб документов — сиблинг табов (как /invoices и /accounts): «назад»
 // всегда возвращает позвавшему.

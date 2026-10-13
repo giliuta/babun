@@ -18,7 +18,7 @@ import {
   countryDialCode,
   normalizeCountry,
   POPULAR_COUNTRIES,
-} from "@/features/clients/phone";
+} from "@/lib/phone";
 import { countryName } from "@/features/clients/use-phone-country";
 import { chooseValue } from "@/lib/choose";
 import { notify } from "@/lib/notify";
@@ -27,7 +27,7 @@ import {
   useCurrentRole,
   useTenant,
   useUpdateTenant,
-} from "@/features/settings/tenant";
+} from "@/session/tenant";
 
 type FormKey =
   | "name"

@@ -1,4 +1,4 @@
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "../access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
 import { visibleLevel, type MasterDraft } from "../master-page/master-draft";
 import { offeredBlocks } from "../master-page/rights-copy";
 

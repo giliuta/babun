@@ -40,7 +40,7 @@ import {
   QUICK_REPLIES,
 } from "@babun/shared/common/utils/quick-replies";
 import { renderTemplate } from "@babun/shared/local/sms-templates";
-import { addressedAs } from "@/features/clients/sms-name";
+import { addressedAs } from "@/lib/sms-name";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -49,9 +49,9 @@ import { useToast } from "@/components/ui/Toast";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useClients, useCreateClient } from "@/features/clients/queries";
-import { tryToE164 } from "@/features/clients/phone";
+import { tryToE164 } from "@/lib/phone";
 import { uniqueByBody, useTeamTemplates } from "@/features/sms/sms-account";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { notify } from "@/lib/notify";
 import { chooseOption } from "@/lib/choose";
 import {

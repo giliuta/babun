@@ -19,7 +19,7 @@ test("заставка: тот же знак, что у системной, сл
 });
 
 test("скрытый календарь не мелькает при входе: список скрытых — с телефона, сетка ждёт его (11.10)", () => {
-  const hidden = read("../settings/use-hidden-calendars.ts");
+  const hidden = read("../../session/use-hidden-calendars.ts");
   assert.match(hidden, /placeholderData: \(\) => readCache\(userId\)/);
   assert.match(hidden, /writeCache\(userId, keys\);/);
   assert.match(read("../../lib/tenant-prefs.ts"), /"babun:calendars\.hidden:"/);

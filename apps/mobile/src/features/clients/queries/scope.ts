@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import type { Client } from "@babun/shared/local/clients";
-import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useMirror } from "@/session/mirror-state";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
-import { useClientsScopeOrNull } from "../company-scope";
+import { useCurrentRole, type UserRole } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   activeCompanyScope,
   capabilitiesOf,
@@ -14,13 +14,13 @@ import {
   viewKeyOf,
   type ClientsCompanyKind,
   type ClientsScope,
-} from "../clients-company";
+} from "@/session/clients-company";
 import {
   clientBlockLevel,
   type ClientCardBlock,
 } from "@/features/clients/client-block-access";
 import { clientsAccessOf } from "@/features/clients/clients-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 
 // ИСТОЧНИК ЭКРАНА: СВОЯ КОМПАНИЯ, КОМПАНИЯ-РАБОТОДАТЕЛЬ ИЛИ КЛИЕНТ ЗАПИСИ.
 //

@@ -4,7 +4,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { SelectRow } from "@/components/ui/select-rows";
 import { docTitle, isVideoPath } from "@/features/appointments/appointment-files";
 import { formatBytes } from "@/features/clients/card-attachments";
-import { fileTime } from "@/features/clients/client-files";
+import { fileTime } from "@/lib/client-files";
 import type { ClientFileItem } from "@/features/clients/use-client-files";
 import { KIND_LABEL } from "@/features/clients/visit-photos";
 import { useThemeColors } from "@/theme/colors";

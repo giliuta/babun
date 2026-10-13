@@ -26,10 +26,10 @@ import {
   fetchMyCalendars,
   myCalendarsQueryKey,
   type MyCalendar,
-} from "@/features/settings/workspaces";
-import { myMembershipsQueryKey } from "@/features/settings/my-memberships-key";
-import { switchTenant } from "@/features/settings/switch-tenant";
-import { isUserRole } from "@/features/settings/role-policy";
+} from "@/session/workspaces";
+import { myMembershipsQueryKey } from "@/session/my-memberships-key";
+import { switchTenant } from "@/session/switch-tenant";
+import { isUserRole } from "@/session/role-policy";
 
 // УВОЛЕННОГО ИЗ КОМПАНИИ — ЕЁ ДАННЫЕ УХОДЯТ С ТЕЛЕФОНА (этап 0(ж) плана доступа).
 //

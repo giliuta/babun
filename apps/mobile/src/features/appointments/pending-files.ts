@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { uploadAttachment } from "@/features/clients/card-attachments";
 import { RetryableAppointmentPhotoUploadError, uploadAppointmentAssets } from "./appointment-photos";
 import type { PendingFile } from "./appointment-files";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 export { pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
 

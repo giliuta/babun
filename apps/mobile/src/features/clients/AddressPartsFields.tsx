@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";

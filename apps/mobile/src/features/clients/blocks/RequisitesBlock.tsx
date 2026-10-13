@@ -15,11 +15,11 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { haptics } from "@/lib/haptics";
 import { useCopyValue } from "@/lib/copy-value";
 import { requisitesLines } from "@/features/clients/client-share";
-import { moreLabel } from "@/features/clients/more-label";
+import { moreLabel } from "@/lib/more-label";
 import { RequisitesSheet } from "@/features/clients/RequisitesSheet";
 import { useRequisitesWriter } from "@/features/clients/use-requisites-writer";
 import { useThemeColors } from "@/theme/colors";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 
 // РЕКВИЗИТЫ КЛИЕНТА (STORY-085, владелец 2026-09-21): «реквизиты делаем
 // всегда… инвойс могут просить прямо на клиента с его реквизитами». Блок

@@ -8,11 +8,11 @@ import {
 } from "@/features/clients/contact-channels";
 import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay, tryToE164 } from "@/lib/phone";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
-import { ClientsScopeProvider } from "@/features/clients/company-scope";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import { ClientsScopeProvider } from "@/session/company-scope";
+import type { ClientsScope } from "@/session/clients-company";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useSmsComposeContext } from "@/features/sms/SmsCompose";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";

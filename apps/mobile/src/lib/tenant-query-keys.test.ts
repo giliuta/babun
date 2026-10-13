@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { myMembershipsQueryKey } from "../features/settings/my-memberships-key";
+import { myMembershipsQueryKey } from "@/session/my-memberships-key";
 import { querySurvivesSwitch } from "./tenant-query-keys";
 
 // СВОИ ЧЛЕНСТВА ПЕРЕЖИВАЮТ ПЕРЕХОД. По ним вкладка «Клиенты» находит компанию,

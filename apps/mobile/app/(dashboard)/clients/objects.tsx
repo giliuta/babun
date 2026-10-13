@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { useInClientsTab } from "@/features/clients/reference-href";
+import { useInClientsTab } from "@/lib/reference-href";
 import { ScrollView, View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import type { Client } from "@babun/shared/local/clients";

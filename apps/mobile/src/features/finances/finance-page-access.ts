@@ -5,9 +5,9 @@ import {
   canEditTransaction,
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, moneyKey, type AccessGate } from "@/features/access/my-access";
-import type { UserRole } from "@/features/settings/role-policy";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate, moneyKey, type AccessGate } from "@/session/my-access";
+import type { UserRole } from "@/session/role-policy";
 import { NO_TEAM } from "./accounts-sections";
 import type { HomeView } from "./FinanceOverview";
 

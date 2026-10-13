@@ -19,10 +19,10 @@ import {
   type EventBlockId,
 } from "@/features/appointments/booking-prefs";
 import { useCalendarSettings, usePersonalEventTypes } from "@/features/settings/local-settings";
-import { useDataRole, usePlanAllows } from "@/features/settings/tenant";
+import { useDataRole, usePlanAllows } from "@/session/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useMemberUpdateTeam } from "@/features/calendar/mutations";
-import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
+import { useTeamSettingLevel } from "@/session/team-setting-level";
 import { designColorRows, eventTypesSubtitle, type ColorTarget } from "./design-rows";
 
 /** Team, rights, colours and blocks of the «Записи» page. */

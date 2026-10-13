@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { parseMemberAccessMap, type AccessLevel, type MemberAccessMap } from "@/features/access/access-map";
+import { parseMemberAccessMap, type AccessLevel, type MemberAccessMap } from "@/session/access-map";
 import { bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlocks } from "./record-blocks";
 
 const TEAM = "team-1";

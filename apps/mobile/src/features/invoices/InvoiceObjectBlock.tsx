@@ -8,7 +8,7 @@ import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import { hasExactAddress } from "./document";
+import { hasExactAddress } from "@/lib/paper/document";
 import { useUpdateClientById } from "@/features/clients/queries";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { useThemeColors } from "@/theme/colors";

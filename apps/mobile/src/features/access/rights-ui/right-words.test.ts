@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { hasBlockPreview } from "./preview-keys";
 import { WORDED_KEYS, offeredSteps, rightTitle, rowWord, shownLevel, stepDanger, stepHint, stepWord } from "./right-words";
 

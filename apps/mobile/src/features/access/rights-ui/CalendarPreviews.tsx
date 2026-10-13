@@ -8,11 +8,11 @@ import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { actionLook } from "@/features/calendar/ActionMenuSheet";
+import { actionLook } from "@/components/blocks/ActionMenuSheet";
 import { DateCell } from "@/features/calendar/date-header";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import { DayGrid } from "./DayGridPreview";
 import { previewActions, previewRecord, sampleTile, type SampleTile } from "./preview-sample";

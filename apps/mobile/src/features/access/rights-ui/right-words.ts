@@ -1,4 +1,4 @@
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { levelSentence, segmentWord } from "../master-page/rights-copy";
 
 // СЛОВА СТРОК ПРАВ — ЛЕСТНИЦЫ (владелец 29.09: «максимально лёгкий простой

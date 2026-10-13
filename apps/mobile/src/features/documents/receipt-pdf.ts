@@ -1,6 +1,6 @@
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { escapeHtml } from "@/features/invoices/pdf";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { escapeHtml } from "@/lib/paper/pdf";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import {
   buildReceiptDocument,
   type ReceiptDocument,

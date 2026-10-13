@@ -102,7 +102,7 @@ describe("анатомия шторки выбора", () => {
   // всех»). Команда и метка в шапке записи рисовались бледным кружком, а их
   // шторки — квадратной плиткой; у команды к тому же разными глифами.
   test("команда и метка в форме — плитка шторки, карточка белая", () => {
-    const card = read("../../features/appointments/TeamLabelRow.tsx");
+    const card = read("../blocks/TeamLabelRow.tsx");
     const row = read("./select-rows.tsx");
     assert.match(card, /<AppearanceTile\b/, "выбранное в шапке формы снова не плитка шторки");
     const tile = row.match(/const TILE = (\d+)/)?.[1];
@@ -122,7 +122,7 @@ describe("анатомия шторки выбора", () => {
   });
 
   test("глиф команды один и тот же в плитке и в шторке", () => {
-    const card = read("../../features/appointments/TeamLabelRow.tsx");
+    const card = read("../blocks/TeamLabelRow.tsx");
     const sheet = read("../../features/appointments/BookingSheets.tsx");
     const book = bookFormSource();
     assert.doesNotMatch(

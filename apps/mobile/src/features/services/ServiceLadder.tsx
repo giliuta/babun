@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
-import { durationLabel } from "./format";
+import { durationLabel } from "@/lib/service-format";
 import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 import { LadderCell as Cell } from "./service-ladder/LadderCell";
 import { LadderHeader } from "./service-ladder/LadderHeader";

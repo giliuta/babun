@@ -9,13 +9,13 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useQuietUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useServices } from "@/features/services/queries";
-import { useCalendarVisibility } from "@/features/settings/workspaces";
+import { useCalendarVisibility } from "@/session/workspaces";
 import { useCreateFirstCalendar, useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/session/tenant";
+import { useMyAccess } from "@/session/access-queries";
 import { useSession } from "@/providers/SessionProvider";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import { referenceKeys } from "@/features/reference/query-keys";
 
 /** Data the calendar screen reads: records, clients, services, calendars,

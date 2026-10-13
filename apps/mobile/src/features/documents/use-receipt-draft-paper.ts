@@ -5,8 +5,8 @@ import {
 } from "@babun/shared/local/client-requisites";
 import { useClients } from "@/features/clients/queries";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
-import { invoiceDictionary, type InvoiceLanguage } from "@/features/invoices/dictionary";
-import { clientParty } from "@/features/invoices/document";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
+import { clientParty } from "@/lib/paper/document";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import {
   buildDraftReceiptDocument,

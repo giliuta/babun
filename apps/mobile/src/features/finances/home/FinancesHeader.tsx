@@ -4,7 +4,7 @@ import { BarChart3, Search, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import type { FinancePageAccess } from "../finance-page-access";
 import type { HomeView } from "../FinanceOverview";
-import type { Period } from "../period";
+import type { Period } from "@/lib/period";
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква

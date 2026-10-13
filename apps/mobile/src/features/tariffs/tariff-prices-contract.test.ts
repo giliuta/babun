@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 
-import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "./tiers";
+import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "@/session/tiers";
 
 // ЦЕНА НА СТРАНИЦЕ «ТАРИФ» = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE (с 12.10 — одна
 // цена за календарь, количество = живые календари).

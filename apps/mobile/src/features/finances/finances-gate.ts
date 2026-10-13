@@ -1,6 +1,6 @@
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, moneyKey } from "@/features/access/my-access";
-import type { UserRole } from "@/features/settings/role-policy";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate, moneyKey } from "@/session/my-access";
+import type { UserRole } from "@/session/role-policy";
 
 /**
  * ЧТО РИСУЕТ ВКЛАДКА «ФИНАНСЫ».

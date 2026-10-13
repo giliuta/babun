@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { formatInvoiceMoney } from "../format";
+import { formatInvoiceMoney } from "@/lib/paper/format";
 import { InvoiceStatusBadge } from "../InvoiceStatusBadge";
 
 /** «Поделиться PDF» and «⋯» in the invoice page header. */

@@ -1,7 +1,7 @@
 // Invitation <-> draft: the request sent to the server, a pending invitation
 // read back into a draft, and its route segment.
 
-import { LEVEL_WORD, type AccessBlock, type AccessChange, type AccessLevel } from "../../access-map";
+import { LEVEL_WORD, type AccessBlock, type AccessChange, type AccessLevel } from "@/session/access-map";
 import { draftAccessChanges } from "./area";
 import type { MasterDraft } from "./draft";
 

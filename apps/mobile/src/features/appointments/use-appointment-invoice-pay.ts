@@ -7,7 +7,7 @@ import {
 } from "@babun/shared/local/finance/invoice-ledger";
 import { randomUuid } from "@babun/shared/sync";
 
-import { useInvoicePayments, useRecordInvoicePayment } from "@/features/invoices/queries";
+import { useInvoicePayments, useRecordInvoicePayment } from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 

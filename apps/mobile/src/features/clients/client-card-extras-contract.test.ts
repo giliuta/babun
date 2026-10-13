@@ -67,7 +67,7 @@ describe("метка и тег — плитками перед «Личным»"
   // Метка» в записи. Метка заходит сама с записи, пока её не выбрали руками.
   const tiles = () => read("ClientLabelTags.tsx");
   test("та же плитка, что в шапке записи", () => {
-    assert.match(tiles(), /import \{ IdentityCard \} from "@\/features\/appointments\/TeamLabelRow"/);
+    assert.match(tiles(), /import \{ IdentityCard \} from "@\/components\/blocks\/TeamLabelRow"/);
     assert.equal((tiles().match(/<IdentityCard/g) ?? []).length, 2);
   });
   test("авто-метка подписана «по записи», ручная — нет", () => {
@@ -205,7 +205,7 @@ describe("аудит 23.09 — то, что чинили", () => {
     assert.match(search, /for \(const set of client\.requisites \?\? \[\]\) \{/);
   });
   test("двери подстраниц уносят компанию клиента", () => {
-    assert.match(readModuleSource(resolve(here, "clients-company.ts")), /export function clientSubParams\(/);
+    assert.match(readModuleSource(resolve(here, "../../session/clients-company.ts")), /export function clientSubParams\(/);
     assert.match(page(), /pathname: subPage\("objects"\), params: clientSubParams\(id, scope\)/);
     assert.match(page(), /pathname: subPage\("requisites"\), params: clientSubParams\(id, scope\)/);
     assert.match(read("blocks/ClientFilesBlock.tsx"), /clientSubParams\(clientId, scope\)/);
@@ -257,7 +257,7 @@ describe("«Отменить» возвращает связь по-настоя
 
 describe("страницы карточки — над записью свои адреса (аудит 03.10)", () => {
   test("карточка, открытая из записи, уходит в `(shared)`, а не во вкладку", () => {
-    const href = read("reference-href.ts");
+    const href = read("../../lib/reference-href.ts");
     assert.match(href, /inClientsTab \? \(`\/clients\/\$\{page\}` as const\) : \(`\/client-\$\{page\}` as const\)/);
     for (const page of ["visits", "objects", "attachments", "requisites", "sms", "people"]) {
       assert.match(

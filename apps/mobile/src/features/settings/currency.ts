@@ -5,7 +5,7 @@ import {
   moneySymbol,
   type MoneyCurrency,
 } from "@babun/shared/common/utils/money";
-import { useTenant } from "./tenant";
+import { useTenant } from "@/session/tenant";
 
 /** Валюта тенанта для экранов: код, символ и форматтеры. Реестр в money.ts
  *  кормит старые `formatEUR*`; новому коду — этот хук, чтобы экран

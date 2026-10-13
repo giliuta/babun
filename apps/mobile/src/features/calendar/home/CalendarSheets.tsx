@@ -1,6 +1,6 @@
 import { ColorSheet } from "@/features/appointments/BookingSheets";
 import { humanDayTitle } from "@/features/appointments/helpers";
-import { ActionMenuSheet } from "@/features/calendar/ActionMenuSheet";
+import { ActionMenuSheet } from "@/components/blocks/ActionMenuSheet";
 import { BookSlotSheet } from "@/features/calendar/BookSlotSheet";
 import { DayFinanceSheet } from "@/features/calendar/DayFinanceSheet";
 import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";

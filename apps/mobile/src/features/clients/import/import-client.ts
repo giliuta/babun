@@ -2,7 +2,7 @@ import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import type { CountryCode } from "libphonenumber-js";
 
-import { tryToE164 } from "../phone";
+import { tryToE164 } from "@/lib/phone";
 import type { MappedRow } from "./csv-validate";
 
 export function rowToClient(

@@ -42,7 +42,7 @@ describe("mobile create quota integration", () => {
     // `switch-tenant.ts` (2026-09-12): её же зовёт переключатель контуров, а
     // двух способов менять компанию не бывает. Проверяем там, где она живёт
     // теперь, и отдельно — что приглашение не завело себе вторую копию.
-    const switching = source("src/features/settings/switch-tenant.ts");
+    const switching = source("src/session/switch-tenant.ts");
     const invitations = source("src/features/settings/invitations.ts");
 
     assert.match(runtime, /startSyncRuntime\(tenantId:\s*string\)/);

@@ -1,8 +1,8 @@
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { useAccountGate, useAccountScope } from "@/features/cabinet/account-scope";
-import { CabinetAccountRoute } from "@/features/cabinet/CabinetAccountRoute";
+import { useAccountGate, useAccountScope } from "@/session/account-scope";
+import { CabinetAccountRoute } from "@/session/CabinetAccountRoute";
 import { FinanceSettingsRoute } from "@/features/finances/FinanceSettingsRoute";
 import { RequisitesScreen } from "@/features/companies/RequisitesScreen";
 

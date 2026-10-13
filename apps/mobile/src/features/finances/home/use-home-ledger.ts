@@ -5,7 +5,7 @@ import { useDebtPaidTotals, useDebts } from "../debts-queries";
 import type { FinancePageAccess } from "../finance-page-access";
 import { readableTransactions, type FinanceReadRules } from "../finance-read-rules";
 import { fallbackScopeUpdate } from "../finance-route";
-import type { Period } from "../period";
+import type { Period } from "@/lib/period";
 import { useTransactions } from "../queries";
 import type { useFinanceRoute } from "../use-finance-route";
 import { hasTeamlessMoney, teamlessLedgerRows, withTeamlessRows } from "../team-scope";

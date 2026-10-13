@@ -2,7 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import { X } from "lucide-react-native";
 import { FieldLabel } from "@/components/ui/Field";
 import { GUTTER } from "@/components/ui/tokens";
-import { durationLabel } from "@/features/services/format";
+import { durationLabel } from "@/lib/service-format";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
 import type { ServiceSheetState } from "./use-service-sheet";

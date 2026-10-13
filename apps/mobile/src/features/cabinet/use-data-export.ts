@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTeams } from "@/features/reference/queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { shareCsvFile } from "@/lib/share-csv";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";

@@ -18,7 +18,7 @@ import { useTeams } from "@/features/reference/queries";
 import { useClientChoice } from "./use-client-choice";
 import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
 import { useReceiptSession } from "./receipt-upload";
-import { todayYmd as todayInZone } from "@/features/invoices/format";
+import { todayYmd as todayInZone } from "@/lib/paper/format";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // ЧЕРНОВИК ДОЛГА — ДАННЫЕ ФОРМЫ ОТДЕЛЬНО ОТ ЕЁ ВЁРСТКИ (тот же приём, что у

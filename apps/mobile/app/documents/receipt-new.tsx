@@ -20,19 +20,19 @@ import {
   useComposeReceipt,
   useIssueReceipt,
   useUpdateReceipt,
-} from "@/features/documents/receipts-queries";
+} from "@/features/finances/receipts-queries";
 import { useReceiptSource } from "@/features/documents/use-receipt-source";
 import { useReceiptDraftPaper } from "@/features/documents/use-receipt-draft-paper";
-import { useNextInvoiceSeries } from "@/features/invoices/queries";
+import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/session/tenant";
 import { useServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 
 // НОВЫЙ ЧЕК — ТОНКИЙ МАРШРУТ НАД СОСТАВИТЕЛЕМ, как `invoices/new.tsx` над
 // `InvoiceEditor`: экран держит только действие и переход, все блоки и листы

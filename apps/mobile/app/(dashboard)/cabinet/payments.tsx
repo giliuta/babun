@@ -6,7 +6,7 @@
 // приложении из магазина покупок нет (App Store 3.1.3(f), `pay-here.ts`).
 // Строки к ней там нет; старая ссылка возвращает в Кабинет.
 import { Redirect } from "expo-router";
-import { CabinetAccountRoute } from "@/features/cabinet/CabinetAccountRoute";
+import { CabinetAccountRoute } from "@/session/CabinetAccountRoute";
 import { TariffPaymentsScreen } from "@/features/cabinet/TariffPaymentsScreen";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 

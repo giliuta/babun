@@ -3,7 +3,7 @@ import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
-import { defaultPeriod, makePeriod, type Period } from "../period";
+import { defaultPeriod, makePeriod, type Period } from "@/lib/period";
 import type { BusinessClock } from "./use-business-clock";
 
 /** Selected period of the screen plus the open-state of its two pickers. */

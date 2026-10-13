@@ -23,7 +23,7 @@ import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { teamSources, type ClientSource, sourceDisplayName } from "@/features/clients/acquisition-source";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import {
   useClientSources,

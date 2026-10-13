@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
 import { useTeams } from "@/features/reference/queries";
 

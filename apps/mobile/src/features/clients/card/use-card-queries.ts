@@ -1,6 +1,6 @@
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import type { ClientsScope } from "@/session/clients-company";
 import { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import {
   useClient,
@@ -9,10 +9,10 @@ import {
   useTrashClientAsPartner,
   useUpdateClient,
 } from "@/features/clients/queries";
-import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useRevealedClient } from "@/session/revealed-contacts";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { useAllServices } from "@/features/services/queries";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { useTenantId } from "@/lib/tenant";
 
 /** What the card reads from the server and the writers it needs. */

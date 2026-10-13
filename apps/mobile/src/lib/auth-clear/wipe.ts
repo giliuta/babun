@@ -5,7 +5,7 @@
 import { getStorage } from "@babun/shared/storage";
 import { cacheClearAll } from "@babun/shared/db/cache/sql";
 import { queryClient } from "@/lib/query-client";
-import { forgetRevealedContacts } from "@/features/clients/revealed-contacts";
+import { forgetRevealedContacts } from "@/session/revealed-contacts";
 import {
   ACTIVE_TENANT_KEY_PREFIX,
   PENDING_CLAIM_KEY_PREFIX,
@@ -14,7 +14,7 @@ import { isTenantScopedKey } from "@/lib/tenant-prefs";
 import { sweepQueryCacheOnSwitch } from "@/lib/switch-cache-sweep";
 import { notificationsForWipe } from "@/lib/wipe-plan";
 import { clearAllBabunNotifications } from "@/lib/notifications";
-import { resetTeamPrefsCache } from "@/features/cabinet/notification-prefs-cache";
+import { resetTeamPrefsCache } from "@/lib/notification-prefs-cache";
 
 // Every Babun-owned key starts with one of these — a prefix sweep catches new
 // modules automatically (no «we forgot to add the key» follow-ups).

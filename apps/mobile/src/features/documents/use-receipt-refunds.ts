@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { useInvoices } from "@/features/invoices/queries";
+import { useInvoices } from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 

@@ -20,8 +20,8 @@ import {
   periodDates,
   periodTitle,
   type Period,
-} from "@/features/finances/period";
-import { todayYmd } from "@/features/invoices/format";
+} from "@/lib/period";
+import { todayYmd } from "@/lib/paper/format";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { StatementPaper } from "@/features/finances/statement/StatementPaper";
 import { shareStatementPdf } from "@/features/finances/statement/statement-pdf";

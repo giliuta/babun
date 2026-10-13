@@ -27,7 +27,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { haptics } from "@/lib/haptics";
 import {
   cancelManualAppointmentReminder,
@@ -49,12 +49,12 @@ import {
   recordsLabel,
   sameRecordRule,
   type TeamNotifyPrefs,
-} from "./notification-prefs";
+} from "@/lib/notification-prefs";
 import {
   readTeamNotifyPrefs,
   useSaveTeamNotifyPrefs,
   useTeamNotifyPrefs,
-} from "./notification-prefs-store";
+} from "@/lib/notification-prefs-store";
 import {
   permissionRow,
   reminderCanCancel,

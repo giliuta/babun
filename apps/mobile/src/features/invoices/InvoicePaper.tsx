@@ -1,5 +1,5 @@
 import { Image, Text, View } from "react-native";
-import type { DocumentParty, InvoiceDocument } from "./document";
+import type { DocumentParty, InvoiceDocument } from "@/lib/paper/document";
 
 // БУМАГА ИНВОЙСА — ТА ЖЕ, ЧТО УЙДЁТ КЛИЕНТУ.
 //

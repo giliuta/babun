@@ -1,10 +1,10 @@
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { LocalDraftNoteField } from "@/features/appointments/LocalDraftNoteField";
 import { PaymentBlock } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { withBaselineStatus } from "@/features/appointments/edit-baseline";
 import { WhenRow } from "@/features/appointments/BookingSummary";
-import { TeamLabelRow } from "@/features/appointments/TeamLabelRow";
+import { TeamLabelRow } from "@/components/blocks/TeamLabelRow";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { minutesBetweenHM } from "@/features/appointments/helpers";

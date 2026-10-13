@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { countryDialCode, normalizeCountry, tryToE164 } from "./phone";
+import { countryDialCode, normalizeCountry, tryToE164 } from "@/lib/phone";
 
 // КОД СТРАНЫ КОМПАНИИ — подстановка, а не ограничение.
 //

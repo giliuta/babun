@@ -9,7 +9,7 @@ import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
 import type { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import type { ClientsScope } from "@/session/clients-company";
 import type { ClientFilterResult } from "@/features/clients/useClientFilters";
 
 /** Bulk mode: what is picked among the visible own rows, and the actions

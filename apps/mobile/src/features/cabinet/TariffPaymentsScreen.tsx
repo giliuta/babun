@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { openTariffPortal, useTariff } from "@/features/tariffs/use-tariff";
 import { loadErrorWords } from "@/lib/connection-words";
 import { notify } from "@/lib/notify";
@@ -18,7 +18,7 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 
 import { groupByMonth, paymentSub, paymentValue, type TariffPayment } from "./tariff-payments";
-import { useAccountGate, useAccountName, useAccountScope } from "./account-scope";
+import { useAccountGate, useAccountName, useAccountScope } from "@/session/account-scope";
 import { useTariffPayments } from "./use-tariff-payments";
 
 // «ОПЛАТЫ ТАРИФА» (Кабинет, владелец 03.10: «оплаты тарифа — да, надо»).

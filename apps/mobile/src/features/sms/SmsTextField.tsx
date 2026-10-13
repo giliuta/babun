@@ -14,7 +14,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { acceptSmsInput, MAX_SMS_PARTS, smsVars } from "./sms-compose";
 

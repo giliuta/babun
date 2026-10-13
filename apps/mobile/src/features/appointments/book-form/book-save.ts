@@ -5,7 +5,7 @@ import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { setSelfReminder } from "@/features/calendar/reminders";
-import type { SelfReminder } from "@/features/calendar/reminder-time";
+import type { SelfReminder } from "@/lib/reminder-time";
 import { serverReason } from "@/features/calendar/server-reason";
 import type { Team } from "@/features/reference/queries";
 import type { useToast } from "@/components/ui/Toast";

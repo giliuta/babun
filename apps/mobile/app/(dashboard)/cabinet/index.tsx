@@ -52,7 +52,7 @@ import { HelpRow } from "@/features/cabinet/HelpRow";
 import { LanguageRow } from "@/features/cabinet/LanguageRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { confirmAndSignOut } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 

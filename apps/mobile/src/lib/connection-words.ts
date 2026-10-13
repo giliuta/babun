@@ -1,4 +1,4 @@
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 
 // СЛОВА ЭКРАНА, КОГДА СЕРВЕР НЕ ОТВЕТИЛ (владелец 03.10, зависший сервер).
 // Под облаком стояло «listTransactionsForRange: TypeError: Network request

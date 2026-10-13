@@ -2,10 +2,10 @@ import { Pressable, Text, View } from "react-native";
 import { ChevronDown } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useToast } from "@/components/ui/Toast";
-import { useCalendarChips } from "@/features/settings/workspaces";
+import { useCalendarChips } from "@/session/workspaces";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
-import { periodDates, periodTitle, type Period } from "../period";
+import { periodDates, periodTitle, type Period } from "@/lib/period";
 
 /**
  * ЛЕНТА КОМАНД И СТРОКА ПЕРИОДА — ШАПКА ДЕНЕЖНЫХ ЭКРАНОВ. Одна вёрстка на

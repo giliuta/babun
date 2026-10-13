@@ -7,10 +7,10 @@ import { OnlineOnlyWriteError } from "@babun/shared/sync/cache-errors";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { notify } from "@/lib/notify";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
-import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
+import { refreshRevealedContacts } from "@/session/revealed-contacts";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
-import { offlineForeignWriteMessage, type ClientsScope } from "../clients-company";
-import { clientKeys } from "../query-keys";
+import { offlineForeignWriteMessage, type ClientsScope } from "@/session/clients-company";
+import { clientKeys } from "@/lib/client-query-keys";
 import { syncClientReminderWithFeedback } from "./reminder-feedback";
 import { scopeOf, useQueryScope, writeClientOf, type QueryScope } from "./scope";
 

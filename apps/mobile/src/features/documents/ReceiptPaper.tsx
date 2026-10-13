@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { useThemeColors } from "@/theme/colors";
 import type { ReceiptDocument } from "./receipt-document";
-import { headCell, numCell, PAPER, totalsAbove, TotalRow } from "./ReceiptPaperParts";
+import { headCell, numCell, PAPER, totalsAbove, TotalRow } from "@/components/blocks/ReceiptPaperParts";
 
 // ЗЕРКАЛО ЧЕКА — ТА ЖЕ БУМАГА, ЧТО УЖЕ УШЛА В PDF.
 //

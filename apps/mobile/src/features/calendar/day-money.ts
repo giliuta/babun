@@ -10,7 +10,7 @@ import {
 } from "@babun/shared/local/finance/transaction";
 import { incomeDeals } from "@/features/finances/income-deals";
 import { materialExpenseRows } from "@/features/finances/material-expenses";
-import { dayDebtRecords, isPastRecord } from "./day-ledger";
+import { dayDebtRecords, isPastRecord } from "@/features/finances/day-ledger";
 
 // ДЕНЬГИ ДНЯ В КАЛЕНДАРЕ — ДЕНЬГИ ЗАПИСИ ЖИВУТ В ДНЕ ЗАПИСИ.
 //

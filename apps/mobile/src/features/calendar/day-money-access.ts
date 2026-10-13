@@ -1,6 +1,6 @@
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, type AccessGate, type AccessGateInput } from "@/features/access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate, type AccessGate, type AccessGateInput } from "@/session/my-access";
 import { asRecordWindow, recordWindowStart } from "@/features/appointments/record-window";
 
 // ДОХОД И РАСХОД ДНЯ — ПРАВО КАЛЕНДАРЯ, А НЕ «ФИНАНСОВ» (владелец 04.10:

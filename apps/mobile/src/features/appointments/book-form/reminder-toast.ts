@@ -2,7 +2,7 @@ import type { setSelfReminder } from "@/features/calendar/reminders";
 import {
   selfReminderLabel,
   type SelfReminder,
-} from "@/features/calendar/reminder-time";
+} from "@/lib/reminder-time";
 import type { useToast } from "@/components/ui/Toast";
 
 type Toast = ReturnType<typeof useToast>;

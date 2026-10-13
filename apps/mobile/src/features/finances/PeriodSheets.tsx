@@ -15,7 +15,7 @@ import {
   PERIOD_LABELS,
   presetHint,
   type Period,
-} from "./period";
+} from "@/lib/period";
 
 // LOCKED v5 header split (finances-design.html): the period NAME opens this
 // preset list — paired «текущий/прошлый» blocks (День/Неделя/Месяц/Год),

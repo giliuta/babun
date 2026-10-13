@@ -8,15 +8,15 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { usePartnersAccess } from "@/features/access/master-page/use-partner-manager";
+import { usePartnersAccess } from "@/session/use-partner-manager";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { usePendingInvitations } from "@/features/settings/team-access";
-import { canAddPartner } from "@/features/tariffs/tiers";
+import { canAddPartner } from "@/session/tiers";
 import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
-import { refusalOf } from "@/features/access/access-map";
+import { refusalOf } from "@/session/access-map";
 import { calendarCards } from "@/features/access/masters-list";
 import { openMasterDraft } from "@/features/access/master-page/draft-store";
 import {
@@ -27,7 +27,7 @@ import {
   AccessRequestError,
   useCompanyMembers,
   type CalendarMember,
-} from "@/features/access/queries";
+} from "@/session/access-queries";
 
 // СОТРУДНИКИ КОМПАНИИ — «Кабинет → Сотрудники» (владелец 29.09: «страницу
 // мастера перенесём в кабинет… и полноценно на каждую команду, что он может

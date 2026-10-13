@@ -2,7 +2,7 @@ import {
   INVOICE_GENERATOR_DEFAULTS,
   type InvoiceGeneratorSettings,
 } from "@babun/shared/local/finance/invoice-generator";
-import type { Tenant } from "@/features/settings/tenant";
+import type { Tenant } from "@/session/tenant";
 
 // ПЕРЕВОДЧИК НАСТРОЕК КОМПАНИИ В ПРАВИЛА ГЕНЕРАТОРА.
 //

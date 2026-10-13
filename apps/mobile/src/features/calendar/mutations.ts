@@ -29,8 +29,8 @@ import type { PaymentMethod } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
 import { preflightQuotaForCreate } from "@/lib/quota";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { useCurrentRole } from "@/session/tenant";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 import { useSession } from "@/providers/SessionProvider";
 import { autoAssignClientLabel } from "@/features/clients/label-auto-assign";
 import {

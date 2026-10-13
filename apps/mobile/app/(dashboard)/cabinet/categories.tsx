@@ -37,7 +37,7 @@ import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { CategoryRow } from "@/features/finances/CategoryRow";
 import { CATEGORY_KIND_ROW } from "@/features/finances/settings-levels";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 
 // КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //

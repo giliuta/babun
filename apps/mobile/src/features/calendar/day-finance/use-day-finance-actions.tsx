@@ -17,8 +17,8 @@ import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { canEditDayMoneyRow } from "@/features/calendar/day-money-access";
-import type { useMyAccess } from "@/features/access/queries";
-import type { useCurrentRole } from "@/features/settings/tenant";
+import type { useMyAccess } from "@/session/access-queries";
+import type { useCurrentRole } from "@/session/tenant";
 
 /** What a row of the sheet opens, asks or swipes away — always after the
  *  sheet has left (see `leaveThen`). */

@@ -20,7 +20,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { useEquipment, useSaveEquipment } from "@/features/inventory/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { InventoryEditorSheet } from "./InventoryEditorSheet";

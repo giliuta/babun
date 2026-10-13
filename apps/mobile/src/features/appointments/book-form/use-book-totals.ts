@@ -5,10 +5,10 @@ import type { Client } from "@babun/shared/local/clients";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import type { Service } from "@/features/services/queries";
-import { durationLabel } from "@/features/services/format";
-import { useTenant } from "@/features/settings/tenant";
+import { durationLabel } from "@/lib/service-format";
+import { useTenant } from "@/session/tenant";
 import { smsVars } from "@/features/sms/sms-compose";
-import { addressedAs, firstName } from "@/features/clients/sms-name";
+import { addressedAs, firstName } from "@/lib/sms-name";
 import {
   addMinutesHM,
   buildServices,

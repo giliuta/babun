@@ -1,8 +1,8 @@
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
-import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/session/company-scope";
+import { useReferenceHref } from "@/lib/reference-href";
 import { draftLinkFromParams, type DraftLinkParams } from "@/features/clients/useClientDraft";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 
 /** Address of the card: which client (or a draft), who opened it and from
  *  where, and with which rights. */

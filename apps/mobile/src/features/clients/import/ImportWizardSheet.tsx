@@ -1,5 +1,5 @@
 import { Modal, ScrollView } from "react-native";
-import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
+import { MirrorBanner } from "@/components/blocks/MirrorBanner";
 import { Screen } from "@/components/ui/Screen";
 import { clearResumeState } from "./resume";
 import { MappingStep } from "./wizard/MappingStep";

@@ -22,11 +22,11 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
-import { useReceiptMenu } from "@/features/documents/receipt-menu";
-import { useDocumentWriter } from "@/features/documents/document-rights";
-import { invoiceDeleteBlock } from "@/features/invoices/invoice-delete";
-import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
+import { ActionMenuSheet, type ActionMenu } from "@/components/blocks/ActionMenuSheet";
+import { useReceiptMenu } from "@/features/finances/receipt-menu";
+import { useDocumentWriter } from "@/session/document-rights";
+import { invoiceDeleteBlock } from "@/features/finances/invoice-delete";
+import { useInvoiceMenu } from "@/features/finances/invoice-menu";
 import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
@@ -34,7 +34,7 @@ import { humanDayYear } from "@/features/appointments/helpers";
 import type { AccountWithBalance } from "./accounts";
 import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
-import type { Period } from "./period";
+import type { Period } from "@/lib/period";
 import { usePeriodDocuments } from "./use-period-documents";
 import {
   filterDocuments,

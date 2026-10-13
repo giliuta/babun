@@ -17,7 +17,7 @@ import { useLocationRequests } from "@/features/clients/location-requests";
 import { objectTarget } from "@/features/clients/object-address";
 import { useThemeColors } from "@/theme/colors";
 import { useCopyValue } from "@/lib/copy-value";
-import { moreLabel } from "@/features/clients/more-label";
+import { moreLabel } from "@/lib/more-label";
 import { ObjectNote } from "./objects-block/ObjectNote";
 import { ObjectRow } from "./objects-block/ObjectRow";
 

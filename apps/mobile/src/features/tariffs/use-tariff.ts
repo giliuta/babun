@@ -4,11 +4,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
-import { useAccountProfile, useAccountScope } from "@/features/cabinet/account-scope";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useAccountProfile, useAccountScope } from "@/session/account-scope";
+import { useCurrentRole } from "@/session/tenant";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { TENANT_HEADER } from "@/lib/tenant-header";
-import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "./tiers";
+import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "@/session/tiers";
 
 // ТАРИФ АККАУНТА — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ `tiers.ts`.
 //

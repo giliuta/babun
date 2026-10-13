@@ -10,7 +10,7 @@ import {
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { referenceKeys } from "../query-keys";
 import { teamMembers, teamRoles, type Team } from "./types";
 import { toJson } from "@babun/shared/db/json";

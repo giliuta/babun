@@ -4,18 +4,18 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { myAccessQueryKey } from "@/lib/company-query-keys";
-import { parseMemberAccessMap, type MemberAccessMap } from "@/features/access/access-map";
-import { useMyAccess } from "@/features/access/queries";
-import { useMirror } from "@/features/access/mirror/mirror-state";
-import { useMyMemberships } from "@/features/settings/my-memberships";
-import { useMyCalendars } from "@/features/settings/workspaces";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { parseMemberAccessMap, type MemberAccessMap } from "@/session/access-map";
+import { useMyAccess } from "@/session/access-queries";
+import { useMirror } from "@/session/mirror-state";
+import { useMyMemberships } from "@/session/my-memberships";
+import { useMyCalendars } from "@/session/workspaces";
+import { useCurrentRole } from "@/session/tenant";
 import { clientsAccessOf } from "./clients-access";
 import {
   clientsSources,
   type ClientsSources,
   type CompanyAccess,
-} from "./clients-company";
+} from "@/session/clients-company";
 
 // ИСТОЧНИКИ ВКЛАДКИ «КЛИЕНТЫ» — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ ПРАВИЛОМ.
 //

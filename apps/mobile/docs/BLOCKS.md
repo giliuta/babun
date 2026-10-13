@@ -260,7 +260,7 @@
 Создание пишет черновик одной кнопкой, правка — на уходе с каждого поля.
 
 **Дополнительные страницы:** типы объектов —
-`src/features/reference/screens/ObjectTypesScreen.tsx`, двери
+`src/features/clients/ObjectTypesScreen.tsx`, двери
 `clients/object-types.tsx`, `cabinet/object-types.tsx`, `(shared)/object-types.tsx`.
 
 **Не делать:** второй формы объекта (была, свели 2026-09-10 — сторожит
@@ -409,7 +409,7 @@
 открывать»). Блок `src/features/clients/blocks/ClientFilesBlock.tsx` показывает
 ПОСЛЕДНИЙ файл под заголовком своего дня (`VisitDayHeader`), тап — страница
 `app/(dashboard)/clients/attachments.tsx`: вся лента (`clientFileTimeline` в
-`src/features/clients/client-files.ts`) днями, плашки `ClientFileRow` —
+`src/lib/client-files.ts`) днями, плашки `ClientFileRow` —
 `SelectRow plain`: фото — снимком в плитке (`image`), документ, инвойс и чек —
 значком; у инвойса и чека справа сумма цветом (получено — зелёным, ждёт —
 янтарём). Тап открывает сразу; своё вложение удаляется свайпом; «Добавить
@@ -431,7 +431,7 @@
 
 ## 7. Докет «Команда · Метка» и блок «Время»
 
-**Канон:** `src/features/appointments/TeamLabelRow.tsx:46` (`TeamLabelRow`),
+**Канон:** `src/components/blocks/TeamLabelRow.tsx:46` (`TeamLabelRow`),
 `src/features/appointments/BookingSummary.tsx:96` (`WhenRow`).
 
 Выбранная команда и метка — квадратная плитка шторки (`AppearanceTile`, 28pt,

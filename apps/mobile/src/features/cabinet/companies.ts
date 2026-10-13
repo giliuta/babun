@@ -6,8 +6,8 @@
 // компании. Какая компания «сейчас» — решает компания УСТРОЙСТВА: флаг сервера
 // `isActive` сразу после перехода ещё прежний (см. `useCalendarChips`).
 
-import type { MyCalendar } from "../settings/workspaces";
-import { isUserRole, ROLE_LABELS, type UserRole } from "../settings/role-policy";
+import type { MyCalendar } from "@/session/workspaces";
+import { isUserRole, ROLE_LABELS, type UserRole } from "@/session/role-policy";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 export interface CompanyCalendar {

@@ -11,7 +11,7 @@ import {
   calendarSettingsQueryKey,
   teamsQueryKey,
 } from "@/lib/company-query-keys";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import {
   budgetAlerts,
   hasBudget,
@@ -19,7 +19,7 @@ import {
   monthSpendByCategory,
   type BudgetSeen,
 } from "./category-budget";
-import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
+import { readTeamNotifyPrefs } from "@/lib/notification-prefs-cache";
 
 // УВЕДОМЛЕНИЕ О БЮДЖЕТЕ — КОМУ, КОГДА И СКОЛЬКО РАЗ.
 //

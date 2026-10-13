@@ -21,13 +21,13 @@ import { useTenantId } from "@/lib/tenant";
 // режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
 // владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
 // настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
-import { useDataRole } from "@/features/settings/tenant";
-import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
+import { useDataRole } from "@/session/tenant";
+import { fetchCalendarSettings } from "@/session/company-fetchers";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
   isConfirmedNetworkUnavailable,
   isMissingCalendarSettingsContract,
-} from "@/features/settings/server-read-fallback";
+} from "@/lib/server-read-fallback";
 import {
   beginCalendarSave,
   confirmCalendarSave,

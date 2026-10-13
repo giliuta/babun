@@ -1,7 +1,7 @@
 import { Linking } from "react-native";
 import type { CountryCode } from "libphonenumber-js";
 import { withHomeCode } from "@/features/clients/use-phone-country";
-import { dialPrefix, formatPhoneForDisplay } from "@/features/clients/phone";
+import { dialPrefix, formatPhoneForDisplay } from "@/lib/phone";
 import { FieldRow, RowActionButton } from "@/components/ui/card-rows";
 import {
   CONTACT_FIELDS,

@@ -8,7 +8,7 @@ import { NavRow } from "@/components/ui/card-rows";
 import { Screen } from "@/components/ui/Screen";
 import { SectionCard } from "@/components/ui/SectionCard";
 import ClientHeader from "@/features/clients/ClientHeader";
-import { clientSubParams } from "@/features/clients/clients-company";
+import { clientSubParams } from "@/session/clients-company";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { ClientLabelTags } from "@/features/clients/ClientLabelTags";
 import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";

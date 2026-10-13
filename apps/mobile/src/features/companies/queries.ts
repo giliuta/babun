@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useAccountScope } from "@/features/cabinet/account-scope";
+import { useAccountScope } from "@/session/account-scope";
 
 // ЮРЛИЦА КОМПАНИИ — СПРАВОЧНИК, КАК УСЛУГИ.
 //

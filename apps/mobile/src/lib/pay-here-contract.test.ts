@@ -6,7 +6,7 @@ import { readModuleSource } from "./module-source";
 import { test } from "node:test";
 import { LEGAL_TEXTS, LEGAL_TEXTS_APP } from "../features/legal/legal-texts";
 import { balanceWarning } from "../features/sms/sms-model";
-import { tariffAction, tariffStatus, tierLine } from "../features/tariffs/tiers";
+import { tariffAction, tariffStatus, tierLine } from "@/session/tiers";
 
 // ОПЛАТА — ТОЛЬКО НА САЙТЕ (владелец 04.10, `pay-here.ts`). Приложение из
 // App Store / Google Play с кнопкой на чужую оплату отклоняют, поэтому каждая

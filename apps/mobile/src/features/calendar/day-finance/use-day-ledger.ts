@@ -11,8 +11,8 @@ import { useAppointmentsLedger, useTransactions } from "@/features/finances/quer
 import type { useFinanceServices } from "@/features/calendar/queries";
 import type { useClients } from "@/features/clients/queries";
 import type { useFinanceCategories } from "@/features/finances/queries";
-import type { useMyAccess } from "@/features/access/queries";
-import type { useCurrentRole } from "@/features/settings/tenant";
+import type { useMyAccess } from "@/session/access-queries";
+import type { useCurrentRole } from "@/session/tenant";
 import type { DayView } from "./types";
 
 /** The shown day, its ledger rows and the money of its four tiles. */

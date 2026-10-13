@@ -1,6 +1,6 @@
-import { accessGate, moneyKey } from "@/features/access/my-access";
-import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
-import type { UserRole } from "@/features/settings/role-policy";
+import { accessGate, moneyKey } from "@/session/my-access";
+import type { AccessLevel, MemberAccessMap } from "@/session/access-map";
+import type { UserRole } from "@/session/role-policy";
 
 // ПРАВА БЛОКА «ОПЛАТА» — В ОДНОМ МЕСТЕ, ЧИСТОЙ ФУНКЦИЕЙ.
 //

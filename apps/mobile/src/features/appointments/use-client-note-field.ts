@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { applyNoteEdit } from "@/features/appointments/client-note-journal";
-import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { useInlineNote } from "@/components/blocks/use-inline-note";
 import { useUpdateClientById } from "@/features/clients/queries";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 

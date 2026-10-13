@@ -17,7 +17,7 @@ import {
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { pad2, parseYMD } from "@/features/appointments/helpers";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { WorkBand } from "@/features/calendar/DayView";
 

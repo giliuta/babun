@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { EditableInvoiceLine } from "../format";
+import type { EditableInvoiceLine } from "@/lib/paper/format";
 import { invoiceBlockLines, serviceSelection, typedNumber } from "./block-lines";
 
 const line = (over: Partial<EditableInvoiceLine> = {}): EditableInvoiceLine => ({

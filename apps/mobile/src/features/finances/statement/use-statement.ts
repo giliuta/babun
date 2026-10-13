@@ -6,7 +6,7 @@ import { useTenantId } from "@/lib/tenant";
 import { useClients } from "@/features/clients/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { useAccountsWithBalances } from "../accounts";
 import { useFinanceCategories } from "../queries";
 import { buildStatementDocument, type StatementDocument } from "./statement-document";

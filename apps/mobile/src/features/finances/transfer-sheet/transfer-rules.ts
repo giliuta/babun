@@ -9,7 +9,7 @@ import {
 import { transferValidationError } from "@babun/shared/local/finance/integrity";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { accountDaysOnHand } from "../accounts-sections";
-import { dayPhrase } from "../period";
+import { dayPhrase } from "@/lib/period";
 import { defaultTransferTarget, type TransferAccount } from "../transfer-options";
 
 export type TransferStep = "form" | "from" | "to" | "date";

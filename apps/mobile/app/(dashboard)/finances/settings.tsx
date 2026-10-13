@@ -25,8 +25,8 @@ import {
 } from "@/features/finances/team-settings-lines";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useCalendarChips } from "@/features/settings/workspaces";
+import { useCurrentRole } from "@/session/tenant";
+import { useCalendarChips } from "@/session/workspaces";
 import {
   CATEGORY_KIND_ROW,
   anyFinanceSetting,

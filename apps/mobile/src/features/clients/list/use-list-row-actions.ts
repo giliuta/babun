@@ -15,12 +15,12 @@ import {
   capabilitiesOf,
   type ClientsCapabilities,
   type ClientsScope,
-} from "@/features/clients/clients-company";
+} from "@/session/clients-company";
 import { clientRowActions } from "@/features/clients/client-row-actions";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 
 /** Слова неудачи удаления одного клиента (`writeErrorWords`). */
 const CLIENT_NOT_DELETED = { failed: "Не удалось удалить", notDone: "Клиент не удалён" };

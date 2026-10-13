@@ -15,7 +15,7 @@ const read = (relative: string) => readFileSync(resolve(here, relative), "utf8")
 // Деньги и документы онлайн-only на запись: каждая их мутация обязана нести
 // `NEVER_PAUSE`, как операции и счета (`finances/accounts.ts`).
 
-const FILES = ["./queries.ts", "../documents/receipts-queries.ts"];
+const FILES = ["../finances/invoices-queries.ts", "../finances/receipts-queries.ts"];
 
 describe("инвойсы и чеки — запись без сети не встаёт на паузу", () => {
   for (const file of FILES) {

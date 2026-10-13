@@ -10,7 +10,7 @@ import {
   DeletedOn,
   HiddenClientsScreen,
 } from "@/features/clients/HiddenClientsScreen";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";

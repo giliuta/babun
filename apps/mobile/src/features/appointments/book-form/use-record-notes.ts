@@ -1,5 +1,5 @@
 import type { Client, Location } from "@babun/shared/local/clients";
-import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { useInlineNote } from "@/components/blocks/use-inline-note";
 import { useClientNoteField } from "@/features/appointments/use-client-note-field";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { useClientFunctionOn } from "@/features/clients/client-functions";

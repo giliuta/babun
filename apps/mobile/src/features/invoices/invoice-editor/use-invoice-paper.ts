@@ -9,11 +9,11 @@ import {
   requisitesMirror,
 } from "@babun/shared/local/client-requisites";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { buildInvoiceDocument, type InvoiceDraftSeller } from "../document";
-import { invoiceDictionary } from "../dictionary";
-import { parseDecimal, parseMoneyAmount } from "../format";
-import { useNextInvoiceSeries } from "../queries";
+import { useCurrentRole } from "@/session/tenant";
+import { buildInvoiceDocument, type InvoiceDraftSeller } from "@/lib/paper/document";
+import { invoiceDictionary } from "@/lib/paper/dictionary";
+import { parseDecimal, parseMoneyAmount } from "@/lib/paper/format";
+import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
 import { discountAmountOf } from "./invoice-rules";
 import type { InvoiceEditorProps } from "./types";
 import type { useInvoiceDraft } from "./use-invoice-draft";

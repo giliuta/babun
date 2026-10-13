@@ -1,4 +1,4 @@
-import { PERIOD_LABELS, type Period } from "@/features/finances/period";
+import { PERIOD_LABELS, type Period } from "@/lib/period";
 
 // The period facet: its value type and the human label of a period.
 

@@ -21,8 +21,8 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const paperSource = readFileSync(resolve(here, "InvoicePaper.tsx"), "utf8");
-const pdfSource = readFileSync(resolve(here, "pdf.ts"), "utf8");
-const dictionarySource = readFileSync(resolve(here, "dictionary.ts"), "utf8");
+const pdfSource = readFileSync(resolve(here, "../../lib/paper/pdf.ts"), "utf8");
+const dictionarySource = readFileSync(resolve(here, "../../lib/paper/dictionary.ts"), "utf8");
 
 function stripComments(source: string): string {
   return source

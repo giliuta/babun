@@ -23,7 +23,7 @@ import {
   historyFilterCount,
   type HistoryFilter,
   type HistoryPeriod,
-} from "./change-log";
+} from "@/lib/change-log";
 
 // «ФИЛЬТРЫ» ИСТОРИИ ИЗМЕНЕНИЙ — ТЕ ЖЕ, ЧТО В КЛИЕНТАХ (владелец 03.10:
 // «фильтрацию как в клиентах — не подразделения под всё, а просто красивые

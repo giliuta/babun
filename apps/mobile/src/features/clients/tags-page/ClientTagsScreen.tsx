@@ -3,7 +3,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";

@@ -2,7 +2,7 @@
   "_": "Literals the UI translation must NOT touch (apps/mobile/scripts/i18n/babel-plugin.js). files: the whole file stays as written. literals: per file, these exact texts stay raw ({0} for a template slot); display: true keeps the phrase in the dictionaries so tDynamic still translates it when it is printed. Every entry says why.",
   "files": [
     {
-      "path": "apps/mobile/src/features/invoices/dictionary.ts",
+      "path": "apps/mobile/src/lib/paper/dictionary.ts",
       "why": "invoice paper has its own language (ru/en), chosen per document"
     },
     {
@@ -34,7 +34,7 @@
       "why": "SQL text (the cache modules behind sql.ts)"
     },
     {
-      "path": "apps/mobile/src/features/invoices/paper-languages.ts",
+      "path": "apps/mobile/src/lib/paper/paper-languages.ts",
       "why": "invoice paper in bg/el/uk/de/es — paper language is chosen per document; Bulgarian and Ukrainian words would otherwise hit Russian keys («Цена»)"
     },
     {
@@ -105,7 +105,7 @@
         "why": "SMS template variable name"
       }
     ],
-    "apps/mobile/src/features/settings/tenant.ts": [
+    "apps/mobile/src/session/tenant.ts": [
       {
         "text": "Не удалось проверить роль: сеть не отвечает",
         "display": true,

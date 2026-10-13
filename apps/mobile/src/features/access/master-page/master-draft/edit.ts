@@ -1,6 +1,6 @@
 // Draft edits (levels, calendars), invite blockers and dirtiness.
 
-import type { AccessBlock, AccessLevel } from "../../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { compositeRow } from "../composite-rows";
 import { companionLevels, resetOnHide } from "./dependants";
 import {

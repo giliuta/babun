@@ -5,7 +5,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
 
-import { accountHref } from "./CabinetAccountRoute";
+import { accountHref } from "@/session/CabinetAccountRoute";
 import { latestPaymentLine } from "./tariff-payments";
 import { LATEST_PAYMENTS_SAMPLE, useTariffPayments } from "./use-tariff-payments";
 

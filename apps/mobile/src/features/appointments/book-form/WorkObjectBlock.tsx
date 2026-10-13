@@ -4,7 +4,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { haptics } from "@/lib/haptics";
 import type { BookModel } from "./use-book-form";
 

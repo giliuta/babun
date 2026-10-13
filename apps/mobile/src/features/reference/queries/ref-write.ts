@@ -4,7 +4,7 @@ import {
 } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { referenceKeys, type RefTable } from "../query-keys";
 import type { Tables } from "./types";
 

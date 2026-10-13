@@ -28,13 +28,13 @@ import {
 import {
   mapServicesSummary,
   useEnabledMapServices,
-} from "@/lib/map-services";
+} from "@/features/clients/map-services";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
 import { useClientSources } from "@/features/clients/acquisition-sources";
 import { sourcesSummary, teamSources } from "@/features/clients/acquisition-source";
 import { useAppointments } from "@/features/calendar/queries";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 import { useTeams } from "@/features/reference/queries";
 import { useSetClientsTeam } from "@/features/clients/team-pref";
 import { clientsOfTeam } from "@/features/clients/team-scope";

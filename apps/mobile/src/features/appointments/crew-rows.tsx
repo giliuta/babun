@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { QtyBadge } from "@/features/appointments/QtyBadge";
-import { durationLabel } from "@/features/services/format";
+import { durationLabel } from "@/lib/service-format";
 import { useThemeColors } from "@/theme/colors";
 
 import type { CrewWorkLine } from "./crew-work";

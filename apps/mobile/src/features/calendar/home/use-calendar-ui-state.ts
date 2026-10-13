@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
-import type { ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import type { ActionMenu } from "@/components/blocks/ActionMenuSheet";
 import type { SlotDraft } from "@/features/calendar/BookSlotSheet";
 
 /** Open/closed state of the screen's sheets and menus. Effects that reset

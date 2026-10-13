@@ -1,6 +1,6 @@
 import type { InvoicePaymentLedger } from "@babun/shared/local/finance/invoice-ledger";
 import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
-import { formatInvoiceDate } from "../format";
+import { formatInvoiceDate } from "@/lib/paper/format";
 
 /** The grey second line of a payment row on the invoice page. */
 export function paymentMeta({

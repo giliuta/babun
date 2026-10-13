@@ -1,6 +1,6 @@
 // The draft shape, its blank/starter forms and how a block's level is read.
 
-import type { AccessArea, AccessBlock, AccessChange, AccessLevel } from "../../access-map";
+import type { AccessArea, AccessBlock, AccessChange, AccessLevel } from "@/session/access-map";
 import { offeredBlocks } from "../rights-copy";
 
 export interface MasterDraft {

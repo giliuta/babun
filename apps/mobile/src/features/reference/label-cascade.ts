@@ -2,8 +2,8 @@ import {
   useCalendarSettings,
   useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
-import { useRenameDayCity } from "@/features/calendar/day-cities";
-import { useDataRole } from "@/features/settings/tenant";
+import { useRenameDayCity } from "@/features/reference/day-cities";
+import { useDataRole } from "@/session/tenant";
 
 // КАСКАД ПЕРЕИМЕНОВАНИЯ МЕТКИ. Имя хранится СТРОКОЙ (не id) в днях
 // (`day_cities.city`) и в личных метках веба, поэтому переименование в

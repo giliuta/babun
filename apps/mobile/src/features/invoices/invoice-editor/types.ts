@@ -9,8 +9,8 @@ import type {
 import type { InvoiceGeneratorSettings } from "@babun/shared/local/finance/invoice-generator";
 import type { Service } from "@/features/services/queries";
 import type { Team } from "@/features/reference/queries";
-import type { Tenant } from "@/features/settings/tenant";
-import type { InvoiceLanguage } from "../dictionary";
+import type { Tenant } from "@/session/tenant";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 
 export interface InvoicePrefill {
   transactionId?: string | null;

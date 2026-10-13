@@ -4,10 +4,10 @@ import {
   withFeature,
   type CompanyFeatureKey,
 } from "@babun/shared/local/company-features";
-import { useScopeCompany } from "@/features/clients/company-scope";
+import { useScopeCompany } from "@/session/company-scope";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 
-import { fetchCalendarSettings } from "./company-fetchers";
+import { fetchCalendarSettings } from "@/session/company-fetchers";
 import { useCalendarSettings, useSaveCalendarSettings } from "./local-settings";
 
 // ФУНКЦИИ КОМПАНИИ НА ЭКРАНЕ (STORY-088). Читаются той же дверью, что

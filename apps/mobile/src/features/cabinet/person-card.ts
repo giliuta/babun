@@ -11,7 +11,7 @@
 // компания (имя своего аккаунта), ниже — факты значком и значением, без
 // подписей: значок и есть подпись. Пустое не печатается.
 
-import { formatPhoneForDisplay } from "../clients/phone";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 export type PersonFactKind = "email" | "phone" | "birthday";
 
