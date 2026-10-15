@@ -81,16 +81,22 @@ describe("метка и тег — плитками перед «Личным»"
   });
 });
 
-describe("тег один, как метка", () => {
-  // Владелец 22.09: «в тегах убери кнопку „Применить“… выбирается один тег,
-  // то же самое, как одна метка».
-  test("шторка без «Применить», тап выбирает и закрывает", () => {
+describe("тегов у клиента несколько", () => {
+  // Владелец 15.10: «под одного клиента несколько тегов… шторка, внизу
+  // „Применить“, могу тыкнуть несколько, убрать все или выбрать сразу три».
+  // (22.09 тег был один, как метка, — по его тогдашнему слову.)
+  test("тап только отмечает, пишет «Применить» — весь набор", () => {
     const sheet = read("TagPickerSheet.tsx");
-    assert.doesNotMatch(sheet, /label="Применить"|footer=/);
-    assert.match(sheet, /onPick\(tag\.id\);\s*onClose\(\);/);
+    assert.match(sheet, /label="Применить"/);
+    assert.match(sheet, /onApply\(draft\);\s*onClose\(\);/);
+    assert.match(sheet, /onPress=\{\(\) => toggle\(tag\.id\)\}/);
+    assert.doesNotMatch(sheet, /onPick/);
   });
-  test("тап ставит один тег, тап по выбранному снимает", () => {
-    assert.match(read("ClientLabelTags.tsx"), /const next = before\.length === 1 && before\[0\] === id \? \[\] : \[id\];/);
+  test("плитка — главный тег по порядку набора и «+N»", () => {
+    const tile = read("ClientLabelTags.tsx");
+    assert.match(tile, /const chosen = shownTags\s*\.map/);
+    assert.match(tile, /chosen\.length > 1 \? `\+\$\{chosen\.length - 1\}`/);
+    assert.match(tile, /onApply=\{applyTags\}/);
   });
 });
 

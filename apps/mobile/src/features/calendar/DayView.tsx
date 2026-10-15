@@ -618,10 +618,16 @@ export const DayColumn = memo(function DayColumn({
       : null;
   // Сетка «как в Bumpix» (принцип «из чёрного, не серого»): линии и серый
   // нерабочих часов — альфа от ink поверх белого поля («прикрываем, не
-  // скрываем»), а не бледные отдельные серые. 20% — отчётливая линия часа,
-  // 12% — плоский, явно читаемый wash нерабочего времени.
+  // скрываем»), а не бледные отдельные серые. 20% — отчётливая линия часа.
   const gridLine = `${t.ink}33`;
-  const offHoursFill = `${t.ink}1f`;
+  // ВСЁ НЕРАБОЧЕЕ — ОДНИМ ЦВЕТОМ (владелец 15.10): часы до и после смены,
+  // перерыв и выходной закрыты одним тёмным слоем (36%), подобранным на
+  // выходном — «сделай нерабочие часы такого же цвета, как выходной».
+  const offHoursFill = `${t.ink}5c`;
+  // ПЕРЕПАДЫ ЧИТАЮТСЯ СРАЗУ (владелец 15.10: «как будто сплошное — давит на
+  // глаза»): будущее — чистый белый, прошедшее — заметно серее прежнего
+  // (0.05 → 0.08).
+  const pastFill = "rgba(11,18,32,0.08)";
 
   // Off-hours wash band: per-date team schedule wins (workBand), else the
   // global hour props.
@@ -649,6 +655,31 @@ export const DayColumn = memo(function DayColumn({
   // Ноль рабочего времени у выходного: полоса «после смены» начинается на
   // верхней кромке окна и кроет колонку целиком одним слоем.
   const workEnd = band ? clampWin(band.endMin) : winStartMin;
+
+  // Рабочие отрезки дня: смена минус перерывы, в границах окна. Только на
+  // них ложатся серый «прошло» и плёнка метки.
+  const workSegs: { from: number; to: number }[] = [];
+  if (workEnd > workStart) {
+    const breaks = (band?.breaks ?? [])
+      .map((b) => ({ from: clampWin(b.startMin), to: clampWin(b.endMin) }))
+      .filter((b) => b.to > b.from)
+      .sort((a, b) => a.from - b.from);
+    let cur = workStart;
+    for (const b of breaks) {
+      if (cur >= workEnd) break;
+      if (b.from > cur) workSegs.push({ from: cur, to: Math.min(b.from, workEnd) });
+      cur = Math.max(cur, b.to);
+    }
+    if (cur < workEnd) workSegs.push({ from: cur, to: workEnd });
+  }
+  // До какой минуты окна время уже прошло (null — ничего не прошло).
+  const pastEnd =
+    (todayYmd && dateYmd < todayYmd) ||
+    (isToday && nowMinutes != null && nowMinutes > winEndMin)
+      ? winEndMin
+      : nowMin != null
+        ? winStartMin + nowMin
+        : null;
 
   /** Время под пальцем в ячейке часа, с шагом TAP_STEP. */
   const slotTime = (hour: number, locationY: number) => {
@@ -687,21 +718,6 @@ export const DayColumn = memo(function DayColumn({
         backgroundColor: t.surface,
       }}
     >
-      {tintColor ? (
-        // ~5% alpha of the label colour — reads as a hue, not a fill, so
-        // gridlines / washes / blocks above keep their contrast.
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: `${tintColor}0d`,
-          }}
-        />
-      ) : null}
       {/* off-hours wash: before work start / after work end */}
       {workStart > winStartMin ? (
         <MinuteBand
@@ -738,33 +754,41 @@ export const DayColumn = memo(function DayColumn({
         ) : null,
       )}
 
-      {nowMin != null ? (
-        // Прошедшее время затемняется ОТЧЁТЛИВО (запрос владельца
-        // 2026-07-16: «затемним участки, которые прошли») — 0.05 читается
-        // сразу, но остаётся легче серых нерабочих часов (0.12).
-        <MinuteBand
-          fromMin={winStartMin}
-          toMin={winStartMin + nowMin}
-          winStartMin={winStartMin}
-          winEndMin={winEndMin}
-          color="rgba(11,18,32,0.05)"
-        />
-      ) : null}
-      {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
-          позади» видно при сканировании, тем же слоем, что «до сейчас».
-          И сегодня после конца окна: в 19:59 колонка затемнена до низа, а
-          в 20:30 была белой, как будущее (повторный аудит 03.10). */}
-      {(todayYmd && dateYmd < todayYmd) ||
-      (isToday && nowMinutes != null && nowMinutes > winEndMin) ? (
-        <MinuteBand
-          fromMin={winStartMin}
-          toMin={winEndMin}
-          winStartMin={winStartMin}
-          winEndMin={winEndMin}
-          color="rgba(11,18,32,0.05)"
-        />
-      ) : null}
-
+      {/* ПРОШЕДШЕЕ И МЕТКА — ТОЛЬКО НА РАБОЧИХ ЧАСАХ (владелец 15.10: «нерабочее
+          время или выходной — полностью одним цветом, и неважно, прошло оно
+          или нет»). Серый «прошло» и плёнка метки ложатся лишь на отрезки
+          смены без перерывов; нерабочее закрыто одним `offHoursFill` и под
+          ними не темнеет и не окрашивается. «Прошло» — до сейчас у сегодня,
+          весь день у прошедших дней и у сегодня после конца окна (повторный
+          аудит 03.10: в 20:30 колонка была белой, как будущее). */}
+      {pastEnd != null
+        ? workSegs.map((seg) =>
+            seg.from < pastEnd ? (
+              <MinuteBand
+                key={`past-${seg.from}`}
+                fromMin={seg.from}
+                toMin={Math.min(seg.to, pastEnd)}
+                winStartMin={winStartMin}
+                winEndMin={winEndMin}
+                color={pastFill}
+              />
+            ) : null,
+          )
+        : null}
+      {/* Метка дня — ~5% её цвета поверх серого «прошло»: прошедший день
+          метку не гасит (владелец 15.10: «всегда того цвета, что была»). */}
+      {tintColor
+        ? workSegs.map((seg) => (
+            <MinuteBand
+              key={`tint-${seg.from}`}
+              fromMin={seg.from}
+              toMin={seg.to}
+              winStartMin={winStartMin}
+              winEndMin={winEndMin}
+              color={`${tintColor}0d`}
+            />
+          ))
+        : null}
       {/* hour cells: gridline + create-slot in one flex node. Часовые ряды
           чистые (Bumpix); получасовая волосяная линия появляется только на
           достаточном зуме (HALF_MARK_MIN_H) — иначе частокол. */}
@@ -1047,14 +1071,12 @@ export const DayColumn = memo(function DayColumn({
 function DayHeader({
   dateYmd,
   isToday,
-  isPast,
   dayOff = false,
   label,
   onLabelTap,
 }: {
   dateYmd: string;
   isToday: boolean;
-  isPast: boolean;
   /** У команды на эту дату выходной — на месте метки встанет слово. */
   dayOff?: boolean;
   /** Метка дня (город команды). null при отсутствии — шапка чистая,
@@ -1083,7 +1105,6 @@ function DayHeader({
         date={date}
         size="lg"
         isToday={isToday}
-        isPast={isPast}
         label={label}
         dayOff={dayOff}
       />
@@ -1231,7 +1252,6 @@ export const DayView = memo(function DayView({
               <DayHeader
                 dateYmd={d}
                 isToday={d === todayYmd}
-                isPast={d < todayYmd}
                 label={labelFor?.(d) ?? null}
                 dayOff={workBandFor?.(d) === null}
                 onLabelTap={off === 0 ? onDayLabelTap : undefined}

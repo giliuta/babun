@@ -59,6 +59,14 @@ describe("плотный блок записи", () => {
     for (const { value } of PRESET_COLORS) {
       const idle = blockSolid(value);
       const pressed = blockPressed(value);
+      // Чёрный (15.10) глубже стать не может: отклик у него — на ступень
+      // светлее (пол светлоты 0.2), имя при этом читается с запасом.
+      const [idleL] = hexToOklch(idle) ?? [1];
+      if (idleL <= 0.2) {
+        assert.notEqual(pressed, idle, value);
+        assert.ok(contrastRatio(BLOCK_TEXT, pressed) >= 4.5, value);
+        continue;
+      }
       assert.ok(
         contrastRatio(BLOCK_TEXT, pressed) > contrastRatio(BLOCK_TEXT, idle),
         value,

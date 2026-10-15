@@ -29,7 +29,6 @@ export function DateCell({
   date,
   size,
   isToday,
-  isPast = false,
   count = 0,
   label,
   dayOff = false,
@@ -38,7 +37,6 @@ export function DateCell({
   /** sm — ячейка недельной полосы; lg — шапка дневного вида. */
   size: "sm" | "lg";
   isToday: boolean;
-  isPast?: boolean;
   count?: number;
   label?: { name: string; color: string } | null;
   /** У команды на эту дату выходной (график сказал «не работаем»). */
@@ -47,7 +45,6 @@ export function DateCell({
   const t = useThemeColors();
   const weekend = date.getDay() === 0 || date.getDay() === 6;
   const dow = WEEKDAYS_RU[(date.getDay() + 6) % 7];
-  const dim = isPast && !isToday;
 
   // ДВА РАЗНЫХ СИГНАЛА, И ОНИ НЕ СПОРЯТ (владелец 2026-08-07):
   //   • ШАПКА красит субботу и воскресенье красным — это государственные
@@ -70,7 +67,6 @@ export function DateCell({
           alignItems: "center",
           justifyContent: "center",
           paddingVertical: 3,
-          opacity: dim ? 0.4 : 1,
         }}
       >
         <Text
@@ -138,7 +134,10 @@ export function DateCell({
     >
       {/* Ряды фиксированной высоты: число у ВСЕХ ячеек на одной строке —
           слот метки резервируется и пустым, ничего не прыгает. */}
-      <View style={{ alignItems: "center", opacity: dim ? 0.4 : 1 }}>
+      {/* Прошедший день в шапке не гаснет — ни число, ни метка (владелец
+          15.10: «даты сверху всегда одинаковые», «метка всегда того цвета,
+          что была»). Прошлое показывает серая колонка, не шапка. */}
+      <View style={{ alignItems: "center" }}>
         <Text
           maxFontSizeMultiplier={1.2}
           style={{

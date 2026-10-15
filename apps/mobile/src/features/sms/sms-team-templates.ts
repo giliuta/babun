@@ -168,7 +168,7 @@ export interface TemplateDraft {
 }
 
 /** Цвет нового шаблона — первый цвет палитры, как у нового типа события. */
-export const DEFAULT_TEMPLATE_COLOR = "#3276FB";
+export const DEFAULT_TEMPLATE_COLOR = "#3333FF";
 
 export function draftOf(t: SmsTeamTemplate): TemplateDraft {
   return {
