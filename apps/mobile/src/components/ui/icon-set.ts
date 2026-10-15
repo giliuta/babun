@@ -2,7 +2,9 @@
 // разработаем блок с иконками, которые нам в будущем могут понадобиться»).
 // Было сорок; 03.10 владелец попросил больше — «чтоб под офис был значок
 // офиса, под дом — дома»: добавлены ещё пять восьмёрок (здания · жильё и
-// отдых · внутри · техника и стройка · разное), всего восемьдесят.
+// отдых · внутри · техника и стройка · разное), всего восемьдесят. 15.10 —
+// сто («сделай 100 значков и 100 цветов»): услуги и уход · транспорт и офис ·
+// успех (последний ряд — неполная четвёрка).
 // Рисует их `IconPicker`; читают — экраны, где значок уже выбран (счета).
 //
 // Порядок задаёт картинку так же, как в палитре: сетка идёт в ВОСЕМЬ столбцов,
@@ -16,13 +18,19 @@
 // car, tools, phone, gift. Все на месте, миграции не нужно.
 import {
   AirVent,
+  Baby,
   Banknote,
   Bath,
   Bed,
+  Bike,
   Briefcase,
+  Brush,
+  Bug,
   Building,
   Building2,
+  Bus,
   Calendar,
+  Camera,
   Car,
   Caravan,
   Castle,
@@ -33,6 +41,7 @@ import {
   Construction,
   CookingPot,
   CreditCard,
+  Crown,
   DoorOpen,
   Drill,
   Droplet,
@@ -40,7 +49,10 @@ import {
   Factory,
   Fan,
   Fence,
+  FileText,
   Flame,
+  Flower2,
+  Fuel,
   Gauge,
   Gift,
   Globe,
@@ -54,9 +66,11 @@ import {
   House,
   Key,
   Landmark,
+  Laptop,
   Leaf,
   Lightbulb,
   Lock,
+  Mail,
   MapPin,
   Mountain,
   Package,
@@ -65,23 +79,31 @@ import {
   PiggyBank,
   Plane,
   Plug,
+  Printer,
   Receipt,
+  Recycle,
   Refrigerator,
+  Rocket,
   Sailboat,
   School,
+  Scissors,
   ShieldCheck,
+  Shirt,
   ShoppingBag,
   ShowerHead,
   Smartphone,
   Snowflake,
   Sofa,
+  Sparkles,
   Star,
+  Stethoscope,
   Store,
   Sun,
   Tent,
   Thermometer,
   TreePalm,
   Trees,
+  Trophy,
   Truck,
   Tv,
   Users,
@@ -197,6 +219,29 @@ export const ICON_PRESETS: IconPreset[] = [
   { value: "gym", label: "Спортзал", icon: Dumbbell },
   { value: "shopping", label: "Покупки", icon: ShoppingBag },
   { value: "paw", label: "Питомцы", icon: PawPrint },
+  // услуги и уход (15.10)
+  { value: "scissors", label: "Ножницы", icon: Scissors },
+  { value: "sparkles", label: "Уборка", icon: Sparkles },
+  { value: "brush", label: "Кисть", icon: Brush },
+  { value: "shirt", label: "Одежда", icon: Shirt },
+  { value: "baby", label: "Дети", icon: Baby },
+  { value: "medic", label: "Медицина", icon: Stethoscope },
+  { value: "flower", label: "Цветы", icon: Flower2 },
+  { value: "bug", label: "Насекомые", icon: Bug },
+  // транспорт и офис (15.10)
+  { value: "bike", label: "Велосипед", icon: Bike },
+  { value: "bus", label: "Автобус", icon: Bus },
+  { value: "fuel", label: "Топливо", icon: Fuel },
+  { value: "laptop", label: "Ноутбук", icon: Laptop },
+  { value: "printer", label: "Принтер", icon: Printer },
+  { value: "camera", label: "Фото", icon: Camera },
+  { value: "docs", label: "Документы", icon: FileText },
+  { value: "mail", label: "Почта", icon: Mail },
+  // успех (15.10)
+  { value: "trophy", label: "Кубок", icon: Trophy },
+  { value: "crown", label: "Корона", icon: Crown },
+  { value: "rocket", label: "Ракета", icon: Rocket },
+  { value: "recycle", label: "Переработка", icon: Recycle },
 ];
 
 /** Глиф по слагу. Старые значения-эмодзи из веб-мастера слагами не являются и
