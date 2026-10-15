@@ -59,7 +59,6 @@ export {
   useAutoColorRule,
   useFallbackColor,
   useSetAutoColorRule,
-  useSetFallbackColor,
   useSetSituationColor,
   useSituationPalette,
   type AutoColorRule,

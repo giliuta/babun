@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Share } from "react-native";
-import * as Linking from "expo-linking";
 import { Mail, Phone, UserRound } from "lucide-react-native";
 
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
@@ -12,8 +11,8 @@ import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import {
   invitationErrorMessage,
-  invitationPath,
   invitationShareText,
+  invitationShareUrl,
   isInvitationEmail,
 } from "@/features/settings/invitation-flow";
 import { useCreateInvitation } from "@/features/settings/team-access";
@@ -42,7 +41,7 @@ export async function shareInvitation(args: {
   token: string;
   tenantName: string | null | undefined;
 }): Promise<void> {
-  const url = Linking.createURL(invitationPath(args.token));
+  const url = invitationShareUrl(args.token);
   await Share.share({
     title: `Приглашение для ${args.email}`,
     message: invitationShareText({ tenantName: args.tenantName, url }),

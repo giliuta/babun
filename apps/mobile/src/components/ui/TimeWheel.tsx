@@ -27,7 +27,7 @@ export {
   VISIBLE_ROWS,
   WHEEL_H,
 } from "./time-wheel/wheel-geometry";
-export { LoopWheelColumn } from "./time-wheel/LoopWheelColumn";
+export { LoopWheelColumn, WheelWithLines } from "./time-wheel/LoopWheelColumn";
 
 /**
  * ВРЕМЯ = ДВА ЗАКОЛЬЦОВАННЫХ БАРАБАНА «ЧЧ : ММ». Канонический контрол времени

@@ -208,6 +208,12 @@ function invalidateInvoices(qc: ReturnType<typeof useQueryClient>) {
   // Оплата и возврат по инвойсу — строки журнала записи: её «История
   // платежей» живёт под своим ключом (аудит 017, 03.10).
   qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
+  // Кредит-нота с возвратом и отмена инвойса двигают ДЕНЬГИ: строки возврата
+  // ложатся в журнал счёта (`_refund_invoice_money`). Остатки счетов и их НДС
+  // живут под `accounts`, долги — под `debts`; без них плитки счетов до минуты
+  // показывали прежний остаток (13.10). Оплата инвойса добавляла их сама.
+  qc.invalidateQueries({ queryKey: ["accounts"] });
+  qc.invalidateQueries({ queryKey: ["debts"] });
 }
 
 export function useIssueInvoice() {
@@ -257,9 +263,18 @@ export function useUpdateInvoice(id: string) {
       ...draft
     }: Omit<IssueInvoiceDraft, "request_id" | "link_to_tx_id"> & { language?: InvoiceLanguage }) => {
       const invoice = await updateInvoice(supabase, id, draft);
+      // Правка уже записана: язык — вторым шагом и НЕ валит её (как у
+      // выставления). Раньше сбой языка отвергал всю мутацию — экран говорил
+      // «ошибка» про сохранённые суммы, а кэш инвойса оставался старым (13.10).
       if (language && language !== invoice.language) {
-        await setInvoiceLanguage(supabase, id, language);
-        return { ...invoice, language };
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await setInvoiceLanguage(supabase, id, language);
+            return { ...invoice, language };
+          } catch {
+            if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
+          }
+        }
       }
       return invoice;
     },

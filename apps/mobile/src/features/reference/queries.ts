@@ -19,7 +19,6 @@ export {
 } from "./queries/teams";
 export {
   fetchMasters,
-  useCreateMaster,
   useMaster,
   useMasters,
 } from "./queries/masters";
@@ -40,7 +39,4 @@ export {
   useUpdateTeam,
 } from "./queries/ref-write";
 export { usePurgeService, useServiceUsageCount } from "./queries/services";
-export {
-  useRemoveMasterFromTeams,
-  useUpdateTeamMembers,
-} from "./queries/team-members";
+export { useRemoveMasterFromTeams } from "./queries/team-members";

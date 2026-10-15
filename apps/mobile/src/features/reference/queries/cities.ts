@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
+import { NEVER_PAUSE } from "@/lib/never-pause";
 import { useTenantId } from "@/lib/tenant";
 import { citiesQueryKey } from "@/lib/company-query-keys";
 import { useDataRole } from "@/session/tenant";
@@ -76,6 +77,9 @@ export function useCreateCity() {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
     // per-city accent colour that tints the calendar day chip (web parity).
     mutationFn: async (input: {

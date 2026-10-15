@@ -78,7 +78,7 @@ export function ClientsSettingsScreen() {
     null;
 
   return (
-    <Screen>
+    <Screen edges={["top"]}>
       <ScreenHeader
         title="Настройки клиентов"
         // Шов несёт лента команд; без неё линию берёт шапка (как в

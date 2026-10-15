@@ -106,11 +106,6 @@ export function useSetAutoColorRule(teamId: string | null | undefined) {
   return { ...save, mutate: (rule: AutoColorRule) => patch({ rule }) };
 }
 
-export function useSetFallbackColor(teamId: string | null | undefined) {
-  const { save, patch } = useSaveDesign(teamId);
-  return { ...save, mutate: (color: string) => patch({ fallback: color || null }) };
-}
-
 export function useSetSituationColor(teamId: string | null | undefined) {
   const { save, base, patch } = useSaveDesign(teamId);
   return {

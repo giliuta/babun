@@ -32,6 +32,7 @@ import {
   type TierCard,
 } from "@/session/tiers";
 import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "./use-tariff";
+import { useLiveCalendarCount } from "./use-live-calendars";
 
 // КАБИНЕТ → ТАРИФ — ЦЕНА ЗА КАЛЕНДАРЬ (владелец 12.10: €9.99 в месяц за
 // рабочий календарь, €7.99 при оплате за год, люди бесплатно; до 12.10 —
@@ -76,6 +77,7 @@ export function TariffScreen() {
   const gate = useAccountGate("cabinet.tariff");
   const accountName = useAccountName();
   const { data: teams = [] } = useTeams();
+  const liveCount = useLiveCalendarCount();
   const startTrial = useStartTrial();
   const [paying, setPaying] = useState(false);
   const current = state.tier && state.tier !== "free" ? state.tier : null;
@@ -103,8 +105,9 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
-  // Платят за каждый живой календарь (12.10) — столько и в кнопке.
-  const calendars = Math.max(1, live.length);
+  // Платят за каждый живой календарь (12.10) — столько и в кнопке; счёт — по
+  // аккаунту страницы, а не по открытому в календаре (13.10).
+  const calendars = Math.max(1, liveCount ?? (scope.foreign ? 0 : live.length));
   const full = owner
     ? tariffAction(state, selected, calendars)
     : gate === "write"

@@ -14,8 +14,7 @@ describe("native settings persistence contract", () => {
     const source = readModuleSource(resolve(here, "../reference/queries.ts"));
     assert.doesNotMatch(source, /\bas any\b/);
     assert.match(source, /\.select\("id"\)[\s\S]*\.maybeSingle\(\)/);
-    assert.match(source, /expectedUpdatedAt: string/);
-    assert.match(source, /\.eq\("updated_at", expectedUpdatedAt\)/);
+    assert.match(source, /\.eq\("updated_at", team\.updated_at\)/);
   });
 
   test("global sign-out and account deletion await tenant-data erasure", () => {

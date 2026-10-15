@@ -73,6 +73,7 @@ export function useClientsList() {
     guestOf: merged.guestOf,
     selectedIds: ui.selectedIds,
     setSelectedIds: ui.setSelectedIds,
+    selecting: ui.selecting,
     setSelecting: ui.setSelecting,
     tags: merged.tags,
     allStatsMap: team.allStatsMap,

@@ -27,7 +27,7 @@ export function newSheetId(): string {
 /** Открытые листы со своим окном, снизу вверх. Закрывающийся сюда не входит:
  *  ложиться в уезжающее окно нельзя. */
 const stack: string[] = [];
-let overlay: { target: string; node: ReactNode } | null = null;
+let overlay: { target: string; node: ReactNode; onBack?: () => void } | null = null;
 
 // ДВЕ ПОДПИСКИ, А НЕ ОДНА. Стопку слушают листы (пропал лист под накладкой),
 // накладку — только места для неё. Одна общая подписка замыкала круг:
@@ -86,9 +86,16 @@ export function isSheetOpen(id: string): boolean {
   return stack.includes(id);
 }
 
-export function setOverlay(target: string, node: ReactNode) {
-  overlay = { target, node };
+export function setOverlay(target: string, node: ReactNode, onBack?: () => void) {
+  overlay = { target, node, onBack };
   emitOverlay();
+}
+
+/** Закрытие накладки, лежащей в окне листа `id`, — для «Назад» Android: оно
+ *  приходит окну листа-хозяина и закрывало его целиком вместо вопроса поверх
+ *  (13.10). */
+export function overlayBackFor(id: string): (() => void) | null {
+  return overlay?.target === id && overlay.onBack ? overlay.onBack : null;
 }
 
 export function clearOverlay(target: string) {

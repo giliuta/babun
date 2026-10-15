@@ -14,7 +14,7 @@ import type { RecordNaming } from "./use-record-naming";
 
 type CreateActionMenuDeps =
   Pick<RecordActions, "openEdit" | "openReminderMenu" | "startFreeMove" | "startMove"
-    | "setCancelled" | "cancelWithReason" | "deleteAppointmentConfirmed">
+    | "setCancelled" | "cancelWithReason" | "deleteAppointmentConfirmed" | "recordRoute">
   & Pick<CalendarSources, "clients">
   & Pick<CalendarRights, "canMutateAppointment" | "isCrew" | "smsInPlan" | "actionsIn"
     | "actorId" | "eventRightsIn" | "workInPlan" | "nudgeTariff">
@@ -30,7 +30,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
     smsInPlan, setSmsApt, setSmsOpen, actionsIn, actorId, startFreeMove, startMove,
     eventRightsIn, setRecolor, setCancelled, cancelWithReason,
     deleteAppointmentConfirmed, copyInPlace, workInPlan, nudgeTariff, setSheetMenu,
-    clientName,
+    clientName, recordRoute,
   } = deps;
   // ─── Контекстное меню записи (долгое нажатие без движения) ──────────
   // Web parity ActionMenuModal (dashboard/page.tsx:1752): «только действия,
@@ -105,10 +105,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
       if (address)
         items.push({
           label: "Маршрут",
-          run: () =>
-            Linking.openURL(
-              `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-            ),
+          run: () => recordRoute.open(null, address),
           view: true,
         });
       // ДЕЙСТВИЯ ПО ПРАВАМ (STORY-088): каждое — свой блок в календаре

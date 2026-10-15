@@ -169,11 +169,3 @@ export function useToggleCardField(teamId: string | null = null) {
   };
 }
 
-/** Краткое живое резюме включённых полей (строка в настройках, web
- *  cardSummary). */
-export function cardFieldsSummary(p: CardFieldPrefs): string {
-  const parts = ["Имя"];
-  if (p.phone) parts.push("телефон");
-  if (p.last) parts.push("посл. запись");
-  return parts.join(" · ");
-}

@@ -4,13 +4,10 @@ import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/session/tenant";
 import { useAccountScope } from "@/session/account-scope";
 import {
-  applyPatch,
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
-  type SmsAccount,
   type SmsHistoryItem,
-  type SmsSettingsPatch,
 } from "./sms-model";
 import { clientKeys } from "@/lib/client-query-keys";
 import {
@@ -70,33 +67,6 @@ export function useSmsAccount() {
   });
 }
 
-export function useSaveSmsSettings() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (patch: SmsSettingsPatch) => {
-      const { data, error } = await supabase.rpc("sms_save_settings", {
-        p: toJson(patch),
-      });
-      if (error) throw new Error(error.message);
-      return parseSmsAccount(data);
-    },
-    // Выключатели откликаются сразу, а ответ базы — истина после.
-    onMutate: async (patch) => {
-      const key = smsAccountKey(tenantId);
-      await qc.cancelQueries({ queryKey: key });
-      const before = qc.getQueryData<SmsAccount>(key);
-      if (before) qc.setQueryData<SmsAccount>(key, applyPatch(before, patch));
-      return { before };
-    },
-    onError: (_e, _patch, context) => {
-      if (context?.before) qc.setQueryData(smsAccountKey(tenantId), context.before);
-    },
-    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
-    meta: { errorHandled: true },
-  });
-}
-
 /** Имя отправителя команды; пустое — снять. Ответ базы — свежий счёт. */
 export function useSaveTeamSender() {
   const tenantId = useTenantId();
@@ -107,43 +77,6 @@ export function useSaveTeamSender() {
         p_team_id: input.teamId,
         p_name: input.name,
       });
-      if (error) throw new Error(error.message);
-      return parseSmsAccount(data);
-    },
-    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
-    meta: { errorHandled: true },
-  });
-}
-
-/** Автопополнение (волна 13): включить — только с сохранённой картой,
- *  порог и сумма — из готовых. Ответ базы — новый вид страницы. */
-export function useSaveAutotopup() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (patch: { enabled?: boolean; thresholdCents?: number; amountCents?: number }) => {
-      const { data, error } = await supabase.rpc("sms_autotopup_save", {
-        p: {
-          ...(patch.enabled !== undefined ? { enabled: patch.enabled } : null),
-          ...(patch.thresholdCents !== undefined ? { threshold_cents: patch.thresholdCents } : null),
-          ...(patch.amountCents !== undefined ? { amount_cents: patch.amountCents } : null),
-        },
-      });
-      if (error) throw new Error(error.message);
-      return parseSmsAccount(data);
-    },
-    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
-    meta: { errorHandled: true },
-  });
-}
-
-/** Убрать карту: автопополнение выключается, карта больше не списывается. */
-export function useForgetAutotopupCard() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.rpc("sms_autotopup_forget");
       if (error) throw new Error(error.message);
       return parseSmsAccount(data);
     },

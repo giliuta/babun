@@ -5,7 +5,6 @@ import { getDebtAmount, type Appointment } from "./appointments";
 
 import type {
   AcquisitionSource,
-  ACType,
   Client,
   ClientMembership,
   PropertyType,
@@ -54,12 +53,6 @@ export const PROPERTY_LABELS: Record<PropertyType, string> = {
   restaurant: "Ресторан",
   shop: "Магазин",
   other: "Другое",
-};
-
-export const AC_TYPE_LABELS: Record<ACType, string> = {
-  split: "Сплит",
-  ducted: "Канальный",
-  cassette: "Кассетный",
 };
 
 /** Что подставить в «Адрес» заявки при выборе объекта. Поле заявки принимает

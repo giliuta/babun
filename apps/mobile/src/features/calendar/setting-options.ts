@@ -1,5 +1,4 @@
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
-import type { SheetOption } from "@/components/ui/OptionSheet";
 
 // Наборы вариантов и резолверы для настроек календаря. Один дом на оба экрана
 // (общий /calendar и календарь команды /calendar/[teamId]) — иначе подписи
@@ -29,16 +28,6 @@ export function effectiveWorkHours(g: CalendarSettings): {
   };
 }
 
-/** Буфер после записи. */
-const BUFFER_CHOICES: SheetOption<string>[] = [
-  { value: "0", label: "Нет" },
-  { value: "5", label: "5 мин" },
-  { value: "10", label: "10 мин" },
-  { value: "15", label: "15 мин" },
-  { value: "30", label: "30 мин" },
-  { value: "60", label: "1 час" },
-];
-
 /**
  * БУФЕР ПОСЛЕ ЗАПИСИ — СВОЙ У КАЖДОЙ БРИГАДЫ (владелец 2026-08-17: «давай в
  * график команды добавим этот буфер — по сути это тот же перерыв, только после
@@ -60,6 +49,3 @@ export function effectiveBuffer(
   return team?.buffer_minutes ?? company?.bufferMinutes ?? 0;
 }
 
-export function bufferLabel(min: number): string {
-  return BUFFER_CHOICES.find((o) => o.value === String(min))?.label ?? `${min} мин`;
-}

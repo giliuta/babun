@@ -189,6 +189,18 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(screen(), /schedule: \(current\) => \{\s*const base: TeamSchedule = current \?\?/);
   });
 
+  test("апсерты графика идут по очереди: «Сб» и «Вс» подряд не затирают друг друга", () => {
+    const sched = readFileSync(resolve(here, "../reference/team-schedule.ts"), "utf8");
+    const hook = sched.slice(sched.indexOf("export function useUpsertTeamSchedule"));
+    const fn = hook.slice(hook.indexOf("mutationFn:"), hook.indexOf("onMutate:"));
+    assert.match(fn, /afterPreviousScheduleWrite\(tenantId as string, async \(\) => \{/);
+    assert.ok(
+      fn.indexOf("afterPreviousScheduleWrite") < fn.indexOf("listScheduleEntries") &&
+        fn.indexOf("listScheduleEntries") < fn.indexOf("upsertScheduleEntry"),
+      "чтение свежего графика и апсерт должны стоять внутри очереди",
+    );
+  });
+
   test("мелочи: «Новая запись» в пустом Списке у сотрудника с одними событиями, удаление записи с возвратом", () => {
     const src = screen();
     assert.match(src, /kind: canManageBookings \|\| activeActions\.create \? "work" : "event",/);

@@ -34,7 +34,7 @@ type CreateSlotPlacementDeps =
   & Pick<GridModes, "pickClientId" | "pick" | "setMoving" | "editingApt" | "setEditingApt"
     | "moving" | "placedFromRef" | "movingKind">
   & Pick<CalendarScope, "activeTeamId">
-  & Pick<CalendarRoute, "pushBookOnce" | "router">
+  & Pick<CalendarRoute, "pushBookOnce" | "router" | "tenantId">
   & Pick<CalendarRights, "isCrew">
   & Pick<RecordActions, "memberCopy" | "createAppt">
   & Pick<QuickEvents, "attemptId" | "settleAttempt">
@@ -50,7 +50,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     pushBookOnce, setMoving, isCrew, memberCopy, moveWindowMin, attemptId,
     settleAttempt, createAppt, router, teams, updateAppt, appointmentTimeZone,
     editingApt, setEditingApt, moving, placedFromRef, movingKind, workBandFor,
-    setNotice, setSlotDraft,
+    setNotice, setSlotDraft, tenantId,
   } = deps;
   /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ (владелец 2026-08-24: «в
    *  прошлом чёрная плашка вылазит сверху — нельзя заполнить в прошлом, — и
@@ -181,8 +181,8 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     };
     const tz = appointmentTimeZone(apt);
     const syncReminders = (placed: Appointment) => {
-      if (isCalendarEvent(placed)) void syncEventAppointmentReminders(placed, tz);
-      else void cancelAppointmentReminders(placed.id);
+      if (!isCalendarEvent(placed)) void cancelAppointmentReminders(placed.id);
+      else if (tenantId) void syncEventAppointmentReminders(placed, tz, tenantId);
     };
     updateAppt.mutate(
       { id: apt.id, patch: next },

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // КОРЕНЬ «ЗАСТЫВАНИЙ» (владелец 11.10): вопрос из открытого листа больше не
 // второе окно поверх первого — он ложится в окно листа. Проверено в вебе:
@@ -29,4 +30,41 @@ test("накладка будит только своё место, а не вс
   const src = read("sheet-overlay.tsx");
   assert.match(src, /export function setOverlay[\s\S]{0,120}emitOverlay\(\);/);
   assert.doesNotMatch(src.slice(src.indexOf("export function setOverlay"), src.indexOf("/** Подписка на перемены стопки")), /\bemit\(\);/);
+});
+
+test("тап мимо листа закрывает его и с рамкой подъёма над клавиатурой", () => {
+  // Рамка подъёма во весь экран лежит ПОВЕРХ затемнения (сосед, не предок):
+  // без `box-none` она съедала тап, и на Android ни один лист не закрывался
+  // тапом мимо (12.10, подъём у каждого листа).
+  const sheet = read("BottomSheet.tsx");
+  assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
+  const lift = read("KeyboardLift.tsx");
+  assert.match(lift, /<KeyboardAvoidingView[\s\S]{0,80}pointerEvents=\{pointerEvents\}/);
+  assert.match(lift, /<View ref=\{ref\} pointerEvents=\{pointerEvents\}/);
+});
+
+test("лист без футера на Android держит отступ навигации снизу", () => {
+  // Окно листа edge-to-edge: без отступа последняя строка выбора ложилась под
+  // «Назад / Домой» трёхкнопочной навигации, где её не нажать (13.10).
+  const sheet = read("BottomSheet.tsx");
+  assert.match(sheet, /\) : Platform\.OS === "android" && !keyboardShown \? \(/);
+  assert.match(sheet, /<View style=\{\{ height: insets\.bottom \}\} \/>/);
+});
+
+test("уезжающий лист не тянется, отклонённый свайп возвращает лист", () => {
+  // Второй рывок во время выхода срывал анимацию — лист оставался
+  // смонтированным невидимкой со скримом, глотавшим каждый тап (13.10).
+  // Жест листа живёт в `bottom-sheet/use-sheet-motion.ts`.
+  const sheet = readModuleSource(resolve(here, "BottomSheet.tsx"), resolve(here, "bottom-sheet"));
+  assert.match(sheet, /const drag = Gesture\.Pan\(\)[\s\S]{0,700}\.enabled\(visible\)/);
+  assert.match(sheet, /runOnJS\(closeFromDrag\)\(\);/);
+  assert.match(sheet, /if \(!visibleRef\.current\) return;\s*ty\.value = withSpring\(0/);
+});
+
+test("массовая SMS поднимается над клавиатурой и не глотает тап мимо", () => {
+  // Сырой Modal edge-to-edge: поле текста и кнопки отправки уходили под
+  // клавиатуру Android, печатали вслепую (13.10).
+  const sheet = read("../../features/clients/BulkSmsSheet.tsx");
+  assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
+  assert.doesNotMatch(sheet, /className="absolute bottom-0 left-0 right-0/);
 });

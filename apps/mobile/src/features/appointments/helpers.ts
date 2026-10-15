@@ -35,13 +35,6 @@ export function formatHM(d: Date): string {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-export function parseHM(s: string, base?: Date): Date {
-  const d = base ? new Date(base) : new Date();
-  const [h, m] = s.split(":").map(Number);
-  d.setHours(h || 0, m || 0, 0, 0);
-  return d;
-}
-
 // Конец слота = старт + минуты, БЕЗ заворота через полночь: тап по
 // слоту 23:30 не должен давать конец «00:00» раньше начала (Alert при
 // сохранении). Клампим к 23:59 — визит через полночь бронируется двумя

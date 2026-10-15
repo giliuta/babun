@@ -15,7 +15,6 @@ export {
 export { useClients } from "./queries/list";
 export { useClient } from "./queries/card";
 export {
-  useSetClientTeam,
   useUpdateClient,
   useUpdateClientById,
   type ClientWriteTarget,

@@ -51,4 +51,21 @@ describe("выходной на дату", () => {
     const off = setDayOff(base, "2026-10-05", true);
     expect(off.date_overrides?.["2026-10-05"]).toEqual({ is_working: false, start: "09:00", end: "18:00", breaks: [] });
   });
+
+  test("рабочее воскресенье — по часам недели, а не по полям рождения графика", () => {
+    // Так график пишет шторка с 11.10: часы — в днях недели, `start/end` —
+    // от рождения (00:00–24:00).
+    const week: TeamSchedule = {
+      start: "00:00",
+      end: "24:00",
+      breaks: [],
+      overrides: {
+        mon: { is_working: true, start: "09:00", end: "18:00", breaks: [] },
+        tue: { is_working: true, start: "09:00", end: "18:00", breaks: [] },
+        sun: { is_working: false, start: "00:00", end: "24:00", breaks: [] },
+      },
+    };
+    const next = setDayOff(week, "2026-10-04", false);
+    expect(next.date_overrides?.["2026-10-04"]).toEqual({ is_working: true, start: "09:00", end: "18:00", breaks: [] });
+  });
 });

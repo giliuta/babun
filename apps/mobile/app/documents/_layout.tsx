@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { useThemeColors } from "@/theme/colors";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Screen } from "@/components/ui/Screen";
+import { OverTabs, Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useCurrentRole } from "@/session/tenant";
@@ -20,12 +20,16 @@ export default function DocumentsLayout() {
   const role = useCurrentRole().data;
   const level = useDocumentLevel();
   const stack = (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: t.canvas },
-      }}
-    />
+    // Над табами: подвалы документов («Выставить», «Оформить возврат») —
+    // над навигацией Android, низ берёт сам `Screen`.
+    <OverTabs value>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: t.canvas },
+        }}
+      />
+    </OverTabs>
   );
   if (role === "master") {
     return (

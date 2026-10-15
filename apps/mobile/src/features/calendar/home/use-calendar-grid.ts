@@ -135,8 +135,11 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
   // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь
   // остаётся прежним, без зелени.
   // Окно переноса — длительность записи; у записи без длительности — шаг.
+  // Конец 23:59 — это конец суток (как у блока, `spanEnd`, аудит 03.10):
+  // иначе «Копировать» запись 22:00–23:59 на 10:00 давало 10:00–11:59 (13.10).
+  const movingSpan = moving ? minutesBetweenHM(moving.time_start, moving.time_end) : 0;
   const moveWindowMin = moving
-    ? minutesBetweenHM(moving.time_start, moving.time_end) ||
+    ? (movingSpan > 0 && moving.time_end === "23:59" ? movingSpan + 1 : movingSpan) ||
       (activeTeam?.default_slot_minutes ?? 30)
     : 0;
   const freeSlotsFor = useMemo(() => {

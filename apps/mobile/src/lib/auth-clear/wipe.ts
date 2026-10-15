@@ -262,23 +262,3 @@ export async function wipeTenantScopedData(
     // cleared, and native bootstrap always injects before a user can switch.
   }
 }
-
-/** Drop every tenant-scoped local key + the in-memory query cache + the
- *  SQLite offline cache (clients / appointments / tags / sync_queue /
- *  sync_meta). Without the SQLite wipe, Tenant A's cached rows AND — worse
- *  — A's un-drained sync_queue ops survive a logout→login-B on the same
- *  device: those ops would replay onto the server under B's session
- *  (cross-tenant leak, offline-plan risk #1). This compatibility helper keeps
- *  the old fire-and-forget shape for post-deletion/global-signout call sites;
- *  normal logout and account-switch guards use wipeTenantScopedData() and
- *  await the SQLite clear before another session can render. */
-export function wipeLocalData(): void {
-  void clearAllBabunNotifications();
-  wipeFastStores(false);
-  void cacheClearAll().catch(() => {
-    // Cache not injected yet (SqlAdapter set only on native bootstrap) or a
-    // transient SQLite error — swallow. The cross-tenant leak this guards
-    // only materialises once slice 4 wires mutations onto the wrappers; on
-    // web / pre-bootstrap there is nothing to clear.
-  });
-}

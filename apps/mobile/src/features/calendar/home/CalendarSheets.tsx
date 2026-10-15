@@ -21,7 +21,7 @@ export function CalendarSheets({ c }: { c: CalendarController }) {
     activeActions, setSlotDraft, bookAt, sheetMenu, setSheetMenu, smsApt, clients,
     smsOpen, teams, companyName, canManageBookings, setSmsOpen, reminderFor,
     pickReminderFor, setReminderFor, recolor, setRecolor, teamColorFor, updateAppt,
-    toast,
+    toast, recordRoute,
   } = c;
   return (
     <>
@@ -83,6 +83,7 @@ export function CalendarSheets({ c }: { c: CalendarController }) {
           />
         );
       })() : null}
+      {recordRoute.sheet}
       <SelfReminderSheet
         visible={reminderFor != null}
         value={reminderFor ? getSelfReminder(reminderFor.id) : null}

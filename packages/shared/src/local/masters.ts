@@ -3,7 +3,7 @@
 // Форма людей и бригад плюс правила прав. Хранит их Supabase
 // (tenant_state через features/reference), здесь хранилища нет.
 
-import type { AccountStatus, Team } from "./masters/types";
+import type { Team } from "./masters/types";
 
 export type {
   AccountStatus,
@@ -11,33 +11,16 @@ export type {
   BrigadeRole,
   Master,
   MasterExtraContacts,
-  MasterPermissions,
   MasterPhoneEntry,
   MasterRole,
   Team,
 } from "./masters/types";
-export {
-  defaultPermissionsForRole,
-  mergePermissions,
-  PERMISSION_GROUPS,
-  PERMISSION_LABELS,
-  ROLE_LABELS,
-  type PermissionGroupKey,
-} from "./masters/permissions";
-
-export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
-  invited: "Приглашён",
-  active: "Активен",
-  paused: "На паузе",
-  terminated: "Уволен",
-};
 
 // NOTE: no default roles are auto-created for a fresh brigade — the
 // tenant authors them explicitly. Legacy migration (see the masters
 // page) is the only place these IDs still appear, and only for
 // buckets that actually have members.
 export const LEGACY_LEAD_ROLE_ID = "role-lead";
-export const LEGACY_HELPER_ROLE_ID = "role-helper";
 
 // STORY audit: до этой константы три разных места жёстко проверяли
 // `role.name.trim().toLowerCase() === "бригадир"`. Это хрупкая логика

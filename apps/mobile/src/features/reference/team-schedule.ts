@@ -67,6 +67,25 @@ export function useAllTeamSchedules() {
   });
 }
 
+/** Апсерты графика компании — строго по очереди (13.10). Апсерт ЗАМЕНЯЕТ
+ *  весь блоб, а «Сб» и «Вс» подряд, два выходных на даты или тики колеса
+ *  уходили параллельно: оба читали один и тот же свежий график, и сервер
+ *  оставлял только последнюю правку (на бесплатной базе запрос идёт 2–6 с —
+ *  окно широкое). В очередь встаёт только сеть: оптимистичный кэш
+ *  (`onMutate`) пишется сразу, экран отвечает в том же кадре. */
+const scheduleWrites = new Map<string, Promise<unknown>>();
+
+function afterPreviousScheduleWrite<T>(tenantId: string, run: () => Promise<T>): Promise<T> {
+  const previous = scheduleWrites.get(tenantId) ?? Promise.resolve();
+  const next = previous.then(run, run);
+  scheduleWrites.set(tenantId, next);
+  const forget = () => {
+    if (scheduleWrites.get(tenantId) === next) scheduleWrites.delete(tenantId);
+  };
+  next.then(forget, forget);
+  return next;
+}
+
 /** Insert-or-replace the schedule for a single team. The caller passes the
  *  full TeamSchedule (merge nested fields client-side first). */
 export function useUpsertTeamSchedule() {
@@ -85,22 +104,23 @@ export function useUpsertTeamSchedule() {
        *  весь блоб из кэша телефона и молча затирал правку графика,
        *  сделанную на другом телефоне после загрузки (аудит 03.10). */
       schedule: TeamSchedule | ((current: TeamSchedule | null) => TeamSchedule);
-    }) => {
+    }) =>
       // Кто может — решает сервер: график пишет владелец и тот, кому дали
       // «График: Меняет» (`team_schedules_write_access`). Ворота «только
       // владелец» отбивали партнёра — выходной на дату и правка часов из
       // шторки дня падали «Не удалось сохранить» (аудит 2026-10-03).
-      const next =
-        typeof schedule === "function"
-          ? schedule(
-              pickTeamSchedule(
-                await listScheduleEntries(supabase, tenantId as string),
-                teamId,
-              ),
-            )
-          : schedule;
-      await upsertScheduleEntry(supabase, tenantId as string, teamId, next);
-    },
+      afterPreviousScheduleWrite(tenantId as string, async () => {
+        const next =
+          typeof schedule === "function"
+            ? schedule(
+                pickTeamSchedule(
+                  await listScheduleEntries(supabase, tenantId as string),
+                  teamId,
+                ),
+              )
+            : schedule;
+        await upsertScheduleEntry(supabase, tenantId as string, teamId, next);
+      }),
     // Оптимистичный мерж здесь ОБЯЗАТЕЛЕН, а не украшение: апсерт ЗАМЕНЯЕТ
     // весь блоб, а редактор дня строит следующий блоб от того, что лежит в
     // кэше. Без него правка «Начало», сделанная до приземления рефетча,

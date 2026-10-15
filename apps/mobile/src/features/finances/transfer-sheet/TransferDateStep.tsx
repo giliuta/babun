@@ -1,6 +1,6 @@
 import { View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { StepBack } from "@/components/ui/StepBack";
 import { GUTTER } from "@/components/ui/tokens";
@@ -42,15 +42,11 @@ export function renderTransferDateStep(v: TransferView) {
               известна, компактный DateTimeInput навсегда запоминает
               «1 янв. 1970» — здесь `dateDraft` уже посчитан, а сам шаг
               существует только когда его открыли. */}
-          <DateTimeInput
+          <DateSpinner
             value={parseYMD(dateDraft)}
             minimumDate={parseYMD(dateFloor)}
             maximumDate={parseYMD(businessToday)}
-            mode="date"
-            display="spinner"
-            locale="ru-RU"
-            themeVariant="light"
-            onChange={(_, date) => date && setDateDraft(formatYMD(date))}
+            onChange={(date) => setDateDraft(formatYMD(date))}
           />
         </View>
       </View>

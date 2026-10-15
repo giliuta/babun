@@ -24,7 +24,7 @@ import type { VisibleAppointments } from "./use-visible-appointments";
 
 type CreateRescheduleDeps =
   Pick<CalendarRights, "isCrew" | "workInPlan" | "nudgeTariff" | "canMoveAppointment">
-  & Pick<CalendarSources, "toast" | "updateAppt" | "teams">
+  & Pick<CalendarSources, "toast" | "updateAppt" | "teams" | "visibilityTenantId">
   & Pick<VisibleAppointments, "visibleAppts" | "weekYmds">
   & Pick<CalendarGrid, "workBandFor" | "bufferMinutes">
   & Pick<CalendarView, "mode" | "setDay">
@@ -37,7 +37,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
   const {
     isCrew, toast, workInPlan, nudgeTariff, canMoveAppointment, visibleAppts,
     workBandFor, bufferMinutes, mode, weekYmds, setDay, editingApt, setEditingApt,
-    updateAppt, appointmentTimeZone, teams,
+    updateAppt, appointmentTimeZone, teams, visibilityTenantId,
   } = deps;
   const reschedule = (
     apt: Appointment,
@@ -144,7 +144,9 @@ export function createReschedule(deps: CreateRescheduleDeps) {
           // блок лёг на слот, рука это чувствует.
           haptics.impact();
           if (isCalendarEvent(apt)) {
-            void syncEventAppointmentReminders(moved, appointmentTimeZone(apt));
+            if (visibilityTenantId) {
+              void syncEventAppointmentReminders(moved, appointmentTimeZone(apt), visibilityTenantId);
+            }
           } else {
             void cancelAppointmentReminders(apt.id);
           }

@@ -5,7 +5,6 @@
 
 import type {
   Appointment,
-  AppointmentSource,
   AppointmentStatus,
 } from "./appointments/types";
 
@@ -31,17 +30,6 @@ export {
   isCustomServiceId,
   newCustomServiceId,
 } from "./appointments/factories";
-
-export const APPOINTMENT_SOURCE_LABELS: Record<AppointmentSource, string> = {
-  instagram: "Instagram",
-  whatsapp: "WhatsApp",
-  online: "Сайт",
-  phone: "Звонок",
-  referral: "Рекомендация",
-  repeat: "Повторный",
-  walk_in: "Проездом",
-  other: "Другое",
-};
 
 /** Статус СЛОВОМ — только отмена (владелец 03.10: «статус удаляй
  *  полностью, он не нужен»). «Запланирована / В работе / Выполнена» нигде

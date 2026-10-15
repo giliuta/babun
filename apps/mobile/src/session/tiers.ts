@@ -19,8 +19,6 @@ import { CALENDAR_PRICE, calendarsMonthly, euro } from "./calendar-price";
 
 export type Tier = "free" | "solo" | "pro" | "max";
 
-export const PAID_TIERS: readonly Exclude<Tier, "free">[] = ["solo", "pro", "max"];
-
 /** ЧТО ПРЕДЛАГАЕТ СТРАНИЦА «ТАРИФ» (12.10): одна цена за календарь в любом
  *  аккаунте. Сервер держит то же: пробный — полный доступ. */
 export function tiersForKind(
@@ -87,7 +85,6 @@ export const TIER_CARDS: readonly TierCard[] = [
   },
 ];
 
-
 const NAMES: Record<Tier, string> = {
   free: "Без тарифа",
   solo: "Соло",
@@ -127,11 +124,6 @@ export function tierOf(
 export function tierAllows(tier: Tier | null | undefined, feature: TierFeature): boolean {
   if (!tier) return true;
   return RANK[tier] >= RANK[OPENS_FROM[feature]];
-}
-
-/** С какого тарифа открывается — для слов плашки. */
-export function tierFor(feature: TierFeature): Tier {
-  return OPENS_FROM[feature];
 }
 
 /** Можно ли завести ещё одну команду при стольких живых. */

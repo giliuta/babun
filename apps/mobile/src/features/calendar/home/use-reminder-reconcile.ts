@@ -63,7 +63,11 @@ export function useReminderReconcile(deps: UseReminderReconcileDeps) {
       "Europe/Nicosia";
     const timer = setTimeout(() => {
       const list = apptsRef.current;
-      void reconcileEventAppointmentReminders(list, tzFor).catch(() => {});
+      // Сверка — только своей группы аккаунта (`event:<аккаунт>:`): список
+      // держит записи открытого аккаунта, и замена всей группы стирала пуши
+      // остальных (13.10).
+      if (!tenantId) return;
+      void reconcileEventAppointmentReminders(list, tzFor, tenantId).catch(() => {});
       // Пуши «себе» (колокольчик) пересчитываются от свежих дат: перенесли
       // запись — напоминание переехало, отменили — снято.
       // С ИМЕНЕМ КЛИЕНТА (аудит 2026-10-03): «Напомнить» ставится с именем,
@@ -72,18 +76,17 @@ export function useReminderReconcile(deps: UseReminderReconcileDeps) {
       void reconcileSelfReminders(
         list,
         tzFor,
+        tenantId,
         (a) => clientNameRef.current(a) || undefined,
       ).catch(() => {});
       // Напоминание о каждой записи — по правилу телефона; у записи с
       // колокольчиком звонит колокольчик.
-      if (tenantId) {
-        void reconcileAutoReminders(
-          list,
-          tzFor,
-          (a) => clientNameRef.current(a) || undefined,
-          tenantId,
-        ).catch(() => {});
-      }
+      void reconcileAutoReminders(
+        list,
+        tzFor,
+        (a) => clientNameRef.current(a) || undefined,
+        tenantId,
+      ).catch(() => {});
     }, 1000);
     return () => clearTimeout(timer);
   }, [

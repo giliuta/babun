@@ -1,8 +1,18 @@
-import { type ReactNode } from "react";
-import { View } from "react-native";
+import { createContext, useContext, type ReactNode } from "react";
+import { Platform, View } from "react-native";
 import { useSafeAreaInsets, type Edge } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useThemeColors } from "@/theme/colors";
+
+// НАД ТАБАМИ ЛИ ЭКРАН (13.10). Экраны вкладок берут только верх
+// (`edges={["top"]}`): низ закрывает таб-бар. Те же экраны живут и над табами
+// — группы `(shared)`, инвойсы, чеки, — где таб-бара нет, и подвал («Создать
+// услугу», «Выставить») ложился под «Назад / Домой» Android. Стек такой группы
+// говорит это экрану контекстом, и низ экран берёт сам — ровно один раз:
+// отступ, поставленный стеком поверх, удваивался у экранов, которые над табами
+// и так берут низ (карточка клиента: визиты, SMS, объекты). На iOS вид прежний.
+const OverTabsContext = createContext(false);
+export const OverTabs = OverTabsContext.Provider;
 
 // Base screen wrapper. Holds the flex/bg and the safe-area padding (NativeWind
 // v5 className doesn't apply to wrapper components yet, so the wrapper uses
@@ -31,7 +41,8 @@ export function Screen({
   // поэтому падинги ставим руками. Владелец поймал это на выборе услуги:
   // «кнопка „Готово“ хуй знает куда упала».
   const insets = useSafeAreaInsets();
-  const on = (edge: Edge) => !edges || edges.includes(edge);
+  const overTabs = useContext(OverTabsContext) && Platform.OS === "android";
+  const on = (edge: Edge) => !edges || edges.includes(edge) || (edge === "bottom" && overTabs);
   return (
     <View
       style={{

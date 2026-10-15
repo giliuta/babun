@@ -9,7 +9,7 @@ import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
-import { formatHM } from "@/features/appointments/helpers";
+import { useBusinessNow } from "@/features/appointments/business-now";
 import { useThemeColors } from "@/theme/colors";
 import { VIEW_ONLY_REASON } from "../finance-page-access";
 import { CATEGORY_KIND_ROW } from "../settings-levels";
@@ -98,6 +98,8 @@ export function DebtPickers({
   router: ReturnType<typeof useRouter>;
 }) {
   const th = useThemeColors();
+  // Час долга без часа — по часам бизнеса, как в самом листе (13.10).
+  const businessNow = useBusinessNow();
   const {
     date,
     setDate,
@@ -120,8 +122,8 @@ export function DebtPickers({
         open={whenOpen}
         onClose={() => setWhenOpen(false)}
         date={date}
-        timeStart={time ?? formatHM(new Date())}
-        timeEnd={time ?? formatHM(new Date())}
+        timeStart={time ?? businessNow().hm}
+        timeEnd={time ?? businessNow().hm}
         allDay={false}
         allowAllDay={false}
         singleTime

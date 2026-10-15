@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, ScrollView, View, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Bell,
@@ -99,7 +99,7 @@ export function NotificationsScreen() {
   const permissionQuery = useDevicePermission();
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
-  const permissionView = permission ? permissionRow(permission) : null;
+  const permissionView = permission ? permissionRow(permission, Platform.OS === "android") : null;
   const [picker, setPicker] = useState<"records" | "clients" | null>(null);
   const { data: teams = [] } = useTeams();
   const isOwner = useDataRole().data === "owner";
@@ -207,7 +207,7 @@ export function NotificationsScreen() {
           <SettingsRow
             tile={SETTINGS_TILE.orange}
             icon={Bell}
-            title="Уведомления на iPhone"
+            title={Platform.OS === "android" ? "Уведомления на телефоне" : "Уведомления на iPhone"}
             sub={permissionView?.sub}
             subColor={
               permission && remindersSilenced(permission, count)

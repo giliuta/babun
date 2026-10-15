@@ -34,7 +34,6 @@ import type {
 } from "./data-export/types";
 
 export {
-  EXPORT_KINDS,
   type AccountRef,
   type AppointmentExportRow,
   type ClientExportRow,

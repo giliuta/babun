@@ -130,3 +130,14 @@ describe("quick client creation", () => {
     );
   });
 });
+
+test("быстрый выбор по местному номеру — по стране команды, а не всегда Кипр", () => {
+  // Греческая команда набирает «6912345678»: без страны номер не разбирался,
+  // и шторка предлагала создать клиента вместо существующего (13.10).
+  const draft = buildQuickClientDraft("6912345678", "GR");
+  assert.equal(draft.phone_e164, "+306912345678");
+  const existing = { id: "c1", phone: "6912345678", phone_e164: null, deleted_at: null, locations: [] };
+  assert.equal(findQuickClientDuplicate([existing], draft.phone_e164, "GR")?.id, "c1");
+  // Без страны — прежнее правило (Кипр): номер не разбирается.
+  assert.equal(buildQuickClientDraft("6912345678").phone_e164, null);
+});

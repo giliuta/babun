@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import { Platform } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
@@ -98,18 +99,19 @@ export function bookSaveActions({
   const reminderToast = (
     res: Awaited<ReturnType<typeof setSelfReminder>>,
     rule: SelfReminder | null,
-  ) => reminderToastWith(toast, res, rule);
+  ) => reminderToastWith(toast, res, rule, Platform.OS === "android");
 
   const pickSelfReminder = (rule: SelfReminder | null) => {
     setSelfReminderRule(rule);
     setReminderSheetOpen(false);
     // У сохранённой записи пуш ставится сразу — это не поле записи, его не
     // надо «сохранять»; у новой — после создания, когда появится id.
-    if (isEdit && editing) {
+    if (isEdit && editing && tenantIdForFiles) {
       void setSelfReminder(
         { ...editing, date, time_start: timeStart },
         rule,
         team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+        tenantIdForFiles,
         client?.full_name,
       ).then((res) => reminderToast(res, rule));
     }
@@ -188,11 +190,12 @@ export function bookSaveActions({
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
-        if (selfReminder) {
+        if (selfReminder && tenantIdForFiles) {
           void setSelfReminder(
             created,
             selfReminder,
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+            tenantIdForFiles,
             client?.full_name,
           ).then((res) => reminderToast(res, selfReminder));
         }

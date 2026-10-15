@@ -46,9 +46,6 @@ export const DEBT_DIRECTION_LABEL: Record<DebtDirection, string> = {
   outgoing: "Я должен",
 };
 
-/** Направления в порядке показа: сначала деньги, которые придут. */
-export const DEBT_DIRECTIONS: readonly DebtDirection[] = ["incoming", "outgoing"];
-
 /**
  * Платёж по долгу приходит доходом, когда должны нам, и расходом, когда
  * должны мы. Одна функция на продукт: форма платежа и подсчёт остатка

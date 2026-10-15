@@ -39,7 +39,7 @@ export default function CalendarTab() {
     // Поэтому конечное пустое состояние показывается, только когда известно
     // И что здесь календарей нет, И какие есть в других компаниях.
     return (
-      <Screen>
+      <Screen edges={["top"]}>
         <CalendarFirstRunGate c={c} />
       </Screen>
     );

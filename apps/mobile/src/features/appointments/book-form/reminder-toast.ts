@@ -12,6 +12,8 @@ export const reminderToast = (
   toast: Toast,
   res: Awaited<ReturnType<typeof setSelfReminder>>,
   rule: SelfReminder | null,
+  // Тест без react-native: платформу называет вызывающий (`Platform.OS`).
+  android = false,
 ) => {
   if (res === "cleared") toast("Напоминание снято", "info");
   else if (res === "scheduled" && rule) {
@@ -20,7 +22,12 @@ export const reminderToast = (
   } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
   else if (res === "past") toast("Это время уже прошло", "info");
   else if (res === "deferred")
-    toast("Напоминание в очереди — установится, когда на iPhone освободится место", "info");
+    toast(
+      android
+        ? "Напоминание в очереди — установится, когда на телефоне освободится место"
+        : "Напоминание в очереди — установится, когда на iPhone освободится место",
+      "info",
+    );
   else if (res === "capacity")
     toast("Очередь напоминаний переполнена", "error");
   else if (res === "unavailable") toast("Появится после обновления приложения", "info");

@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { useThemeColors } from "@/theme/colors";
 import { DashboardGate } from "@/lib/DashboardGate";
+import { OverTabs } from "@/components/ui/Screen";
 
 // ОДИН ЭКРАН НА ВСЕХ, КТО ЕГО ЗОВЁТ.
 //
@@ -25,12 +26,15 @@ export default function SharedLayout() {
   const t = useThemeColors();
   return (
     <DashboardGate>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: t.canvas },
-        }}
-      />
+      {/* Над табами: низ — над навигацией Android, его берёт сам `Screen`. */}
+      <OverTabs value>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: t.canvas },
+          }}
+        />
+      </OverTabs>
     </DashboardGate>
   );
 }

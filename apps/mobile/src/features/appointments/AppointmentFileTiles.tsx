@@ -223,37 +223,6 @@ export function DocumentPill({
   );
 }
 
-export function UploadingTile() {
-  const t = useThemeColors();
-  const tile = squareTile(t, PHOTO_TILE_SIZE);
-  return (
-    <View style={[tile, { alignItems: "center", justifyContent: "center" }]}>
-      <Spinner size={20} label="Загрузка" />
-    </View>
-  );
-}
-
-/** Плашка загрузки документа — тот же язык, что у `UploadingTile`, но в
- *  форме пилюли: документ грузится плашкой, а не квадратом (владелец 20.09). */
-export function UploadingDocumentPill() {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        width: 90,
-        height: PILL_HEIGHT,
-        borderRadius: t.radius.input,
-        borderCurve: "continuous",
-        backgroundColor: t.fill,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Spinner size={16} label="Загрузка" />
-    </View>
-  );
-}
-
 /** Файл новой записи: ещё не уехал, ждёт «Создать запись». Медиа — квадрат,
  *  как у сохранённого фото; документ — та же плашка, что у сохранённого
  *  файла (владелец 20.09: разница только в источнике данных, не во виде). */

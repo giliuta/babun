@@ -175,10 +175,6 @@ export async function uploadAppointmentAssets(args: {
   return uploaded;
 }
 
-export function photosQueryKey(tenantId: string | null, appointmentId: string) {
-  return key(tenantId, appointmentId);
-}
-
 export function useUploadAppointmentPhotos(appointmentId: string) {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();

@@ -1,9 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { generateId, type MasterRole } from "@babun/shared/local/masters";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { mastersQueryKey } from "@/lib/company-query-keys";
@@ -67,48 +62,5 @@ export function useMaster(id: string | undefined) {
       if (error) throw new Error(error.message);
       return data;
     },
-  });
-}
-
-export function useCreateMaster() {
-  const tenantId = useTenantId();
-  const role = useDataRole().data;
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      full_name: string;
-      phone?: string;
-      // v-hubs: the create sheet can seed the display fields the hub reads
-      // directly off the row (not the profile jsonb). All optional so the
-      // RefListScreen quick-add call (name only) keeps working.
-      role?: MasterRole;
-      title?: string;
-      color?: string;
-      team_id?: string | null;
-      account_status?: string;
-    }) => {
-      if (role !== "owner") {
-        throw new Error("Приглашать партнёров может только владелец.");
-      }
-      const { data, error } = await supabase
-        .from("masters")
-        .insert({
-          id: generateId("master"),
-          tenant_id: tenantId as string,
-          full_name: input.full_name,
-          phone: input.phone || null,
-          role: input.role ?? undefined,
-          title: input.title || null,
-          color: input.color || null,
-          team_id: input.team_id ?? null,
-          account_status: input.account_status ?? undefined,
-        })
-        .select("*")
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: referenceKeys.masterAll() }),
-    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }

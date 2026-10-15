@@ -3,6 +3,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { NEVER_PAUSE } from "@/lib/never-pause";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/session/tenant";
 import { referenceKeys, type RefTable } from "../query-keys";
@@ -100,6 +101,9 @@ function useRefUpdate<Table extends RefTable>(table: Table) {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async ({
       id,
       patch,
@@ -121,6 +125,9 @@ function useRefDelete(table: RefTable) {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
       assertCanWriteReference(table, role);

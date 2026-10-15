@@ -10,6 +10,7 @@ import { useClient } from "@/features/clients/queries";
 import { useClientPeople } from "@/features/clients/ClientPeopleDoor";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
+import { useInClientsTab } from "@/lib/reference-href";
 
 // ВСЕ ЛЮДИ КАРТОЧКИ — СВОЯ СТРАНИЦА (владелец 22.09: «то же самое можно
 // сделать с людьми — как история: нажимаю и открывается страница»). На
@@ -44,8 +45,11 @@ function ClientPeopleScreen() {
     access: access.people,
   });
 
+  // Во вкладке низ закрывает таб-бар — как у соседних страниц карточки.
+  const inTab = useInClientsTab();
+
   return (
-    <Screen>
+    <Screen edges={inTab ? ["top"] : undefined}>
       <ScreenHeader title="Люди" subtitle={client?.full_name ?? undefined} />
       {isLoading ? (
         <EmptyState state="loading" fill />

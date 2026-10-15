@@ -135,6 +135,17 @@ describe("двери и подписи по уровню", () => {
     assert.match(popup, /const canInvoice = \(allow\?\.invoice \?\? true\) &&/);
   });
 
+  test("доход по инвойсу возвращают кредит-нотой, а не простым возвратом", () => {
+    // Простой возврат без документа снова открывал инвойс долгом (04.10).
+    const popup = readParts("TransactionPopup.tsx", "transaction-popup");
+    const refund = popup.slice(popup.indexOf("const canRefund ="), popup.indexOf("const refundStatusCaption"));
+    assert.match(refund, /!tx\.invoice_id &&/);
+    // Вкладка — тонкий маршрут; возврат строки живёт в `home/use-row-actions.ts`.
+    const screen = financesScreenSource();
+    const handler = screen.slice(screen.indexOf("const handleRefund = async"), screen.indexOf("buildRefundDraft(tx, amount"));
+    assert.match(handler, /if \(tx\.invoice_id\) \{\s*throw new Error/);
+  });
+
   test("лист долга на «Смотрит»: серое сохранение и без карточки «Ещё»", () => {
     const sheet = readParts("DebtSheet.tsx", "debt-sheet");
     assert.match(sheet, /disabled=\{!canSave \|\| !canWrite\}/);

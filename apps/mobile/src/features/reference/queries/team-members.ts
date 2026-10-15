@@ -54,57 +54,6 @@ function deriveLeadHelperIds(
   return { lead_ids, helper_ids, lead_id: lead_ids[0] ?? null };
 }
 
-export function useUpdateTeamMembers() {
-  const tenantId = useTenantId();
-  const role = useDataRole().data;
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      teamId,
-      expectedUpdatedAt,
-      roles,
-      members,
-    }: {
-      teamId: string;
-      expectedUpdatedAt: string;
-      roles: BrigadeRole[];
-      members: BrigadeMember[];
-    }) => {
-      const { lead_ids, helper_ids, lead_id } = deriveLeadHelperIds(
-        roles,
-        members,
-      );
-      if (!tenantId) throw new Error("Нет активного аккаунта.");
-      if (role !== "owner") {
-        throw new Error("Изменять состав команды может только владелец.");
-      }
-      const { data, error } = await supabase
-        .from("teams")
-        .update({
-          // Domain interfaces carry no index signature, so they are not Json.
-          roles: toJson(roles),
-          members: toJson(members),
-          lead_ids,
-          helper_ids,
-          lead_id,
-        })
-        .eq("tenant_id", tenantId)
-        .eq("id", teamId)
-        .eq("updated_at", expectedUpdatedAt)
-        .select("id")
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      if (!data) {
-        throw new Error(
-          "Состав команды уже изменился. Обновите экран и повторите действие.",
-        );
-      }
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: referenceKeys.teamAll() }),
-    meta: { errorHandled: true },
-  });
-}
-
 // ─── Master deletion side-effects (web parity, handleDelete) ─────────
 // After a master is soft-deleted the web sweeps every team and strips the
 // master.id out of lead_id / helper_ids. On mobile the source of truth is

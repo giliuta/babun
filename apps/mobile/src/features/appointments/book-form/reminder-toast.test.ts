@@ -38,4 +38,12 @@ describe("reminderToast", () => {
     reminderToast(silent.toast, "scheduled", null);
     assert.deepEqual(silent.calls, []);
   });
+
+  test("on Android the queue names the phone, not an iPhone", () => {
+    const { calls, toast } = record();
+    reminderToast(toast, "deferred", null, true);
+    assert.deepEqual(calls, [
+      ["Напоминание в очереди — установится, когда на телефоне освободится место", "info"],
+    ]);
+  });
 });

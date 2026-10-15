@@ -10,13 +10,12 @@ import {
   type SelfReminder,
 } from "@/lib/reminder-time";
 import {
-  babunNotificationRegistrySnapshot,
   removeBabunNotificationOwners,
   replaceBabunNotificationOwner,
   replaceBabunNotificationScope,
   type BabunNotificationOwnerDrafts,
 } from "@/lib/notifications";
-import { notificationDrafts, type ReminderResult } from "./shared";
+import { legacyOwners, notificationDrafts, ownersOf, type ReminderResult } from "./shared";
 
 // ── НАПОМИНАНИЕ СЕБЕ (колокольчик в шапке записи и события, владелец 24.09) ──
 //
@@ -27,7 +26,8 @@ import { notificationDrafts, type ReminderResult } from "./shared";
 // удалили или отменили — пуш снят (своя группа уведомлений `self:`).
 
 const SELF_REMINDERS_KEY = "calendar.selfReminders.v1";
-const selfOwnerKey = (appointmentId: string) => `self:${appointmentId}`;
+const selfOwnerKey = (tenantId: string, appointmentId: string) =>
+  `self:${tenantId}:${appointmentId}`;
 
 function readSelfReminders(): Record<string, SelfReminder> {
   return getStorage().get<Record<string, SelfReminder>>(SELF_REMINDERS_KEY) ?? {};
@@ -49,15 +49,20 @@ export async function setSelfReminder(
   apt: Appointment,
   rule: SelfReminder | null,
   timeZone: string,
+  tenantId: string,
   clientName?: string,
 ): Promise<ReminderResult | "cleared"> {
   const all = { ...readSelfReminders() };
+  const ownerKey = selfOwnerKey(tenantId, apt.id);
+  // Ключи этой записи прежнего вида — снять, чтобы не зазвонило дважды.
+  const stale = ownersOf("self:", apt.id).filter((key) => key !== ownerKey);
   if (!rule) {
     delete all[apt.id];
     writeSelfReminders(all);
-    await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
+    await removeBabunNotificationOwners([ownerKey, ...stale]);
     return "cleared";
   }
+  if (stale.length > 0) await removeBabunNotificationOwners(stale);
   all[apt.id] = rule;
   writeSelfReminders(all);
   // У записи с колокольчиком звонит колокольчик — автонапоминание снимаем
@@ -83,17 +88,17 @@ export async function setSelfReminder(
   }
   if (when.getTime() <= Date.now()) {
     forget();
-    await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
+    await removeBabunNotificationOwners([ownerKey]);
     return "past";
   }
   try {
     const result = await replaceBabunNotificationOwner(
-      selfOwnerKey(apt.id),
+      ownerKey,
       notificationDrafts(
         apt,
         [{ when, label: selfReminderLabel(rule), date: apt.date }],
         clientName,
-        selfOwnerKey(apt.id),
+        ownerKey,
       ),
       { requestPermission: true },
     );
@@ -112,6 +117,7 @@ export async function setSelfReminder(
 export async function reconcileSelfReminders(
   appointments: readonly Appointment[],
   timeZoneFor: (appointment: Appointment) => string,
+  tenantId: string,
   clientNameFor?: (appointment: Appointment) => string | undefined,
 ): Promise<void> {
   const rules = readSelfReminders();
@@ -127,7 +133,7 @@ export async function reconcileSelfReminders(
       continue;
     }
     if (when.getTime() <= now) continue;
-    const ownerKey = selfOwnerKey(apt.id);
+    const ownerKey = selfOwnerKey(tenantId, apt.id);
     owners.push({
       ownerKey,
       drafts: notificationDrafts(
@@ -138,7 +144,9 @@ export async function reconcileSelfReminders(
       ),
     });
   }
-  await replaceBabunNotificationScope("self:", owners, { requestPermission: false });
+  await replaceBabunNotificationScope(`self:${tenantId}:`, owners, { requestPermission: false });
+  const legacy = legacyOwners("self:", new Set(appointments.map((apt) => apt.id)));
+  if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
 }
 
 /** Снять напоминание себе по id записи (страница «Уведомления»): запись
@@ -147,7 +155,7 @@ export async function clearSelfReminder(appointmentId: string): Promise<void> {
   const all = { ...readSelfReminders() };
   delete all[appointmentId];
   writeSelfReminders(all);
-  await removeBabunNotificationOwners([selfOwnerKey(appointmentId)]);
+  await removeBabunNotificationOwners(ownersOf("self:", appointmentId));
 }
 
 // ── НАПОМИНАНИЕ О КАЖДОЙ ЗАПИСИ (Кабинет → Уведомления, владелец 03.10) ──
@@ -166,13 +174,7 @@ const autoOwnerKey = (tenantId: string, appointmentId: string) => `auto:${tenant
 /** Ключи `auto:` этой записи (любого аккаунта) — снять, когда на запись
  *  ставят колокольчик: два пуша об одном не нужны. */
 function autoOwnersOf(appointmentId: string): string[] {
-  return [
-    ...new Set(
-      babunNotificationRegistrySnapshot()
-        .map((item) => item.ownerKey)
-        .filter((key) => key.startsWith("auto:") && key.endsWith(`:${appointmentId}`)),
-    ),
-  ];
+  return ownersOf("auto:", appointmentId);
 }
 
 export async function reconcileAutoReminders(
@@ -213,12 +215,6 @@ export async function reconcileAutoReminders(
   }
   await replaceBabunNotificationScope(`auto:${tenantId}:`, owners, { requestPermission: false });
   // Ключи первого дня (`auto:<запись>` без аккаунта) — снять.
-  const legacy = [
-    ...new Set(
-      babunNotificationRegistrySnapshot()
-        .map((item) => item.ownerKey)
-        .filter((key) => key.startsWith("auto:") && key.split(":").length === 2),
-    ),
-  ];
+  const legacy = legacyOwners("auto:");
   if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
 }

@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { Keyboard } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import {
@@ -89,7 +89,27 @@ export function useSheetMotion({
   // живёт только на верхней зоне — не конфликтует со скроллом тела.
   // Тянем лист за пальцем; отпустили за порогом (или рывком) — закрываем,
   // иначе пружиной возвращаем на место.
+  // Закрытие свайпом могут ОТКЛОНИТЬ (идёт запись — `useGuardedClose`): тогда
+  // лист возвращается пружиной, а не висит там, где его бросили (13.10).
+  // Принятое закрытие гасит `visible` — и возврат не нужен.
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const closeFromDrag = () => {
+    onClose();
+    setTimeout(() => {
+      if (!visibleRef.current) return;
+      ty.value = withSpring(0, { ...SPRING, reduceMotion: ReduceMotion.Never });
+      scrim.value = withTiming(1, { duration: 160 });
+    }, 100);
+  };
+
   const drag = Gesture.Pan()
+    // УЕЗЖАЮЩИЙ ЛИСТ НЕ ТЯНЕТСЯ (13.10). Второй рывок во время выхода писал
+    // `ty`/`scrim` и срывал анимацию выхода: колбэк размонтирования не
+    // приходил (`fin === false`), а повторный `onClose` уже ничего не делал.
+    // Лист оставался смонтированным — часто невидимым, но со скримом во весь
+    // экран, который глотал каждый тап. На Android «Назад» не спасал.
+    .enabled(visible)
     // Тянут лист вниз — клавиатура уходит первой. Иначе панель уползает ПОД
     // клавиатуру (отдельное окно выше приложения), палец идёт, а порог
     // закрытия не достигается: жест читается как сломанный.
@@ -109,7 +129,7 @@ export function useSheetMotion({
     .onEnd((e) => {
       const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
       if (ty.value > h * 0.3 || e.velocityY > 800) {
-        runOnJS(onClose)();
+        runOnJS(closeFromDrag)();
       } else {
         // Возврат за пальцем не должен телепортироваться при Reduce
         // Motion — это прямой отклик на жест, а не декорация.

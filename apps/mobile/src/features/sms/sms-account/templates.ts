@@ -18,6 +18,7 @@ import {
   smsTemplatesKey,
 } from "./keys";
 import { toJson } from "@babun/shared/db/json";
+import { NEVER_PAUSE } from "@/lib/never-pause";
 
 /** Шаблоны команды (`teamId`) или всех видимых команд (`null`). */
 export function useTeamTemplates(teamId: string | null, cardTenantId?: string | null) {
@@ -55,6 +56,9 @@ function useTemplatesChanged() {
 export function useSaveTeamTemplate() {
   const changed = useTemplatesChanged();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async (draft: TemplateDraft): Promise<SmsTeamTemplate> => {
       const { data, error } = await supabase.rpc("sms_save_team_template", {
         p: toJson(draftPayload(draft)),

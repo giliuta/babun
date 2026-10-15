@@ -10,7 +10,6 @@ import {
 } from "@/features/calendar/layout";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { CalendarClock } from "lucide-react-native";
-import { haptics } from "@/lib/haptics";
 import { useBlockColors } from "@/features/calendar/status-colors";
 import { isOverdue } from "@/features/calendar/overdue";
 import { useUnstretchedStyle } from "@/features/calendar/zoom";
@@ -114,7 +113,8 @@ export const DayColumn = memo(function DayColumn({
   const openDeck = (apt: Appointment) => {
     const deck = decks.get(apt.id);
     if (!deck) return onEdit(apt);
-    haptics.tap();
+    // Тик уже дал сам блок (`openWithTick`): второй здесь давал двойную
+    // вибрацию на тап по стопке (13.10, нашла сессия 025).
     setDeckOpen(deck.members);
   };
 

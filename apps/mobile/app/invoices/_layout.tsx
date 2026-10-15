@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { useThemeColors } from "@/theme/colors";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Screen } from "@/components/ui/Screen";
+import { OverTabs, Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useFeatureOn } from "@/features/settings/company-features";
@@ -23,12 +23,16 @@ export default function InvoicesLayout() {
   const teams = useTeams().data ?? [];
   const stack = (
     <DocumentsFeatureGate>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: t.canvas },
-        }}
-      />
+      {/* Над табами: подвалы инвойсов — над навигацией Android, низ берёт
+          сам `Screen`. */}
+      <OverTabs value>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: t.canvas },
+          }}
+        />
+      </OverTabs>
     </DocumentsFeatureGate>
   );
   if (role === "master") {

@@ -213,8 +213,10 @@ describe("веб-паритет: платформенные API только з�
       /from\s+["'][^"']*\/DateTimeInput["']/.test(code),
     );
     // Порог — «поиск нашёл места вызова», а не их точное число: шторка
-    // оплаты инвойса перешла на DateSpinner (04.10), и мест стало пять.
-    assert.ok(users.length >= 3, `мест вызова DateTimeInput: ${users.length}`);
+    // оплаты инвойса перешла на DateSpinner (04.10), а 13.10 туда же ушли
+    // период «Финансов» и дата перевода (на Android системный пикер — диалог,
+    // который открывался по кругу). Остался один вызов — сам `DateSpinner`.
+    assert.ok(users.length >= 1, `мест вызова DateTimeInput: ${users.length}`);
     const offenders = users.flatMap(({ id, code }) =>
       [...code.matchAll(/\bmode=["']([a-z-]+)["']/g)]
         .filter((m) => !modes.includes(m[1]))

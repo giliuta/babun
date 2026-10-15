@@ -97,50 +97,6 @@ export function useUpdateClient(id: string) {
   });
 }
 
-/** КОМАНДА КЛИЕНТА (30.09) — отдельной дверью `set_client_team`: у правки
- *  карточки свой белый список, а переезд между командами решает, кто клиента
- *  увидит. Список и карточка меняются сразу; отказ сервера возвращает как
- *  было. */
-export function useSetClientTeam() {
-  const scope = useQueryScope();
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: async ({ id, teamId }: { id: string; teamId: string }) => {
-      const { error } = await writeClientOf(scope).rpc("set_client_team", {
-        p_client_id: id,
-        p_team_id: teamId,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onMutate: async ({ id, teamId }) => {
-      await qc.cancelQueries({ queryKey: clientKeys.all() });
-      await qc.cancelQueries({ queryKey: clientKeys.card(id) });
-      const previous = [
-        ...qc.getQueriesData<Client[]>({ queryKey: clientKeys.all() }),
-        ...qc.getQueriesData<Client | null>({ queryKey: clientKeys.card(id) }),
-      ];
-      qc.setQueriesData<Client[]>({ queryKey: clientKeys.all() }, (list) =>
-        Array.isArray(list)
-          ? list.map((c) => (c.id === id ? { ...c, team_id: teamId } : c))
-          : list,
-      );
-      qc.setQueriesData<Client | null>({ queryKey: clientKeys.card(id) }, (current) =>
-        current ? { ...current, team_id: teamId } : current,
-      );
-      return { previous };
-    },
-    onError: (_e, _input, context) => {
-      for (const [key, value] of context?.previous ?? []) qc.setQueryData(key, value);
-    },
-    onSettled: (_d, _e, { id }) => {
-      void qc.invalidateQueries({ queryKey: clientKeys.all() });
-      void qc.invalidateQueries({ queryKey: clientKeys.card(id) });
-    },
-    meta: { errorHandled: true }, // caller messages the refusal itself
-  });
-}
-
 /** КЛИЕНТ ЧУЖОЙ СТРОКИ СПИСКА (аудит 03.10). Список склеен из нескольких
  *  компаний, а источник у экрана один — своя. Действие по строке
  *  работодателя (`guestOf`) несёт её источник: без него запись ушла бы под

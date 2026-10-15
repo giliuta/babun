@@ -1,4 +1,4 @@
-// Shapes of people and teams. Permission rules live in ./permissions.ts.
+// Shapes of people and teams.
 
 export type MasterRole = "admin" | "dispatcher" | "lead" | "helper";
 
@@ -19,65 +19,6 @@ export interface MasterExtraContacts {
   email?: string;
 }
 
-// Sprint 027 — the permission surface grew from 9 to ~25 flags to
-// support a real SaaS onboarding (lead working only in their brigade
-// must not see finances or other brigades). Grouped into five
-// semantic clusters: calendar / clients / finance / chats / admin.
-// The legacy 9-field shape is preserved so records persisted before
-// this sprint keep parsing.
-export interface MasterPermissions {
-  // ── Legacy / calendar-related ──────────────────────────────────
-  /** Видеть цены услуг в каталоге и в записи. */
-  see_prices: boolean;
-  /** Видеть доходы / расходы / прибыль (общий тумблер финансов). */
-  see_finances: boolean;
-  see_clients_phone: boolean;
-  see_clients_address: boolean;
-  see_clients_balance: boolean;
-
-  can_create_appointments: boolean;
-  can_edit_appointments: boolean;
-  can_delete_appointments: boolean;
-  can_complete_appointments: boolean;
-
-  /** Which teams' calendars are visible.
-   *  Empty array = only own team. `['*']` = all teams. */
-  visible_team_ids: string[];
-
-  // ── Новые флаги Sprint 027 (все optional — legacy-записи не ломаются) ──
-  // Календарь
-  can_reschedule_appointments?: boolean;
-  can_edit_all_appointments?: boolean; // иначе только свои
-  can_see_all_teams_calendar?: boolean; // синоним `visible_team_ids = ['*']`, но явный флаг для UX
-
-  // Клиенты
-  see_clients_list?: boolean; // если false — мастер видит клиента только внутри своей записи
-  see_clients_financial_history?: boolean;
-  can_create_clients?: boolean;
-  can_edit_clients?: boolean;
-  can_delete_clients?: boolean;
-
-  // Финансы
-  see_own_salary?: boolean;
-  see_own_brigade_revenue?: boolean;
-  see_own_brigade_expenses?: boolean;
-  see_all_company_finances?: boolean; // только admin/dispatcher
-  can_add_expenses?: boolean;
-  can_record_payments?: boolean;
-  can_apply_discounts?: boolean;
-
-  // Чаты
-  see_brigade_chats?: boolean;
-  see_all_chats?: boolean;
-  can_reply_chats?: boolean;
-
-  // Администрирование
-  can_manage_masters?: boolean;
-  can_manage_teams?: boolean;
-  can_manage_services?: boolean;
-  can_manage_settings?: boolean;
-}
-
 export type AccountStatus =
   | "invited" // CEO created creds, user hasn't logged in yet
   | "active" // logged in at least once
@@ -92,7 +33,6 @@ export interface Master {
   team_id: string | null; // primary team (null = no team, e.g. admin or universal substitute)
   role: MasterRole;
   is_active: boolean;
-  permissions: MasterPermissions;
   created_at: string; // ISO date
 
   /** Custom job title the tenant writes themselves ("Старший техник",
@@ -257,8 +197,4 @@ export interface BrigadeRole {
 export interface BrigadeMember {
   master_id: string;
   role_id: string | null; // null = без роли
-  /** Sprint 033 Phase I47 — granular per-brigade permissions. Undef
-   *  = full access (backward compat). See lib/brigade-permissions.ts
-   *  for the type (avoids a circular import). */
-  permissions?: import("../brigade-permissions").BrigadeMemberPermissions;
 }

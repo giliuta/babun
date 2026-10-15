@@ -183,14 +183,3 @@ export function startSyncBridge(
   return controller.dispose;
 }
 
-/** Temporarily stop old-tenant realtime/revalidate callbacks while local
- * stores and the JWT are being switched. On failure call the returned resume
- * function; on success SessionProvider changes tenantId and the React effect
- * mounts a fresh bridge itself. */
-export function pauseSyncBridgeForTenantSwitch(): () => void {
-  const previous = activeBridge;
-  previous?.pause();
-  return () => {
-    if (previous && activeBridge === previous) previous.resume();
-  };
-}

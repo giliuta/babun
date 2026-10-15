@@ -183,11 +183,18 @@ export function setDayOff(schedule: TeamSchedule, dateKey: string, off: boolean)
     const day = getDayScheduleForDate(schedule, date);
     return setDateOverride(schedule, dateKey, { ...day, is_working: false });
   }
+  // ЧАСЫ — ОБЩИЕ ЧАСЫ НЕДЕЛИ, как их показывает шторка графика: часы первого
+  // рабочего дня Пн…Вс (13.10). С 11.10 шторка пишет часы только в дни
+  // недели, а `start/end` графика остаются от его рождения (обычно
+  // 00:00–24:00): рабочее воскресенье вставало «с полуночи до полуночи».
+  // Рабочих дней нет вовсе — тогда общие поля.
+  const week = [1, 2, 3, 4, 5, 6, 0].map((jsDay) => getDaySchedule(schedule, jsDay));
+  const hours = week.find((day) => day.is_working) ?? schedule;
   return setDateOverride(schedule, dateKey, {
     is_working: true,
-    start: schedule.start,
-    end: schedule.end,
-    breaks: schedule.breaks ?? [],
+    start: hours.start,
+    end: hours.end,
+    breaks: hours.breaks ?? [],
   });
 }
 
@@ -196,8 +203,3 @@ export function timeToMinutes(time: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-export function minutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}

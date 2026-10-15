@@ -11,6 +11,8 @@ import {
   eventOwnerKey,
   manualOwnerKey,
   notificationDrafts,
+  legacyOwners,
+  ownersOf,
   readRegistry,
   writeRegistry,
   type ReminderNotification,
@@ -48,7 +50,7 @@ export async function cancelAppointmentReminders(
   const registry = readRegistry();
   const ids = registry[appointmentId] ?? [];
   await removeBabunNotificationOwners(
-    [manualOwnerKey(appointmentId), eventOwnerKey(appointmentId)],
+    [manualOwnerKey(appointmentId), ...ownersOf("event:", appointmentId)],
     ids,
   );
   if (appointmentId in registry) {
@@ -74,23 +76,6 @@ export async function cancelManualAppointmentReminder(
     delete next[appointmentId];
     writeRegistry(next);
   }
-}
-
-// Локальное напоминание о записи. Для каждой записи хранится id системного
-// уведомления: новый пресет заменяет старый, а перенос/отмена/удаление снимают
-// устаревшее уведомление через cancelAppointmentReminders.
-export async function scheduleAppointmentReminder(
-  apt: Appointment,
-  when: Date,
-  label: string,
-  clientName?: string,
-): Promise<ReminderResult> {
-  return scheduleAppointmentReminders(
-    apt,
-    [{ when, label, date: apt.date }],
-    clientName,
-    manualOwnerKey(apt.id),
-  );
 }
 
 async function scheduleAppointmentReminders(
@@ -191,6 +176,7 @@ export async function consumeLastAppointmentNotificationTarget(): Promise<
 export async function syncEventAppointmentReminders(
   appointment: Appointment,
   timeZone: string,
+  tenantId: string,
 ): Promise<ReminderResult | "cleared"> {
   if (!appointment.event_push_enabled) {
     await cancelAppointmentReminders(appointment.id);
@@ -201,12 +187,10 @@ export async function syncEventAppointmentReminders(
     await cancelAppointmentReminders(appointment.id);
     return "past";
   }
-  return scheduleAppointmentReminders(
-    appointment,
-    reminders,
-    undefined,
-    eventOwnerKey(appointment.id),
-  );
+  const ownerKey = eventOwnerKey(tenantId, appointment.id);
+  const stale = ownersOf("event:", appointment.id).filter((key) => key !== ownerKey);
+  if (stale.length > 0) await removeBabunNotificationOwners(stale);
+  return scheduleAppointmentReminders(appointment, reminders, undefined, ownerKey);
 }
 
 /** Rebuild every DB-backed event owner in one nearest-first pass. This runs
@@ -215,6 +199,7 @@ export async function syncEventAppointmentReminders(
 export async function reconcileEventAppointmentReminders(
   appointments: readonly Appointment[],
   timeZoneFor: (appointment: Appointment) => string,
+  tenantId: string,
 ): Promise<void> {
   const owners: BabunNotificationOwnerDrafts[] = [];
   const legacyRegistry = readRegistry();
@@ -230,7 +215,7 @@ export async function reconcileEventAppointmentReminders(
     ) {
       continue;
     }
-    const ownerKey = eventOwnerKey(appointment.id);
+    const ownerKey = eventOwnerKey(tenantId, appointment.id);
     const reminders = eventReminderOccurrences(
       appointment,
       timeZoneFor(appointment),
@@ -244,10 +229,12 @@ export async function reconcileEventAppointmentReminders(
   const legacyIds = [...eventIds].flatMap(
     (appointmentId) => legacyRegistry[appointmentId] ?? [],
   );
-  await replaceBabunNotificationScope("event:", owners, {
+  await replaceBabunNotificationScope(`event:${tenantId}:`, owners, {
     requestPermission: false,
     legacyIds,
   });
+  const legacy = legacyOwners("event:", eventIds);
+  if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
   if (legacyIds.length > 0) {
     const next = { ...legacyRegistry };
     for (const appointmentId of eventIds) delete next[appointmentId];

@@ -1,4 +1,4 @@
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -13,7 +13,9 @@ function surfaceClientReminderResult(result: ClientReminderResult): void {
     confirmThen(
       "Дата сохранена",
       {
-        message: "Уведомление не запланировано, потому что оно выключено для Babun в настройках iPhone.",
+        message: Platform.OS === "android"
+          ? "Уведомление не запланировано, потому что оно выключено для Babun в настройках телефона."
+          : "Уведомление не запланировано, потому что оно выключено для Babun в настройках iPhone.",
         confirmLabel: "Открыть настройки",
       },
       () => void Linking.openSettings(),
@@ -23,7 +25,9 @@ function surfaceClientReminderResult(result: ClientReminderResult): void {
   if (result === "deferred") {
     notify(
       "Дата сохранена",
-      "Напоминание сохранено в очереди и установится, когда на iPhone освободится место.",
+      Platform.OS === "android"
+        ? "Напоминание сохранено в очереди и установится, когда на телефоне освободится место."
+        : "Напоминание сохранено в очереди и установится, когда на iPhone освободится место.",
     );
     return;
   }

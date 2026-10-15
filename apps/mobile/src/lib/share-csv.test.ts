@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import { csvCell, csvDocument, csvTextCell, shareCsvFile } from "./share-csv";
 
@@ -162,4 +164,12 @@ describe("выгрузка CSV в браузере", () => {
     });
     assert.equal(run.anchors[0].download, "-.csv");
   });
+});
+
+test("файл экспорта не стирается сразу после shareAsync (Android отдаёт промис раньше получателя)", () => {
+  const src = readFileSync(join(__dirname, "share-csv.ts"), "utf8");
+  const native = src.slice(src.indexOf("new FileSystem.Directory"));
+  assert.doesNotMatch(native, /finally[\s\S]*file\.delete\(\)/);
+  assert.match(native, /entry\.delete\(\)/);
+  assert.doesNotMatch(src, /iOS-приложение/);
 });

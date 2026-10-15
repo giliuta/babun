@@ -19,6 +19,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/lib/haptics";
+import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 import { GUTTER } from "@/components/ui/tokens";
 import { useReduceMotion } from "@/lib/reduce-motion";
@@ -27,6 +28,7 @@ import {
   clearOverlay,
   isSheetOpen,
   newSheetId,
+  overlayBackFor,
   pushSheet,
   removeSheet,
   topSheet,
@@ -143,6 +145,7 @@ export function BottomSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  const keyboardShown = useKeyboardShown();
   // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ (04.10). В браузере
   // вкладка, открытая «за кадром», грузит код при окне 0×0: константа
   // модуля давала `maxHeight: 0`, лист схлопывался, и строки уходили под
@@ -295,7 +298,16 @@ export function BottomSheet({
       ) : (
         shown.children
       )}
-      {shown.footer ? <SheetFooter padded={padded}>{shown.footer}</SheetFooter> : null}
+      {shown.footer ? (
+        <SheetFooter padded={padded}>{shown.footer}</SheetFooter>
+      ) : Platform.OS === "android" && !keyboardShown ? (
+        // ЛИСТ БЕЗ ФУТЕРА НЕ УХОДИТ ПОД НАВИГАЦИЮ ANDROID (13.10). Окно листа
+        // edge-to-edge, и последняя строка выбора ложилась под полосу жестов,
+        // а при трёх кнопках навигации — под «Назад / Домой», где её не
+        // нажать. Футер этот отступ уже держит (`SheetFooter`), тело без
+        // футера — теперь тоже. На iOS вид прежний.
+        <View style={{ height: insets.bottom }} />
+      ) : null}
     </Animated.View>
   );
 
@@ -322,6 +334,7 @@ export function BottomSheet({
             На iOS — по флагу, как было. */}
         {avoidKeyboard || Platform.OS === "android" ? (
           <KeyboardLift
+            pointerEvents="box-none"
             style={{ flex: 1, justifyContent: "flex-end" }}
           >
             {sheet}
@@ -346,7 +359,7 @@ export function BottomSheet({
   );
 
   if (asOverlay) {
-    return <OverlayLayers target={target.current as string} layers={layers} />;
+    return <OverlayLayers target={target.current as string} layers={layers} onBack={onClose} />;
   }
 
   return (
@@ -355,7 +368,15 @@ export function BottomSheet({
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      // «НАЗАД» ANDROID СНАЧАЛА ЗАКРЫВАЕТ ВОПРОС ПОВЕРХ ЛИСТА (13.10). Вопрос
+      // лежит в окне этого листа, и «Назад» приходит сюда: раньше он закрывал
+      // весь лист под вопросом (а лист с защитой — открывал «Закрыть без
+      // сохранения?»).
+      onRequestClose={() => {
+        const back = overlayBackFor(sheetId);
+        if (back) back();
+        else onClose();
+      }}
     >
       {/* GestureHandlerRootView внутри Modal обязателен — иначе жест
           перетаскивания грабера не долетает (RN Modal — отдельное окно).

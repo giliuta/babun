@@ -65,7 +65,6 @@ export function formatCountRu(count: number, forms: PluralFormsRu): string {
 
 export const FORMS_USLUGA: PluralFormsRu = ["услуга", "услуги", "услуг"];
 export const FORMS_DEN: PluralFormsRu = ["день", "дня", "дней"];
-export const FORMS_RAZ: PluralFormsRu = ["раз", "раза", "раз"];
 export const FORMS_SCHET: PluralFormsRu = ["счёт", "счёта", "счетов"];
 export const FORMS_DOCUMENT: PluralFormsRu = ["документ", "документа", "документов"];
 export const FORMS_PLATEZH: PluralFormsRu = ["платёж", "платежа", "платежей"];

@@ -30,6 +30,15 @@ export function invitationPath(token: string): `/invite/${string}` {
   return `/invite/${token}`;
 }
 
+/** Ссылка приглашения, которую ОТПРАВЛЯЮТ — `https://`, а не `babun://`
+ *  (13.10). Схему приложения WhatsApp, Telegram и почта на Android не делают
+ *  ссылкой — приглашённый получал некликабельный текст. Сайт отдаёт тот же
+ *  маршрут, а телефон с Babun открывает его в приложении (universal link /
+ *  App Links в `app.config.js`). */
+export function invitationShareUrl(token: string): string {
+  return `https://babun.app${invitationPath(token)}`;
+}
+
 export function invitationErrorMessage(message: string): string {
   // Отказы про календарь — раньше общих «истёк» и «не найдено»: строка
   // `calendar not found or archived` иначе читалась как «приглашение не
@@ -148,7 +157,7 @@ export function invitationShareText(args: {
     ? ` в «${args.tenantName.trim()}»`
     : " в Babun CRM";
   // Роль не называем (владелец 15.09: «роль уберём, она в целом нам не нужна»).
-  return `Вас пригласили${company}. Откройте ссылку на iPhone:\n${args.url}`;
+  return `Вас пригласили${company}. Откройте ссылку на телефоне:\n${args.url}`;
 }
 
 /** Сервер ответил, что приглашения по этой ссылке больше нет: не найдено,

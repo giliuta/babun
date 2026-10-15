@@ -114,6 +114,9 @@ export default function LoginScreen() {
         kind="signup"
         email={email.trim()}
         password={password}
+        // «Войти» письма не шлёт: без этого карточка писала «Отправили письмо»
+        // и на минуту гасила «Отправить ещё раз», хотя письма не было.
+        sentAlready={false}
         onChangeEmail={() => setUnconfirmed(false)}
         onBackToLogin={() => setUnconfirmed(false)}
       />

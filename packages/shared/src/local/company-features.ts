@@ -37,13 +37,6 @@ export interface CompanyFeatureDef {
   bookingBlock?: string;
 }
 
-export const COMPANY_FEATURE_GROUP_TITLE: Record<CompanyFeatureGroup, string> = {
-  record: "Запись",
-  calendar: "Календарь",
-  money: "Деньги",
-  clients: "Клиенты",
-};
-
 /** В порядке страницы «Функции». */
 export const COMPANY_FEATURES: readonly CompanyFeatureDef[] = [
   { key: "objects", label: "Объекты", group: "record", bookingBlock: "object" },

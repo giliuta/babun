@@ -41,6 +41,7 @@ const EXEMPT: Record<string, string> = {
   partner_files: "файлы партнёра — у его карточки (masters), право «Партнёры» на аккаунт",
   master_ratings: "команда через masters",
   master_rating_tokens: "команда через masters",
+  calendar_feed_tokens: "ссылка ленты — у человека в компании; что в ленте, решают его права на календари",
   tenant_sms_config: "баланс SMS — у компании, календари — списком team_ids",
   sms_topups: "пополнения баланса SMS компании",
   sms_ledger: "журнал денег SMS — баланс один на компанию",

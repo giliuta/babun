@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ScrollView, View } from "react-native";
 import type { Href } from "expo-router";
 import {
@@ -75,6 +76,31 @@ export function InvoiceDetailScreen() {
     accountsQuery.isLoading ||
     tenantQuery.isLoading ||
     calendarSettingsQuery.isLoading;
+
+  // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА — ЭФФЕКТОМ ПОСЛЕ ОТРИСОВКИ, А НЕ В ТЕЛЕ (13.10,
+  // нашла сессия 025). Раньше блок стоял в рендере ниже ранних возвратов:
+  // правил ref и ставил таймер во время отрисовки, а замыкание читало
+  // `docWrite` и `awaitsPayment`, объявленные ещё ниже, — держалось на одной
+  // задержке. Теперь: эффект ждёт готовую страницу, таймер снимается при
+  // уходе, а само действие берётся из `runActionRef` в миг срабатывания —
+  // уже со свежими правами и остатком.
+  const pageReady = !loading && !!invoice.data && !!settlement && receiptsQuery.isSuccess;
+  const runActionRef = useRef<((next: string) => void) | null>(null);
+  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (actionTimer.current) clearTimeout(actionTimer.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!pageReady || !pendingAction.current || !runActionRef.current) return;
+    const next = pendingAction.current;
+    pendingAction.current = null;
+    // Пауза — дать странице встать, прежде чем поверх поднимется лист.
+    actionTimer.current = setTimeout(() => runActionRef.current?.(next), 450);
+  }, [pageReady, pendingAction]);
+
   if (loading) {
     return (
       <Screen edges={["top"]}>
@@ -171,16 +197,6 @@ export function InvoiceDetailScreen() {
     });
   };
 
-  if (pendingAction.current && receiptsQuery.isSuccess) {
-    const next = pendingAction.current;
-    pendingAction.current = null;
-    setTimeout(() => {
-      if (next === "share" && docWrite) void sharePdf();
-      else if (next === "pay" && docWrite && awaitsPayment) openPayment();
-      else if (next === "receipt" && docWrite) issueReceipts();
-    }, 450);
-  }
-
   const openLinkedAppointment = () => {
     if (!appointment) return;
     router.push({
@@ -225,6 +241,13 @@ export function InvoiceDetailScreen() {
       scope: "calendar",
       teamId: row.brigade_id,
     }) === "write");
+  // Действие из меню списка (эффект выше). Присваивание без побочных
+  // эффектов: таймер ставит эффект, после отрисовки.
+  runActionRef.current = (next) => {
+    if (next === "share" && docWrite) void sharePdf();
+    else if (next === "pay" && docWrite && awaitsPayment) openPayment();
+    else if (next === "receipt" && docWrite) issueReceipts();
+  };
   // «⋯» — ДЕЙСТВИЯ С ДОКУМЕНТОМ, те же, что долгим нажатием в «Документах»
   // (`useInvoiceMenu`, владелец 04.10). Языка и «Поделиться» в меню нет.
   const menuContext = {

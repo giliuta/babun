@@ -3,7 +3,10 @@
 // notification text.
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getStorage } from "@babun/shared/storage";
-import type { BabunNotificationDraft } from "@/lib/notifications";
+import {
+  babunNotificationRegistrySnapshot,
+  type BabunNotificationDraft,
+} from "@/lib/notifications";
 
 export type ReminderResult =
   | "scheduled"
@@ -33,7 +36,44 @@ export function writeRegistry(next: ReminderIdRegistry): void {
 
 export const manualOwnerKey = (appointmentId: string) =>
   `appointment:${appointmentId}`;
-export const eventOwnerKey = (appointmentId: string) => `event:${appointmentId}`;
+// КЛЮЧИ С АККАУНТОМ (13.10). Сверка календаря заменяет ВСЮ группу ключей
+// разом, а в списке — записи только открытого аккаунта: переход на календарь
+// другого аккаунта стирал пуши событий и колокольчики своего, и они молчали,
+// пока человек не вернётся. У `auto:` это починили раньше — теперь у `event:`
+// и `self:` то же устройство: `<группа>:<аккаунт>:<запись>`, и сверка
+// заменяет только группу своего аккаунта.
+export const eventOwnerKey = (tenantId: string, appointmentId: string) =>
+  `event:${tenantId}:${appointmentId}`;
+
+/** Ключи группы этой записи — любого аккаунта и старые, без аккаунта
+ *  (`event:<запись>`): оба оканчиваются на `:<запись>`. */
+export function ownersOf(prefix: "event:" | "self:" | "auto:", appointmentId: string): string[] {
+  return [
+    ...new Set(
+      babunNotificationRegistrySnapshot()
+        .map((item) => item.ownerKey)
+        .filter((key) => key.startsWith(prefix) && key.endsWith(`:${appointmentId}`)),
+    ),
+  ];
+}
+
+/** Ключи первого вида (`<группа>:<запись>`, без аккаунта). Чей это аккаунт,
+ *  по ключу не узнать, поэтому `only` — записи, которые сверка своего
+ *  аккаунта тут же ставит под новым ключом: два звонка об одном не нужны, а
+ *  пуши записей других аккаунтов звонят дальше, пока там не пройдёт сверка. */
+export function legacyOwners(
+  prefix: "event:" | "self:" | "auto:",
+  only?: ReadonlySet<string>,
+): string[] {
+  return [
+    ...new Set(
+      babunNotificationRegistrySnapshot()
+        .map((item) => item.ownerKey)
+        .filter((key) => key.startsWith(prefix) && key.split(":").length === 2)
+        .filter((key) => !only || only.has(key.slice(prefix.length))),
+    ),
+  ];
+}
 
 export function notificationDrafts(
   apt: Appointment,

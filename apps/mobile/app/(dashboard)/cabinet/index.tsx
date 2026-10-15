@@ -65,7 +65,10 @@ export default function CabinetHome() {
   const showSync = role === "owner" || role === "dispatcher";
 
   return (
-    <Screen>
+    // Низ закрывает таб-бар — как у «Клиентов» и «Финансов». Со всеми краями
+    // над таб-баром висела пустая полоса навигации (на Android с кнопками —
+    // 48 dp), и последний пункт списка обрезался над ней (13.10).
+    <Screen edges={["top"]}>
       <View className="px-4 pb-1 pt-4">
         <Text style={{ ...TYPE.display, color: t.ink }}>Кабинет</Text>
       </View>

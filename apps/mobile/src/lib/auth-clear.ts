@@ -24,7 +24,7 @@ import {
   wipeTenantScopedData,
 } from "./auth-clear/wipe";
 
-export { wipeLocalData, wipeTenantScopedData } from "./auth-clear/wipe";
+export { wipeTenantScopedData } from "./auth-clear/wipe";
 
 // Wipe device-local data when this device must no longer see the previous
 // account's data. Originally ported from the Next.js web app's

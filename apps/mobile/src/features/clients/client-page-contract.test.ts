@@ -374,6 +374,14 @@ describe("сценарий г-б: новый человек со связью", 
     assert.match(hook, /draftCanSave\(\{[^}]*\blinked,/, "гейт не спрашивает связь черновика");
   });
 
+  test("команда черновика — с первого кадра: поле номера берёт её страну сразу", () => {
+    // Поле, открытое с фокусом, код страны потом не меняет (13.10).
+    const hook = read("useClientDraft.ts");
+    const init = hook.slice(hook.indexOf("useState<Client>(() =>"), hook.indexOf("const autoTeam"));
+    assert.match(init, /\.\.\.\(newClientTeam \? \{ team_id: newClientTeam \} : \{\}\)/);
+    assert.match(hook, /const autoTeam = useRef<string \| null>\(newClientTeam \?\? null\);/);
+  });
+
   test("в шторке связи есть «Создать клиента», и она открывает черновик со связью", () => {
     assert.match(door(), /onCreate=\{onCreate\}/, "шторка связи снова без «Создать клиента»");
     const src = people();

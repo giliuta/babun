@@ -166,11 +166,6 @@ export function orderCabinetRows<T extends { block: { key: string } }>(rows: rea
   return [...rows].sort((a, b) => rank(a.block.key) - rank(b.block.key));
 }
 
-/** Все строки шестерёнки «Финансов» по порядку её блоков. */
-export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = FINANCE_SETTINGS_BLOCKS.flatMap(
-  (block) => block.keys,
-);
-
 /** Права блока «Записи» на странице «Календарь». */
 const RECORD_KINDS: readonly string[] = [
   "calendar.records",

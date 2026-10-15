@@ -37,7 +37,9 @@ verify_jwt = false
 verify_jwt = false
 
 # Public .ics feed for Apple/Google Calendar subscriptions. Deliberately
-# unauthenticated — the per-user URL is itself the secret.
+# unauthenticated — the URL carries a revocable random token
+# (calendar_feed_tokens, migration 20261013130000). Deploy only after that
+# migration is applied: without the table the function answers 503.
 [functions.calendar-ics]
 verify_jwt = false
 

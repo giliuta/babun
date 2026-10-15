@@ -4,6 +4,7 @@ import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import type { useToast } from "@/components/ui/Toast";
+import { useAndroidBack } from "@/lib/android-back";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
@@ -19,6 +20,7 @@ export function useListBulk({
   guestOf,
   selectedIds,
   setSelectedIds,
+  selecting,
   setSelecting,
   tags,
   allStatsMap,
@@ -29,6 +31,7 @@ export function useListBulk({
   guestOf: Map<string, ClientsScope>;
   selectedIds: Set<string>;
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
+  selecting: boolean;
   setSelecting: Dispatch<SetStateAction<boolean>>;
   tags: ClientTag[];
   allStatsMap: Map<string, ClientStats>;
@@ -59,6 +62,8 @@ export function useListBulk({
     setSelecting(false);
     setSelectedIds(new Set());
   };
+  // «Назад» Android снимает выбор, а не сворачивает приложение с ним.
+  useAndroidBack(selecting, exitSelection);
   const toggleId = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);

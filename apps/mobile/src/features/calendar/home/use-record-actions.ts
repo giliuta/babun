@@ -1,4 +1,5 @@
 import type { Href } from "expo-router";
+import { Platform } from "react-native";
 import { Ban } from "lucide-react-native";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { confirmAction } from "@/lib/confirm";
@@ -19,6 +20,7 @@ import {
   type SelfReminder,
 } from "@/lib/reminder-time";
 import { isCalendarEvent } from "@/features/calendar/event-access";
+import { useRouteOpener } from "@/features/clients/use-route-opener";
 import {
   useCreateAppointment,
   useDeleteAppointment,
@@ -40,7 +42,7 @@ type UseRecordActionsDeps =
   Pick<CalendarScope, "activeActions" | "activeTeamId">
   & Pick<CalendarRights, "canManageBookings" | "isCrew" | "canMutateAppointment">
   & Pick<CalendarSources, "toast" | "roleQuery" | "appts" | "updateAppt">
-  & Pick<CalendarRoute, "pushBookOnce">
+  & Pick<CalendarRoute, "pushBookOnce" | "tenantId">
   & Pick<CalendarUiState, "setCrewViewing" | "setSheetMenu" | "reminderFor" | "setReminderFor">
   & Pick<RecordNaming, "clientName" | "appointmentTimeZone">
   & Pick<GridModes, "setMoving" | "setEditingApt" | "placedFromRef" | "setPick"
@@ -56,7 +58,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     activeTeamId, appts, canMutateAppointment, setCrewViewing, updateAppt, setSheetMenu,
     clientName, setMoving, setEditingApt, mode, setMode, rememberView, setDay,
     placedFromRef, setPick, setNotice, setMovingKind, reminderFor, setReminderFor,
-    appointmentTimeZone,
+    appointmentTimeZone, tenantId,
   } = deps;
   const createAppt = useCreateAppointment();
   const memberCopy = useMemberCopyAppointment();
@@ -277,12 +279,17 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     setDay(startOfDay(parseYMD(apt.date)));
   };
 
+  // «МАРШРУТ» ИЗ МЕНЮ ЗАПИСИ — та же шторка карт, что у листа выезда
+  // (`useRouteOpener`): «Карты для маршрута» команды, а не Apple Карты в
+  // браузере — на Android это была веб-страница вместо Google Карт (13.10).
+  const recordRoute = useRouteOpener(activeTeamId ?? null);
+
   const openReminderMenu = (apt: Appointment) => setReminderFor(apt);
   const pickReminderFor = (rule: SelfReminder | null) => {
     const apt = reminderFor;
     setReminderFor(null);
-    if (!apt) return;
-    void setSelfReminder(apt, rule, appointmentTimeZone(apt), clientName(apt) || undefined).then(
+    if (!apt || !tenantId) return;
+    void setSelfReminder(apt, rule, appointmentTimeZone(apt), tenantId, clientName(apt) || undefined).then(
       (res) => {
         if (res === "cleared") toast("Напоминание снято", "info");
         else if (res === "scheduled" && rule) {
@@ -291,7 +298,12 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
         } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
         else if (res === "past") toast("Это время уже прошло", "info");
         else if (res === "deferred")
-          toast("Напоминание в очереди — установится, когда на iPhone освободится место", "info");
+          toast(
+            Platform.OS === "android"
+              ? "Напоминание в очереди — установится, когда на телефоне освободится место"
+              : "Напоминание в очереди — установится, когда на iPhone освободится место",
+            "info",
+          );
         else if (res === "capacity") toast("Очередь напоминаний переполнена", "error");
         else if (res === "unavailable") toast("Появится после обновления приложения", "info");
       },
@@ -301,7 +313,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   return {
     createAppt, memberCopy, deleteAppt, bookAt, openEdit, setCancelled,
     cancelWithReason, deleteAppointmentConfirmed, startFreeMove, startMove,
-    openReminderMenu, pickReminderFor,
+    openReminderMenu, pickReminderFor, recordRoute,
   };
 }
 

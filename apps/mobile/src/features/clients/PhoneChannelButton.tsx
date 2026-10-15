@@ -17,6 +17,7 @@ import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useSmsComposeContext } from "@/features/sms/SmsCompose";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
@@ -76,6 +77,14 @@ export default function PhoneChannelButton({
   );
 }
 
+/** Открыть мессенджер или звонилку. Приложения нет (Viber, Instagram) —
+ *  `openURL` отказывает, и тап раньше молча ничего не делал (13.10). */
+function openChannel(url: string, label: string): void {
+  Linking.openURL(url).catch(() =>
+    notify("Не удалось открыть", `${label}: приложение не установлено или ссылка не открывается.`),
+  );
+}
+
 function ChannelButton({
   number,
   telegramUsername,
@@ -118,7 +127,7 @@ function ChannelButton({
     onPress:
       c.id === "sms" && smsContext
         ? () => setSmsOpen(true)
-        : () => void Linking.openURL(c.url),
+        : () => openChannel(c.url, c.label),
   }));
   if (instagram) {
     items.push({
@@ -126,7 +135,7 @@ function ChannelButton({
       label: "Instagram",
       icon: Instagram,
       color: MOBILE_CHANNEL_COLORS.instagram,
-      onPress: () => void Linking.openURL(instagram),
+      onPress: () => openChannel(instagram, "Instagram"),
     });
   }
 
@@ -141,7 +150,7 @@ function ChannelButton({
       items[0]!.onPress();
       return;
     }
-    void Linking.openURL(callUrl);
+    openChannel(callUrl, "Звонок");
   };
   const openChannels = () => {
     haptics.tap();

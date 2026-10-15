@@ -30,7 +30,8 @@ test("скрытый календарь не мелькает при входе:
 test("масштаб — ползунком 0…100 в шторке «Часы календаря» (11.10)", () => {
   const sheet = read("../calendar/HourRangeSheet.tsx");
   assert.match(sheet, /<StepSlider\s+value=\{pct\}\s+min=\{0\}\s+max=\{100\}/);
-  assert.match(sheet, /zoom\?\.onApply\(zoomFromPct\(pct, span, zoom\.vh\)\);/);
+  // Масштаб пишется, только если ползунок сдвинули (13.10).
+  assert.match(sheet, /if \(zoom && pct !== openedPct\.current\) zoom\.onApply\(zoomFromPct\(pct, span, zoom\.vh\)\);/);
   const gear = readModuleSource(
     resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
     resolve(here, "../calendar/settings-screen"),
