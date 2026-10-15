@@ -5413,5 +5413,8 @@
  "Медаль": "Medalla",
  "Цель": "Objetivo",
  "Флаг": "Bandera",
- "Кирпичный": "Ladrillo"
+ "Кирпичный": "Ladrillo",
+ "Теги: {0}": "Etiquetas: {0}",
+ "Открывает выбор тегов": "Abre la selección de etiquetas",
+ "Теги клиента": "Etiquetas del cliente"
 }

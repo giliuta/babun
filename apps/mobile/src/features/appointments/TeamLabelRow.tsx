@@ -158,6 +158,7 @@ export function IdentityCard({
   color,
   title,
   sub,
+  badge,
   muted,
   quiet,
   onPress,
@@ -168,6 +169,9 @@ export function IdentityCard({
   color: string;
   title: string;
   sub?: string;
+  /** Хвост справа от имени, который НЕ сжимается: «+3» у тегов клиента
+   *  (владелец 15.10). Длинное имя уходит в многоточие, счёт виден всегда. */
+  badge?: string;
   /** Значения ещё нет — «Метка» вместо имени метки. */
   muted?: boolean;
   /** Значение не своё, а взятое у дня: тише, но на том же месте. */
@@ -255,6 +259,20 @@ export function IdentityCard({
           </Text>
         ) : null}
       </View>
+      {badge ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            flexShrink: 0,
+            fontSize: 15,
+            fontWeight: "600",
+            color: t.sub,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {badge}
+        </Text>
+      ) : null}
     </Pressable>
     </Card>
   );
