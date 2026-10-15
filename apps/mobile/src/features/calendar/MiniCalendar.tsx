@@ -8,6 +8,7 @@ import { formatYMD } from "@/features/appointments/helpers";
 import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
+import { dayMonthLabel } from "./day-month-label";
 
 // ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ (владелец 2026-08-27: «стрелочки
 // влево-вправо это классно, но я хотел бы ещё листать свайпом»).
@@ -258,7 +259,7 @@ export function MiniCalendar({
                               key={day}
                               onPress={() => onSelectDate(date)}
                               accessibilityRole="button"
-                              accessibilityLabel={`${date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
+                              accessibilityLabel={`${dayMonthLabel(date)}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
                               style={({ pressed }) => ({
                                 width: CELL,
                                 height: CELL,

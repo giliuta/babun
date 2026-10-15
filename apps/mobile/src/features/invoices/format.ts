@@ -2,7 +2,7 @@ import type {
   InvoiceLedgerWithLines,
   InvoiceVatMode,
 } from "@babun/shared/local/finance/invoice-ledger";
-import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
+import { getCurrentTimeInZone, zoneNowFormatter } from "@babun/shared/common/utils/date-utils";
 import {
   money,
   moneySymbol,
@@ -119,7 +119,7 @@ export function todayYmd(timeZone?: string): string {
     try {
       // Keep the client fallback identical to the database RPC when a stale
       // or manually-corrupted timezone reaches the device.
-      new Intl.DateTimeFormat("en-US", { timeZone }).format(now);
+      zoneNowFormatter(timeZone);
       now = getCurrentTimeInZone(timeZone);
     } catch {
       now = getCurrentTimeInZone("Europe/Nicosia");

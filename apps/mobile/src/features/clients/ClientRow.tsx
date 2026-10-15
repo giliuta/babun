@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import type React from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import ReanimatedSwipeable, {
@@ -38,7 +38,7 @@ import { visitMark } from "@/features/clients/visit-mark";
  *  шрифтом 14 с моноширинными цифрами — и запас до даты. */
 const PHONE_COLUMN = 138;
 
-export default function ClientRow({
+function ClientRowView({
   client,
   stats,
   cardFields,
@@ -78,6 +78,10 @@ export default function ClientRow({
   /** Компания клиента, если она не компания экрана (строка работодателя в
    *  общем списке): кнопка связи читает набор и шестерёнку её (03.10). */
   source?: ClientsScope;
+  /** Меняется, когда обработчики строки начинают значить другое (режим
+   *  выбора): строка запомнена (`memo`) и обработчики сравнивает не по
+   *  ссылке — список пересоздаёт их на каждой перерисовке. */
+  memoKey?: string;
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry(client.team_id ?? null);
@@ -349,3 +353,26 @@ export default function ClientRow({
     </ReanimatedSwipeable>
   );
 }
+
+type ClientRowProps = Parameters<typeof ClientRowView>[0];
+
+/** Строки не перерисовываются, пока не поменялись их данные (аудит Android
+ *  13.10): список пересоздаёт обработчики на каждой перерисовке — буква в
+ *  поиске, выбор, обновление данных, — и каждая строка с её кнопкой связи,
+ *  свайпом и разбором номера рисовалась заново. Обработчики сравниваются по
+ *  наличию; их смысл меняет `memoKey`. */
+function sameRow(a: ClientRowProps, b: ClientRowProps): boolean {
+  for (const key of Object.keys({ ...a, ...b }) as (keyof ClientRowProps)[]) {
+    const x = a[key];
+    const y = b[key];
+    if (typeof x === "function" || typeof y === "function") {
+      if (typeof x !== typeof y) return false;
+      continue;
+    }
+    if (!Object.is(x, y)) return false;
+  }
+  return true;
+}
+
+const ClientRow = memo(ClientRowView, sameRow);
+export default ClientRow;

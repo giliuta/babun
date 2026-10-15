@@ -7,6 +7,7 @@ import { useAuthTheme } from "@/components/auth/theme";
 import { Spinner } from "@/components/ui/Spinner";
 import { haptics } from "@/lib/haptics";
 
+import { GoogleWebButton } from "./GoogleWebButton";
 import {
   availableProviders,
   fetchEnabledProviders,
@@ -91,6 +92,19 @@ export function SocialButtons({
   return (
     <View style={{ gap: 10, marginBottom: 18 }}>
       {providers.map((provider) => {
+        // На сайте Google — своей кнопкой Google Identity Services.
+        if (provider === "google" && Platform.OS === "web") {
+          return (
+            <GoogleWebButton
+              key={provider}
+              onResult={(result) => {
+                if (!result.ok && !result.cancelled) {
+                  onError("Не удалось войти через Google. Попробуйте ещё раз");
+                }
+              }}
+            />
+          );
+        }
         const apple = provider === "apple";
         const bg = apple ? (dark ? "#FFFFFF" : "#000000") : t.surface;
         const fg = apple ? (dark ? "#000000" : "#FFFFFF") : t.ink;

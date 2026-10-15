@@ -58,6 +58,7 @@
 // (`write-guard.ts`), но местная копия к тому времени уже записана, и откат
 // у неё молчащий — не удался, и в кэше владельца остаётся призрак строки,
 // которой на сервере никогда не было. Поэтому спрашиваем до всего.
+import { sameJson } from "./same-json";
 import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
@@ -256,7 +257,7 @@ function sameClientRows(
   const byId = new Map(cached.map((r) => [r.id, r]));
   for (const row of fresh) {
     const old = byId.get(row.id);
-    if (!old || JSON.stringify(old) !== JSON.stringify(row)) return false;
+    if (!old || !sameJson(old, row)) return false;
   }
   return true;
 }
