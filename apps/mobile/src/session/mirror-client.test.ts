@@ -52,7 +52,7 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.legal_name, null);
     assert.equal(row.balance, 0);
     assert.deepEqual(row.memberships, []);
-    // «Клиент» скрыт (02.10) — номера нет.
+    // «Клиент» скрыт — номера нет.
     assert.equal(row.contacts_hidden, "right");
     assert.equal(row.blocks?.clients, "read");
     assert.equal(row.blocks?.["clients.note"], "off");
@@ -76,7 +76,7 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.blocks?.["clients.note"], "write");
     assert.equal(row.blocks?.clients, "read");
     assert.equal(row.contacts_hidden, null);
-    // 03.10: «Клиент: Видит» — номер целиком, без двери и точек.
+    // «Клиент: Видит» — номер целиком, без двери и точек.
     assert.equal(row.phone, "+35799000000");
   });
 
@@ -163,7 +163,7 @@ describe("зеркало: какие клиенты в его наборе (ка
       appt("c3", "A", "2026-09-15"),
       appt("c3", "A", "2026-09-30", "cancelled"),
       appt("c3", "B", "2026-09-30"),
-      // c4 — клиент чужой команды: запись в A его в набор не приводит (02.10).
+      // c4 — клиент чужой команды: запись в A его в набор не приводит.
       appt("c4", "A", "2026-09-30"),
     ];
     assert.deepEqual(ids(m, { appointments }), ["c1", "c2"]);
@@ -221,7 +221,7 @@ describe("зеркало: какие клиенты в его наборе (ка
     const view = mirrorView(m, data());
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.note"], "off");
     assert.equal(mirrorClientBlocks(row("c4"), m, view)["clients.note"], "read");
-    // «История» — своим правом команды клиента (02.10).
+    // «История» — своим правом команды клиента.
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.history"], "read");
     assert.equal(mirrorClientBlocks(row("c4"), m, view)["clients.history"], "off");
   });

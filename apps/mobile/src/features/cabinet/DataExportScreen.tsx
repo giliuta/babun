@@ -19,9 +19,8 @@ import { isHumanText } from "@babun/shared/i18n/runtime";
 import type { ExportKind } from "./data-export";
 import { useDataExport } from "./use-data-export";
 
-// «ВЫГРУЗКА ДАННЫХ» (Кабинет, владелец 03.10: «выгрузить все данные можно, но
-// только из своих личных команд, нельзя выгрузить, допустим, с какой-то другой
-// командой»).
+// «ВЫГРУЗКА ДАННЫХ» (Кабинет): выгружать можно только из своих личных команд,
+// не из чужой.
 //
 // У КАЖДОЙ СТРОКИ ОДИН ТАП — ФАЙЛ CSV УХОДИТ В «ПОДЕЛИТЬСЯ»: клиенты, записи,
 // финансы. Лента команд сверху сужает выгрузку (как в клиентах и истории SMS:
@@ -119,7 +118,7 @@ function ExportDoors({ teamId }: { teamId: string | null }) {
     haptics.tap();
     run(kind).catch((error: unknown) => {
       // Обрыв — «Нет связи с сервером», а не «Клиенты: TypeError: Network
-      // request failed» (аудит Кабинета 03.10).
+      // request failed».
       const words = writeErrorWords(error, { failed: "Не удалось выгрузить", notDone: "Файл не собран" });
       notify(words.title, isHumanText(words.subtitle) ? words.subtitle : "Повторите попытку.");
     });

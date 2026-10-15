@@ -24,7 +24,7 @@ import { NEVER_PAUSE } from "@/lib/never-pause";
 export function useTeamTemplates(teamId: string | null, cardTenantId?: string | null) {
   const activeTenantId = useTenantId();
   const role = useDataRole();
-  // Шаблоны команды СВОЕЙ компании карточки (03.10): пока в календаре открыта
+  // Шаблоны команды СВОЕЙ компании карточки: пока в календаре открыта
   // команда партнёра, команда клиента — не из активной компании, и чтение без
   // её заголовка возвращало пустой список («Шаблонов пока нет»).
   const tenantId = cardTenantId ?? activeTenantId;
@@ -57,7 +57,7 @@ export function useSaveTeamTemplate() {
   const changed = useTemplatesChanged();
   return useMutation({
     // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
-    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем.
     ...NEVER_PAUSE,
     mutationFn: async (draft: TemplateDraft): Promise<SmsTeamTemplate> => {
       const { data, error } = await supabase.rpc("sms_save_team_template", {

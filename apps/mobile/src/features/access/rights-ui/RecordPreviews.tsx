@@ -71,7 +71,7 @@ export function RecordPreview({
   const rb = previewRecord(blocks, levels);
   const ev = previewEvent(blocks, levels);
   const on = (write: boolean) => (write ? noop : undefined);
-  // Телефон клиента в записи — по блоку «Клиент» карточки (02.10).
+  // Телефон клиента в записи — по блоку «Клиент» карточки.
   const phoneOpen = levels["clients.client"] === "read" || levels["clients.client"] === "write";
 
   switch (blockKey) {
@@ -173,7 +173,7 @@ export function RecordPreview({
       );
     // Статус виден всегда; меняет — «Видит и меняет». Отмена — «Отмена и
     // удаление» в «Календаре».
-    // «SMS» записи (03.10): блок внизу записи — что ушло её клиенту.
+    // «SMS» записи: блок внизу записи — что ушло её клиенту.
     case "record.sms":
       return (
         <PreviewFrame state={levelState(rb.sms)}>

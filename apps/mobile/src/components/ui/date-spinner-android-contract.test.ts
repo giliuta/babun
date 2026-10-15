@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { readModuleSource } from "@/lib/module-source";
 
-// ДАТА НА ANDROID — БАРАБАНЫ В ШТОРКЕ, А НЕ СИСТЕМНЫЙ ДИАЛОГ (13.10). Системный
+// ДАТА НА ANDROID — БАРАБАНЫ В ШТОРКЕ, А НЕ СИСТЕМНЫЙ ДИАЛОГ. Системный
 // «спиннер» Android — диалог, который открывался по кругу на каждой
 // перерисовке и считал «Отмену» выбором. Проверено на эмуляторе Android 16.
 const read = (f: string) => readFileSync(join(__dirname, f), "utf8");

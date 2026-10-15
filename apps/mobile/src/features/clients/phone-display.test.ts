@@ -13,8 +13,8 @@ import { withHomeCode } from "./use-phone-country";
 import { readModuleSource } from "../../lib/module-source";
 import { clientsListSource } from "./list/source-for-tests";
 
-// НОМЕР И КНОПКА СВЯЗИ (владелец 22.09: «как правильно писать номер»,
-// «звоночек справа должен открывать, как я хочу связаться»).
+// НОМЕР И КНОПКА СВЯЗИ: номер пишется в правильном виде, а кнопка справа
+// открывает выбор способа связи.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -49,12 +49,12 @@ describe("кнопка связи у номера", () => {
   });
   test("заголовок листа — номер для глаз, а не сырой из базы", () => {
     assert.match(button(), /title=\{channels\.length > 0 \? formatPhoneForDisplay\(number, country\)/);
-    // Instagram — способ связи и без номера (владелец 12.10).
+    // Instagram — способ связи и без номера.
     assert.match(button(), /instagramDmUrl\(instagramUsername\)/);
     assert.match(button(), /if \(channels\.length === 0 && !instagram\) return null;/);
   });
-  // 03.10: строка работодателя в общем списке жила в компании экрана — лист
-  // читал набор телефона, а шестерёнки не было вовсе.
+  // Строка работодателя в общем списке не должна жить в компании экрана:
+  // лист читал бы набор телефона, а шестерёнки не было бы вовсе.
   test("клиент другой компании — набор и шестерёнка его компании", () => {
     assert.match(
       button(),

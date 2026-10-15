@@ -47,7 +47,7 @@ export function useRenameDayCity() {
     mutationFn: async (input: { teamId: string; from: string; to: string }) => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       // Сотрудник с правом «Метки» разносит новое имя по дням своей
-      // дверью (30.09): права «Метка дня» у него может не быть, а оставить
+      // дверью: права «Метка дня» у него может не быть, а оставить
       // дни со старым именем нельзя.
       if (role === "master") {
         const { error } = await supabase.rpc("member_rename_day_label", {
@@ -81,7 +81,7 @@ export function useSetDayCity() {
       // Кто может — решает сервер: метку дня пишет владелец и тот, кому в
       // календаре дали «Метка дня: Меняет» (`day_cities_write_access`).
       // Ворота «только владелец или диспетчер» здесь отбивали партнёра,
-      // которому шторку метки открыли по праву (аудит 2026-10-03).
+      // которому шторку метки открыли по праву.
       await setDayCity(supabase, tenantId, input.teamId, input.date, input.city);
     },
     // Оптимистика (по образцу useUpdateAppointment): пилл дня перекрашивается

@@ -4,7 +4,7 @@ import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice
 import { buildInvoiceDocument } from "@/lib/paper/document";
 import { buildInvoicePdfHtml } from "@/lib/paper/pdf";
 
-// КРЕДИТ-НОТА ПЕЧАТАЛАСЬ СЛОМАННЫМ «INVOICE» (аудит 03.10): сервер
+// КРЕДИТ-НОТА ПЕЧАТАЛАСЬ СЛОМАННЫМ «INVOICE»: сервер
 // (`_issue_credit_note`) пишет только суммы с минусом и русскую причину —
 // бумага говорила «INVOICE», «No lines yet», «Subtotal −€84.03», «Total
 // −€100.00» без строки VAT (минус уходил в ветку «без налога») и без ссылки на

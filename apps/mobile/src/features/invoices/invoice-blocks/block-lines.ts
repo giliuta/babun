@@ -46,9 +46,8 @@ export function typedNumber(field: "qty" | "unitPrice", value: number): string {
   return String(Number(value.toFixed(field === "qty" ? 3 : 2)));
 }
 
-// ВЫБОР УСЛУГ — ТОТ ЖЕ, ЧТО В ЗАПИСИ (владелец 2026-09-22: «удали этот
-// блок услуг и добавь тот, который мы постоянно используем… не могу выбрать
-// количество»). Выбор знает услугу по id: строка инвойса помнит, из какой
+// ВЫБОР УСЛУГ — ТОТ ЖЕ, ЧТО В ЗАПИСИ: в другом нельзя выбрать количество.
+// Выбор знает услугу по id: строка инвойса помнит, из какой
 // она услуги (`serviceId`), и количество правится степпером прямо в списке.
 export function serviceSelection(lines: readonly EditableInvoiceLine[]): {
   selectedServiceIds: string[];

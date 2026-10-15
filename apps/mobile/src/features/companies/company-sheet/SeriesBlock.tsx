@@ -8,8 +8,7 @@ import { useThemeColors } from "@/theme/colors";
 import { NUMBER_PADDINGS, cleanSeriesPrefix, documentNumberPreview } from "../company-rules";
 import type { Company, CompanyDraft } from "../queries";
 
-// БЛОК «НОМЕР» (владелец 03.10: «буквы и длина номера — в реквизитах,
-// сразу»). Следующий инвойс показывает набранное до «Сохранить»: сменил
+// БЛОК «НОМЕР» (буквы и длина номера — в реквизитах). Следующий инвойс показывает набранное до «Сохранить»: сменил
 // буквы — видишь, как будет. Порядок номера при этом не трогается — дальше
 // идёт тот же счётчик серии, выпущенные бумаги хранят свой номер.
 export function SeriesBlock({

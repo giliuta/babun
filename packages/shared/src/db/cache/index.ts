@@ -1,9 +1,8 @@
 // Shared cache types.
 //
-// This module used to hold an IndexedDB implementation (the `idb` package)
-// for the Next.js web app. That app was removed on 2026-08-25 — every
-// platform now runs the SQLite backend in `./sql.ts` (expo-sqlite on
-// native, its wasm build on web). What survives here are the type
+// Every platform runs the SQLite backend in `./sql.ts` (expo-sqlite on
+// native, its wasm build on web); there is no IndexedDB cache. This module
+// holds only the type
 // definitions both the cache and the outgoing-write queue are built on,
 // kept in one place so `sql.ts` can re-export them and callers never care
 // which backend they're talking to.

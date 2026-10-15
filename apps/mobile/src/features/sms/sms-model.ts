@@ -1,4 +1,4 @@
-// КАБИНЕТ SMS — ФОРМА ДАННЫХ (STORY-089). Чистый модуль: разбор ответа базы,
+// КАБИНЕТ SMS — ФОРМА ДАННЫХ. Чистый модуль: разбор ответа базы,
 // черновик правки и слова отказов. Без React и сети — его читают тесты.
 
 import { parseTeamTemplates, type SmsTeamTemplate } from "./sms-team-templates";
@@ -223,8 +223,7 @@ export function parseSmsRecordLog(data: unknown): SmsRecordLog {
 /** Просит ли текст ссылку «Подтвердить / Отменить». */
 export const wantsLink = (body: string | null | undefined): boolean => /\[(Ссылка|Link)\]/u.test(body ?? "");
 
-/** Ниже этой суммы — «Пополните баланс» (владелец 30.09: «просто
- *  предупреждение на пяти — пополните баланс»). Центы. */
+/** Ниже этой суммы — «Пополните баланс» (предупреждение на пяти евро). Центы. */
 export const LOW_BALANCE_CENTS = 500;
 
 /** Предупреждение о балансе словами; `null` — баланса хватает, он не виден
@@ -233,7 +232,7 @@ export const LOW_BALANCE_CENTS = 500;
 export function balanceWarning(
   account: Pick<SmsAccount, "priceCents" | "owner" | "senders" | "frozen"> | null | undefined,
   /** Можно ли платить здесь (`CAN_PAY_HERE`): в приложении из магазина
-   *  «пополните» не говорим — только состояние (владелец 04.10). */
+   *  «пополните» не говорим — только состояние. */
   payHere = true,
 ): string | null {
   const owner = account?.owner;
@@ -272,8 +271,7 @@ export function smsErrorText(error: unknown): string {
   return (message && tDynamic(message)) || "Не удалось отправить";
 }
 
-/** Пополнение — любая сумма целыми евро от €5 до €500 (владелец 30.09:
- *  «открывается шторка, я вписываю сумму и нажимаю оплатить»). Те же пределы
+/** Пополнение — любая сумма целыми евро от €5 до €500. Те же пределы
  *  у функции `sms-checkout` и у базы (`sms_topup_min_cents` /
  *  `sms_topup_max_cents`). Центы. */
 export const TOPUP_MIN_CENTS = 500;

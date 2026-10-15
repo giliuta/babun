@@ -46,9 +46,8 @@ export function useBookForm() {
   const scrollRef = useRef<ScrollView>(null);
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
-  // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА ТОЛЬКО СМОТРЯТ (владелец 02.10: «раньше
-  // создавал записи — могу надавать наперёд и добавлять туда клиентов»).
-  // Страница открывается, «Сохранить» серая, тап — плашка про тариф; сервер
+  // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА ТОЛЬКО СМОТРЯТ (иначе за бесплатный срок можно наставить записей наперёд и
+  // добавить туда клиентов). Страница открывается, «Сохранить» серая, тап — плашка про тариф; сервер
   // держит то же (`tenant_free_readonly_guard`).
   const workInPlan = usePlanAllows("book-clients");
   const nudgeTariff = useTariffNudge();
@@ -107,9 +106,9 @@ export function useBookForm() {
     servicesQuerySuccess: refs.servicesQuery.isSuccess,
     mastersQuerySuccess: refs.mastersQuery.isSuccess,
   });
-  // ДАТА ВИЗИТА ПОД ИМЕНЕМ КЛИЕНТА — как в списке клиентов (владелец 03.10:
-  // «имя, номер телефона и дата последнего визита»; долга и визитов в блоке
-  // записи больше нет — они на странице клиента).
+  // ДАТА ВИЗИТА ПОД ИМЕНЕМ КЛИЕНТА — как в списке клиентов (имя, номер телефона и дата
+  // последнего визита; долга и визитов в блоке записи нет — они на странице
+  // клиента).
   const clientStats = client ? refs.statsById.get(client.id) : undefined;
   const totals = useBookTotals({
     ...draft,

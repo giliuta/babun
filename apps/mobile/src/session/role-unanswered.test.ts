@@ -8,7 +8,7 @@ import { roleLookupUnanswered } from "./role-unanswered";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
-// Владелец 03.10, на зависшем сервере: вкладки висели загрузкой, карточка
+// На зависшем сервере: вкладки висели загрузкой, карточка
 // писала «Доступ не подтверждён», хотя роль была известна.
 
 describe("сервер не ответил или отказал", () => {

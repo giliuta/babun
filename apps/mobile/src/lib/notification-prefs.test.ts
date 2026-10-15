@@ -16,7 +16,7 @@ import {
   shouldNotify,
 } from "./notification-prefs";
 
-// Уведомления на команду (владелец 03.10): строка базы ↔ настройки, какое
+// Уведомления на команду: строка базы ↔ настройки, какое
 // событие журнала о чём, кому сообщать.
 
 const row = (over: Partial<ChangeLogRow>): ChangeLogRow => ({

@@ -100,7 +100,7 @@ export function rowToAppointment(r: Row): Appointment {
     // Счёт, выбранный при приёме денег. Без него сервер угадывает счёт по
     // способу оплаты — и промахивается, когда счёта такого вида у команды нет.
     payment_account_id: r.payment_account_id ?? null,
-    // НДС записи: выбор «Итого» (режим + ставка, 22.09); старые 'on'/'off'
+    // НДС записи: выбор «Итого» (режим + ставка); старые 'on'/'off'
     // пишет дверь `set_appointment_vat_mode`.
     vat_mode: (r.vat_mode ?? null) as Appointment["vat_mode"],
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
@@ -377,7 +377,7 @@ export async function createAppointment(
 }
 
 /** Запись изменилась на сервере после того, как телефон её видел, а правка
- *  трогает статус или деньги — её не применили (аудит 03.10). `fresh` —
+ *  трогает статус или деньги — её не применили. `fresh` —
  *  строка сервера, чтобы экран сразу показал правду. */
 export class StaleAppointmentError extends Error {
   constructor(readonly fresh: Appointment | null) {
@@ -389,8 +389,8 @@ export class StaleAppointmentError extends Error {
 }
 
 /** Записи на сервере больше нет — её удалили на другом устройстве, пока
- *  этот телефон её показывал (повторный аудит 03.10): правка находит ноль
- *  строк. Раньше это было общее «Не удалось…», а запись оставалась на
+ *  этот телефон её показывал : правка находит ноль
+ *  строк. Это не общее «Не удалось…» — иначе запись оставалась бы на
  *  экране. */
 export class GoneAppointmentError extends Error {
   constructor() {

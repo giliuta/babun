@@ -31,14 +31,13 @@ export default function AuthLayout() {
   const onAccountMissing = path[1] === "account-missing";
   const onFinishSignup = path[1] === "finish-signup";
 
-  // ВЫШЕДШИЙ НЕ ЖДЁТ НА ЗАПАСНОМ ЭКРАНЕ (04.10, Pro Max владельца: «застыла и
-  // не открывается»). Запасной экран — для вошедшего, чьи данные не открылись;
+  // ВЫШЕДШИЙ НЕ ЖДЁТ НА ЗАПАСНОМ ЭКРАНЕ. Запасной экран — для вошедшего, чьи данные не открылись;
   // гейт ниже уводит только ВОШЕДШИХ, а без сессии экран показывал загрузку
   // без поля и кнопки — навсегда, пока приложение не убьют.
   if (!session && onAccountMissing) return <Redirect href="/login" />;
 
   // A signed-in user doesn't belong in the auth stack: send them to the app.
-  // Мастера настройки нет (04.10): только аккаунт без данных уходит на
+  // Мастера настройки нет: только аккаунт без данных уходит на
   // запасной экран. "unknown" fails open to the dashboard, mirroring
   // (dashboard)/_layout.
   if (session && !onResetPassword) {
@@ -58,7 +57,7 @@ export default function AuthLayout() {
         />
       );
     }
-    // «ПОЧТИ ГОТОВО» (09.10): первый вход через Apple/Google — придумать
+    // «ПОЧТИ ГОТОВО»: первый вход через Apple/Google — придумать
     // пароль; аккаунт почтой с экрана входа — назвать себя.
     if (signupFinish(session.user).needed) {
       if (!onFinishSignup) return <Redirect href="/finish-signup" />;

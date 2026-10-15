@@ -25,7 +25,7 @@ export function totalRows(input: {
   // СО СКИДКОЙ: «Subtotal» — сумма услуг, «Discount» — минусом, дальше
   // налог и итог, как в «Итого» записи (скидка, потом VAT). Четыре строки,
   // не пять: база налога «сверху» — в строке налога («VAT 19% on €110.00»),
-  // владелец 2026-09-22: «очень много разных сумм, человек запутается».
+  // иначе слишком много разных сумм — человек запутается.
   if (input.discount) {
     const { dict, discount } = input;
     const money = (value: number) => paperMoney(value, input.currency, dict.locale);

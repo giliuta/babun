@@ -11,11 +11,8 @@ import { CurrencySheet } from "./CurrencySheet";
 import { useCurrency } from "./currency";
 import { useUpdateTenant } from "@/session/tenant";
 
-// ВАЛЮТА КОМПАНИИ — СТРОКА И ЕЁ ШТОРКА (владелец 30.09: «валюту перенесём в
-// финансы — полноценно блок „Валюта" переходит в настройки финансов»). Одна
-// на бизнес (`tenants.currency`): стоит в «Настройки финансов → Вся
-// компания». Раньше жила в шестерёнке календаря рядом с часовым поясом
-// (06.09), теперь — там, где деньги.
+// ВАЛЮТА КОМПАНИИ — СТРОКА И ЕЁ ШТОРКА. Одна на бизнес (`tenants.currency`):
+// стоит в «Настройки финансов → Вся компания», там, где деньги.
 
 export function CurrencySettingsRow({
   readOnly = false,
@@ -31,7 +28,7 @@ export function CurrencySettingsRow({
 
   const apply = (code: string) => {
     if (code === currency) return;
-    // СМЕНА ВАЛЮТЫ СУММ НЕ ПЕРЕСЧИТЫВАЕТ (аудит 2026-09-30): €300 станут
+    // СМЕНА ВАЛЮТЫ СУММ НЕ ПЕРЕСЧИТЫВАЕТ: €300 станут
     // «$300». Спрашиваем словами до записи — отменить её сама по себе
     // нельзя, только выбрать валюту обратно.
     confirmThen(
@@ -63,8 +60,7 @@ export function CurrencySettingsRow({
         tile={SETTINGS_TILE.green}
         icon={Banknote}
         title="Валюта"
-        // Коротко (владелец 30.09 о шестерёнке): «Евро · €» — код EUR
-        // повторял то же, что знак.
+        // Коротко: «Евро · €» — код EUR повторял бы то же, что знак.
         sub={`${moneyName(currency)} · ${moneySymbol(currency)}`}
         onPress={readOnly ? undefined : () => setOpen(true)}
       />

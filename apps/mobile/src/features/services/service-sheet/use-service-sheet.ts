@@ -45,10 +45,10 @@ export function useServiceSheet({ editing, lockedTeamId, busy, onClose, onSave, 
     setBaseErrors, setOpenRow, seedFields,
   } = fields;
   const [seeded, setSeeded] = useState<ServiceEditing | null>(null);
-  // ШАБЛОНЫ ВНУТРИ ЛИСТА (владелец 11.10: «значок в самой шторке справа:
-  // нажимаю шаблон — в этой же шторке появляется вся услуга, и я продолжаю
-  // её редактировать»). Список готовых услуг рисуется вместо формы в ЭТОМ
-  // листе — второе окно поверх листа iOS не показывает (так и «залагало»).
+  // ШАБЛОНЫ ВНУТРИ ЛИСТА: значок в шторке справа, нажал шаблон — в этой же
+  // шторке появляется вся услуга, и её продолжают редактировать. Список готовых
+  // услуг рисуется вместо формы в ЭТОМ листе — второе окно поверх листа iOS не
+  // показывает.
   const [picking, setPicking] = useState(false);
   const [template, setTemplate] = useState<Service | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -85,10 +85,10 @@ export function useServiceSheet({ editing, lockedTeamId, busy, onClose, onSave, 
     null;
   const canSubmit = name.trim().length > 0 && !!ownerTeam && !busy;
 
-  // ТАП ПО ФОНУ НЕ ВЫБРАСЫВАЕТ НАБРАННУЮ УСЛУГУ (аудит 2026-10-03): цена,
-  // лестница и описание пропадали молча — следующее открытие засевает лист
-  // заново. Снимок полей — сразу после засева (эффектов, которые правят
-  // поля после него, у листа нет).
+  // ТАП ПО ФОНУ НЕ ВЫБРАСЫВАЕТ НАБРАННУЮ УСЛУГУ: иначе цена, лестница и
+  // описание пропадали бы молча — следующее открытие засевает лист заново.
+  // Снимок полей — сразу после засева (эффектов, которые правят поля после
+  // него, у листа нет).
   const signature = JSON.stringify([
     name, color, icon, price, duration, cost, description, hasDescription,
     priceEntry, weekdays, hasWeekdays, bufferAfter, hasBufferAfter, economics,

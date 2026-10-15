@@ -76,18 +76,18 @@ export function ListSheets({ list }: { list: ClientsList }) {
         onClose={() => setRemindClient(null)}
       />
       {/* Лист — в компании строки (`menuScope`): реквизиты «Поделиться»
-          клиента работодателя — по его выключателям, а не своим (03.10). */}
+          клиента работодателя — по его выключателям, а не своим. */}
       <RowScope scope={menuScope}>
         <ClientActionsSheet
           client={menuClient}
-          // Те же пункты, что в «⋯» карточки (`clientMenuItems`, 03.10):
+          // Те же пункты, что в «⋯» карточки (`clientMenuItems`):
           // записать — «можно записать», напомнить и чёрный список — «меняет
           // карточку» / «Меню клиента», удалить — владелец своей компании /
           // «Удаление клиента».
           onBook={menuActions?.book ? bookFor : undefined}
           onClose={() => setMenuClient(null)}
           // Выбор нескольких ведёт к экспорту и массовой SMS: своя база — по
-          // «можно вынести», партнёр — по «Меню клиента» (03.10); строки
+          // «можно вынести», партнёр — по «Меню клиента»; строки
           // работодателя в выбор не попадают вовсе.
           onSelectMany={menuActions?.selectMany ? (c) => enterSelection(c.id) : undefined}
           onRemind={menuActions?.remind ? openRemindMenu : undefined}
@@ -120,7 +120,7 @@ export function ListSheets({ list }: { list: ClientsList }) {
         }
       />
       {/* Импорт — в выбранную команду (из «Все» — в первую): у каждой
-          команды свой импорт (владелец 30.09). */}
+          команды свой импорт. */}
       <ImportWizardSheet
         visible={importOpen}
         onClose={() => setImportOpen(false)}

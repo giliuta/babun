@@ -42,8 +42,8 @@ export function useBookRights({
   const requestActions = useLocationRequestActions();
   const viewerRole = useCurrentRole().data;
   const canRequestAddress = viewerRole === "owner" || viewerRole === "dispatcher";
-  // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ, ДВЕРИ ПО ПРАВАМ (STORY-088, владелец
-  // 21.09: «визуал идентичный… даёшь просто разрешение на блоки»). Владельцу
+  // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ, ДВЕРИ ПО ПРАВАМ (STORY-088; визуал
+  // идентичный, меняется только разрешение на блоки). Владельцу
   // `bookRights` отдаёт всё; сотруднику — по блокам календаря записи. Сервер
   // проверяет то же самое поле за полем, поэтому погашенная дверь здесь —
   // не украшение, а честный ответ заранее.
@@ -64,7 +64,7 @@ export function useBookRights({
       (!isEdit || (editing?.created_by ?? null) === sessionUserId),
   });
   // Без тарифа запись клиента только смотрят: объект, услуги, клиент,
-  // время — без дверей (владелец 02.10, `readOnlyBookRights`).
+  // время — без дверей (`readOnlyBookRights`).
   const can = kind === "work" && !workInPlan ? readOnlyBookRights(rights) : rights;
   return {
     pendingRequests,

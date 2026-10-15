@@ -100,7 +100,7 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
   if (kind === "event") {
     // Одна строка «адрес или ссылка»: ссылка — в event_url, текст — в
     // address. Адрес события — его собственный, не объект из базы
-    // (владелец 2026-09-06: «просто адрес, фиксируется только на событии»).
+    // (просто адрес, фиксируется только на событии).
     // Выбран объект — адрес-снимок берётся у него; нет объекта — остаётся
     // прежний вольный адрес события (у старых событий он единственное, что
     // говорит, куда ехать, и терять его нельзя).
@@ -132,8 +132,7 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       address: placeIsUrl ? "" : place,
       color_override: eventColor,
       // Метка события — та же метка выезда, что у записи: null значит «как
-      // у дня» (владелец 2026-09-08: «тип справа вверху переделай на метку,
-      // как в клиентах»).
+      // у дня».
       city,
       // Клиент и объект у события необязательны и НЕЗАВИСИМЫ: объект может
       // принадлежать другому клиенту или стоять вовсе без клиента события.
@@ -187,8 +186,8 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
         ? { vat_mode: recordVatMode, vat_rate: vatRateInUse }
         : { vat_mode: "none" as const, vat_rate: null }
       : {}),
-    // У сотрудника номер клиента в записи не приходит (`contacts_hidden`,
-    // 30.09) — напоминание шлёт сервер по карточке, номер ему известен.
+    // У сотрудника номер клиента в записи не приходит (`contacts_hidden`) —
+    // напоминание шлёт сервер по карточке, номер ему известен.
     reminder_enabled:
       reminderOn && (Boolean(client?.phone) || client?.contacts_hidden !== undefined),
   };

@@ -1,7 +1,6 @@
-// v686 / Audit-2026-05-21 P1-6 + P1-2 — Russian pluralization.
+// Russian pluralization.
 //
-// Audit findings called out several places where number+noun was
-// rendered without proper morphology:
+// Number+noun must be rendered with proper morphology, for example:
 //   - «1 услуг в 1 категориях» (should be «1 услуга в 1 категории»)
 //   - «4 записей в этом устройстве»  (should be «4 записи»)
 //   - «5 клиент» (should be «5 клиентов»)
@@ -24,7 +23,7 @@
 //
 // To extend with a new noun, just pass the 3 forms; no enum.
 //
-// OTHER UI LANGUAGES (2026-10-03). The forms are Russian source text, and the
+// OTHER UI LANGUAGES. The forms are Russian source text, and the
 // build-time translation turns each into the UI language («записей» →
 // «appointments»). Languages with one/other (English, Bulgarian, Greek …) pick
 // the ONE form for exactly 1 and the MANY form otherwise — «21 запись» but
@@ -61,7 +60,7 @@ export function formatCountRu(count: number, forms: PluralFormsRu): string {
   return `${count} ${pluralRu(count, forms)}`;
 }
 
-// ─── Preset form sets for the nouns audit found in production ───────
+// ─── Preset form sets for the nouns used in production ───────
 
 export const FORMS_USLUGA: PluralFormsRu = ["услуга", "услуги", "услуг"];
 export const FORMS_DEN: PluralFormsRu = ["день", "дня", "дней"];

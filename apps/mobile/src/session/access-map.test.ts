@@ -127,7 +127,7 @@ describe("разделы экрана и изменения", () => {
     const sections = sectionsFor(blocks);
     assert.deepEqual(
       sections.map((s) => s.area),
-      // Порядок владельца 01.10: «Календарь, Клиенты, Финансы, Компания».
+      // Порядок: «Календарь, Клиенты, Финансы, Компания».
       ["calendar", "clients", "finance"],
     );
     assert.ok(!sections.some((s) => s.blocks.some((b) => b.ownerOnly)));

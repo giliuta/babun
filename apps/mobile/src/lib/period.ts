@@ -1,6 +1,6 @@
 // The app-wide period dialect (born in finances, reused by clients
 // filters) — web parity with apps/web/src/lib/finance/period.ts (paired
-// current/previous presets) plus the label helpers the LOCKED v5 header
+// current/previous presets) plus the label helpers the v5 header
 // needs (name + dates split). All ranges are inclusive YYYY-MM-DD.
 
 // Ключ даты — ОДНОЙ функцией на продукт: локальная копия `ymd` здесь была
@@ -55,7 +55,7 @@ export const PERIOD_BLOCKS: [PeriodKind, PeriodKind][] = [
   ["today", "yesterday"],
   ["week", "lastweek"],
   ["month", "lastmonth"],
-  // КВАРТАЛ (прогон финансов 2026-09-24): VAT на Кипре сдаётся поквартально,
+  // КВАРТАЛ: VAT на Кипре сдаётся поквартально,
   // и собирать квартал руками из трёх месяцев — лишняя работа каждые 90 дней.
   ["quarter", "lastquarter"],
   ["year", "lastyear"],
@@ -140,8 +140,8 @@ export function dmyShort(s: string): string {
 }
 
 /** Точные даты справа в шапке периода («01.06.26 – 30.06.26»). ВСЕГДА
- *  ДВЕ ДАТЫ, даже у одного дня (владелец 03.10: «сегодня — 03.10.26 –
- *  03.10.26, это же даты»): шапка не меняет вид от периода к периоду. */
+ *  ДВЕ ДАТЫ, даже у одного дня («03.10.26 –
+ *  03.10.26»): шапка не меняет вид от периода к периоду. */
 export function periodDates(p: Period): string {
   return `${dmyShort(p.from)} – ${dmyShort(p.to)}`;
 }
@@ -159,7 +159,7 @@ const RU_MONTHS_OF = [
 
 /** Один день словами: «10 августа». Этой фразой продукт называет дату всюду,
  *  где она не набирается цифрами: и ВЫБРАННУЮ дату перевода (строка «Когда» в
- *  `TransferSheet` — с 2026-08-15 дата выбирается третьим шагом листа), и
+ *  `TransferSheet` — дата выбирается третьим шагом листа), и
  *  возраст остатка, и день в шапке ленты. */
 export function dayPhrase(ymd: string): string {
   const d = parseYmd(ymd);

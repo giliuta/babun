@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 
-// Список чеков читается страницами (аудит финансов 2026-09-30): PostgREST
+// Список чеков читается страницами: PostgREST
 // отдаёт не больше тысячи строк, и без цикла тысяча первый чек молча
 // пропадал из «Документов».
 

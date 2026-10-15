@@ -51,8 +51,8 @@ export function useHomeDebts(input: HomeDebtsInput) {
     [invoices],
   );
 
-  // НЕОПЛАЧЕННЫЕ ИНВОЙСЫ — ДОЛГОМ (владелец 04.10: «выставлен инвойс, оплаты
-  // нет — он переходит в долг»). Работа под инвойсом из долгов записей уже
+  // НЕОПЛАЧЕННЫЕ ИНВОЙСЫ — ДОЛГОМ (выставлен инвойс, оплаты
+  // нет — он переходит в долг). Работа под инвойсом из долгов записей уже
   // исключена (`invoicedAppointments`): её деньги — здесь, остатком инвойса.
   const invoiceDebtSources = useMemo(
     () =>
@@ -82,7 +82,7 @@ export function useHomeDebts(input: HomeDebtsInput) {
     // же обязан найтись (раньше не показывался ни под одним чипом).
     const scoped = scope === NO_TEAM ? rows.filter((debt) => debt.team_id == null) : rows;
     // «Финансы клиента»: записи, инвойсы и операции уже сужены до него, а
-    // ручные долги — нет, и чужой долг стоял в его плитке (аудит 2026-09-30).
+    // ручные долги — нет, и чужой долг стоял в его плитке.
     return forClient(scoped, requestedClientId);
   }, [debtsData, scope, requestedClientId, readRules]);
   const debtPaidData = input.debtPaidData;
@@ -94,7 +94,7 @@ export function useHomeDebts(input: HomeDebtsInput) {
   // ПЛИТКА И СПИСОК ПОД НЕЙ СЧИТАЮТ ОДНОЙ ФУНКЦИЕЙ. «Долги» — это всё, что
   // должны МНЕ: долги записей плюс ручные входящие. «Я должен» в плитку не
   // подмешивается: одни деньги придут, другие уйдут, и общая сумма не значила
-  // бы ничего (владелец 2026-09-10 — две стороны, переключатель между ними).
+  // бы ничего (две стороны, переключатель между ними).
   const manualIncomingDebt = useMemo(
     () =>
       manualDebtRows(

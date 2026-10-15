@@ -1,7 +1,6 @@
 import type { AccessLevel, MemberAccessMap } from "./access-map";
 
-// СВОИ ПРАВА ЧЕЛОВЕКА — ЧИСТЫЙ СЛОЙ (этап 2 доступа, владелец 15.09: «чтоб всё
-// сразу менялось в живом времени»).
+// СВОИ ПРАВА ЧЕЛОВЕКА — ЧИСТЫЙ СЛОЙ (права меняются сразу, в живом времени).
 //
 // Экран спрашивает одно: что МНЕ можно в этом блоке (в этом календаре) —
 // ждать, скрыть, смотреть или менять. Ответ собирается из роли (владелец
@@ -30,7 +29,7 @@ const RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, read: 1, 
 const rank = (level: AccessLevel | undefined): number =>
   level === undefined ? 0 : (RANK[level] ?? 0);
 
-/** «Ограничения» (03.10) — своя шкала: срок короче — доступ уже. Без ступени
+/** «Ограничения» — своя шкала: срок короче — доступ уже. Без ступени
  *  в карте — «Неделя», как у сервера. */
 const WINDOW_RANK: Readonly<Partial<Record<AccessLevel, number>>> = {
   week: 0,
@@ -111,7 +110,7 @@ export function recordLevelsChanged(
     const now = next.calendars[team] ?? {};
     const keys = new Set([...Object.keys(was), ...Object.keys(now)]);
     for (const key of keys) {
-      // «Ограничения» записей (03.10) — тоже маска окна: сузили — строки
+      // «Ограничения» записей — тоже маска окна: сузили — строки
       // старше окна должны уйти, расширили — прийти.
       if ((key.startsWith("record.") || key === "calendar.window") && was[key] !== now[key]) return true;
     }
@@ -119,11 +118,11 @@ export function recordLevelsChanged(
   return false;
 }
 
-// КЛИЕНТЫ УХОДЯТ С ТЕЛЕФОНА ПРИ СУЖЕНИИ ПРАВ (защита базы, владелец 30.09:
-// «чтоб не пришёл на неделю, не выгрузил базу и не ушёл»). У прав клиентов
+// КЛИЕНТЫ УХОДЯТ С ТЕЛЕФОНА ПРИ СУЖЕНИИ ПРАВ (защита базы:
+// чтобы не пришёл на неделю, не выгрузил базу и не ушёл). У прав клиентов
 // своя шкала: «Ограничения» — Неделя < 2 недели < Месяц < 3 месяца < Полгода
 // < Без ограничения
-// («Телефон» с 02.10 идёт вместе с базой). Сузили хоть одно
+// («Телефон» идёт вместе с базой). Сузили хоть одно
 // хоть в одной команде (или команду сняли) — клиенты и открытые номера этой
 // компании стираются с телефона сразу; поменяли иначе — перечитываются: маска
 // строк и `contacts_hidden` пришли при прежних правах.
@@ -133,7 +132,7 @@ const BLOCK_RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, rea
 const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel, number>>>>> = {
   clients: BLOCK_RANK,
   "clients.scope": { week: 0, near: 1, month: 2, quarter: 3, half: 4, own: 5, all: 6 },
-  // Блоки карточки (30.09): закрыли блок — его поля уходят с телефона вместе
+  // Блоки карточки: закрыли блок — его поля уходят с телефона вместе
   // со строками, перечитанными уже без них.
   "clients.note": BLOCK_RANK,
   "clients.people": BLOCK_RANK,
@@ -146,9 +145,9 @@ const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel,
   "clients.client": BLOCK_RANK,
   "clients.history": BLOCK_RANK,
   "clients.sms": BLOCK_RANK,
-  // «Меню клиента» и «Удаление клиента» (03.10) тоже едут в `blocks` строки:
+  // «Меню клиента» и «Удаление клиента» тоже едут в `blocks` строки:
   // без них сужение оставляло «Удалить» и «Напомнить» на кэше, а сервер
-  // отказывал (аудит 03.10).
+  // отказывал.
   "clients.menu": BLOCK_RANK,
   "clients.delete": BLOCK_RANK,
 };
@@ -206,9 +205,9 @@ export function isClientDataKey(queryKey: readonly unknown[], tenantId: string):
   return CLIENT_DATA_HEADS.includes(String(queryKey[0])) && queryKey[1] === tenantId;
 }
 
-/** ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА С ЭТАПА 2 (владелец 29.09: «только доходы, но
- *  видел все расходы»): ключ права стороны денег. Общей строки
- *  `finance.operations` на сервере нет с наката этапа 2 (03.10 сверено: ни в
+/** ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА С ЭТАПА 2 (бывает «только доходы», без расходов):
+ *  ключ права стороны денег. Общей строки
+ *  `finance.operations` на сервере нет с наката этапа 2 (сверено: ни в
  *  реестре, ни в правах, ни в функциях и политиках) — карта её не принесёт. */
 export function moneyKey(_map: MemberAccessMap | undefined, side: "income" | "expense"): string {
   return side === "income" ? "finance.income" : "finance.expense";
@@ -243,9 +242,9 @@ export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.debts",
   "finance.documents",
   "finance.profit",
-  // «Ограничения» (03.10): сузили окно — старые деньги уходят с телефона.
+  // «Ограничения»: сузили окно — старые деньги уходят с телефона.
   "finance.window",
-  // Строки шестерёнки (03.10): категории, счета, ящик и бланк — тоже деньги
+  // Строки шестерёнки: категории, счета, ящик и бланк — тоже деньги
   // компании на телефоне.
   "finance.settings_accounts",
   "finance.settings_trash",

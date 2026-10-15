@@ -8,7 +8,7 @@ import { invoiceEditorSource } from "../invoices/invoice-editor/editor-source";
 import { bookFormSource } from "./book-form/source-for-tests";
 import { clientCardSource } from "../clients/card/source-for-tests";
 
-// АУДИТ ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS 03.10 — сторожа на сборку экранов;
+// СТОРОЖА ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS — сторожа на сборку экранов;
 // чистые правила (цена лестницы, поля партнёра, части SMS) проверены своими
 // тестами рядом с ними.
 const here = dirname(fileURLToPath(import.meta.url));
@@ -45,8 +45,8 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("фото и видео записи: камера не пишет видео, пачка не рвётся молча", () => {
-    // Минуту видео с камеры (03.10 — VGA, чтобы влезла в 50 МБ) сняли 06.10
-    // целиком: видео пишет звук, а микрофона в сборке нет — на живом iPhone
+    // Минуту видео с камеры (VGA, чтобы влезла в 50 МБ) снимать целиком нельзя:
+    // видео пишет звук, а микрофона в сборке нет — на живом iPhone
     // камера падала. Видео приходит только из галереи; сторож — в
     // appointment-photo-picker-contract.test.ts.
     assert.match(src("appointments/use-file-pickers.ts"), /launchCameraAsync\(\{\s*mediaTypes: \["images"\],/);
@@ -76,11 +76,11 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("«Оплаты тарифа»: без подписки и без оплат нет двери в портал", () => {
     const screen = src("cabinet/TariffPaymentsScreen.tsx");
     // Подписка — только оплаченный не «навсегда»; на пробном и без тарифа
-    // дверь вела в «Подписки ещё нет» (аудит Кабинета 03.10).
+    // дверь вела в «Подписки ещё нет».
     assert.match(screen, /const hasSubscription = tariffState\.paid && !tariffState\.forever;/);
-    // Дверь — только владельцу: партнёр с «Оплатами тарифа» (04.10) видит
+    // Дверь — только владельцу: партнёр с «Оплатами тарифа» видит
     // оплаты, но подпиской не управляет. И только на сайте: в приложении из
-    // магазина двери в Stripe нет (владелец 04.10, `lib/pay-here.ts`).
+    // магазина двери в Stripe нет (`lib/pay-here.ts`).
     assert.match(screen, /\{!CAN_PAY_HERE \|\| !owner \|\| \(!hasSubscription && months\.length === 0\) \? null : \(/);
   });
 

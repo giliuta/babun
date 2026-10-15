@@ -42,7 +42,7 @@ export function zeroHintFor(
   if (shownCount > 0) return null;
   const w = withoutOne;
   // Имя в кавычках — как строка в листе, в именительном: «Без «метку»»
-  // читалось сбоем (проверка 03.10).
+  // читалось бы сбоем.
   const names: Record<string, string> = {
     search: "Поиск",
     period: "Период",

@@ -8,7 +8,7 @@ import { readModuleSource } from "@/lib/module-source";
 import { bookFormSource } from "../appointments/book-form/source-for-tests";
 import { clientCardSource } from "../clients/card/source-for-tests";
 
-// ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ 03.10 — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
+// ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
 // СИМУЛЯТОРА (экран и жесты тянут react-native). Каждый держит конкретную
 // поломку, найденную разбором «как сломать то, что пользователь не делает».
 
@@ -30,7 +30,7 @@ const daySheet = () =>
 describe("календарь под нагрузкой", () => {
   test("быстрое событие рождается с uuid — «Отменить» удаляет именно его", () => {
     // Номер — uuid попытки: повтор того же действия после потерянного ответа
-    // несёт тот же номер и не заводит второе событие (аудит 03.10).
+    // несёт тот же номер и не заводит второе событие.
     const src = screen();
     assert.match(src, /total_amount: 0,\s*\}\), id: attemptId\(attempt\) \};\s*createAppt\.mutate\(ev,/);
     assert.match(src, /const id = randomUuid\(\);\s*attemptIdsRef\.current\.set\(key, id\);/);
@@ -102,7 +102,7 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("кнопки сотрудника — только по его правам", () => {
     const src = screen();
-    // «В работу» / «Выполнена» удалены вместе со статусом (владелец 03.10).
+    // «В работу» / «Выполнена» удалены вместе со статусом.
     assert.doesNotMatch(src, /quickStatus|"В работу"|"Вернуть в план"/);
     assert.match(src, /ownEvent && eventRightsIn\(apt\.team_id \?\? null\)\.type === "write"/);
     assert.match(src, /\(canManageBookings \|\| activeActions\.schedule === "write"\)\s*\? \(next\) =>/);
@@ -327,7 +327,7 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("месяц: метка видна и на хвостовых днях; окошко дат не подсвечивает «1» в Месяце", () => {
     const month = monthGrid();
-    // Выходной команды заменяет метку (03.10) — в остальном метка у каждого дня.
+    // Выходной команды заменяет метку — в остальном метка у каждого дня.
     assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
     assert.match(mini, /const isViewed = markOpenDay && !isToday && key === openKey;/);

@@ -11,7 +11,7 @@ import type { UserRole } from "@/session/role-policy";
 import { NO_TEAM } from "./accounts-sections";
 import type { HomeView } from "./FinanceOverview";
 
-// «ФИНАНСЫ» ПО УРОВНЮ — ОДНО ПРАВИЛО НА ВСЮ СТРАНИЦУ (этап 2 доступа).
+// «ФИНАНСЫ» ПО УРОВНЮ — ОДНО ПРАВИЛО НА ВСЮ СТРАНИЦУ.
 //
 // Экран спрашивает готовые ответы: что живое у выбранной команды, можно ли
 // править эту строку, виден ли остаток этого счёта. Считать уровни по месту
@@ -22,10 +22,10 @@ import type { HomeView } from "./FinanceOverview";
 // Закон AGENTS.md 10: у человека без права блок либо отсутствует, либо виден
 // только для чтения. Живой кнопки, которую сервер откажет, быть не может —
 // поэтому правка здесь считается ровно теми же условиями, что и в политиках
-// `finance_transactions` (миграция 20260929235000, срез 2а).
+// `finance_transactions` (миграция 20260929235000).
 //
-// ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА (владелец 29.09: «только доходы, но видел все
-// расходы»). У каждой стороны: Не видит · Видит · Добавляет · Правит всё.
+// ДОХОДЫ И РАСХОДЫ — ДВА НЕЗАВИСИМЫХ ПРАВА (можно видеть только доходы, но все
+// расходы). У каждой стороны: Не видит · Видит · Добавляет · Правит всё.
 // «Добавляет» правит только свою операцию, «Правит всё» — и чужие. Оплату
 // долга ведёт «Долги: Принимает оплату» сама, без сторон денег.
 //
@@ -69,7 +69,7 @@ export interface FinancePageAccess {
   ops: Level;
   accounts: Level;
   debts: Level;
-  /** «Прибыль» (`finance.profit`, 03.10: «Скрыта» · «Видит»). Плитка и панель
+  /** «Прибыль» (`finance.profit`: «Скрыта» · «Видит»). Плитка и панель
    *  открыты, когда видны и обе стороны денег: прибыль — их разница. */
   profit: Level;
   /** Пока владельческие: срез 1 их не открывает. */
@@ -88,7 +88,7 @@ export interface FinancePageAccess {
   footer: (view: HomeView) => { enabled: boolean; reason: string | null };
   /** «Добавить счёт» в футере «Счетов» (у команды ещё нет счёта): счёт
    *  заводит строка шестерёнки «Счета», а не право «Счета» на плитке —
-   *  перевод и новый счёт разведены, как на сервере (03.10). */
+   *  перевод и новый счёт разведены, как на сервере. */
   accountCreate: { enabled: boolean; reason: string | null };
   /** Новую операцию этой стороны можно завести в выбранном календаре. */
   canAdd: (side: Side) => boolean;
@@ -152,7 +152,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   const ops = best(income, expense);
   const accounts = levelIn("finance.accounts", scope);
   const debts = levelIn("finance.debts", scope);
-  // «Документы» — своё право команды с 03.10 (миграция 20261003171500):
+  // «Документы» — своё право команды (миграция 20261003171500):
   // «Видит» — её инвойсы и чеки, «Выставляет» — ещё и новые инвойсы.
   const documentsLevel = levelIn("finance.documents", scope);
   // ПРИБЫЛЬ ПАРТНЁРА — доход минус расход команды, которые он видит. Материалы
@@ -256,7 +256,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     profit,
     documents: has.documents && documentsLevel === "write",
     // Шестерёнка над счетами ведёт на «Счета» команды — открыта тому, у кого
-    // открыта эта строка шестерёнки (03.10).
+    // открыта эта строка шестерёнки.
     settings: owner || settingsAccounts !== "locked",
     refunds: owner,
     noTeamChip: owner,
@@ -270,16 +270,15 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       if (view === "debt" && !has.debts) return "all";
       if (view === "documents" && !has.documents) return "all";
       if (view === "accounts" && accounts === "locked") return "all";
-      // ПЛАШКА «ДОКУМЕНТЫ» ОСТАЁТСЯ И БЕЗ ДОСТУПА (владелец 20.09: «если нет
-      // доступа к документам, тогда всё равно остаётся плашка „Документы“, и
-      // там просто не показываются документы»). Раньше тап по ней уводил на
-      // общий вид — плитка выглядела сломанной. Список документов сотруднику
+      // ПЛАШКА «ДОКУМЕНТЫ» ОСТАЁТСЯ И БЕЗ ДОСТУПА: просто не показываются документы.
+      // Иначе тап по ней уводил бы на общий вид — плитка выглядела бы сломанной.
+      // Список документов сотруднику
       // и так не приходит: инвойсы закрыты правилами базы.
       if (view === "debt" && debts === "locked") return "all";
       if (view === "income" && income === "locked") return "all";
       if (view === "expense" && expense === "locked") return "all";
       // Прибыль — доход минус расход: без одной из сторон она была бы
-      // выдумкой. Партнёру — по его праву «Прибыль» (03.10).
+      // выдумкой. Партнёру — по его праву «Прибыль».
       if (view === "profit" && profit === "locked") return "all";
       return view;
     },

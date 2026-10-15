@@ -37,20 +37,18 @@ export function useCalendarRights(deps: UseCalendarRightsDeps) {
   const actionsIn = useCalendarActionsReader();
   const eventRightsIn = useEventRightsReader();
   // ОПЛАТУ ЗАПИСИ СОТРУДНИК МОЖЕТ НЕ ВИДЕТЬ («Оплата: Скрыта»): сервер шлёт
-  // нули, и сетка красила каждый прошедший визит «нет оплаты» (повторный
-  // аудит 03.10). Владельцу читатель отдаёт всё — у него всегда «видит».
+  // нули, и сетка красила каждый прошедший визит «нет оплаты». Владельцу читатель отдаёт всё — у него всегда «видит».
   const recordRightsIn = useRecordBlocksReader();
   const paymentHiddenFor = useCallback(
     (a: Appointment) => recordRightsIn(a.team_id ?? null).payment === "hidden",
     [recordRightsIn],
   );
-  // Сумма в повестке — по праву «Сумма» календаря записи, а не по роли
-  // (аудит 11.10).
+  // Сумма в повестке — по праву «Сумма» календаря записи, а не по роли.
   const amountVisible = useCallback(
     (a: Appointment) => recordRightsIn(a.team_id ?? null).amount !== "hidden",
     [recordRightsIn],
   );
-  // ЧЬЁ СОБЫТИЕ — ГЛАЗАМИ ТОГО, КОГО ПОКАЗЫВАЕМ (повторный аудит 03.10). В
+  // ЧЬЁ СОБЫТИЕ — ГЛАЗАМИ ТОГО, КОГО ПОКАЗЫВАЕМ. В
   // зеркале «своё» сверялось с вошедшим владельцем: его события выглядели
   // доступными сотруднику для переноса и удаления, а события самого
   // сотрудника — нет.
@@ -65,7 +63,7 @@ export function useCalendarRights(deps: UseCalendarRightsDeps) {
   const canMoveAppointment = useCallback(
     (appointment: Appointment) => {
       // Без тарифа запись клиента не двигается ни пальцем, ни растяжкой:
-      // сервер её правку отклонит (аудит 03.10).
+      // сервер её правку отклонит.
       if (!workInPlan && !isCalendarEvent(appointment)) return false;
       if (!isCrew) return canMutateAppointment(appointment);
       const can = actionsIn(appointment.team_id ?? null);

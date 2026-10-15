@@ -100,7 +100,7 @@ describe("dictionaries", () => {
     });
   }
 
-  // ПЕРВЫЙ ЗАПУСК — ЯЗЫК ЧЕЛОВЕКА (владелец 04.10): первый знакомый из языков
+  // ПЕРВЫЙ ЗАПУСК — ЯЗЫК ЧЕЛОВЕКА: первый знакомый из языков
   // телефона или браузера, иначе английский, а не русский.
   it("a fresh device speaks the first of its own languages the app knows", () => {
     expect(pickDeviceLocale(["el-GR"])).toBe("el");

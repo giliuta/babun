@@ -6,9 +6,8 @@ import { fileURLToPath } from "node:url";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 import { bookFormSource } from "../appointments/book-form/source-for-tests";
 
-// АУДИТ 11.10 «СОТРУДНИК ВИДИТ НЕ ТО» (владелец: «проверь всё, что может быть
-// в таком плане… убедись, что во всех страницах такого рода бага не будет»).
-// Каждая находка сверена на боевой от лица партнёра (giluta.d в AirFix).
+// «СОТРУДНИК ВИДИТ НЕ ТО»: на всех страницах такого рода бага быть не должно.
+// Каждая находка сверена на боевой от лица партнёра.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");

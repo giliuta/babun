@@ -10,7 +10,7 @@ import { createInvitationArgs } from "./invitation-contract";
 import { monthWorkOf, workLine, workOfPeriod, workWindow } from "./master-work";
 import { rightsFocusOf, rightsFocusQuery } from "./rights-focus";
 
-// STORY-087 — страница сотрудника по законам страницы клиента (владелец 23.09).
+// STORY-087 — страница сотрудника по законам страницы клиента.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");

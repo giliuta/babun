@@ -4,8 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// ДЕНЬГИ СЛУШАЮТСЯ УРОВНЕЙ (этап 2 доступа, срез 1; владелец 15.09: «чтоб всё
-// сразу менялось в живом времени… максимальное качество»). Сторож миграции
+// ДЕНЬГИ СЛУШАЮТСЯ УРОВНЕЙ. Сторож миграции
 // проверяет каталог один раз на накате; этот тест — каждый раз, когда кто-то
 // перепишет правило, политику или функцию в обход. Сравнение идёт по ТЕКСТУ
 // условий целиком (пробелы схлопнуты): прошлый сторож искал метки через
@@ -532,7 +531,7 @@ describe("owner-only money functions follow levels, and the owner path is byte f
       ],
     ], "replace_day_extras");
     assert.equal(own("replace_day_extras"), expected);
-    // Срез 2а (29.09) разделил «Доходы и расходы» на два права и переписал
+    // Позже «Доходы и расходы» разделили на два права и переписали
     // эту проверку; его тело сторожит `finance-income-expense-contract.test.ts`.
     assert.ok(
       [MIGRATION, "20260929235000_finance_income_expense_levels.sql"].includes(latestDefinition("replace_day_extras").file),

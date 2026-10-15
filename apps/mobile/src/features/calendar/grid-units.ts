@@ -2,7 +2,7 @@ import type { DimensionValue } from "react-native";
 import { pad2 } from "@/features/appointments/helpers";
 
 // ЕДИНИЦЫ СЕТКИ — общие у колонки дня (`DayView`) и блока записи
-// (`AppointmentBlock`). Вынесены из DayView при разрезе файла 24.09: обе
+// (`AppointmentBlock`). Вынесены из DayView: обе
 // части считают время и проценты одними и теми же функциями.
 
 /** Ширина рельса времени слева от сетки. */

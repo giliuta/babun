@@ -244,7 +244,7 @@ export default function ChatThreadScreen() {
   const togglePin = useTogglePin();
   const setStatus = useSetChatStatus();
   const createClient = useCreateClient();
-  // Шаблоны SMS живут у команд (STORY-089, 29.09): в чате — все команды,
+  // Шаблоны SMS живут у команд (STORY-089): в чате — все команды,
   // которые человек видит, одинаковый текст — одной строкой.
   const { data: teamTemplates = [] } = useTeamTemplates(null);
   const smsTemplates = useMemo(() => uniqueByBody(teamTemplates), [teamTemplates]);

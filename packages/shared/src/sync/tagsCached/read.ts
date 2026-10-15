@@ -55,9 +55,9 @@ const revalidateTags = tagsRevalidator.revalidate;
  *  tag row — client_tags has no `updated_at`, so a rename/recolour still
  *  registers) drives the bridge emit. Returns whether anything changed.
  *
- *  ПРАВКА, ЛЕГШАЯ ЗА ВРЕМЯ ЗАПРОСА, НЕ ЗАТИРАЕТСЯ (аудит 04.10): удалённый
- *  тег воскресал (а поставить его давало 23503), новый исчезал,
- *  переименование откатывалось. Замена отменяется, если с начала запроса в
+ *  ПРАВКА, ЛЕГШАЯ ЗА ВРЕМЯ ЗАПРОСА, НЕ ЗАТИРАЕТСЯ: иначе удалённый
+ *  тег воскресал бы (а поставить его давало 23503), новый исчезал бы,
+ *  переименование откатывалось бы. Замена отменяется, если с начала запроса в
  *  кэш тегов писали, и следом идёт вторая сверка. */
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,

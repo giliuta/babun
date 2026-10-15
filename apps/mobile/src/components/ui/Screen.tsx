@@ -4,7 +4,7 @@ import { useSafeAreaInsets, type Edge } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useThemeColors } from "@/theme/colors";
 
-// НАД ТАБАМИ ЛИ ЭКРАН (13.10). Экраны вкладок берут только верх
+// НАД ТАБАМИ ЛИ ЭКРАН. Экраны вкладок берут только верх
 // (`edges={["top"]}`): низ закрывает таб-бар. Те же экраны живут и над табами
 // — группы `(shared)`, инвойсы, чеки, — где таб-бара нет, и подвал («Создать
 // услугу», «Выставить») ложился под «Назад / Домой» Android. Стек такой группы
@@ -33,13 +33,12 @@ export function Screen({
   bg?: string;
 }) {
   const t = useThemeColors();
-  // ОТСТУПЫ СЧИТАЕМ ПО КОНТЕКСТУ, А НЕ `SafeAreaView` (2026-08-17). Внутри
+  // ОТСТУПЫ СЧИТАЕМ ПО КОНТЕКСТУ, А НЕ `SafeAreaView`. Внутри
   // нативной `Modal` (выбор услуги, выбор клиента, полноэкранные листы)
   // `SafeAreaView` меряет СВОЁ окно и даёт ноль сверху: шапка уезжала под
   // статус-бар — заголовок прятался за «островом», а «Готово» вставало вровень
   // с часами. Значения инсетов приходят по React-дереву и внутри модалки живы,
-  // поэтому падинги ставим руками. Владелец поймал это на выборе услуги:
-  // «кнопка „Готово“ хуй знает куда упала».
+  // поэтому падинги ставим руками.
   const insets = useSafeAreaInsets();
   const overTabs = useContext(OverTabsContext) && Platform.OS === "android";
   const on = (edge: Edge) => !edges || edges.includes(edge) || (edge === "bottom" && overTabs);

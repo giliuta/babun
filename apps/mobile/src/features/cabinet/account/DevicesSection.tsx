@@ -38,7 +38,7 @@ export function DevicesSection() {
 
   const signOutEverywhere = async () => {
     // Очередь правок стирается вместе с кэшем — сказать об этом в том же
-    // окне, а не вторым (аудит 03.10).
+    // окне, а не вторым.
     const unsent = await unsentChangesNow();
     confirmThen(
       "Выйти со всех устройств?",

@@ -68,7 +68,7 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   // рисует календарь: кеш уже тёплый, отдельный запрос завёл бы вторую
   // правду о той же записи.
   const editId = first(params.appointmentId) ?? null;
-  // НАПОМНИТЬ СЕБЕ — колокольчик в шапке (владелец 24.09). Правило личное и
+  // НАПОМНИТЬ СЕБЕ — колокольчик в шапке. Правило личное и
   // лежит на телефоне (`reminders.ts`), а не в записи.
   const [selfReminder, setSelfReminderRule] = useState<SelfReminder | null>(
     () => (editId ? getSelfReminder(editId) : null),
@@ -80,12 +80,9 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   );
   const updateMut = useUpdateAppointment();
 
-  // ── роли на этой странице пока нет (владелец 2026-08-30: «сейчас мы делаем
-  //    как для одного, для директора… а потом уже, когда сделаем страницу
-  //    мастера и будем добавлять сотрудников, тогда уже будем делать под
-  //    каждый блок разрешения»). Скидка поэтому открыта всем, кто дошёл до
-  //    формы; прежний owner-only гейт снят, а не расширен на правку —
-  //    иначе правило существовало бы в одной дороге из двух (находка Б2). ──
+  // ── роли на этой странице пока нет: скидка открыта всем, кто дошёл до
+  //    формы; owner-only гейт не расширен на правку — иначе правило существовало
+  //    бы в одной дороге из двух. ──
 
   // ── состояние ──
   const initialKind = first(params.kind) === "event" ? "event" : "work";
@@ -104,9 +101,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
     addMinutesHM(first(params.time_start) ?? "10:00", 60),
   );
   const [durationTouched, setDurationTouched] = useState(false);
-  // ДЛИТЕЛЬНОСТЬ, ВЫБРАННАЯ РУКАМИ, СИЛЬНЕЕ ДЛИТЕЛЬНОСТИ ТИПА (владелец
-  // 2026-09-08: «тип события — это стандарт, но если в событии я выбираю
-  // время, скажем, тридцать минут, то главнее эти тридцать минут»).
+  // ДЛИТЕЛЬНОСТЬ, ВЫБРАННАЯ РУКАМИ, СИЛЬНЕЕ ДЛИТЕЛЬНОСТИ ТИПА (тип события — стандарт, но выбранное время,
+  // скажем тридцать минут, главнее).
   // Отдельный флаг от `durationTouched`: тот взводит и сам выбор типа —
   // иначе второй тип уже не смог бы поставить свою длительность.
   const [durationByHand, setDurationByHand] = useState(false);
@@ -128,9 +124,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
     null,
   );
   const [discountValue, setDiscountValue] = useState("");
-  // VAT ЗАПИСИ — В «ИТОГО», КАК У ЧЕКА И ИНВОЙСА (владелец 2026-09-22:
-  // «скидка, всё высчитывается, потом VAT начисляется; к счёту привязывается —
-  // заходят деньги туда плюсом VAT»). Режим — клавишей VAT, ставка — цифрами,
+  // VAT ЗАПИСИ — В «ИТОГО», КАК У ЧЕКА И ИНВОЙСА (скидка, потом VAT; к счёту привязывается — деньги
+  // заходят туда плюсом VAT). Режим — клавишей VAT, ставка — цифрами,
   // написанная запоминается для следующих документов. «К оплате» записи
   // (`total_amount`) включает налог, а оплата ложится на счёт с выделенным
   // налогом по этой ставке (сервер, миграция 20260922040000).
@@ -139,8 +134,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   const rememberedVatRate = useRememberedVatRate(teamVatRate);
   const [recordVatMode, setRecordVatMode] = useState<TxVatMode>("none");
   const [recordVatRate, setRecordVatRate] = useState<number | null>(null);
-  // Причина скидки осталась только у старых записей — программу лояльности
-  // сняли 20.09 по слову владельца, и её больше никто не выставляет сам.
+  // Причина скидки осталась только у старых записей — программы лояльности
+  // нет, и её больше никто не выставляет сам.
   const [discountReason, setDiscountReason] = useState<string | null>(null);
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [comment, setComment] = useState("");
@@ -182,9 +177,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   const overpayRequestRef = useRef<string | null>(null);
   const [reminderOn, setReminderOn] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
-  // МЕТКА ЭТОЙ ЗАПИСИ. Новая запись берёт метку дня СРАЗУ (владелец
-  // 2026-09-04: «метка подставляется туда автоматически, то есть выбирается
-  // по дню, а потом я уже вручную могу выбрать другую именно на запись»), и
+  // МЕТКА ЭТОЙ ЗАПИСИ. Новая запись берёт метку дня СРАЗУ (подставляется автоматически по дню, а
+  // потом вручную можно выбрать другую именно на запись), и
   // с этого момента она принадлежит записи: диспетчер переставит метку дня —
   // уже назначенные работы своей метки не потеряют. `null` остаётся только у
   // записей, созданных до этого правила: они по-прежнему читаются как «как у

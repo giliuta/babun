@@ -431,7 +431,7 @@
 
 ## 7. Докет «Команда · Метка» и блок «Время»
 
-**Канон:** `src/components/blocks/TeamLabelRow.tsx:46` (`TeamLabelRow`),
+**Канон:** `src/components/blocks/TeamLabelRow.tsx:41` (`TeamLabelRow`),
 `src/features/appointments/BookingSummary.tsx:96` (`WhenRow`).
 
 Выбранная команда и метка — квадратная плитка шторки (`AppearanceTile`, 28pt,

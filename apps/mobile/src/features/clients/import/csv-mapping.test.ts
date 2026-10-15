@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { autoMapHeaders } from "./csv-mapping";
 
-// ПОВТОРНЫЙ ИМПОРТ СВОЕЙ ВЫГРУЗКИ (повторный аудит 03.10): «Метка» — заголовок
+// ПОВТОРНЫЙ ИМПОРТ СВОЕЙ ВЫГРУЗКИ: «Метка» — заголовок
 // `bulk-export.ts`, и при обратном импорте колонка оставалась «не
 // импортировать».
 describe("autoMapHeaders", () => {

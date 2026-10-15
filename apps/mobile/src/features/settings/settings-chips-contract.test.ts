@@ -6,8 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
 // ШЕСТЕРЁНКИ КАЛЕНДАРЯ И ФИНАНСОВ — ВСЕ КАЛЕНДАРИ ВСЕХ АККАУНТОВ ОДНОЙ ЛЕНТОЙ
-// (владелец 09.10: «переключаться между командой один, командой два и своей
-// личной… сразу все видно три команды, только разный доступ»).
+// (все команды видны сразу, доступ у них разный).
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = (relative: string) => readFileSync(resolve(here, "../../../app", relative), "utf8");
@@ -31,8 +30,7 @@ test("настройки финансов — та же лента, что на�
   assert.match(src, /onSelect=\{chips\.pick\}/);
 });
 
-// ПАРТНЁР ВЫХОДИТ ИЗ КОМАНДЫ САМ (владелец 09.10: «добавить добавили, а выйти
-// я уже не могу, если меня не удалят»).
+// ПАРТНЁР ВЫХОДИТ ИЗ КОМАНДЫ САМ: без этого выйти можно только если удалят.
 test("в настройках чужой команды — «Выйти из команды», а не удаление", () => {
   const src = gear();
   assert.match(src, /const canLeave = role != null && role !== "owner";/);

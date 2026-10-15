@@ -6,8 +6,8 @@ import type { Coords } from "@/features/clients/location-request-form";
 import { hasNativeView } from "@/lib/native-view";
 import { useThemeColors } from "@/theme/colors";
 
-// КАРТА, НА КОТОРОЙ СТАВЯТ ТОЧКУ — НАТИВНАЯ (владелец 2026-09-10: «хочу
-// максимальное качество, вставляй native maps»).
+// КАРТА, НА КОТОРОЙ СТАВЯТ ТОЧКУ — НАТИВНАЯ (максимальное качество, native
+// maps).
 //
 // Почему не «увести в Google Maps и получить точку обратно»: ни у Google, ни у
 // Apple нет режима «выбери точку и вернись к вызвавшему» — их URL-схемы
@@ -23,9 +23,8 @@ import { useThemeColors } from "@/theme/colors";
 // одной рукой — тот же приём, что в Uber и Яндекс.Картах.
 //
 // МОДУЛЬ ПОДКЛЮЧЁН ЛЕНИВО. `react-native-maps` нативный: клиент, собранный до
-// его появления, такого компонента не знает. На этой ветке живут ещё две
-// сессии со своими сборками (см. [[second-simulator-worktree]]) — у них человек
-// увидит внятную строчку, а не пустоту.
+// его появления, такого компонента не знает: у такой сборки человек увидит
+// внятную строчку, а не пустоту.
 type MapsModule = typeof import("react-native-maps");
 let maps: MapsModule | null = null;
 try {
@@ -87,9 +86,8 @@ export function MapPicker({
   }, [followKey]);
 
   const MapView = maps?.default;
-  // ТАЙЛЫ GOOGLE, КОГДА ЕСТЬ КЛЮЧ (владелец 2026-09-10: «желательно
-  // использовать не Apple Maps, а Google Maps — она понятнее, и клиентов у неё
-  // больше»). Провайдер Google на iOS работает только со своим SDK и ключом
+  // ТАЙЛЫ GOOGLE, КОГДА ЕСТЬ КЛЮЧ (Google Maps предпочтительнее Apple Maps:
+  // понятнее, и клиентов у неё больше). Провайдер Google на iOS работает только со своим SDK и ключом
   // Google Cloud: ключа в проекте пока нет, и без него карта была бы пустой —
   // поэтому пока рисует Apple, а переключение уже здесь и включится само,
   // как только ключ появится в `app.json` (ios.config.googleMapsApiKey) и

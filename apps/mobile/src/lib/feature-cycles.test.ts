@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 
-// FEATURE BOUNDARIES (2026-10-13). Two features never import each other in
+// FEATURE BOUNDARIES. Two features never import each other in
 // both directions: a cycle makes neither of them understandable or
 // changeable on its own. The shared piece moves down — into `src/session/`
 // (who is signed in and what they may do), `src/lib/` (helpers),

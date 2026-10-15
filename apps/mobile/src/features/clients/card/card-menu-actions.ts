@@ -28,8 +28,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
     deleteWithUndo,
   } = card;
 
-  // «Напомнить» живёт в меню ⋯ (с карточки кнопка убрана владельцем
-  // 2026-07-26) и открывает ТОТ ЖЕ лист, что long-press в списке.
+  // «Напомнить» живёт в меню ⋯ (кнопки на карточке нет) и открывает ТОТ ЖЕ лист, что long-press в списке.
   // Паузу «второй лист ждёт, пока уедет первый» держит сам PickerSheet:
   // своего таймера здесь больше нет, иначе ожидание удваивается.
   const onRemind = () => {
@@ -61,7 +60,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
 
   const onBack = () => router.back();
 
-  // МЕНЮ КЛИЕНТА ПАРТНЁРА (владелец 03.10): «Меню клиента» — всё меню, кроме
+  // МЕНЮ КЛИЕНТА ПАРТНЁРА: «Меню клиента» — всё меню, кроме
   // «Удалить»: Записать, Поделиться, Напомнить, В чёрный список; «Удаление
   // клиента» — «Удалить». Своими дверями сервера.
   const partnerMenu =
@@ -69,9 +68,8 @@ export function cardMenuActions(card: ClientCard, c: Client) {
   const partnerDelete =
     !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.delete") === "write";
 
-  // «Записать» — первым в «⋯» (03.10). Нет права записи в команде клиента —
-  // нет и пункта (владелец: «если нет разрешения на запись — этого и не
-  // будет»).
+  // «Записать» — первым в «⋯». Нет права записи в команде клиента — нет и
+  // пункта.
   const bookTeam = c.team_id ?? stats?.lastTeamId ?? null;
   const onBookFromMenu =
     !isDraft &&
@@ -83,16 +81,15 @@ export function cardMenuActions(card: ClientCard, c: Client) {
           guardedBook(c, {
             locationId:
               c.locations?.find((l) => l.isPrimary)?.id ?? c.locations?.[0]?.id ?? null,
-            // Та же команда, по которой проверено право записи (аудит 03.10:
-            // проверка шла по команде клиента, а календарь открывался в
+            // Та же команда, по которой проверено право записи (иначе
+            // проверка шла бы по команде клиента, а календарь открывался бы в
             // команде последнего визита — без права там).
             teamId: bookTeam,
           });
         }
       : undefined;
 
-  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет»).
-  // Клиент уходит в «Удалённые клиенты». Без истории он сотрётся через 30
+  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (архива нет). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся через 30
   // дней; за клиентом с визитами стоит финансовая история, и база снимает
   // ему срок сама (`client_history_never_purges`) — он лежит там, пока его не
   // вернут. Поэтому слова подтверждения зависят от истории.
@@ -113,7 +110,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
             await trashAsPartner.mutateAsync(c.id);
             router.back();
           } catch (e) {
-            // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+            // Обрыв — словами, а не «TypeError: Network request failed».
             const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
             notify(words.title, words.subtitle);
           }

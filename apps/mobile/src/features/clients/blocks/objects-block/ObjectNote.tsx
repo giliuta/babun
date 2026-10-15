@@ -3,9 +3,9 @@ import { useClientsCapabilities } from "@/session/company-scope";
 import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { useInlineNote } from "@/components/blocks/use-inline-note";
 
-/** МИНИ-ЗАМЕТКА ОБЪЕКТА — ТА ЖЕ ПЛАШКА, ЧТО У ЗАМЕТКИ ЗАПИСИ (владелец
- *  22.09: «в записи мы выбираем объект, и там снизу сразу заметка; сделай
- *  такую же у клиента — под каждым объектом своя»). Своим компонентом, а не
+/** МИНИ-ЗАМЕТКА ОБЪЕКТА — ТА ЖЕ ПЛАШКА, ЧТО У ЗАМЕТКИ ЗАПИСИ (в записи
+ *  выбирают объект, и там снизу сразу заметка; у клиента такая же под каждым
+ *  объектом). Своим компонентом, а не
  *  в цикле: у каждой плашки свой черновик и своя запись по уходу с поля. */
 export function ObjectNote({
   loc,
@@ -22,7 +22,7 @@ export function ObjectNote({
     (next, id) => onSave(id, next),
     ownerKey,
   );
-  // Без выноса (30.09): у сотрудника чужой компании меню «Скопировать» нет.
+  // Без выноса: у сотрудника чужой компании меню «Скопировать» нет.
   const caps = useClientsCapabilities();
   return (
     <InlineNoteField

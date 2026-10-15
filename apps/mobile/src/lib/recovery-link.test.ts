@@ -70,7 +70,7 @@ describe("ссылка сброса меняет пароль своему че�
 });
 
 // Письма подтверждения и входа по коду ведут на babun.app/login?token_hash=…
-// (04.10): тип ключа берётся из ссылки, неизвестный — «email».
+//: тип ключа берётся из ссылки, неизвестный — «email».
 describe("тип ключа из ссылки письма", () => {
   test("type из адреса, по умолчанию email", () => {
     assert.equal(emailLinkOtpType("https://babun.app/login?token_hash=abc&type=email"), "email");

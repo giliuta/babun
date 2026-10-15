@@ -63,7 +63,7 @@ export function CrewWorkRecord({
     setSavedComment(appointment.comment ?? "");
   }, [appointment.id, appointment.comment]);
 
-  // НОМЕР — ПО ОДНОМУ (защита базы 30.09): клиент записи приходит без
+  // НОМЕР — ПО ОДНОМУ (защита базы): клиент записи приходит без
   // контактов; строка номера открывает его дверью с журналом, дальше — звонок.
   const tenantId = useTenantId();
   const { open: openContacts } = useOpenMemberContacts();
@@ -71,7 +71,7 @@ export function CrewWorkRecord({
   const phone = shownClient?.phone?.trim() ?? "";
   const phoneLocked = shownClient ? contactsLocked(shownClient) : false;
   const commentChanged = comment.trim() !== savedComment.trim();
-  // Заметка — своё право «Заметка» (30.09): «Видит и меняет» — пишет,
+  // Заметка — своё право «Заметка»: «Видит и меняет» — пишет,
   // «Только видит» — читает, «Скрыта» — заметки нет.
   const canWriteNote = blocks.note === "write";
   const route = useRouteOpener(appointment.team_id ?? null);
@@ -91,7 +91,7 @@ export function CrewWorkRecord({
 
   return (
     <>
-      {/* СТАТУСА НЕТ (владелец 03.10: «статус удаляй полностью»): остаётся
+      {/* СТАТУСА НЕТ: остаётся
           только отмена — её видно словами. */}
       {appointment.status === "cancelled" ? (
         <SectionCard>
@@ -165,7 +165,7 @@ export function CrewWorkRecord({
       ) : null}
 
       {/* РАБОТЫ И «ИТОГО» — ОДИН БЛОК, как в записи у владельца («блок в
-          услугах — итого», владелец 21.09). Без «Услуг» блока нет вовсе,
+          услугах — итого»). Без «Услуг» блока нет вовсе,
           без «Суммы» строки идут без цен и без «Итого». */}
       {blocks.services ? (
         <SectionCard title="Работы">
@@ -216,7 +216,7 @@ export function CrewWorkRecord({
           clientId={null}
           locationId={blocks.object ? appointment.location_id : null}
           canUpload={blocks.files === "write" && appointment.status !== "cancelled"}
-          // «Меняет» — весь блок (04.10): прикладывает и удаляет; сервер
+          // «Меняет» — весь блок: прикладывает и удаляет; сервер
           // пускает по тому же праву календаря записи.
           canDelete={blocks.files === "write"}
           pending={[]}

@@ -43,7 +43,7 @@ export function monthTable(
   services: readonly Service[],
   base: Pick<Scope, "today" | "teamId" | "accountTeam" | "nowHm">,
 ): { rows: MonthRow[]; total: MonthRow } {
-  // ПЕРИОД ЧЕРЕЗ НОВЫЙ ГОД — ВСЕ ЕГО ГОДЫ (аудит 2026-09-24): таблица
+  // ПЕРИОД ЧЕРЕЗ НОВЫЙ ГОД — ВСЕ ЕГО ГОДЫ: таблица
   // строилась по году начала, и у «20.12–10.01» январь выпадал из «Итого».
   const span = typeof years === "number" ? { from: years, to: years } : years;
   const months: { key: string; from: string; to: string }[] = [];
@@ -89,8 +89,7 @@ const daysBetween = (from: string, to: string) =>
 const lastDayOfMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
 
 /**
- * ПРОШЛЫЙ ПЕРИОД ДЛЯ СРАВНЕНИЯ — ЧЕСТНЫЙ (владелец 2026-09-24: «сравнивание
- * между месяцами — это очень хорошо»).
+ * ПРОШЛЫЙ ПЕРИОД ДЛЯ СРАВНЕНИЯ — ЧЕСТНЫЙ (сравнение между месяцами).
  *
  * Период, выровненный по календарю (месяц, квартал, год), сравнивается с
  * прошлым таким же — но ТЕМИ ЖЕ ДНЯМИ, если текущий ещё идёт: 1–24 сентября
@@ -122,9 +121,9 @@ export function previousPeriod(
     return { from: prevFrom, to: prevTo < prevEnd ? prevTo : prevEnd, partial };
   }
   // Прочий период сдвигается на ВСЮ свою длину, а сравнивается столько же
-  // дней с начала. Раньше брался отрезок длины «прошедших» дней вплотную
-  // перед началом: «Текущая неделя» в субботу сравнивала пн–сб с вт–вс
-  // прошлой недели, в среду — пн–ср с пт–вс (аудит финансов 03.10).
+  // дней с начала. Брать отрезок длины «прошедших» дней вплотную
+  // перед началом нельзя: «Текущая неделя» в субботу сравнивалась бы пн–сб с вт–вс
+  // прошлой недели, в среду — пн–ср с пт–вс.
   const span = daysBetween(from, to) + 1;
   const prevFrom = addDaysYmd(from, -span);
   return { from: prevFrom, to: addDaysYmd(prevFrom, elapsed), partial };

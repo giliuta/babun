@@ -14,7 +14,7 @@ import { useClientsList } from "./use-clients-list";
 // becomes a checkbox, the contact button hides, and a tap toggles the pick
 // instead of opening the card.
 //
-// СВАЙПЫ (2026-08-06): вправо — «Записать», влево — «Напомнить» и «В архив».
+// СВАЙПЫ: вправо — «Напомнить», влево — «Удалить».
 // Телефон для них не нужен; в режиме выбора свайпы отключены целиком.
 
 /** The clients tab: one list of several companies (own first). Wiring is in

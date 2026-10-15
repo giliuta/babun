@@ -12,7 +12,7 @@ import { accessGate } from "@/session/my-access";
 import { useMyAccess } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
 
-// ДВЕРЬ (03.10): владельцу — как было (граница роли); партнёру — если хоть в
+// ДВЕРЬ: владельцу — граница роли; партнёру — если хоть в
 // одной команде у него «Документы: Видит». Какие инвойсы он видит, режет
 // сервер (`invoices_select_documents`); что на странице можно сделать —
 // решает сама страница (`[id].tsx`), кому выставлять — `new.tsx`.
@@ -65,7 +65,7 @@ export default function InvoicesLayout() {
 
 /** «Инвойсы и чеки» выключены у компании (STORY-088): все двери к ним уже
  *  спрятаны, а прямая ссылка на инвойс говорит словами, где это включается,
- *  — без кнопки внутри (владелец 15.09: пустые состояния — только слова). */
+ *  — без кнопки внутри: пустые состояния — только слова. */
 function DocumentsFeatureGate({ children }: { children: ReactNode }) {
   const documentsOn = useFeatureOn("documents");
   if (documentsOn) return <>{children}</>;

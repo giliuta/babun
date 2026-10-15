@@ -41,7 +41,7 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
     movingKind, pickClientId, apptsFor, todayYmd, nowMinutes,
   } = deps;
   // Буфер после каждой записи (дорога/уборка) — СВОЙ У БРИГАДЫ, компанейский
-  // остаётся фолбэком (владелец 2026-08-17: буфер переехал в график команды).
+  // остаётся фолбэком (буфер живёт в графике команды).
   // Один резолвер на все поверхности — три собственных `?? 0` уже разъезжались
   // на рабочих часах. Лента рисуется в DayColumn.
   const bufferMinutes = effectiveBuffer(activeTeam, calSettings);
@@ -99,8 +99,8 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
     const bands = visibleDays.map((ymd) => workBandFor?.(ymd));
     const dayAppts = visibleAppts.filter((a) => visibleDays.includes(a.date));
     // «Часы календаря» ЭТОГО календаря: своя пара команды → стандарт компании
-    // (владелец 2026-08-17: у команды один и команды два часы разные). Читается
-    // буквально — «Автоматически» в продукте больше нет. Записи раздвигают
+    // (у разных команд часы разные). Читается
+    // буквально — «Автоматически» в продукте нет. Записи раздвигают
     // окно: deriveWindow держит инвариант «ничего не спрятано».
     //
     // МИНУТЫ ГРАНИЦЫ ОКРУГЛЯЮТСЯ НАРУЖУ. Рельс размечен целыми часами
@@ -135,8 +135,8 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
   // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь
   // остаётся прежним, без зелени.
   // Окно переноса — длительность записи; у записи без длительности — шаг.
-  // Конец 23:59 — это конец суток (как у блока, `spanEnd`, аудит 03.10):
-  // иначе «Копировать» запись 22:00–23:59 на 10:00 давало 10:00–11:59 (13.10).
+  // Конец 23:59 — это конец суток (как у блока, `spanEnd`):
+  // иначе «Копировать» запись 22:00–23:59 на 10:00 давало бы 10:00–11:59.
   const movingSpan = moving ? minutesBetweenHM(moving.time_start, moving.time_end) : 0;
   const moveWindowMin = moving
     ? (movingSpan > 0 && moving.time_end === "23:59" ? movingSpan + 1 : movingSpan) ||

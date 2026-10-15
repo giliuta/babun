@@ -42,7 +42,7 @@ export interface CreateClientTagInput {
   name: string;
   color: string;
   icon?: string | null;
-  /** Команда тега — у каждой команды свои теги (владелец 30.09). */
+  /** Команда тега — у каждой команды свои теги. */
   teamId: string;
 }
 
@@ -62,7 +62,7 @@ export interface UpdateClientTagInput {
 function assertCanManageClientTags(
   scope: QueryScope,
 ): asserts scope is QueryScope & { tenantId: string } {
-  // ПАРТНЁР ПРАВИТ ТЕГИ КОМАНДЫ ПО ПРАВУ «ТЕГИ КЛИЕНТОВ» (владелец 01.10).
+  // ПАРТНЁР ПРАВИТ ТЕГИ КОМАНДЫ ПО ПРАВУ «ТЕГИ КЛИЕНТОВ».
   // Какой команды — решает сервер политикой `client_tags_write_settings`;
   // здесь только не мешаем ему ответить.
   if (scope.kind === "member") {
@@ -126,9 +126,8 @@ export function useUpdateClientTag() {
   });
 }
 
-/** СКРЫТЬ И ПОКАЗАТЬ — левая кромка свайпа, как у категории и метки (владелец
- *  2026-09-10: «свайп вправо — с левой стороны появляется „Скрыть“… везде во
- *  всех одно и то же»). Скрытый тег остаётся у клиентов, которым уже
+/** СКРЫТЬ И ПОКАЗАТЬ — левая кромка свайпа, как у категории и метки (везде
+ *  одно и то же). Скрытый тег остаётся у клиентов, которым уже
  *  проставлен: скрытие — про справочник, а не про данные. */
 export function useSetClientTagHidden() {
   const scope = useQueryScope();

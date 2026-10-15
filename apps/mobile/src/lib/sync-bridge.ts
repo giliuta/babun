@@ -79,7 +79,7 @@ function invalidate(qc: QueryClient, table: CachedTable): void {
 
 /** Событие проглочено окном своей правки — когда окно закроется, сверить
  *  проглоченное с кэшем: чужая правка новее кэша — перечитать список
- *  (аудит параллельных правок 03.10, `own-writes.ts`). Окно продлилось
+ *  (`own-writes.ts`). Окно продлилось
  *  (снова своя правка) — сверка ждёт его нового конца. */
 function checkAfterOwnWindow(qc: QueryClient, id: string, isLive: () => boolean): void {
   const ends = ownWindowEndsAt(id);

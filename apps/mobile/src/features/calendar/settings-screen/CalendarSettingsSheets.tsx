@@ -43,7 +43,7 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
       />
       <CalendarCreateSheet
         visible={createOpen}
-        // Подписка уже есть — календарь в ней со следующего платежа (12.10).
+        // Подписка уже есть — календарь в ней со следующего платежа.
         note={
           CAN_PAY_HERE && tariffPaid && !tariffForever
             ? `+${euro(CALENDAR_PRICE.monthly)} в месяц со следующего платежа`
@@ -54,8 +54,7 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
         onCreated={(created) => router.setParams({ team: created.id })}
       />
 
-      {/* Часы календаря — нижним листом «С … До …» (владелец 2026-08-16: «как
-          время в финансах»): сегмент С|До, список часов, «Применить». */}
+      {/* Часы календаря — нижним листом «С … До …» (как время в финансах): сегмент С|До, список часов, «Применить». */}
       <HourRangeSheet
         visible={picker === "view" || picker === "zoom"}
         title={picker === "zoom" ? "Масштаб" : "Часы календаря"}

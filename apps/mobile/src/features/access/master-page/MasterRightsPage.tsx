@@ -78,7 +78,7 @@ function DraftRights({
   onBack: () => void;
 }) {
   const preview = usePreview();
-  // «Его глазами» — инструмент владельца; директор зовёт без него (04.10).
+  // «Его глазами» — инструмент владельца; директор зовёт без него.
   const partners = usePartnersAccess();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();
@@ -147,7 +147,7 @@ function InviteRights({
 }) {
   const toast = useToast();
   const preview = usePreview();
-  // «Его глазами» — инструмент владельца; директор зовёт без него (04.10).
+  // «Его глазами» — инструмент владельца; директор зовёт без него.
   const partners = usePartnersAccess();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();

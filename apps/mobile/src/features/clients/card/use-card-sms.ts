@@ -32,7 +32,7 @@ export function useCardSms({
   // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись
   // клиента — «SMS» у его номера предложит шаблоны, которые ими заполняются.
   const { data: smsTeams = [] } = useTeams({ includeInactive: true });
-  // Имя в шаблоне — компании КАРТОЧКИ (03.10): при команде партнёра в
+  // Имя в шаблоне — компании КАРТОЧКИ: при команде партнёра в
   // календаре клиент AirFix получал бы подпись чужой компании.
   const activeCompanyName = useTenant().data?.name ?? null;
   const companyName = scope

@@ -28,7 +28,7 @@ export function useBookReferences(teamId: string | null) {
   const clientsQuery = useClients();
   const appointmentsQuery = useAppointments();
   const calendarSettingsQuery = useCalendarSettings();
-  // Типы событий ЭТОЙ команды (владелец 24.09).
+  // Типы событий ЭТОЙ команды.
   const eventTypesQuery = usePersonalEventTypes(teamId);
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const masters = useMemo(() => mastersQuery.data ?? [], [mastersQuery.data]);
@@ -54,7 +54,7 @@ export function useBookReferences(teamId: string | null) {
   // ПУСТОМУ списку: команда из ссылки «не находилась» и обнулялась, клиент
   // из диплинка сбрасывался, и цепочка открывала выбор клиента поверх
   // записи, у которой клиент был назван. Ловилось только на холодном кэше —
-  // после полной перезагрузки бандла (симулятор 2026-09-03). `isPending`
+  // после полной перезагрузки бандла. `isPending`
   // истинно, пока данных нет вовсе, — ровно то, чего эффекты ждут.
   const teamsLoading = teamsQuery.isPending;
   const clientsLoading = clientsQuery.isPending;
@@ -86,17 +86,15 @@ export function useBookReferences(teamId: string | null) {
 
   const recentClientIds = useMemo(() => recentClientIdsOf(allAppts), [allAppts]);
 
-  // Прайс ВЫБРАННОЙ команды: услуга принадлежит ровно одной команде
-  // (2026-08-17). Пока команда не выбрана, каталог пуст — см.
+  // Прайс ВЫБРАННОЙ команды: услуга принадлежит ровно одной команде.
+  // Пока команда не выбрана, каталог пуст — см.
   // `isServiceAllowedForTeam`.
   const teamServices = useMemo(
     () => services.filter((s) => teamId != null && s.team_id === teamId),
     [services, teamId],
   );
-  // «ЧАСТЫЕ УСЛУГИ» ПИЛЮЛЯМИ СНЕСЕНЫ ЦЕЛИКОМ (владелец 2026-09-04: «что это
-  // за… старый мусор, убирай, чтоб я этого больше не видел»). Пилюли стояли и
-  // в блоке услуг, и в листе выбора: тот же прайс, набранный второй раз
-  // другой вёрсткой, — список услуг открывается одним тапом и говорит цену и
+  // «ЧАСТЫЕ УСЛУГИ» ПИЛЮЛЯМИ НЕТ. Пилюли в блоке услуг и в листе выбора были бы тем же
+  // прайсом, набранным второй раз другой вёрсткой, — список услуг открывается одним тапом и говорит цену и
   // длительность, а пилюля не говорит ничего.
 
   return {

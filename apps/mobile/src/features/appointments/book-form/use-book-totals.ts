@@ -151,9 +151,9 @@ export function useBookTotals({
     [address, showMoney, client, companyName, date, effectiveTotal, serviceLines, teamName, timeStart],
   );
   // Сервису нужны ещё запись, клиент и календарь: SMS через сервис владелец
-  // разрешает по календарям (STORY-089, волна 2).
+  // разрешает по календарям (STORY-089).
   //
-  // КЛИЕНТ СМЕНЁН, НО НЕ СОХРАНЁН (03.10) — SMS всё равно о записи: сервер
+  // КЛИЕНТ СМЕНЁН, НО НЕ СОХРАНЁН — SMS всё равно о записи: сервер
   // шлёт клиенту на экране (`sms_send_manual` берёт присланного клиента, а не
   // сохранённого), и SMS ложится в блок SMS этой записи.
   const recordSmsContext = useMemo(

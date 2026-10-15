@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// ЛИСТ ОПЕРАЦИИ ДОЖИВАЕТ ДО КОНЦА УХОДА (04.10). Лента открывает его самим
+// ЛИСТ ОПЕРАЦИИ ДОЖИВАЕТ ДО КОНЦА УХОДА. Лента открывает его самим
 // значением (`visible={!!popupTx}`, `transaction={popupTx}`) и на закрытии
 // обнуляет оба в одном кадре. Вопрос «Удалить перевод?» / «Удалить операцию?»
 // лист задаёт по `onExited` — а ранний `if (!transaction) return null` снимал

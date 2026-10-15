@@ -12,8 +12,7 @@ import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
 import { useInClientsTab } from "@/lib/reference-href";
 
-// ВСЕ ЛЮДИ КАРТОЧКИ — СВОЯ СТРАНИЦА (владелец 22.09: «то же самое можно
-// сделать с людьми — как история: нажимаю и открывается страница»). На
+// ВСЕ ЛЮДИ КАРТОЧКИ — СВОЯ СТРАНИЦА, как «История». На
 // карточке видны первые трое и дверь «Все люди · N», здесь — весь перечень.
 //
 // Строки собирает ТОТ ЖЕ `useClientPeople`, что карточка: роли, свайп
@@ -21,8 +20,8 @@ import { useInClientsTab } from "@/lib/reference-href";
 
 export default function ClientPeopleScreenRoute() {
   return (
-    // ПРАВА — КАК У САМОЙ КАРТОЧКИ, а не как у визитов и вложений (аудит
-    // 23.09): это продолжение её блока, и сотрудник, которому карточка
+    // ПРАВА — КАК У САМОЙ КАРТОЧКИ, а не как у визитов и вложений:
+    // это продолжение её блока, и сотрудник, которому карточка
     // открыта, видит здесь то же самое; правку гасят права блока.
     <ClientsCompanyRoute kind="card">
       <ClientPeopleScreen />
@@ -34,7 +33,7 @@ function ClientPeopleScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const id = clientId ?? "";
   const { data: client, isLoading } = useClient(id);
-  // Права блока «Люди» этого клиента (30.09), как на карточке.
+  // Права блока «Люди» этого клиента, как на карточке.
   const access = useCardAccess(client, false);
   const people = useClientPeople({
     id,

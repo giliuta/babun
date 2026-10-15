@@ -47,12 +47,12 @@ export function useListFilters({
   citiesReady: boolean;
   data: Client[] | undefined;
 }) {
-  // ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ (владелец 30.09): правило — `filterTagsFor`.
+  // ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ: правило — `filterTagsFor`.
   const filterTags = useMemo(
     () => filterTagsFor(tags, teams, teamChoice === ALL_TEAMS ? null : teamChoice),
     [tags, teams, teamChoice],
   );
-  // ИСТОЧНИКИ КОМАНД (03.10) — все: значение клиента любой команды читается
+  // ИСТОЧНИКИ КОМАНД — все: значение клиента любой команды читается
   // по ним; варианты фильтра — по именам, под чипом — только его команды.
   const sourcesQuery = useClientSources();
   const ownSources = sourcesQuery.data ?? NO_SOURCES;
@@ -60,7 +60,7 @@ export function useListFilters({
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
-  // Поиск фильтрует отложенно (аудит Android 13.10): буква сразу видна в
+  // Поиск фильтрует отложенно: буква сразу видна в
   // поле, а пересчёт сотен клиентов и перерисовка строк идут следом и не
   // держат клавиатуру.
   const searched = useDeferredValue(query);

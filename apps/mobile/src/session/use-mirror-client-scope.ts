@@ -13,7 +13,7 @@ import {
 import { useMirror } from "@/session/mirror-state";
 
 // НАБОР КЛИЕНТОВ ЗЕРКАЛА — ИЗ БАЗЫ, А НЕ ИЗ КЭША КАЛЕНДАРЯ. Видны только
-// клиенты его команд (02.10); записи (полгода назад — полгода вперёд) читаются
+// клиенты его команд; записи (полгода назад — полгода вперёд) читаются
 // у команд с «Ограничениями» — из них окна от недели до полугода.
 // Кэш календаря держит то, что открывали, и набор по нему гулял бы от
 // прокрутки. Читает токен владельца: ему таблицы открыты, писать нечего.
@@ -58,7 +58,7 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
     queryFn: async (): Promise<MirrorView> => {
       const accessMap = map as MemberAccessMap;
       const tenantId = accessMap.tenantId;
-      // Видны только клиенты команды (02.10); записи нужны лишь командам с
+      // Видны только клиенты команды; записи нужны лишь командам с
       // «Ограничением по времени» — «Без ограничения» решает сама команда клиента.
       const windowed = (teams as NonNullable<typeof teams>)
         .filter((team) => team.scope !== "own" && team.scope !== "all")
@@ -80,7 +80,7 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
           .order("id")
           .range(from, to) as unknown as Page,
       );
-      // «Завёл сам» (03.10, как `access_client_ids_in`): его клиенты команд с
+      // «Завёл сам» (как `access_client_ids_in`): его клиенты команд с
       // окном видны и без записи. Владельцу таблица открыта.
       let created: { id: string; team_id: string | null }[] = [];
       if (userId) {

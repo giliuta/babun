@@ -7,11 +7,11 @@ import { accountHref } from "@/session/CabinetAccountRoute";
 import { shortDate } from "@/lib/change-log";
 import { useChangeLogToday } from "@/lib/use-change-log";
 
-// «ИСТОРИЯ ИЗМЕНЕНИЙ» — СТРОКА-ДВЕРЬ КАБИНЕТА (владелец 03.10). Подпись —
+// «ИСТОРИЯ ИЗМЕНЕНИЙ» — СТРОКА-ДВЕРЬ КАБИНЕТА. Подпись —
 // живое состояние: сколько изменений сегодня, а без них — когда было
 // последнее.
 /** `tenantId` — строка блока аккаунта (пригласившего или своего, открытого
- *  со стороны, 04.10): его журнал и его страница. */
+ *  со стороны): его журнал и его страница. */
 export function HistoryRow({ tenantId }: { tenantId?: string } = {}) {
   const router = useRouter();
   const { data } = useChangeLogToday();

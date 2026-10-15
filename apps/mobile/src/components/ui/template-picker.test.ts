@@ -5,8 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД — ВО ВСЕХ СПРАВОЧНИКАХ (владелец 11.10: «как с
-// услугами — со всеми: категории, метки и так далее»).
+// ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД — ВО ВСЕХ СПРАВОЧНИКАХ: как с услугами, категории, метки и так далее.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");

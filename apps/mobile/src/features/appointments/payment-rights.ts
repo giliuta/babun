@@ -23,7 +23,7 @@ export interface PaymentRights {
   seeHistory: boolean;
   /** Принять оплату и снять её. */
   takeMoney: boolean;
-  /** «Документы» в команде записи (04.10): `write` — выписать инвойс и чек,
+  /** «Документы» в команде записи: `write` — выписать инвойс и чек,
    *  `read` — только открыть уже выписанные, `none` — значков нет. */
   documents: "write" | "read" | "none";
 }

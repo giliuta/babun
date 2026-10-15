@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// ОДИН ТАП — ОДНА ВИБРАЦИЯ (13.10). Тап по стопке записей шёл через
-// `openWithTick` блока (тик) и `openDeck` дня (ещё тик) — двойная вибрация.
+// ОДИН ТАП — ОДНА ВИБРАЦИЯ. Тап по стопке записей не должен идти и через
+// `openWithTick` блока (тик), и через `openDeck` дня (ещё тик) — выйдет двойная вибрация.
 const here = dirname(fileURLToPath(import.meta.url));
 // Вход + его папка: тело дня и блока живёт в `day-view/` и `appointment-block/`.
 const readParts = (entry: string, folder: string) =>

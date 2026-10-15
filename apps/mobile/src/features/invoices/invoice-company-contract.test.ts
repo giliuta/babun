@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { invoiceEditorSource } from "./invoice-editor/editor-source";
 
-// ПРЕВЬЮ И ВЫПУСК — ОДНИ РЕКВИЗИТЫ (аудит 03.10). Пустой `company_id` сервер
+// ПРЕВЬЮ И ВЫПУСК — ОДНИ РЕКВИЗИТЫ. Пустой `company_id` сервер
 // (`issue_invoice`) разрешает юрлицом КОМАНДЫ, а превью и номер — основным
 // юрлицом; после смены основного документ уходил от другого юрлица другой
 // серией.
@@ -18,7 +18,7 @@ describe("реквизиты инвойса", () => {
   test("номер превью — из серии тех же реквизитов; партнёру не спрашивается", () => {
     assert.match(
       editor(),
-      // У выставленного счёта (правка, 04.10) номер свой — серию не спрашивают.
+      // У выставленного счёта (правка) номер свой — серию не спрашивают.
       /useNextInvoiceSeries\(\s*issuedYear,\s*owner \? \(pickedCompany\?\.id \?\? companyId\) : null,\s*owner && !existing,\s*\)/,
     );
   });

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-// ПРЕДЛОЖЕНИЕ «НОВЫЙ КАЛЕНДАРЬ» (13.10). Лист тянет react-native — проверка по
+// ПРЕДЛОЖЕНИЕ «НОВЫЙ КАЛЕНДАРЬ». Лист тянет react-native — проверка по
 // исходнику.
 const src = readFileSync(join(__dirname, "CalendarOfferSheet.tsx"), "utf8");
 

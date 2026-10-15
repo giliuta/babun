@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
-// ЛИСТЫ КАЛЕНДАРЯ УХОДЯТ ПЕРЕД ЗАПИСЬЮ ИЗ УВЕДОМЛЕНИЯ (прогон 04.10). Тап по
+// ЛИСТЫ КАЛЕНДАРЯ УХОДЯТ ПЕРЕД ЗАПИСЬЮ ИЗ УВЕДОМЛЕНИЯ. Тап по
 // уведомлению при открытых «Финансах дня» открывал страницу записи ПОД
 // листом: человек видел прежний лист и думал, что тап не сработал.
 

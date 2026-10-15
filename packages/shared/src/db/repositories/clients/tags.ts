@@ -19,8 +19,6 @@ async function listClientTagRows(
       .select("*")
       .eq("tenant_id", tenantId)
       // ПОРЯДОК СПРАВОЧНИКА — РУКА ВЛАДЕЛЬЦА, а имя лишь разводит равные:
-      // до 2026-09-10 список шёл по алфавиту, потому что колонки порядка не
-      // было вовсе.
       .order("position", { ascending: true })
       .order("name", { ascending: true })
       .order("id", { ascending: true })
@@ -59,7 +57,7 @@ export async function createClientTag(
     name: string;
     color: string;
     icon?: string | null;
-    /** Команда тега — обязательна (у каждой команды свои теги, 30.09). */
+    /** Команда тега — обязательна (у каждой команды свои теги). */
     team_id: string;
   },
   tenantId: string,

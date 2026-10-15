@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
-// БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА В КАЛЕНДАРЕ — ТОЛЬКО ДЛЯ ПРОСМОТРА (аудит 03.10).
+// БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА В КАЛЕНДАРЕ — ТОЛЬКО ДЛЯ ПРОСМОТРА.
 // Сервер (`appointments_free_readonly`) отклоняет любую правку записи с
 // kind='work', а календарь давал её тянуть, растягивать, красить, отменять и
 // удалять — блок переезжал и откатывался с ошибкой сервера вместо плашки

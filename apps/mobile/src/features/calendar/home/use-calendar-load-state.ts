@@ -20,7 +20,7 @@ export function useCalendarLoadState(deps: UseCalendarLoadStateDeps) {
   } = deps;
   const calendarLoading =
     // Пока не известно, что скрыто, сетка не показывает ни одного календаря:
-    // иначе первым кадром мелькал бы скрытый (11.10).
+    // иначе первым кадром мелькал бы скрытый.
     !calendarVisibility.known ||
     isLoading ||
     clientsQuery.isLoading ||
@@ -34,7 +34,7 @@ export function useCalendarLoadState(deps: UseCalendarLoadStateDeps) {
     if (!calendarLoading) markBootReady();
   }, [calendarLoading]);
 
-  // СЕТКУ ПРЯЧЕТ ТОЛЬКО ОШИБКА ПЕРВОЙ ЗАГРУЗКИ (аудит 03.10). Неудачное
+  // СЕТКУ ПРЯЧЕТ ТОЛЬКО ОШИБКА ПЕРВОЙ ЗАГРУЗКИ. Неудачное
   // ПЕРЕЧИТЫВАНИЕ в react-query ставит `error`, а данные оставляет — и
   // загруженная неделя целиком менялась на «Не удалось загрузить календарь»,
   // стоило метке дня или графику не перечитаться при возврате в приложение.

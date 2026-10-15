@@ -5,7 +5,7 @@ import path from "node:path";
 import { readModuleSource } from "@/lib/module-source";
 import { bookFormSource } from "./book-form/source-for-tests";
 
-// ФОРМА ЗАПИСИ НА ЛЕЖАЩЕМ СЕРВЕРЕ (03.10 вечер, шлюз отдавал 503/525).
+// ФОРМА ЗАПИСИ НА ЛЕЖАЩЕМ СЕРВЕРЕ (шлюз отдаёт 503/525).
 // Три поломки сразу:
 //  • упавшее ПЕРЕЧИТЫВАНИЕ команд (данные на руках) меняло заполненную форму
 //    на экран ошибки;

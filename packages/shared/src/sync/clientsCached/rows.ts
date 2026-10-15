@@ -80,8 +80,7 @@ export function makeServerRow(
     city: input.city ?? "",
     city_manual: input.city_manual ?? false,
     // Колонка в базе осталась (данные не трогаем), но продукт язык клиента
-    // больше не ведёт: владелец 2026-07-27 убрал поле — переводы уедут в
-    // SMS-рассылки. Для NOT NULL-строки шлём пустую.
+    // больше не ведёт: переводы уедут в SMS-рассылки. Для NOT NULL-строки шлём пустую.
     language: "",
     property_type: input.property_type ?? "",
     birthday: input.birthday ?? "",
@@ -99,7 +98,7 @@ export function makeServerRow(
     deleted_at: input.deleted_at ?? null,
     purge_at: input.purge_at ?? null,
     favorite_master_id: input.favorite_master_id ?? null,
-    // Команда клиента (30.09): прямой офлайн-INSERT умолчания сервера не
+    // Команда клиента: прямой офлайн-INSERT умолчания сервера не
     // знает, поэтому форма всегда присылает команду сама.
     team_id: input.team_id ?? null,
     created_at: input.created_at ?? nowIso,

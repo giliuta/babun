@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 import { readModuleSource } from "@/lib/module-source";
 
-// «НАЗАД» ANDROID (13.10, проверено на эмуляторе Android 16).
+// «НАЗАД» ANDROID (проверено на эмуляторе Android 16).
 const read = (f: string) => readFileSync(join(__dirname, f), "utf8");
 
 test("«Назад» сначала закрывает вопрос поверх листа, а не весь лист", () => {

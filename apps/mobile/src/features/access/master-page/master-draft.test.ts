@@ -45,7 +45,7 @@ const REGISTRY: AccessBlock[] = (
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
-    // «Долг и деньги» снято 03.10 — деньги идут с «Историей» (три положения).
+    // Деньги идут с «Историей» (три положения).
     ["clients.history", "clients", "company", OFF_READ_WRITE, 230],
     ["services", "company", "company", OFF_READ_WRITE, 310],
     ["company.currency", "company", "company", ["read", "write"], 330],
@@ -157,7 +157,7 @@ describe("черновик нового мастера", () => {
     draft = toggleTeam(draft, "team-2");
     assert.deepEqual(draft.teamIds, ["team-1", "team-2"]);
     assert.equal(draftLevel(records, draft, "team-2"), "off");
-    // «Записи клиентов» уходят и на «Скрыты» (01.10): приём засевает им
+    // «Записи клиентов» уходят и на «Скрыты»: приём засевает им
     // «Видит», и молчание превратилось бы в «Видит».
     assert.deepEqual(
       draftAccessChanges(REGISTRY, draft).filter((change) => change.team_id === "team-2"),
@@ -174,7 +174,7 @@ describe("черновик нового мастера", () => {
     draft = withLevel(draft, operations, "read", "team-2");
     draft = withLevel(draft, services, "write", null);
     // «Записи клиентов: Видит и создаёт» ставит и «Новые записи: Может»
-    // (владелец 30.09, `companionLevels`).
+    // (`companionLevels`).
     assert.deepEqual(draftAccessChanges(REGISTRY, draft), [
       { block: "calendar.records", team_id: "team-1", level: "write" },
       { block: "calendar.records", team_id: "team-2", level: "read" },
@@ -425,7 +425,7 @@ describe("карточка ждущего приглашения", () => {
   });
 });
 
-// STORY-087: у мастера в каждом календаре свои права (владелец 23.09).
+// STORY-087: у мастера в каждом календаре свои права.
 describe("права «как в том календаре»", () => {
   test("переносятся живые календарные блоки в новый календарь", () => {
     const draft: MasterDraft = {
@@ -462,7 +462,7 @@ describe("стартовые права нового календаря (вла�
     // В тестовом реестре жива «Метка дня»: остальные заготовки
     // сервер бы отверг, и в изменения они не идут.
     assert.deepEqual(starterCalendarChanges(REGISTRY, "B"), [
-      // Записи команды — «Видит», как засевает сервер (01.10).
+      // Записи команды — «Видит», как засевает сервер.
       { block: "calendar.records", team_id: "B", level: "read" },
       { block: "calendar.day_labels", team_id: "B", level: "read" },
     ]);

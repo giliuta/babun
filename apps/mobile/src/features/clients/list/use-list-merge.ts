@@ -40,7 +40,7 @@ export function useListMerge({
     }
     return byClient;
   }, [guests.list]);
-  // У сотрудника визиты клиентов — ещё и «Историей записей» (01.10):
+  // У сотрудника визиты клиентов — ещё и «Историей записей»:
   // календарь открывает клиента записи только около записи.
   const ownHistory = useMemberClientHistory(scope, data);
   const appointments = useMemo(
@@ -55,7 +55,7 @@ export function useListMerge({
   // прийти и своим хуком, и гостевым источником (её календарь открыт), а два
   // одинаковых ключа в списке — это и предупреждение React, и две одинаковые
   // строки в фильтре.
-  // Скрытого календаря (владелец 04.10) в ленте команд клиентов нет.
+  // Скрытого календаря в ленте команд клиентов нет.
   const { isHidden } = useCalendarVisibility();
   const visibilityTenantId = useTenantId();
   const teams = useMemo(

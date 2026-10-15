@@ -81,7 +81,7 @@ export function useClientsList() {
     deleteWithUndo: sources.deleteWithUndo,
   });
 
-  // Обрыв — словами, а не текстом ошибки (03.10).
+  // Обрыв — словами, а не текстом ошибки.
   const listErrorWords = loadErrorWords(sources.error, {
     failed: "Не удалось загрузить клиентов",
     later: "Клиенты загрузятся, как только сервер ответит.",

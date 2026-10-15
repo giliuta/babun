@@ -8,8 +8,8 @@ import { financesScreenSource } from "./home/screen-source";
 import { operationSheetSource } from "./operation-sheet/sheet-source";
 import { transferSheetSource } from "./transfer-sheet/sheet-source";
 
-// ПОВТОРНЫЙ АУДИТ ФИНАНСОВ 03.10 — сторожа на исходник там, где чистой
-// функции нет: экран и формы собирают уже проверенные помощники.
+// СТОРОЖА НА ИСХОДНИК ТАМ, ГДЕ ЧИСТОЙ ФУНКЦИИ НЕТ: экран и формы собирают уже
+// проверенные помощники.
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");
 

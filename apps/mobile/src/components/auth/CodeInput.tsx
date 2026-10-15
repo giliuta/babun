@@ -2,7 +2,7 @@ import { forwardRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useAuthTheme } from "@/components/auth/theme";
 
-/** Цифр в коде из письма — настройка Supabase «Email OTP length» (6, 04.10). */
+/** Цифр в коде из письма — настройка Supabase «Email OTP length» (6). */
 export const EMAIL_CODE_LENGTH = 6;
 
 // Код из письма — клетки по цифре. Набор идёт в одно скрытое поле поверх

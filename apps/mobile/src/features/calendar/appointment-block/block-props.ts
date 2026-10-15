@@ -41,8 +41,7 @@ export type AppointmentBlockProps = {
   deckIndex?: number;
   deckSize?: number;
   /** Долгое нажатие — меню записи. Двигать и растягивать — только после
-   *  выбора этого в меню (владелец 2026-09-24: «просто так тянуть нельзя,
-   *  она зафиксирована; зажимаешь — окно, выбрал — тогда можно»). */
+   *  выбора этого в меню (в покое запись зафиксирована). */
   onMenu?: (a: Appointment) => void;
   /** Undefined for crew: the block stays tappable but has no drag affordance. */
   onReschedule?: (a: Appointment, s: string, e: string, date?: string) => void;

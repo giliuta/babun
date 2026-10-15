@@ -6,7 +6,7 @@ import { financesScreenSource } from "./home/screen-source";
 
 // КОМАНДА И СЧЁТ В ДЕНЬГАХ ЖИВУТ ТОЛЬКО В `select`.
 //
-// С 2026-09-15 журнал и долги читаются одним ключом на компанию и период:
+// Журнал и долги читаются одним ключом на компанию и период:
 // команду ключ больше не называет, её отбирает `select` (`ledger-select.ts`).
 // Значит `select` здесь — весь фильтр: удали его — и плитка команды покажет
 // деньги всей компании. Заглушка загрузки — вся граница между компаниями:
@@ -235,7 +235,7 @@ describe("экран «Финансы»: гашение, обновление и
       /return scope === NO_TEAM \? orphanAccounts\.length > 0 \? \{ accountIds: orphanAccounts\.map\(\(account\) => account\.id\), \} : \{ brigadeIds: \[NO_TEAM\] \} : \{ brigadeIds: scope \? \[scope\] : undefined \};/,
       "чип «Без команды»: при сиротах — срез по их счетам, без сирот — ноль строк, а не журнал всей компании",
     );
-    // Тот же отбор — у текущего периода и у прошлого в «Прибыли» (30.09).
+    // Тот же отбор — у текущего периода и у прошлого в «Прибыли».
     assert.match(source, /useTransactions\(period\.from, period\.to, ledgerFilter\)/);
     assert.match(source, /useTransactions\(prevRange\.from, prevRange\.to, \{ \.\.\.ledgerFilter, enabled: compareOn, \}\)/);
     assert.doesNotMatch(source, /accountIds: orphanAccounts\.map\([^)]*\)[^}]*enabled:/);

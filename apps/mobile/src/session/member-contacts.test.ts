@@ -13,7 +13,7 @@ describe("номер сотруднику — по одному", () => {
     assert.equal(contactsHiddenOf({ contacts_hidden: null }), null);
     assert.equal(contactsHiddenOf({ contacts_hidden: "day" }), "day");
     assert.equal(contactsHiddenOf({ contacts_hidden: "right" }), "right");
-    // 03.10: открытый номер приходит в строке; пустой при `null` — клиент
+    // Открытый номер приходит в строке; пустой при `null` — клиент
     // без номера, а не замок с точками.
     assert.equal(contactsLocked({ phone: "", contacts_hidden: null }), false);
     assert.equal(contactsLocked({ phone: "", contacts_hidden: "right" }), true);

@@ -9,7 +9,7 @@ import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// СМЕНА ПОЧТЫ (04.10): код на новую почту, отказы словами.
+// СМЕНА ПОЧТЫ: код на новую почту, отказы словами.
 describe("смена почты аккаунта", () => {
   test("занятая почта и опечатка называются своими словами", () => {
     assert.equal(

@@ -2,7 +2,7 @@ import type { CountryCode } from "libphonenumber-js";
 import { countryOfZone } from "@babun/shared/local/zone-country";
 import { normalizeCountry, SUPPORTED_COUNTRIES } from "./phone";
 
-// Страна номера по часовому поясу команды — чистое правило (владелец 02.10).
+// Страна номера по часовому поясу команды — чистое правило.
 // Живой слой — `default-country.ts`.
 
 const SUPPORTED = new Set<string>(SUPPORTED_COUNTRIES);

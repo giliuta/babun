@@ -87,7 +87,7 @@ describe("master appointment RPC mapper", () => {
     assert.equal(appointment.paid_amount, 700);
     assert.equal(appointment.prepaid_amount, 200);
     assert.equal(appointment.payment_status, "paid");
-    // Скидка, цены услуг и VAT — тоже по уровню (03.10): пустыми они
+    // Скидка, цены услуг и VAT — тоже по уровню: пустыми они
     // расходились с «Итого», а сохранение партнёра стирало скидку.
     assert.deepEqual(appointment.service_price_overrides, { "service-1": 980 });
     assert.deepEqual(appointment.global_discount, { type: "fixed", value: 80 });

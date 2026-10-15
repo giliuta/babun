@@ -53,14 +53,13 @@ import { anyClientSetting } from "@/features/clients/settings-levels";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
 import { SettingsGroup } from "./SettingsGroup";
 
-// «НАСТРОЙКИ КЛИЕНТОВ» — шестерёнка списка клиентов. С 02.10 разложены ПО
-// ФУНКЦИЯМ КАРТОЧКИ (владелец: «чтоб оно разделялось всё по функциям»):
+// «НАСТРОЙКИ КЛИЕНТОВ» — шестерёнка списка клиентов. Разложены ПО
+// ФУНКЦИЯМ КАРТОЧКИ:
 //   • Клиент — строка в списке, связь, заметка, личное;
-//   • Объекты — типы объектов и карты для маршрута (03.10 без своей страницы);
+//   • Объекты — типы объектов и карты для маршрута (без своей страницы);
 //   • Карточка — метка и тег, люди, файлы, реквизиты;
 //   • Данные — импорт, выгрузка, архив и корзина (только своей базы).
-// Сортировка ЗДЕСЬ НЕ живёт: она первая строка листа «Фильтры» (решение
-// владельца 2026-07-25).
+// Сортировка ЗДЕСЬ НЕ живёт: она первая строка листа «Фильтры».
 
 // Подпись «Блоков клиентов» называет выключенные блоки словами их страницы.
 const BLOCK_WORDS: [ClientFunctionKey, string][] = [
@@ -77,7 +76,7 @@ const BLOCK_WORDS: [ClientFunctionKey, string][] = [
 export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: string | null }) {
   const router = useRouter();
   const toast = useToast();
-  // ХОЗЯЙСТВО БАЗЫ («Данные») — только своей компании (владелец 20.09).
+  // ХОЗЯЙСТВО БАЗЫ («Данные») — только своей компании.
   const caps = useClientsCapabilities();
   const objectsOn = useFeatureOn("objects");
   // Выключено у всей компании (STORY-088) — в подписи блока не числится.
@@ -89,8 +88,8 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
   const levels = useClientSettingLevelsOf()(teamId);
   const teamHref = (pathname: string): Href =>
     ({ pathname, params: tenantParam ? { team: teamId, tenant: tenantParam } : { team: teamId } }) as Href;
-  // Функции клиентов — у команды (владелец 30.09: «люди, связи, реквизиты,
-  // файлы — всё закреплено за командой»).
+  // Функции клиентов — у команды: люди, связи, реквизиты, файлы закреплены за
+  // командой.
   const blockOn: Record<ClientFunctionKey, boolean> = {
     client_note: useClientFunctionOn("client_note", teamId),
     client_people: useClientFunctionOn("client_people", teamId),
@@ -101,8 +100,8 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
     client_tags: useClientFunctionOn("client_tags", teamId),
     client_personal: useClientFunctionOn("client_personal", teamId),
   };
-  // «БЛОКИ КЛИЕНТОВ» — ОДНОЙ СТРОКОЙ (владелец 03.10: «всё в одну страницу и
-  // там уже редактировать»): тумблеры блоков уехали на эту страницу, здесь —
+  // «БЛОКИ КЛИЕНТОВ» — ОДНОЙ СТРОКОЙ (всё на одной странице, там и
+  // редактируют): тумблеры блоков уехали на эту страницу, здесь —
   // что выключено. Строка — по праву «Карточки клиента».
   const showCard = levels.card !== "hidden";
   const offBlocks = BLOCK_WORDS.filter(
@@ -124,18 +123,18 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
     [clients, appointmentsForStats],
   );
   const tags = useMemo(() => tagsQuery.data ?? [], [tagsQuery.data]);
-  // Теги — у команды (30.09): счётчик строки — теги выбранной команды.
+  // Теги — у команды: счётчик строки — теги выбранной команды.
   const teamTags = useMemo(
     () => (teamId ? tags.filter((tag) => !tag.team_id || tag.team_id === teamId) : tags),
     [tags, teamId],
   );
-  // Источники команды (03.10) — счётчик строки «Источники».
+  // Источники команды — счётчик строки «Источники».
   const sourcesQuery = useClientSources();
   const teamSourceCount = useMemo(
     () => teamSources(sourcesQuery.data ?? [], teamId).length,
     [sourcesQuery.data, teamId],
   );
-  // ДАННЫЕ — ТОЖЕ У КОМАНДЫ (владелец 30.09): выгрузка, архив и корзина — её
+  // ДАННЫЕ — ТОЖЕ У КОМАНДЫ: выгрузка, архив и корзина — её
   // клиенты (свои и те, кого она обслуживала, как под чипом списка), импорт —
   // в неё.
   const teamClients = useMemo(
@@ -144,10 +143,9 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
   );
 
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
-  // только удлиняет каждый выезд (владелец 2026-08-02).
+  // только удлиняет каждый выезд.
   const mapServices = useEnabledMapServices(teamId);
-  // Чем связываются с клиентом. Звонок в настройке не стоит (владелец
-  // 04.09: «идёт как стандарт») — и в подписи его нет.
+  // Чем связываются с клиентом. Звонок в настройке не стоит (идёт как стандарт) — и в подписи его нет.
   const enabledWays = useEnabledWays(teamId);
   const waysSub = enabledWays
     .filter((id) => isWayOffered(id))
@@ -202,9 +200,8 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
     }
   };
 
-  // «ОБЪЕКТЫ» — ПОДЗАГОЛОВОК С ДВУМЯ ДВЕРЯМИ (владелец 03.10: «полноценный
-  // подзаголовок объекты, туда типы объектов и карты для маршрута, отдельную
-  // страницу не надо»). Выключенные у компании объекты уносят типы; карты
+  // «ОБЪЕКТЫ» — ПОДЗАГОЛОВОК С ДВУМЯ ДВЕРЯМИ (типы объектов и карты для
+  // маршрута, отдельной страницы нет). Выключенные у компании объекты уносят типы; карты
   // тогда — отдельной строкой у клиента (маршрут по адресу клиента остаётся).
   const typesRow = objectsOn && levels.objects !== "hidden";
   const mapsRowAlone = !objectsOn && levels.maps !== "hidden";
@@ -217,10 +214,9 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
         >
-          {/* НАСТРОЙКИ ПО ФУНКЦИЯМ КАРТОЧКИ (владелец 02.10: «чтоб оно
-              разделялось всё по функциям»). Каждая функция клиента — своя
+          {/* НАСТРОЙКИ ПО ФУНКЦИЯМ КАРТОЧКИ. Каждая функция клиента — своя
               строка: два положения — тумблером, больше — дверью на свою
-              страницу. Строка — по её праву в этой команде (01.10):
+              страницу. Строка — по её праву в этой команде:
               «Скрыты» — строки нет, «Только видит» — без правки. */}
           <SettingsGroup
             title="Клиент"
@@ -288,13 +284,13 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
 
           {/* ТЕГИ И ИСТОЧНИКИ — СПРАВОЧНИКИ КОМАНДЫ: какие есть. Включён ли
               блок «Тег» на карточке — на странице «Блоки клиентов». Источники
-              (03.10) — справочник команды с засеянными готовыми, со своим
-              правом «Источники» (как у каждой строки шестерёнки). */}
+              — справочник команды с засеянными готовыми, со своим правом
+              «Источники» (как у каждой строки шестерёнки). */}
           <SettingsGroup
             title="Справочники"
             rows={[
-              // Строка — своим правом «Теги» (аудит 03.10: по «Блокам
-              // клиентов» она открывалась пустой страницей).
+              // Строка — своим правом «Теги» (по «Блокам клиентов» она
+              // открывалась бы пустой страницей).
               levels.tags !== "hidden" ? (
                 <SettingsRow
                   key="tags"
@@ -319,7 +315,7 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
           />
 
           {/* ДАННЫЕ — ХОЗЯЙСТВО СВОЕЙ БАЗЫ: импорт, выгрузка и удалённые.
-              Партнёру их нет (выгрузка — «без передачи», 30.09). */}
+              Партнёру их нет (выгрузка — «без передачи»). */}
           {caps.manage ? (
             <SettingsGroup
               title="Данные"
@@ -360,8 +356,7 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
                   }
                   onPress={() => void exportAll()}
                 />,
-                // ОДНА ПОЛКА (владелец 03.10: «понятия „в архив" не будет —
-                // удалить»). Без записей и денег клиент стирается через
+                // ОДНА ПОЛКА (архива нет). Без записей и денег клиент стирается через
                 // срок; с историей — лежит здесь, пока его не вернут.
                 <SettingsRow
                   key="trash"
@@ -378,7 +373,7 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело
         // говорит одной строкой — без подписи и без кнопки (канон пустых
-        // состояний, LOCKED 2026-08-27).
+        // состояний).
         <EmptyState fill title="Настроек пока нет" />
       )}
     </>

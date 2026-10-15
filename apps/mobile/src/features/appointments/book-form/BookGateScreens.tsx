@@ -86,7 +86,7 @@ export function BookLoadingScreen({
       </View>
       {failedReference ? (
         // Тот же экран ошибки, что у календаря и списков: облако, слова,
-        // «Повторить» — футером, где все кнопки (владелец 21.09).
+        // «Повторить» — футером, где все кнопки.
         <EmptyState
           state="error"
           fill
@@ -102,7 +102,7 @@ export function BookLoadingScreen({
       ) : (
         <View className="flex-1 items-center justify-center px-7">
           {/* Ожидание ДВИЖЕТСЯ: крупная надпись без движения читалась как
-              зависший экран (владелец 2026-07-27). */}
+              зависший экран. */}
           <View style={{ marginBottom: 14 }}>
             <Spinner size={30} label="Загружаем данные записи" />
           </View>

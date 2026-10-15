@@ -2,7 +2,7 @@ import { parseYMD } from "@/features/appointments/helpers";
 
 // «Сегодня» / «Завтра» / «Понедельник, 14 июля» — web formatHeaderRu.
 // С меткой дня — «Вс, 20 сентября»: полный день недели плюс «ЛИМАССОЛ» не
-// влезали в строку рядом с «Маршрут →» (аудит 29.09).
+// влезали в строку рядом с «Маршрут →».
 export function headerRu(
   ymd: string,
   todayYmd: string,

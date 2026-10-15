@@ -38,8 +38,8 @@ export function forClient<T extends { client_id?: string | null }>(
   return clientId ? rows.filter((row) => row.client_id === clientId) : rows;
 }
 
-/** Счёт = одна команда (2026-08-15): командный скоуп видит РОВНО счета
- *  своей команды, «общих счетов» больше нет; чип «Без команды» показывает
+/** Счёт = одна команда: командный скоуп видит РОВНО счета
+ *  своей команды, «общих счетов» нет; чип «Без команды» показывает
  *  сирот старой схемы. */
 export function scopedAccountsFor<A extends { brigade_id: string | null }>(
   accounts: A[],

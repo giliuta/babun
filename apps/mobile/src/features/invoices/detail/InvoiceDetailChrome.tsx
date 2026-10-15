@@ -31,7 +31,7 @@ export function InvoiceHeaderActions({
   const t = useThemeColors();
   return (
     <View style={{ flexDirection: "row" }}>
-      {/* «Документы: Видит» — смотрит, но не отправляет (владелец 04.10). */}
+      {/* «Документы: Видит» — смотрит, но не отправляет. */}
       {docWrite ? (
       <Pressable
         onPress={pdfBusy ? undefined : onShare}
@@ -99,7 +99,7 @@ export function InvoiceDetailFooter({
     </View>
   ) : docWrite && !awaitsPayment && canIssueReceipt ? (
     // Оплачен — главное действие экрана становится «Выписать чек»: чек
-    // рождается кнопкой, а не сам (владелец 2026-09-20).
+    // рождается кнопкой, а не сам.
     <View
       className="px-4 pb-7 pt-3"
       style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
@@ -107,9 +107,8 @@ export function InvoiceDetailFooter({
       <Button label="Выписать чек" onPress={onIssueReceipt} />
     </View>
   ) : !docWrite ? null : (
-    // ШАГОВ НЕ ОСТАЛОСЬ — ДОКУМЕНТ ОТПРАВЛЯЮТ, как у чека (владелец 04.10:
-    // «на чеке внизу „Поделиться PDF“ есть, а в инвойсе нет — расхождение
-    // в архитектуре; то же и в кредит-ноте»). Оплачен с чеком, отменён,
+    // ШАГОВ НЕ ОСТАЛОСЬ — ДОКУМЕНТ ОТПРАВЛЯЮТ, как у чека: «Поделиться PDF» внизу
+    // одинаково у чека, инвойса и кредит-ноты. Оплачен с чеком, отменён,
     // кредит-нота — внизу «Поделиться PDF».
     <View
       className="px-4 pb-7 pt-3"

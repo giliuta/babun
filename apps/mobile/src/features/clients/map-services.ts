@@ -4,9 +4,9 @@ import type { MapService } from "@babun/shared/common/utils/map-links";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
 import { teamOrderedSet } from "@/features/clients/team-ordered-set";
 
-// КАРТЫ ДЛЯ МАРШРУТА — какие сервисы вообще предлагать (владелец 2026-08-02:
-// «если человек пользуется только Google Картами — на фига ему каждый раз
-// выбирать Яндекс; это должно быть в настройках, тумблером»).
+// КАРТЫ ДЛЯ МАРШРУТА — какие сервисы вообще предлагать: тому, кто пользуется
+// только Google Картами, незачем каждый раз выбирать Яндекс; это настройка
+// тумблером.
 //
 // Отсюда и главное следствие: когда включена ОДНА карта, выбора нет вовсе —
 // «Маршрут» открывает её сразу. Лист появляется только там, где выбор
@@ -38,7 +38,7 @@ const prefs = createEnabledPrefs<MapService>({
   requireOne: true,
 });
 
-// Набор команды — на сервере (`team_design.map_services`, 30.09), телефон —
+// Набор команды — на сервере (`team_design.map_services`), телефон —
 // запасной, пока команда на сервере не настраивала.
 const teamSet = teamOrderedSet(prefs, "mapServices");
 

@@ -4,7 +4,7 @@ import { buildPayments, type TariffPayment } from "./tariff-payments";
 
 // ОПЛАТЫ ТАРИФА — события Stripe, которые пишет вебхук (логика разбора и
 // слова — в `tariff-payments.ts`), через `cabinet_tariff_payments`. Видит
-// владелец аккаунта и партнёр с правом «Оплаты тарифа» (04.10); остальным
+// владелец аккаунта и партнёр с правом «Оплаты тарифа»; остальным
 // запрос даже не уходит. Аккаунт —
 // страницы (`account-scope`): в блоке пригласившего аккаунта — его оплаты.
 //
@@ -37,10 +37,10 @@ export function useTariffPayments(limit: number = ALL_PAYMENTS) {
     staleTime: 60_000,
     // Без сети — отказ с «Повторить», а не вечная крутилка на приостановленном запросе.
     networkMode: "always",
-    // СЫРЫХ СОБЫТИЙ STRIPE ТЕЛЕФОН НЕ ЧИТАЕТ (аудит 017, 04.10): в них почта,
+    // СЫРЫХ СОБЫТИЙ STRIPE ТЕЛЕФОН НЕ ЧИТАЕТ: в них почта,
     // адрес и карта плательщика. Сервер отдаёт только оплаты тарифа
     // (`invoice.payment_succeeded | failed`) и только поля, из которых
-    // строится строка, — в прежней форме `payload` (`cabinet_tariff_payments`).
+    // строится строка (`cabinet_tariff_payments`).
     queryFn: async (): Promise<TariffPayment[]> => {
       const { data, error } = await (client as unknown as PaymentsRpc).rpc("cabinet_tariff_payments", {
         p_limit: limit,

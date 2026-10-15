@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 import { CHIP_GAP, dropIndex, shiftOf } from "./chip-drag-math";
 
-// ПОРЯДОК КАЛЕНДАРЕЙ — ЗАЖАТЬ И ПЕРЕТАЩИТЬ В ЛЕНТЕ ШЕСТЕРЁНКИ (владелец 11.10).
+// ПОРЯДОК КАЛЕНДАРЕЙ — ЗАЖАТЬ И ПЕРЕТАЩИТЬ В ЛЕНТЕ ШЕСТЕРЁНКИ.
 
 // «Личный» 80, «Y&D» 50, «Команда 2» 100 — чипы разной ширины.
 const boxes = [

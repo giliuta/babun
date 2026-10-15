@@ -66,7 +66,7 @@ export function HomeSheets({ home }: { home: FinanceHome }) {
         visible={!!popupTx}
         transaction={popupTx}
         // Подписи строки — по ВСЕМ счетам: перевод на скрытый накопительный
-        // терял ноги «Откуда/Куда» и показывал одну сторону (аудит 03.10).
+        // терял ноги «Откуда/Куда» и показывал одну сторону.
         accounts={allAccounts}
         teams={allTeams}
         categories={categories}
@@ -95,7 +95,7 @@ export function HomeSheets({ home }: { home: FinanceHome }) {
               ? access.owner
               : // Ошибочный ручной возврат владелец убирает сам: правкой он не
                 // открывается (сумма привязана к доходу), а удалить его было
-                // негде (аудит 2026-09-30). Возврат оплаты записи или инвойса —
+                // негде. Возврат оплаты записи или инвойса —
                 // только из его двери.
                 popupTx.type === "refund"
                 ? access.owner && popupTx.source === "manual" && !popupTx.invoice_id

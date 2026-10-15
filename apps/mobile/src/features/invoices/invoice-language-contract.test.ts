@@ -11,7 +11,7 @@ import { RECEIPT_WORDS } from "../documents/receipt-words";
 import { invoiceDictionary } from "@/lib/paper/dictionary";
 import { buildInvoiceDocument } from "@/lib/paper/document";
 
-// ЯЗЫК БУМАГИ НЕ ОСТАЁТСЯ РУССКИМ МОЛЧА (аудит 03.10). Язык пишется вторым
+// ЯЗЫК БУМАГИ НЕ ОСТАЁТСЯ РУССКИМ МОЛЧА. Язык пишется вторым
 // запросом после выставления, ошибка глоталась, а переключателя на странице
 // документа не было — английское превью уходило клиенту русской бумагой.
 
@@ -28,8 +28,8 @@ describe("язык бумаги инвойса", () => {
     assert.match(read("../../../app/invoices/new.tsx"), /if \(value\.language && invoice\.language !== value\.language\) \{\s*notify\(/);
   });
 
-  // Владелец 2026-10-04: «в инвойсе не надо менять язык; если надо — пусть
-  // переделывает полностью». Язык — в превью выставления и правки.
+  // Язык выставленного инвойса не меняют — нужен другой, переделывают полностью.
+  // Язык — в превью выставления и правки.
   test("у выставленного инвойса язык не переключается — только через «Изменить»", () => {
     // The page is the thin route plus `detail/`.
     const page = readModuleSource(resolve(here, "../../../app/invoices/[id].tsx"), resolve(here, "detail"));
@@ -38,8 +38,8 @@ describe("язык бумаги инвойса", () => {
     assert.match(read("../finances/invoice-menu.ts"), /label: "Изменить инвойс",[^}]*run: edit/);
   });
 
-  // ЯЗЫК ВЫСТАВЛЕННОГО ИНВОЙСА НЕ МЕНЯЮТ (владелец 04.10: «если надо поменять —
-  // пусть переделывает полностью»): его выбирают при выставлении и при
+  // ЯЗЫК ВЫСТАВЛЕННОГО ИНВОЙСА НЕ МЕНЯЮТ (нужен другой — переделывают полностью):
+  // его выбирают при выставлении и при
   // «Изменить инвойс». Отсюда — только то, что выставление и запись языка
   // принимают любой язык приложения, а не «ru» | «en».
   test("выставление и запись языка принимают любой язык приложения", () => {
@@ -47,7 +47,7 @@ describe("язык бумаги инвойса", () => {
     assert.match(readModuleSource(resolve(here, "../../../../../packages/shared/src/db/repositories/invoices.ts")), /language: UiLocale,\n\): Promise<void>/);
   });
 
-  // ВСЕ ЯЗЫКИ ПРИЛОЖЕНИЯ — ЯЗЫКИ БУМАГИ (владелец 2026-10-04). Словарь у
+  // ВСЕ ЯЗЫКИ ПРИЛОЖЕНИЯ — ЯЗЫКИ БУМАГИ. Словарь у
   // каждого свой, и даты с деньгами печатаются локалью того же языка.
   test("у каждого языка приложения есть бумага инвойса и чека на нём", () => {
     for (const { code, intl } of UI_LOCALES) {
@@ -58,7 +58,7 @@ describe("язык бумаги инвойса", () => {
     assert.equal(invoiceDictionary("xx").invoice, invoiceDictionary("ru").invoice);
   });
 
-  // ИТОГ КРЕДИТ-НОТЫ — НЕ «К ОПЛАТЕ» (019, 04.10): платить по ней нечего.
+  // ИТОГ КРЕДИТ-НОТЫ — НЕ «К ОПЛАТЕ»: платить по ней нечего.
   test("у кредит-ноты итог на любом языке — «Итого», а не «К оплате»", () => {
     const note = {
       id: "cn-1", tenant_id: "t", number: "CN-2026-0001", year: 2026, seq: 1,
@@ -80,7 +80,7 @@ describe("язык бумаги инвойса", () => {
     }
     assert.notEqual(invoiceDictionary("ru").creditNoteTotal, invoiceDictionary("ru").grandTotal);
 
-    // КРЕДИТ-НОТА К ЧЕКУ (возврат по чеку без инвойса, 019, 04.10): о чеке, не об инвойсе.
+    // КРЕДИТ-НОТА К ЧЕКУ (возврат по чеку без инвойса): о чеке, не об инвойсе.
     for (const { code } of UI_LOCALES) {
       const dict = invoiceDictionary(code);
       const doc = buildInvoiceDocument({
@@ -93,7 +93,7 @@ describe("язык бумаги инвойса", () => {
     }
     assert.equal(invoiceDictionary("ru").creditNoteForReceipt("RC-1"), "К чеку RC-1");
 
-    // ЧАСТИЧНАЯ КРЕДИТ-НОТА (019, 04.10): инвойс в силе — не «Отмена инвойса».
+    // ЧАСТИЧНАЯ КРЕДИТ-НОТА: инвойс в силе — не «Отмена инвойса».
     for (const { code } of UI_LOCALES) {
       const dict = invoiceDictionary(code);
       const doc = buildInvoiceDocument({
@@ -107,7 +107,7 @@ describe("язык бумаги инвойса", () => {
     }
   });
 
-  // КЛИЕНТ НА ЧЕКЕ — «ПЛАТЕЛЬЩИК», А НЕ «ПОЛУЧАТЕЛЬ» ИНВОЙСА (019, 04.10).
+  // КЛИЕНТ НА ЧЕКЕ — «ПЛАТЕЛЬЩИК», А НЕ «ПОЛУЧАТЕЛЬ» ИНВОЙСА.
   test("на чеке клиент подписан словом чека, а не словом инвойса", () => {
     const doc = readModuleSource(resolve(here, "../documents/receipt-document.ts"));
     assert.doesNotMatch(doc, /label: dict\.recipient/);

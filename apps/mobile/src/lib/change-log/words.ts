@@ -170,7 +170,7 @@ export const LEVEL_WORDS: Record<string, string> = {
   full: "полный доступ",
 };
 
-/** Английские значения полей — словами продукта (проверка 03.10: в истории
+/** Английские значения полей — словами продукта (в истории
  *  было «Уровень read → write», «Статус issued → void»). */
 export const VALUE_WORDS: Record<string, Record<string, string>> = {
   level: LEVEL_WORDS,

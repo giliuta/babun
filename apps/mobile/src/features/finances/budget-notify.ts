@@ -108,8 +108,8 @@ export function runBudgetAlerts(
   teamNames?: ReadonlyMap<string, string>,
 ): Promise<void> {
   return enqueue(async () => {
-    // «Бюджет категорий» — у команды категории (Кабинет → Уведомления,
-    // 03.10): выключенные команды не сообщают, и их пороги не помечаются —
+    // «Бюджет категорий» — у команды категории (Кабинет → Уведомления):
+    // выключенные команды не сообщают, и их пороги не помечаются —
     // включили обратно, сообщится текущее.
     const { notices, next } = budgetAlerts(
       categories.filter((c) => readTeamNotifyPrefs(c.team_id ?? null).budget),
@@ -138,7 +138,7 @@ export function checkBudgetsAfterWrite(
   if (budgeted.length === 0) return;
   // Месяц — по часам компании, как у сторожа на экране
   // (`use-category-budget.ts`): около полуночи телефон в другом поясе считал
-  // соседний месяц и переписывал «уже сообщено» (аудит 2026-09-30).
+  // соседний месяц и переписывал «уже сообщено».
   const tz = qc.getQueryData<{ timezone?: string }>(
     calendarSettingsQueryKey(tenantId, "owner"),
   )?.timezone;

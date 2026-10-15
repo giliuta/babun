@@ -71,7 +71,7 @@ const receipt: Receipt = {
 };
 
 describe("receipt document", () => {
-  // Язык чека — язык его инвойса (аудит 03.10): английский счёт и русский
+  // Язык чека — язык его инвойса: английский счёт и русский
   // чек к нему больше не встречаются.
   it("speaks the invoice language: English words and money format", () => {
     const en = buildReceiptDocument(
@@ -93,8 +93,7 @@ describe("receipt document", () => {
 
   it("prints the tax row only when the receipt actually carries VAT", () => {
     const withVat = buildReceiptDocument(receipt);
-    // «VAT 19%», без «в т.ч.» — владелец 2026-09-20 дал ровно эту строку и
-    // тем же днём заменил слово «НДС» на «VAT».
+    // «VAT 19%», без «в т.ч.»: слово «НДС» заменено на «VAT».
     assert.deepEqual(withVat.vat, { label: "VAT 19% в сумме", value: formatInvoiceMoney(19, "EUR") });
 
     const noVatFields = buildReceiptDocument({ ...receipt, vat_rate: null, vat_amount: null });
@@ -111,8 +110,7 @@ describe("receipt document", () => {
     assert.equal(voided.voidLabel, "Аннулирован");
     assert.equal(voided.number, receipt.number);
 
-    // «оплачено тоже давай не писать» (владелец 2026-09-20) — живой чек не
-    // печатает штамп вовсе, не только другое слово.
+    // Живой чек не печатает штамп «оплачено» вовсе, не только другое слово.
     const issued = buildReceiptDocument(receipt);
     assert.equal(issued.voidLabel, null);
   });
@@ -121,8 +119,7 @@ describe("receipt document", () => {
     const doc = buildReceiptDocument(receipt);
     assert.equal(doc.amount, formatInvoiceMoney(receipt.amount, receipt.currency));
 
-    // Дата чека — цифрами и полностью («дату оставляем, только давай дату
-    // цифрами полностью сделаем», владелец 2026-09-20), НЕ словом через
+    // Дата чека — цифрами и полностью, НЕ словом через
     // `formatInvoiceDate` — тот форматтер остаётся инвойсу и не трогается.
     assert.equal(doc.issuedOn, "20.07.2026");
     assert.notEqual(doc.issuedOn, formatInvoiceDate(receipt.issued_on));
@@ -143,8 +140,8 @@ describe("receipt document", () => {
     const doc = buildReceiptDocument(receipt);
     assert.equal(doc.seller.name, "AC Service Ltd");
     assert.deepEqual(doc.seller.lines, ["Limassol"]);
-    // «клиент убираем» (владелец 2026-09-20) — поля с клиентом на документе
-    // нет вовсе, это не «пустая строка», которую можно случайно напечатать.
+    // Поля с клиентом на документе нет вовсе, это не «пустая строка», которую
+    // можно случайно напечатать.
     assert.equal("clientName" in doc, false);
 
     const noSeller = buildReceiptDocument({ ...receipt, seller_snapshot: {} });
@@ -153,8 +150,8 @@ describe("receipt document", () => {
   });
 
   it("способа оплаты на документе нет вовсе — ни у чека с ним, ни у чека без", () => {
-    // «оплата давай не писать» (владелец 2026-09-20): поле снято с модели,
-    // а не просто скрыто в шаблоне — второго пути его напечатать не остаётся.
+    // Поле снято с модели, а не просто скрыто в шаблоне — второго пути его
+    // напечатать не остаётся.
     const withMethod = buildReceiptDocument(receipt); // receipt.payment_method === "transfer"
     assert.equal("paymentMethod" in withMethod, false);
 
@@ -218,9 +215,8 @@ describe("receiptLinesFromAppointment — строки из снимка усл�
     assert.equal(receiptLinesFromAppointment(apt).lines.length, 2);
   });
 
-  // ЭТОТ ТЕСТ ПРОВЕРЯЛ ОШИБКУ. Он требовал, чтобы скидка ехала отдельной
-  // заметкой, — и закреплял двойное вычитание: генератор уже ужал цены строк
-  // по `total_amount`. Переписан по факту (аудит бумаги 2026-09-20).
+  // ЭТОТ ТЕСТ СТОРОЖИТ ОТСУТСТВИЕ ДВОЙНОГО ВЫЧИТАНИЯ: скидка не едет отдельной
+  // заметкой — генератор уже ужал цены строк по `total_amount`.
   it("скидка НЕ едет отдельно: она уже в ценах строк", () => {
     const apt = appointment({
       total_amount: 90,
@@ -351,10 +347,9 @@ describe("buildReceiptDocument с перечнем строк", () => {
 });
 
 describe("скидка не вычитается дважды (регрессия аудита 2026-09-20)", () => {
-  // РЕГРЕССИЯ, НАЙДЕННАЯ АУДИТОМ БУМАГИ 2026-09-20. Генератор масштабирует
-  // цены строк по `total_amount` — скидка уже в них. Пока чек передавал её ещё
-  // и отдельной строкой, бумага не сходилась сама с собой: сумма работ минус
-  // скидка не равнялась полученному.
+  // Генератор масштабирует цены строк по `total_amount` — скидка уже в них.
+  // Если чек передаёт её ещё и отдельной строкой, бумага не сходится сама с
+  // собой: сумма работ минус скидка не равна полученному.
   const discounted = appointment({
     total_amount: 180,
     discount_amount: 20,

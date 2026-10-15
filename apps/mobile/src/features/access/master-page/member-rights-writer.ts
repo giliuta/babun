@@ -26,7 +26,7 @@ import { MEMBER_REFUSAL_TEXT, levelChanges, withMemberChanges } from "./rights-r
 export const memberRefusal = (error: unknown): AccessRefusal =>
   error instanceof AccessRequestError ? refusalOf(error) : "other";
 
-/** Отказ словами. Границы директора (04.10: «не выше своих прав», «не ваша
+/** Отказ словами. Границы директора («не выше своих прав», «не ваша
  *  команда», «права директора меняет владелец») сервер называет сам — по-русски
  *  и точнее общей фразы. */
 export function memberRefusalText(error: unknown): string {

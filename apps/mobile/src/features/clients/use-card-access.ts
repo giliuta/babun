@@ -21,7 +21,7 @@ function useScopeAccessMap(): MemberAccessMap | null {
 }
 
 /** То же для любого источника — например, гостевой команды на ленте
- *  «Клиентов» (кнопка «Создать клиента» по выбранной команде, 04.10). */
+ *  «Клиентов» (кнопка «Создать клиента» по выбранной команде). */
 export function useAccessMapOf(
   scope: { kind: string; tenantId: string; isActive: boolean } | null | undefined,
 ): MemberAccessMap | null {
@@ -61,11 +61,11 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
   // команды сервер кладёт клиента в первую, где «Карточки клиентов: Меняет».
   const accessMap = useScopeAccessMap();
   const draftTeam = client?.team_id ?? null;
-  // КОМАНДА ЧЕРНОВИКА — ТА ЖЕ, КУДА СЕРВЕР ПОЛОЖИТ КЛИЕНТА (аудит прав 03.10).
+  // КОМАНДА ЧЕРНОВИКА — ТА ЖЕ, КУДА СЕРВЕР ПОЛОЖИТ КЛИЕНТА.
   // `create_client_with_tags` оставляет команду, только если в ней «Создание
   // клиента: Может», иначе берёт первую по порядку такую — и обнуляет блоки,
-  // которые там нельзя менять. Черновик показывал блоки команды чипа, и
-  // заметка, вписанная в «чужой» команде, молча пропадала при сохранении.
+  // которые там нельзя менять. Если показать блоки команды чипа,
+  // заметка, вписанная в «чужой» команде, молча пропадёт при сохранении.
   const { data: scopeTeams = [] } = useTeams();
   const draftBlocks = useMemo(() => {
     if (!draft || !accessMap || accessMap.isOwner) return null;
@@ -77,8 +77,8 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
       draftTeam;
     return mirrorClientBlocks({ team_id: team }, accessMap);
   }, [draft, accessMap, draftTeam, scopeTeams]);
-  // БЕЗ ТАРИФА СВОЯ БАЗА — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 02.10: «если клиент
-  // заведён раньше — становится серым, редактировать нельзя»). Карточка
+  // БЕЗ ТАРИФА СВОЯ БАЗА — ТОЛЬКО ДЛЯ ПРОСМОТРА (клиент серый, редактировать
+  // нельзя). Карточка
   // открывается, блоки на месте, правки нет — сервер держит то же
   // (`tenant_free_readonly_guard`). Чужая база партнёра — по тарифу её
   // владельца, её держит сервер.

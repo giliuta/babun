@@ -12,13 +12,13 @@ export type PostgrestErrorLike = {
   statusCode?: number;
 };
 
-/** Имена блоков карточки — как на странице прав (015 + 014, 30.09). */
+/** Имена блоков карточки — как на странице прав (015 + 014). */
 const CLIENT_BLOCK_TITLES: Record<string, string> = {
   "clients.client": "Клиент",
   "clients.note": "Заметка",
   "clients.people": "Люди",
   "clients.objects": "Объекты",
-  // 03.10: «Метка» и «Тег» — два права; «Долг и деньги» ушли в «Историю».
+  // «Метка» и «Тег» — два права; «Долг и деньги» ушли в «Историю».
   "clients.labels": "Метка",
   "clients.tags": "Тег",
   "clients.personal": "Личное",
@@ -30,7 +30,7 @@ const CLIENT_BLOCK_TITLES: Record<string, string> = {
 
 /** Права-действия — своей фразой: «менять „Удаление клиента"» не по-русски.
  *  `block:clients` сервер даёт и без базы, и на деньги, корзину и любимого
- *  мастера в правке партнёра — это всегда дело владельца (аудит 03.10). */
+ *  мастера в правке партнёра — это всегда дело владельца. */
 const CLIENT_ACTION_REFUSALS: Record<string, string> = {
   clients: "Это может только владелец",
   "clients.create": "Нет права заводить клиентов",
@@ -38,7 +38,7 @@ const CLIENT_ACTION_REFUSALS: Record<string, string> = {
   "clients.delete": "Нет права удалять клиентов",
 };
 
-/** ОТКАЗ СЕРВЕРА СЛОВАМИ (аудит 015, 30.09). Права по блокам отвечают 42501
+/** ОТКАЗ СЕРВЕРА СЛОВАМИ. Права по блокам отвечают 42501
  *  с подсказкой `block:clients.note`, закрытый номер — `access:contacts_closed`,
  *  клиент вне набора — P0002. Сырой английский текст Postgres человеку нечего
  *  делать; наше слово — что именно нельзя и что сделать. `null` — не наш
@@ -46,7 +46,7 @@ const CLIENT_ACTION_REFUSALS: Record<string, string> = {
 export function clientWriteRefusal(error: PostgrestErrorLike): string | null {
   const hint = error.hint ?? "";
   if (hint === "access:contacts_closed") return "Сначала откройте номер";
-  // 03.10: партнёр ставит только теги команды клиента.
+  // Партнёр ставит только теги команды клиента.
   if (hint === "client:tag_other_team") return "Тег другой команды этому клиенту не поставить";
   if (hint.startsWith("block:")) {
     const key = hint.slice("block:".length);

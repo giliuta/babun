@@ -109,7 +109,7 @@ describe("сравнение пропсов сетки", () => {
 describe("сетка календаря мемоизирована и кормится стабильными пропсами", () => {
   // The day grid is `DayView.tsx` plus its parts in `day-view/`.
   const dayView = code(readModuleSource(resolve(here, "DayView.tsx"), resolve(here, "day-view")));
-  // Блок записи вынесен в свой файл 24.09 — сторож смотрит туда.
+  // Блок записи вынесен в свой файл — сторож смотрит туда.
   const blockFile = code(
     readModuleSource(resolve(here, "AppointmentBlock.tsx"), resolve(here, "appointment-block")),
   );

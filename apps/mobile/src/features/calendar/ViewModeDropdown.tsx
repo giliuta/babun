@@ -6,8 +6,7 @@ import { useThemeColors } from "@/theme/colors";
 
 export type CalMode = "day" | "week" | "month" | "agenda";
 
-// День / Неделя / Месяц / Список («3 дня» удалён по решению владельца
-// 2026-07-13 — промежуточный режим не использовался).
+// День / Неделя / Месяц / Список (режима «3 дня» нет).
 const MODES: { key: CalMode; label: string }[] = [
   { key: "day", label: "День" },
   { key: "week", label: "Неделя" },

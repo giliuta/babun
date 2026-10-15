@@ -40,7 +40,7 @@ describe("карточка клиента: блоки по команде и п�
     assert.deepEqual(a.objects, { show: true, edit: true });
     assert.deepEqual(a.personal, { show: false, edit: false });
     assert.equal(a.history.show, true);
-    // Деньги идут вместе с «Историей» (03.10): видит историю — видит и долг.
+    // Деньги идут вместе с «Историей»: видит историю — видит и долг.
     assert.deepEqual(a.money, { show: true, edit: false });
     const noHistory = cardAccess({
       client: { blocks: { ...client.blocks, "clients.history": "off" } },

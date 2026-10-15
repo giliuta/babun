@@ -40,7 +40,7 @@ export interface Debt {
   created_at: string;
 }
 
-/** Слово владельца: «две ступени — я должен или мне должны» (2026-09-10). */
+/** Две ступени: «я должен» или «мне должны». */
 export const DEBT_DIRECTION_LABEL: Record<DebtDirection, string> = {
   incoming: "Мне должны",
   outgoing: "Я должен",

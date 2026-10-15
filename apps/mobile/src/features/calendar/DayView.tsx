@@ -147,8 +147,7 @@ export const DayView = memo(function DayView({
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
   const dateAt = (off: -1 | 0 | 1) => addDaysYmd(dateYmd, off);
-  // «+N» полосы «весь день» в Дне — список всех событий дня (повторный аудит
-  // 03.10): Неделя уводит «+N» в День, а в самом Дне ему вести было некуда, и
+  // «+N» полосы «весь день» в Дне — список всех событий дня: Неделя уводит «+N» в День, а в самом Дне ему вести было некуда, и
   // спрятанные события дня были недостижимы.
   const [allDayList, setAllDayList] = useState<Appointment[] | null>(null);
   const allDayColors = useBlockColors(teamColorFor);

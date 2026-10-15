@@ -21,7 +21,7 @@ export function shortDate(value: unknown): string {
   return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? ""}`.trim();
 }
 
-/** Статуса записи у владельца нет (03.10: «статус удаляй полностью»):
+/** Статуса записи у владельца нет:
  *  «запланирована → выполнена» ставит оплата сама, и журнал о нём молчит —
  *  не строкой и не «служебным полем». Словом остаётся только отмена. */
 const VISIT_STATES = new Set(["scheduled", "in_progress", "completed"]);

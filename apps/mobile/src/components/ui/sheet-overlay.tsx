@@ -1,8 +1,7 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import { View } from "react-native";
 
-// ОКНО ПОВЕРХ ОКНА — КОРЕНЬ «ЗАСТЫВАНИЙ» (владелец 11.10: «приложение бывает
-// застывает и ничего нажать нельзя — хочу убрать корень этого бага»).
+// ОКНО ПОВЕРХ ОКНА — КОРЕНЬ «ЗАСТЫВАНИЙ» приложения (ничего нельзя нажать).
 //
 // Каждый нижний лист — отдельное системное окно (`Modal`). Вопрос или выбор
 // (`chooseOption`, `confirmThen`) рисует общий хост в корне приложения — тоже
@@ -92,8 +91,7 @@ export function setOverlay(target: string, node: ReactNode, onBack?: () => void)
 }
 
 /** Закрытие накладки, лежащей в окне листа `id`, — для «Назад» Android: оно
- *  приходит окну листа-хозяина и закрывало его целиком вместо вопроса поверх
- *  (13.10). */
+ *  приходит окну листа-хозяина и закрывало его целиком вместо вопроса поверх. */
 export function overlayBackFor(id: string): (() => void) | null {
   return overlay?.target === id && overlay.onBack ? overlay.onBack : null;
 }

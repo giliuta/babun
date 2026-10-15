@@ -32,8 +32,7 @@ export function dataSpanOf(
   return { from: min, to: max };
 }
 
-/** ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ (владелец 30.09: «теги закреплены за
- *  командой»): под чипом — её теги; без чипа — все, и одинаковые имена
+/** ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ (теги закреплены за командой): под чипом — её теги; без чипа — все, и одинаковые имена
  *  разных команд подписаны командой, иначе две «VIP» не различить. */
 export function filterTagsFor<T extends { name: string; team_id?: string | null }>(
   tags: T[],
@@ -81,14 +80,13 @@ export function pruneFilter(
   // кажется одно «Неизвестно».
   const sourceSet = new Set(sourceOptions.map((o) => o.value));
   const sources = sourcesReady ? f.sources.filter((x) => sourceSet.has(x)) : f.sources;
-  // Строки «Команда» в фильтрах с 30.09 нет — команду выбирает лента.
+  // Строки «Команда» в фильтрах нет — команду выбирает лента.
   // Забытый вчерашний выбор прятал бы клиентов без видимого токена.
   void teamSet;
   const selectedTeams: string[] = [];
   // Теги и метки — тоже только пришедшие: набор дня поднимается из памяти
   // на холодном старте раньше справочников, и пустой список стирал
-  // вчерашние «VIP · Лимассол» до того, как они успевали загрузиться
-  // (проверка 03.10).
+  // вчерашние «VIP · Лимассол» до того, как они успевали загрузиться.
   const activeTags = tagsReady ? f.activeTags.filter((x) => tagSet.has(x)) : f.activeTags;
   const selectedCities = citiesLoaded
     ? f.selectedCities.filter((x) => citySet.has(x))

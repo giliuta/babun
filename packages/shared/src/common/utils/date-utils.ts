@@ -17,10 +17,10 @@ const MONTH_NAMES_SHORT = [
  *  ISO-строки даёт полночь UTC, и в зоне восточнее Гринвича `getDay()` вернёт
  *  ПРЕДЫДУЩИЙ день. Здесь дата — календарная, без времени и зоны вовсе.
  *
- *  ЖИЛА В ДВУХ МЕСТАХ ДО 2026-08-30 — `local/services.ts` и мобильный
- *  `features/calendar/iso-weekday.ts`, — байт в байт одинаковых. Опасность
- *  была не в дублировании, а в комментарии: ловушку с UTC описывала только
- *  одна копия, и «починка» второй через `new Date(ymd)` сломала бы расписание
+ *  Функция одна на продукт, а не по копии в `local/services.ts` и
+ *  `features/calendar/iso-weekday.ts`: опасность дублей не в самом
+ *  дублировании, а в комментарии — ловушку с UTC описывала бы только одна
+ *  копия, и «починка» другой через `new Date(ymd)` сломала бы расписание
  *  молча.
  */
 export function isoWeekdayOf(ymd: string): number {
@@ -33,9 +33,9 @@ export function isoWeekdayOf(ymd: string): number {
 /** YYYY-MM-DD + N дней. Считается в UTC намеренно: дата документа — календарный
  *  день без времени, и местная полночь не должна сдвигать срок оплаты.
  *
- *  ЖИЛ В `invoice-generator` ДО 2026-08-30, пока читателем был один счёт. С
- *  тех пор те же сутки считает расписание меток, а справочник, импортирующий
- *  финансовый модуль ради сложения дней, — не зависимость, а случайность. */
+ *  Живёт здесь, а не в `invoice-generator`: те же сутки считает расписание
+ *  меток, а справочник, импортирующий финансовый модуль ради сложения дней, —
+ *  не зависимость, а случайность. */
 export function addDaysYmd(ymd: string, days: number): string {
   const [year, month, day] = ymd.split("-").map(Number);
   const date = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
@@ -54,7 +54,7 @@ export function formatDateLongRu(dateKey: string): string {
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} г.`;
 }
 
-// v687 / Audit-2026-05-21 P1-47 — short RU date for small chips:
+// Short RU date for small chips:
 // "2026-08-19" → "19 авг". No year because the badge is always
 // implied to be relative to the current year ± 12 months. Bigger
 // surfaces use formatDateLongRu (which includes the year).
@@ -93,7 +93,7 @@ export function getCurrentCyprusTime(): Date {
 // returned as a local Date whose getHours()/getMinutes() read that zone's
 // clock. Used so a brigade calendar can place its "now" line in the
 // brigade's own timezone. Falls back to device-local time on a bad zone id.
-// Форматтер на зону — один на процесс (аудит Android 13.10): постройка
+// Форматтер на зону — один на процесс: постройка
 // Intl.DateTimeFormat на Android идёт через JNI в ICU и стоит заметно, а
 // «сейчас в зоне» спрашивают на каждой перерисовке финансов и календаря.
 // Неверная зона бросает при постройке — такую не кэшируем, вызов падает в

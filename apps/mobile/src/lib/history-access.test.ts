@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import type { MemberAccessMap } from "@/session/access-map";
 import { HISTORY_ENTITY_RIGHTS, historyRowVisible } from "./history-access";
 
-// «ИСТОРИЯ ИЗМЕНЕНИЙ» ПАРТНЁРА (владелец 04.10). Таблица соответствий живёт
+// «ИСТОРИЯ ИЗМЕНЕНИЙ» ПАРТНЁРА. Таблица соответствий живёт
 // дважды — в политике сервера и здесь, для «его глазами»; разъедутся — в
 // зеркале партнёр увидит не то, что увидит на самом деле.
 

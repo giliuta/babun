@@ -26,7 +26,7 @@ import {
 
 export function useLocationRequestActions() {
   const tenant = useTenant();
-  // ИМЯ — КОМПАНИИ КАРТОЧКИ, а не открытой в календаре (03.10): при команде
+  // ИМЯ — КОМПАНИИ КАРТОЧКИ, а не открытой в календаре: при команде
   // партнёра клиент AirFix получал «Giliuta: отметьте адрес…». Имени чужой
   // компании нет под рукой — без подписи, но не чужим именем.
   const scope = useClientsScopeOrNull();

@@ -71,8 +71,8 @@ export function ListBody({ list }: { list: ClientsList }) {
             const stats = statsMap.get(item.id);
             // ГОСТЬ — клиент компании, где человек работает. Его карточка
             // открывается в ЕГО компании, и массовый выбор к нему не
-            // относится. Меню и свайпы — по его блокам, как в зеркале (аудит
-            // 03.10: у настоящего партнёра они гасли целиком).
+            // относится. Меню и свайпы — по его блокам, как в зеркале (у
+            // настоящего партнёра они не гаснут целиком).
             const guest = guestOf.get(item.id);
             const actions = rowActionsOf(item, selecting);
             return (
@@ -82,15 +82,15 @@ export function ListBody({ list }: { list: ClientsList }) {
                 stats={stats}
                 cardFields={cardFieldsFor(item.team_id)}
                 // «Связаться» клиента работодателя — набор и шестерёнка его
-                // компании, а не своей (03.10).
+                // компании, а не своей.
                 source={guest}
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
                   selecting && !guest
                     ? toggleId(item.id)
-                    : // Видит клиента — открывает его страницу (владелец 02.10:
-                      // «Открывает карточку» убрано).
+                    : // Видит клиента — открывает его страницу (отдельного права
+                      // «Открывает карточку» нет).
                       guest
                       ? router.push(clientCardHref(item.id, guest.tenantId))
                       : router.push(ownClientCardHref(item.id, scope))
@@ -101,22 +101,22 @@ export function ListBody({ list }: { list: ClientsList }) {
                   }
                   openSwipe.current = row;
                 }}
-                // Свайп (владелец 03.10): вправо — «Напомнить», влево —
+                // Свайп: вправо — «Напомнить», влево —
                 // «Удалить»; «Записать» — в меню долгого нажатия.
                 onRemind={actions.remind ? () => setRemindClient(item) : undefined}
                 onDelete={actions.remove ? () => confirmDeleteOne(item) : undefined}
                 onLongPress={() => {
                   if (actions.select) toggleId(item.id);
                   // Меню — те же права, что у `ClientActionsSheet` ниже; ни
-                  // одного — нет и пустой шторки (проверка глазами 30.09).
-                  // Партнёру — с «Меню клиента» или «Удаление клиента» (03.10).
+                  // одного — нет и пустой шторки. Партнёру — с «Меню клиента»
+                  // или «Удаление клиента».
                   else if (actions.menu) setMenuClient(item);
                 }}
               />
             );
           }}
           ItemSeparatorComponent={ClientSeparator}
-          // Плотнее окно отрисовки (аудит Android 13.10): строка клиента
+          // Плотнее окно отрисовки: строка клиента
           // тяжёлая (свайп, кнопка связи), и FlatList по умолчанию держал
           // 21 экран строк смонтированными.
           initialNumToRender={12}
@@ -147,8 +147,8 @@ export function ListBody({ list }: { list: ClientsList }) {
                     ? "Пока нет клиентов"
                     : "В этой команде пока нет клиентов"
                 }
-                // Подписи здесь нет: канон пустых состояний (LOCKED
-                // 2026-08-27) оставляет объяснения ошибкам. Что делать
+                // Подписи здесь нет: канон пустых состояний
+                // оставляет объяснения ошибкам. Что делать
                 // дальше, говорит футер — он на месте у всех.
               />
             )

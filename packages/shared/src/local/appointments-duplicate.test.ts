@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createBlankAppointment, duplicateAppointment } from "./appointments";
 
-// КОПИЯ ЗАПИСИ — БЕЗ ЧУЖИХ ДЕНЕГ И БЕЗ ВТОРОЙ СЕРИИ (аудит 03.10).
+// КОПИЯ ЗАПИСИ — БЕЗ ЧУЖИХ ДЕНЕГ И БЕЗ ВТОРОЙ СЕРИИ.
 describe("копия записи", () => {
   test("строки предоплаты оригинала не копируются", () => {
     const original = createBlankAppointment({

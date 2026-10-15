@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "./module-source";
 
-// ВЫПУСК В МАГАЗИНЫ 06.10 — ЧТО ВИДИТ ПРОВЕРКА APP STORE. Экраны тянут
+// ВЫПУСК В МАГАЗИНЫ — ЧТО ВИДИТ ПРОВЕРКА APP STORE. Экраны тянут
 // react-native, поэтому сторожим исходник: каждая проверка держит правку,
 // без которой проверяющий видел бы недоделку или неправду.
 

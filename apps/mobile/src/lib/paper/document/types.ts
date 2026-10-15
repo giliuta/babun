@@ -153,6 +153,6 @@ export interface DraftDocumentInput extends BaseInput {
    *  подтверждал кнопкой одну бумагу, клиент получал другую. */
   company?: InvoiceDraftSeller | null;
   /** Объект, под который выписан счёт: его ТОЧНЫЙ адрес — единственный адрес
-   *  получателя на бумаге (владелец 2026-09-22). */
+   *  получателя на бумаге. */
   location?: Location | null;
 }

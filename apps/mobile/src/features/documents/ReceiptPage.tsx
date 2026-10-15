@@ -27,9 +27,8 @@ import { useReceipt } from "@/features/finances/receipts-queries";
 import { shareHtmlAsPdf } from "@/lib/share-pdf";
 import { useIssuedReceiptDoc } from "./use-issued-receipt-doc";
 
-// СТРАНИЦА ЧЕКА — КАК СТРАНИЦА ИНВОЙСА (владелец 2026-10-04: «чек — в такой
-// же архитектуре: конструкция, превью, нажимаю — сохраняется, и уже всё
-// можно отправлять»). Выписанный чек живёт здесь, а не в листе: бумага, что
+// СТРАНИЦА ЧЕКА — КАК СТРАНИЦА ИНВОЙСА: конструкция, превью, «сохранить» — и
+// чек можно отправлять. Выписанный чек живёт здесь, а не в листе: бумага, что
 // с ней связано (запись, инвойс, счёт), «Поделиться PDF» внизу и в шапке,
 // «Изменить чек» — в «⋯» (правка на месте, тот же номер).
 export function ReceiptPage({ id }: { id: string }) {
@@ -43,12 +42,12 @@ export function ReceiptPage({ id }: { id: string }) {
   const refunds = useReceiptRefunds(receiptQuery.data ?? null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const receiptMenu = useReceiptMenu();
-  // «ДОКУМЕНТЫ: ВИДИТ» — СМОТРИТ, НО НЕ ОТПРАВЛЯЕТ (владелец 04.10): ни
+  // «ДОКУМЕНТЫ: ВИДИТ» — СМОТРИТ, НО НЕ ОТПРАВЛЯЕТ: ни
   // «Поделиться PDF», ни кнопки внизу, ни «⋯». Отправка и действия — у
   // «Выставляет» в команде чека (владельцу — всегда).
   const docWrite = useDocumentLevel(receipt?.team_id ?? null) === "write";
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
-  // «Поделиться PDF» из меню списка (04.10) — один раз, когда бумага готова.
+  // «Поделиться PDF» из меню списка — один раз, когда бумага готова.
   const { action } = useLocalSearchParams<{ action?: string }>();
   const pendingAction = useRef<string | null>(action ?? null);
 
@@ -77,7 +76,7 @@ export function ReceiptPage({ id }: { id: string }) {
   const appointment = paper.appointment;
   const client = (clients.data ?? []).find((c) => c.id === receipt.client_id) ?? null;
   const invoice = paper.invoice;
-  // КРЕДИТ-НОТЫ ВОЗВРАТА (04.10) — к самому чеку или к его инвойсу: «вернули
+  // КРЕДИТ-НОТЫ ВОЗВРАТА — к самому чеку или к его инвойсу: «вернули
   // деньги — документ закреплён за чеком».
   const notes = refunds.notes;
   // Возвращён и без ноты, если деньги вернули другой дверью (отмена визита).
@@ -114,8 +113,8 @@ export function ReceiptPage({ id }: { id: string }) {
 
 
   // «⋯» — ДЕЙСТВИЯ С ЧЕКОМ, те же, что долгим нажатием в «Документах»
-  // (владелец 04.10: «поделиться и прочее — лишнее»): значок в шапке и
-  // кнопка внизу уже делятся PDF.
+  // («поделиться» не дублируется): значок в шапке и кнопка внизу уже делятся
+  // PDF.
   const openMenu = () =>
     setSheetMenu(
       receiptMenu.menuFor(receipt, documentItem, {
@@ -195,7 +194,7 @@ export function ReceiptPage({ id }: { id: string }) {
           {paper.doc ? <ReceiptPaper doc={paper.doc} /> : null}
         </View>
 
-        {/* ТО, ЧЕГО НА БУМАГЕ НЕТ, — БЛОКАМИ ПРОДУКТА (владелец 04.10), теми же,
+        {/* ТО, ЧЕГО НА БУМАГЕ НЕТ, — БЛОКАМИ ПРОДУКТА, теми же,
             что у страницы инвойса. */}
         <DocumentLinkBlocks
           client={client}
@@ -211,8 +210,8 @@ export function ReceiptPage({ id }: { id: string }) {
         />
       </ScrollView>
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ ВЫПИСАННОГО ЧЕКА — ОТПРАВИТЬ (владелец 04.10: «и уже
-          всё можно отправлять»); вернули деньги без документа — выписать его,
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ВЫПИСАННОГО ЧЕКА — ОТПРАВИТЬ; вернули деньги без
+          документа — выписать его,
           и у погашенного чека тоже. */}
       {!docWrite || (dead && refunds.uncovered <= 0) ? null : (
         <View

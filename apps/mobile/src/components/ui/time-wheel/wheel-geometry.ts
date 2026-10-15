@@ -12,8 +12,7 @@ export function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** Шаг минут во ВСЕХ барабанах продукта. Пятиминутка — владелец 2026-08-17:
- *  «минуты должны быть в пятиминутку — 00, 05, 10, 15, 20». */
+/** Шаг минут во ВСЕХ барабанах продукта. Минуты — в пятиминутку: 00, 05, 10, 15, 20. */
 export const MINUTE_STEP = 5;
 export const MINUTES = Array.from({ length: 60 / MINUTE_STEP }, (_, i) =>
   pad2(i * MINUTE_STEP),

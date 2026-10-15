@@ -7,8 +7,8 @@ import { readModuleSource } from "@/lib/module-source";
 import { orderMovable } from "./block-order";
 import { bookFormSource } from "./book-form/source-for-tests";
 
-// ПОРЯДОК БЛОКОВ ЗАПИСИ И СОБЫТИЯ (владелец 11.10: «поставить первым объект,
-// вторым клиент — и самому редактировать»).
+// ПОРЯДОК БЛОКОВ ЗАПИСИ И СОБЫТИЯ: человек сам ставит, например, объект первым,
+// клиента вторым.
 //
 const here = dirname(fileURLToPath(import.meta.url));
 const prefs = readModuleSource(resolve(here, "booking-prefs.ts"));

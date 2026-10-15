@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { readModuleSource } from "@/lib/module-source";
 
-// ЛИСТ С ЗАЩИТОЙ ЗАКРЫТИЯ ЗАКРЫВАЕТСЯ И БЕЗ СЕТИ (13.10). `useGuardedClose`
+// ЛИСТ С ЗАЩИТОЙ ЗАКРЫТИЯ ЗАКРЫВАЕТСЯ И БЕЗ СЕТИ. `useGuardedClose`
 // не закрывает лист, пока идёт запись (`busy` = `isPending`). Запись в режиме
 // сети по умолчанию без связи встаёт на ПАУЗУ — `isPending` не гаснет никогда,
 // и лист не закрывался ни «Назад», ни тапом мимо, ни свайпом. Записи этих

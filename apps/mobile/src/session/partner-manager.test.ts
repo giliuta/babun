@@ -4,8 +4,8 @@ import { describe, test } from "node:test";
 import type { MemberAccessMap } from "@/session/access-map";
 import { partnerManager, stepAllowed, teamsAllowed } from "./partner-manager";
 
-// ДИРЕКТОР (владелец 04.10: «с собой он не может, сам себе доступ не
-// выдаёт»). Копия границ сервера (`partners_manageable`,
+// ДИРЕКТОР (с собой он не может: сам себе доступ не
+// выдаёт). Копия границ сервера (`partners_manageable`,
 // `partners_check_caps`): разойдутся — на странице прав появится дверь,
 // которая кончится отказом, или пропадёт та, что работает.
 

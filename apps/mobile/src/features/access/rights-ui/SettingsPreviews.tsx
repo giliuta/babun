@@ -25,9 +25,9 @@ import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame } from "./PreviewFrame";
 
 // ВИД СТРОК «НАСТРОЕК КОМАНДЫ» И «НАСТРОЕК КЛИЕНТОВ» В ШТОРКЕ ПРАВА
-// (владелец 30.09: «полностью, как в шестерёнке»). Строка — ровно та, что
-// стоит в шестерёнке календаря или клиентов у партнёра: «Скрыт» — её у него нет, «Только видит» — строка со значением
-// без двери, «Видит и меняет» — с дверью.
+// (полностью, как в шестерёнке). Строка — ровно та, что стоит в шестерёнке
+// календаря или клиентов у партнёра: «Скрыт» — её у него нет, «Только видит» —
+// строка со значением без двери, «Видит и меняет» — с дверью.
 
 const noop = () => {};
 
@@ -52,7 +52,7 @@ export function SettingsPreview({
 }) {
   const state: State = level === "off" ? "hidden" : level === "read" ? "read" : "write";
   // Строка шестерёнки клиентов открывается и при «Только видит» — страницей
-  // без правки (аудит 03.10): у неё та же стрелка, что у «Меняет».
+  // без правки: у неё та же стрелка, что у «Меняет».
   const onPress =
     state === "write" ||
     (state === "read" && (blockKey.startsWith("clients.settings_") || blockKey.startsWith("finance.settings_")))
@@ -119,7 +119,7 @@ export function SettingsPreview({
             onPress={onPress}
           />
         );
-      // Шестерёнка «Клиентов» (владелец 01.10; словами 03.10) — строки
+      // Шестерёнка «Клиентов» — строки
       // ровно как в ней.
       case "clients.settings_card":
         return (
@@ -181,8 +181,7 @@ export function SettingsPreview({
             onPress={onPress}
           />
         );
-      // Шестерёнка «Финансов» (владелец 03.10: «по строке на каждую») —
-      // строки как в ней.
+      // Шестерёнка «Финансов» — по строке на каждую, как в ней.
       case "finance.settings_accounts":
         return (
           <SettingsRow tile={SETTINGS_TILE.blue} icon={Wallet} title="Счета" sub="2 счёта" onPress={onPress} />

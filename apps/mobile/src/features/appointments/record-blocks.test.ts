@@ -6,7 +6,7 @@ import { bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlo
 
 const TEAM = "team-1";
 
-/** Реестр как на боевой базе после STORY-088 (волна 1, 24.09): блоки записи и
+/** Реестр как на боевой базе после STORY-088: блоки записи и
  *  действия календаря живые, «Время записи» слито с переносом и не живое. */
 const REGISTRY: { key: string; live: boolean; levels: AccessLevel[] }[] = [
   { key: "calendar.create", live: true, levels: ["off", "write"] },
@@ -39,7 +39,7 @@ function map(levels: Record<string, AccessLevel>): MemberAccessMap {
   };
 }
 
-/** Dmitry на боевой 24.09 после засева. */
+/** Dmitry на боевой после засева. */
 const DMITRY = map({
   // Записи команды видит — так их засевает сервер при приёме приглашения.
   "calendar.records": "read",
@@ -89,7 +89,7 @@ describe("страница записи — одна для всех, блоки
       files: "write",
       note: "read",
       color: "read",
-      // «SMS» записи (03.10): клиента не видит — и истории SMS ему нет.
+      // «SMS» записи: клиента не видит — и истории SMS ему нет.
       sms: "hidden",
     });
   });
@@ -235,9 +235,8 @@ describe("страница записи — двери по правам", () =>
   });
 });
 
-// БЛОКИ СОБЫТИЯ И ЗАМЕТКА ЗАПИСИ (владелец 30.09: «внутри записи клиентов и
-// внутри события — что может видеть, что не может, что может
-// редактировать»). До миграции блоки неживые — страница ведёт себя как было.
+// БЛОКИ СОБЫТИЯ И ЗАМЕТКА ЗАПИСИ (внутри записи клиентов и внутри события —
+// что можно видеть и что редактировать). До миграции блоки неживые — страница ведёт себя как было.
 describe("блоки события и заметка записи", () => {
   const EVENT_KEYS = ["event.label", "event.type", "event.client", "event.object", "event.note", "event.files"];
   const LIVE: typeof REGISTRY = [
@@ -250,7 +249,7 @@ describe("блоки события и заметка записи", () => {
   test("до миграции: всё видно, клиент и объект события — без правки, заметку только читают", () => {
     const ev = eventBlocks(at(DMITRY));
     assert.deepEqual(ev, { label: "write", type: "write", client: "read", object: "read", note: "write", files: "write" });
-    // Статуса нет (03.10) — неживую заметку больше никто не пишет «через него».
+    // Статуса нет — неживую заметку больше никто не пишет «через него».
     assert.equal(recordBlocks(at(DMITRY)).note, "read");
   });
 
@@ -324,8 +323,8 @@ describe("запись клиента без тарифа (02.10)", () => {
 });
 
 describe("живой партнёр — своя карта с сервера (04.10)", () => {
-  // `my_access_map` не несёт `attached_calendars`: до 04.10 каждый календарь
-  // читался чужим, и у партнёра на телефоне запись теряла все блоки, хотя
+  // `my_access_map` не несёт `attached_calendars`: каждый календарь
+  // читался бы чужим, и у партнёра на телефоне запись теряла все блоки, хотя
   // в зеркале владельца всё было на месте.
   const own = parseMemberAccessMap({
     tenant_id: "tenant-1",

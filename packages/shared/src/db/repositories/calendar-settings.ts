@@ -130,15 +130,11 @@ export async function getOperationalCalendarSettings(
     timezone: row.timezone,
     bufferMinutes: row.buffer_minutes,
     hideCancelled: row.hide_cancelled,
-    // `showDayFinance` здесь НЕТ намеренно: полоса «Доход / Расход» — surface
-    // владельца (гейт `role === "owner"`), и мастерской проекции она не нужна
-    // ни для чего. Тест `maps the safe RPC without introducing private
-    // settings` ловит любую попытку протащить сюда лишнее поле — он и поймал.
     workStartHour: row.work_start_hour ?? undefined,
     workEndHour: row.work_end_hour ?? undefined,
-    // С 24.09 (STORY-088) функция отдаёт сотруднику и это: без него у
-    // мастера были заводские цвета записи, полоса денег не слушала
-    // настройку, а выключенные у компании блоки стояли в его записи.
+    // Функция отдаёт сотруднику и это (STORY-088): без него у мастера были
+    // бы заводские цвета записи, полоса денег не слушала бы настройку, а
+    // выключенные у компании блоки стояли бы в его записи.
     showDayFinance: row.show_day_finance ?? true,
     ...sanitizeRecordColorSettings({
       rule: row.record_color_rule,

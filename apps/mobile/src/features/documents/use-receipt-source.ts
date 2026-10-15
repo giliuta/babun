@@ -14,7 +14,7 @@ import {
   useReceiptTransaction,
 } from "@/features/finances/receipts-queries";
 
-// ОТКУДА ЧЕК БЕРЁТ СЕБЯ (владелец 2026-10-03/04): с нуля; на принятую оплату
+// ОТКУДА ЧЕК БЕРЁТ СЕБЯ: с нуля; на принятую оплату
 // (`transactionId` — значок чека в записи, «Выписать чек» инвойса); правка
 // выписанного (`receiptId` — «Изменить» в листе чека, тот же номер). В двух
 // последних случаях деньги уже в журнале: клиент, счёт и сумма — от оплаты.
@@ -32,7 +32,7 @@ export function useReceiptSource(
   /** Чек по инвойсу подписан реквизитами инвойса — их не выбирают. */
   invoiceCompanyId: string | null;
   /** Язык бумаги — язык инвойса оплаты (чек обязан говорить тем же языком,
-   *  что выйдет: предпросмотр был русским, выписанный — английским, 04.10). */
+   *  что выйдет: предпросмотр обязан совпасть с выписанным). */
   language: InvoiceLanguage;
   ready: boolean;
 } {
@@ -86,8 +86,7 @@ export function useReceiptSource(
     });
   }, [mode, ready, tx, editing, invoiceRow, invoiceNumber, invoiceCompanyId, appointment.data, change]);
 
-  // Бумага — на языке инвойса; чек без инвойса — по-английски (владелец
-  // 04.10: «делай пока что всё на английском»).
+  // Бумага — на языке инвойса; чек без инвойса — по-английски.
   const rowLanguage = invoiceRow?.language;
   const language: InvoiceLanguage = isUiLocale(rowLanguage) ? rowLanguage : "en";
   return { mode, tx, editing, invoiceNumber, invoiceCompanyId, language, ready };

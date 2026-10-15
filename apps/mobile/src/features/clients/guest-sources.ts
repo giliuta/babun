@@ -58,7 +58,7 @@ export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
   // ЗЕРКАЛО ЧИТАЕТ ТОКЕНОМ ВЛАДЕЛЬЦА («права его, данные ваши»): дверь команд
   // сотрудника (`list_operational_teams_safe`) ему пуста, и в «его глазах»
   // у шестерёнки клиентов не было ни одной команды — «Настроек пока нет» при
-  // любых правах (аудит 03.10). Как в `useTeams`: список владельца, на
+  // любых правах. Как в `useTeams`: список владельца, на
   // устройстве — только его прикрепления.
   const { mirror } = useMirrorMode();
   const mirroredTenant = mirror?.map.tenantId ?? null;
@@ -97,7 +97,7 @@ export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
           queryKey: appointmentsQueryKey(tenantId, scope.role),
           queryFn: () => listMasterAppointmentsSafePaged(tenantBoundClient(tenantId)),
         },
-        // «История записей» его клиентов (01.10, `member-history.ts`).
+        // «История записей» его клиентов (`member-history.ts`).
         {
           ...common,
           queryKey: memberHistoryQueryKey(tenantId, view, false),

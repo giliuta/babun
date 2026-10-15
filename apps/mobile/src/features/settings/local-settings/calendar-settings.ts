@@ -118,7 +118,7 @@ export function useCalendarSettings() {
         // Копия по компании — у всех ролей: полная копия владельца лежит под
         // общим ключом, и переход в другую компанию её стирает. Без неё
         // компания, открытая без сети после перехода, рисовалась с заводскими
-        // настройками — окно 00–24, отменённые видны (повторный аудит 03.10).
+        // настройками — окно 00–24, отменённые видны.
         safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
         if (role !== "master") safeSaveCalendarSettings(settings);
         return settings;

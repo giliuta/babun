@@ -18,7 +18,7 @@ import {
   type ChangeLogRow,
 } from "./change-log";
 
-// «История изменений» (владелец 03.10): строка журнала словами — что, с чем,
+// «История изменений»: строка журнала словами — что, с чем,
 // что поменялось; пачки склеиваются, пара — нет.
 
 let seq = 0;
@@ -58,7 +58,7 @@ describe("история изменений — слова", () => {
 
   test("поля правки: было → стало, служебное — словом", () => {
     assert.equal(describeField("time_start", ["09:30", "10:00"]), "Начало 09:30 → 10:00");
-    // Статуса записи нет (03.10): словом остаётся только отмена, «запланирована
+    // Статуса записи нет: словом остаётся только отмена, «запланирована
     // → выполнена» от оплаты журнал не показывает вовсе.
     assert.equal(describeField("status", ["scheduled", "cancelled"]), "Отменена");
     assert.equal(describeField("status", ["cancelled", "scheduled"]), "Восстановлена");
@@ -80,7 +80,7 @@ describe("история изменений — слова", () => {
     );
     assert.equal(changesSummary({ calendar_window_start: ["08:00", "07:00"], calendar_window_end: ["20:00", "21:00"] }), "Часы календаря 08:00 → 07:00");
     assert.equal(changesSummary({ foo: [1, 2] }), "Служебные поля");
-    // Живая строка 03.10: предоплата — список и сумма, видна сумма.
+    // Живая строка: предоплата — список и сумма, видна сумма.
     const prepaid = changesSummary({ prepayments: "*", payment_method: [null, "cash"], payment_status: ["unpaid", "paid"], prepaid_amount: [0, 50], payment_account_id: [null, "x"] });
     assert.match(prepaid, /^Предоплата .*0 → .*50 · Способ оплаты — → наличные · Оплата не оплачена → оплачена · ещё 1$/);
     assert.equal(changesSummary(null), "");

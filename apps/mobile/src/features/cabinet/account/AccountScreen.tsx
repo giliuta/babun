@@ -26,7 +26,7 @@ function Row({
 }: {
   label: string;
   value: string;
-  /** Строка-дверь: шеврон справа, тап открывает правку (почта, 04.10). */
+  /** Строка-дверь: шеврон справа, тап открывает правку (почта). */
   onPress?: () => void;
 }) {
   const t = useThemeColors();
@@ -67,7 +67,7 @@ export function AccountScreen() {
 
   return (
     <Screen edges={["top"]}>
-      {/* Шапка = строка Кабинета, которой сюда пришли (аудит 03.10). */}
+      {/* Шапка = строка Кабинета, которой сюда пришли. */}
       <ScreenHeader title="Вход и безопасность" />
       <KeyboardLift
         style={{ flex: 1 }}

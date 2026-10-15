@@ -56,18 +56,18 @@ export function useHomeMoney(input: HomeMoneyInput) {
     input.refs;
   const { invoicedAppointments, invoiceDebts, debts, debtPaid, manualIncomingDebt } = input.debtsState;
 
-  // Счёт = одна команда (2026-08-15): командный скоуп видит РОВНО счета
-  // своей команды, «общих счетов» больше нет; чип «Без команды» показывает
-  // сирот старой схемы. Скрытые балансы ВХОДЯТ в Σ (решение владельца:
-  // маркер-глазик у плитки снят).
+  // Счёт = одна команда: командный скоуп видит РОВНО счета
+  // своей команды, «общих счетов» нет; чип «Без команды» показывает
+  // сирот старой схемы. Скрытые балансы ВХОДЯТ в Σ:
+  // маркера-глазика у плитки нет.
   const scopedAccounts = useMemo(
     () => scopedAccountsFor(accounts, orphanAccounts, scope),
     [accounts, orphanAccounts, scope],
   );
   // Одна цифра «сколько у нас денег» на весь продукт: плитка «Счета» считает
-  // сумму видимых счетов. СКРЫТЫЙ счёт (владелец 03.10: «накопительный, для
+  // сумму видимых счетов. СКРЫТЫЙ счёт («накопительный, для
   // себя») в неё не входит — его деньги видны только на странице «Счета».
-  // Разбивки по видам счетов здесь НЕТ (владелец 2026-08-11): плитка отвечает
+  // Разбивки по видам счетов здесь НЕТ: плитка отвечает
   // «сколько у команды», а не «сколько из этого наличными» — второй вопрос
   // задают плитками счетов под ней, глядя на конкретный счёт.
   const accountsSummary = useMemo(
@@ -111,7 +111,7 @@ export function useHomeMoney(input: HomeMoneyInput) {
     ],
   );
 
-  // ПЛИТКА ЗАКРЫТОГО БЛОКА — СЕРАЯ И ПО НУЛЯМ (владелец 15.09), а не последнее,
+  // ПЛИТКА ЗАКРЫТОГО БЛОКА — СЕРАЯ И ПО НУЛЯМ, а не последнее,
   // что успело приехать до понижения прав.
   const shownTotals = useMemo(
     () => ({
@@ -123,8 +123,8 @@ export function useHomeMoney(input: HomeMoneyInput) {
     [access.debts, access.income, access.expense, access.profit, totals],
   );
 
-  // Плитка «Документы» — ШТУКИ (владелец 2026-08-11), и ровно те, что
-  // откроются под ней (аудит 2026-09-29: «Документы 0», а в «Чеках» за тот же
+  // Плитка «Документы» — ШТУКИ, и ровно те, что
+  // откроются под ней (иначе «Документы 0», а в «Чеках» за тот же
   // месяц 1 чек — плитка считала только инвойсы, ждущие оплату). Один список
   // с панелью (`usePeriodDocuments`): число и строки не расходятся.
   const issuedDocuments = usePeriodDocuments({
@@ -139,7 +139,7 @@ export function useHomeMoney(input: HomeMoneyInput) {
     today: businessToday,
   });
   // ДОКУМЕНТЫ — ПО ПРАВУ «ДОКУМЕНТЫ» КОМАНДЫ: скрыты — плитка «0» и пустая
-  // панель (владелец 04.10). Плитка и панель режут одним отбором.
+  // панель. Плитка и панель режут одним отбором.
   const documentsReadable = useCallback<DocumentsReadable>(
     (documents, receipts) => readableDocuments(documents, receipts, readRules),
     [readRules],
@@ -156,7 +156,7 @@ export function useHomeMoney(input: HomeMoneyInput) {
     [periodDocuments.documents],
   );
 
-  // Материалы записей — строками в «Расходе» (владелец 2026-09-07): плитка
+  // Материалы записей — строками в «Расходе»: плитка
   // считала их всегда, теперь и список их называет поимённо.
   const materialRows = useMemo(
     () =>
@@ -170,7 +170,7 @@ export function useHomeMoney(input: HomeMoneyInput) {
     [access.recordMoney, period.from, period.to, scope, scopedAppointments, services],
   );
 
-  // Каждая строка называет свой счёт (владелец 2026-09-15): имена берутся со
+  // Каждая строка называет свой счёт: имена берутся со
   // всех счетов, включая закрытые, в порядке плиток — строка «Наличные ·
   // Карта» читается в том же порядке, что счета над ней.
   const recordRefs = useMemo(
@@ -183,7 +183,7 @@ export function useHomeMoney(input: HomeMoneyInput) {
       people,
       // Визит вне периода (предоплата сегодня за завтра) — строка днём денег.
       window: { from: period.from, to: period.to },
-      // Оплата инвойса — строкой «Инвойс INV-…» (владелец 04.10).
+      // Оплата инвойса — строкой «Инвойс INV-…».
       invoices,
     }),
     [scopedAppointments, clients, services, categories, allAccounts, people, period.from, period.to, invoices],

@@ -57,7 +57,7 @@ export interface ImportRowsArgs {
   defaultCountry: CountryCode;
   /** Optional tag applied to every imported client. */
   tagId?: string | null;
-  /** Команда, в которую заводятся клиенты (30.09). */
+  /** Команда, в которую заводятся клиенты. */
   teamId?: string | null;
   /** File metadata for the resume record. */
   fileHash: string;
@@ -109,7 +109,7 @@ async function createImportClient(
 
 export function useImportRows() {
   // КОМПАНИЯ ИМПОРТА — КОМПАНИЯ ВКЛАДКИ «КЛИЕНТЫ», чьи команда и теги выбраны в
-  // мастере, а не открытая в календаре (03.10): при команде партнёра каждая
+  // мастере, а не открытая в календаре: при команде партнёра каждая
   // строка отбивалась «client team does not belong to the active tenant».
   const { tenantId, client: db } = useScopeCompany();
   const qc = useQueryClient();

@@ -8,9 +8,9 @@ import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { hasBlockPreview } from "./preview-keys";
 import { WORDED_KEYS, offeredSteps, rightTitle, rowWord, shownLevel, stepDanger, stepHint, stepWord } from "./right-words";
 
-// Живые права реестра на 04.10 (`access_blocks where live`, все 73, в порядке
-// `position`) — с их лестницами. Сверка с базой 04.10 нашла, что прежний список
-// (29.09) не знал 23 живых прав и держал снятые «Шаблоны SMS» компании.
+// Живые права реестра (`access_blocks where live`, все 73, в порядке
+// `position`) — с их лестницами. Список обязан совпадать с базой: иначе тест
+// не знал бы живых прав и держал бы снятые.
 const LIVE: readonly [string, AccessLevel[]][] = [
   ["calendar.records", ["off", "read", "write"]],
   ["calendar.window", ["week", "near", "month", "quarter", "half", "own"]],
@@ -80,7 +80,7 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["clients.settings_maps", ["off", "read", "write"]],
   ["clients.settings_tags", ["off", "read", "write"]],
   ["clients.settings_sources", ["off", "read", "write"]],
-  // Кабинет (04.10).
+  // Кабинет.
   ["cabinet.tariff", ["off", "read", "write"]],
   ["cabinet.tariff_payments", ["off", "read"]],
   ["cabinet.sms", ["off", "read", "write"]],

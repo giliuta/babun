@@ -32,7 +32,7 @@ import { toJson } from "@babun/shared/db/json";
 //                never on the onboarding wizard: a network blip must not
 //                throw a configured owner out of the app;
 //   fail-CLOSED→ only a CONFIRMED missing membership / tenant row routes to
-//                (auth)/account-missing. Мастера настройки нет (04.10):
+//                (auth)/account-missing. Мастера настройки нет:
 //                `onboarded_at` ставит регистрация, и пустой он экран не
 //                меняет.
 
@@ -83,7 +83,7 @@ function stampOnboarded(tenantId: string): void {
  *  ровно этого знания ему не хватало после перехода: он заново спрашивал
  *  сервер «а онбординг пройден?» — с таймаутом и повтором, сразу после смены
  *  токена, — и держал экран «Открываем компанию» ТРИДЦАТЬ СЕКУНД при пяти
- *  секундах самой транзакции (замер 2026-09-12).
+ *  секундах самой транзакции.
  *
  *  Ставить его имеет право только тот, кто получил ФАКТ от сервера:
  *  `activate_tenant` возвращает `onboarded` из `tenants.onboarded_at`. Догадка
@@ -189,7 +189,7 @@ function useTenantResolution() {
       // strand a user who got invited a minute later.
       if (tenantId) {
         writeCache(tenantIdCacheKey(userId as string), tenantId);
-        // УСТРОЙСТВО БЕЗ ВЫБОРА ЗАКРЕПЛЯЕТ НАЙДЕННУЮ КОМПАНИЮ (04.10). Без
+        // УСТРОЙСТВО БЕЗ ВЫБОРА ЗАКРЕПЛЯЕТ НАЙДЕННУЮ КОМПАНИЮ. Без
         // заголовка сервер берёт компанию из токена и сверяет её с членством
         // (`current_tenant_id`), а токен мог остаться от компании, где
         // человека больше нет, — тогда каждый запрос отвечал бы пусто.
@@ -242,7 +242,7 @@ const tenantOnboardingKey = (tenantId: string | null) =>
 /** Профиль компании подтверждённо пуст: человека в ней больше нет (убрали
  *  из партнёров, аккаунт удалён). Выбор устройства и кэш забывают её, токен
  *  с ней резолв пропускает, и поиск по членству идёт заново — к живой
- *  компании человека, а не к «Аккаунт не настроен» навсегда (аудит 04.10). */
+ *  компании человека, а не к «Аккаунт не настроен» навсегда. */
 function forgetGoneTenant(qc: QueryClient, userId: string, tenantId: string): void {
   markTenantGone(userId, tenantId);
   if (readCache(tenantIdCacheKey(userId)) === tenantId) {

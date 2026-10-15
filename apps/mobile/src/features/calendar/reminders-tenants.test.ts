@@ -5,7 +5,7 @@ import { createBlankAppointment } from "@babun/shared/local/appointments";
 import { babunNotificationRegistrySnapshot } from "@/lib/notifications";
 import { reconcileEventAppointmentReminders } from "./reminders";
 
-// СВЕРКА КАЛЕНДАРЯ НЕ СТИРАЕТ ПУШИ ДРУГОГО АККАУНТА (13.10). Список календаря
+// СВЕРКА КАЛЕНДАРЯ НЕ СТИРАЕТ ПУШИ ДРУГОГО АККАУНТА. Список календаря
 // держит записи только открытого аккаунта; замена всей группы `event:`
 // снимала пуши событий своего аккаунта, пока человек смотрел чужой.
 

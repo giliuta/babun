@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// КОРЕНЬ «ЗАСТЫВАНИЙ» (владелец 11.10): вопрос из открытого листа больше не
+// КОРЕНЬ «ЗАСТЫВАНИЙ»: вопрос из открытого листа больше не
 // второе окно поверх первого — он ложится в окно листа. Проверено в вебе:
 // вопрос из листа виден внутри него, «Удалить» и «Отмена» доходят.
 
@@ -35,7 +35,7 @@ test("накладка будит только своё место, а не вс
 test("тап мимо листа закрывает его и с рамкой подъёма над клавиатурой", () => {
   // Рамка подъёма во весь экран лежит ПОВЕРХ затемнения (сосед, не предок):
   // без `box-none` она съедала тап, и на Android ни один лист не закрывался
-  // тапом мимо (12.10, подъём у каждого листа).
+  // тапом мимо (подъём у каждого листа).
   const sheet = read("BottomSheet.tsx");
   assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
   const lift = read("KeyboardLift.tsx");
@@ -45,7 +45,7 @@ test("тап мимо листа закрывает его и с рамкой п
 
 test("лист без футера на Android держит отступ навигации снизу", () => {
   // Окно листа edge-to-edge: без отступа последняя строка выбора ложилась под
-  // «Назад / Домой» трёхкнопочной навигации, где её не нажать (13.10).
+  // «Назад / Домой» трёхкнопочной навигации, где её не нажать.
   const sheet = read("BottomSheet.tsx");
   assert.match(sheet, /\) : Platform\.OS === "android" && !keyboardShown \? \(/);
   assert.match(sheet, /<View style=\{\{ height: insets\.bottom \}\} \/>/);
@@ -53,7 +53,7 @@ test("лист без футера на Android держит отступ нав
 
 test("уезжающий лист не тянется, отклонённый свайп возвращает лист", () => {
   // Второй рывок во время выхода срывал анимацию — лист оставался
-  // смонтированным невидимкой со скримом, глотавшим каждый тап (13.10).
+  // смонтированным невидимкой со скримом, глотавшим каждый тап.
   // Жест листа живёт в `bottom-sheet/use-sheet-motion.ts`.
   const sheet = readModuleSource(resolve(here, "BottomSheet.tsx"), resolve(here, "bottom-sheet"));
   assert.match(sheet, /const drag = Gesture\.Pan\(\)[\s\S]{0,700}\.enabled\(visible\)/);
@@ -63,7 +63,7 @@ test("уезжающий лист не тянется, отклонённый с
 
 test("массовая SMS поднимается над клавиатурой и не глотает тап мимо", () => {
   // Сырой Modal edge-to-edge: поле текста и кнопки отправки уходили под
-  // клавиатуру Android, печатали вслепую (13.10).
+  // клавиатуру Android, печатали вслепую.
   const sheet = read("../../features/clients/BulkSmsSheet.tsx");
   assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
   assert.doesNotMatch(sheet, /className="absolute bottom-0 left-0 right-0/);

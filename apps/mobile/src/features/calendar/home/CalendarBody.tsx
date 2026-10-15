@@ -86,7 +86,7 @@ export function CalendarBody({ c }: { c: CalendarController }) {
                     date: todayYmd,
                     time_start: `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`,
                     // Сотруднику с одними «Событиями» — событие: запись ему не
-                    // открыта, и кнопка всегда кончалась отказом (аудит 03.10).
+                    // открыта, и кнопка всегда кончалась отказом.
                     kind: canManageBookings || activeActions.create ? "work" : "event",
                   });
                 }
@@ -103,7 +103,7 @@ export function CalendarBody({ c }: { c: CalendarController }) {
               labelFor={labelFor}
               offLabelColorFor={offLabelColorFor}
               // «Свободное перемещение» заканчивается тапом по сетке — и у
-              // того, кому «Новые записи» закрыты (аудит 03.10).
+              // того, кому «Новые записи» закрыты.
               onCreateAt={canCreateOnGrid || moving || editingApt ? createAtGrid : undefined}
               onSlotLongPress={
                 !canSlotMenu || moving || editingApt || pickClientId ? undefined : slotMenuGrid
@@ -130,7 +130,7 @@ export function CalendarBody({ c }: { c: CalendarController }) {
         </>
       ) : mode === "day" ? (
         <>
-          {/* ПОЛОСЫ-СВОДКИ ДНЯ ЗДЕСЬ НЕТ (владелец 2026-08-15). «N записей ·
+          {/* ПОЛОСЫ-СВОДКИ ДНЯ ЗДЕСЬ НЕТ. «N записей ·
               €X · N без оплаты» пересказывала то, что и так стоит на экране:
               записи видно в сетке, деньги дня — в футере под ней, долги — на
               «Финансах». Ряд пиллов только отжимал сетку вниз. */}
@@ -144,7 +144,7 @@ export function CalendarBody({ c }: { c: CalendarController }) {
               onDayLabelTap={onDayLabelTap}
               onMenu={onMenuGrid}
               // «Свободное перемещение» заканчивается тапом по сетке — и у
-              // того, кому «Новые записи» закрыты (аудит 03.10).
+              // того, кому «Новые записи» закрыты.
               onCreateAt={canCreateOnGrid || moving || editingApt ? createAtGrid : undefined}
               onSlotLongPress={
                 !canSlotMenu || moving || editingApt || pickClientId ? undefined : slotMenuGrid

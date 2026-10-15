@@ -170,7 +170,7 @@ export function inviteBlockers(
   },
 ): InviteBlocker[] {
   const out: InviteBlocker[] = [];
-  // Имя не нужно (01.10): партнёр — со своим аккаунтом, имя и телефон
+  // Имя не нужно: партнёр — со своим аккаунтом, имя и телефон
   // приходят из его профиля при приёме.
   if (!checks.isEmail(draft.email)) out.push("email");
   if (draft.phone.trim() && !checks.isPhone(draft.phone)) out.push("phone");
@@ -209,7 +209,7 @@ export function isDraftDirty(draft: MasterDraft, initialTeamId: string | null): 
   );
 }
 
-/** Черновик по карточке (STORY-087) открывается уже с именем, телефоном и
+/** Черновик по карточке открывается уже с именем, телефоном и
  *  календарями карточки — «грязный» он, только если что-то поменяли против
  *  этого начала. Без сравнения нетронутая «Пригласить в CRM» спрашивала
  *  «Удалить черновик?» на первом же «Назад». */

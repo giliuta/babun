@@ -63,7 +63,7 @@ export function useRowActions(input: RowActionsInput) {
 
   const toggleView = (v: HomeView) => {
     // «Документы» открываются там, где что-то есть: единственный чек месяца
-    // прятался за пустой вкладкой «Инвойсы 0» (аудит 2026-09-30).
+    // прятался за пустой вкладкой «Инвойсы 0».
     if (v === "documents" && view !== "documents") {
       const next = documentsFilterOnOpen(input.periodDocuments.documents, docFilter);
       if (next) setDocFilter(next);
@@ -111,8 +111,8 @@ export function useRowActions(input: RowActionsInput) {
 
   // СТРОКА ЛЮБОЙ ПАНЕЛИ ВЕДЁТ В ОДНО МЕСТО — и в разрезах «Доход / Расход /
   // Долги», и в ленте счёта под «Счетами»: одна дверь на одну строку.
-  // СВАЙП «УДАЛИТЬ» В ЛЕНТЕ (владелец 03.10: «удалить операцию — не кнопка
-  // внизу»; «только у тех, что создаём своими руками»). Строка — одиночная
+  // СВАЙП «УДАЛИТЬ» В ЛЕНТЕ: удаление операции — не кнопка внизу, и только у тех,
+  // что создаём своими руками. Строка — одиночная
   // ручная операция (`deletableByHand`), право — то же, что у правки строки
   // и у витрины (`allow.remove` ниже): перевод и ручной возврат — владельцу.
   // Счёт операции закрыт или удалён — сервер удаление не примет, свайпа нет.
@@ -179,7 +179,7 @@ export function useRowActions(input: RowActionsInput) {
       router.push(`/invoices/${row.invoiceId}` as Href);
       return;
     }
-    // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
+    // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ.
     if (row.appointmentId && openAppointment(row.appointmentId)) return;
     // Ручной долг записи не имеет — открывается он сам.
     if (row.debtId) {

@@ -22,8 +22,8 @@ export function appBuildFacts(): AppBuildFacts {
 export function appUpdateFacts(): AppUpdateFacts {
   return {
     // Сборка разработки берёт код из Metro: `isEnabled` там бывает true, а
-    // проверка обновления падает — строка обещала бы то, чего нет (проверено
-    // на Pro 2026-09-15: «Версия из сборки» с шевроном в дев-клиенте).
+    // проверка обновления падает — строка обещала бы то, чего нет (в дев-клиенте
+    // была бы «Версия из сборки» с шевроном).
     enabled: Updates.isEnabled && !__DEV__,
     embedded: Updates.isEmbeddedLaunch,
     createdAt: Updates.createdAt,

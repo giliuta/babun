@@ -7,7 +7,7 @@ import { helpFaq, LEGAL_LINKS } from "../cabinet/help";
 import { fillLegal, LEGAL_TEXTS, LEGAL_TEXTS_APP, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
 import { isLegalReady } from "./operator";
 
-// ДОКУМЕНТЫ ДЛЯ МАГАЗИНОВ (04.10). Ссылки из карточек App Store и Google Play
+// ДОКУМЕНТЫ ДЛЯ МАГАЗИНОВ. Ссылки из карточек App Store и Google Play
 // обязаны открываться без входа и называть, кто обрабатывает данные; русский
 // и английский — один и тот же документ.
 

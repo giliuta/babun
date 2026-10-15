@@ -229,7 +229,7 @@ export function calculateInvoiceSettlement(
   invoice: Pick<InvoiceLedger, "status" | "total" | "credited_amount">,
   payments: readonly InvoicePaymentLedger[],
 ): InvoiceSettlement {
-  // К ОПЛАТЕ = СУММА − СТОРНИРОВАНО (частичная кредит-нота, 04.10) — то же
+  // К ОПЛАТЕ = СУММА − СТОРНИРОВАНО (частичная кредит-нота) — то же
   // правило, что у сервера (`sync_invoice_status_from_ledger`).
   const due = round2(Math.max(0, invoice.total - (invoice.credited_amount ?? 0)));
   const income = round2(

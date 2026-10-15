@@ -3,7 +3,7 @@ import { isCalendarEvent } from "@/features/calendar/event-access";
 
 /** «Личное» событие — без команды: оно видно в любом календаре, и перенос
  *  или копия по кубику выбранной команды не превращают его в событие этой
- *  команды (аудит 03.10: «Стоматолог» становился виден партнёрам). */
+ *  команды (иначе «Стоматолог» становился виден партнёрам). */
 export function isPersonalEvent(apt: Appointment): boolean {
   return apt.team_id == null && apt.kind !== "work";
 }

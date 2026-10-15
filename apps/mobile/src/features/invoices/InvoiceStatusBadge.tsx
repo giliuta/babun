@@ -9,9 +9,8 @@ import {
 const VARIANT: Record<ReturnType<typeof invoiceDisplayStatus>, BadgeVariant> = {
   issued: "warning",
   partial: "brand",
-  // НЕ danger: «неоплаченный документ — ничего страшного, не надо выставлять
-  // его якобы красным» (владелец 2026-08-15). Слово «Просрочен» сказано — тон
-  // тот же спокойный, что у любого ждущего оплаты.
+  // НЕ danger: неоплаченный документ — не повод для красного. Слово «Просрочен»
+  // сказано — тон тот же спокойный, что у любого ждущего оплаты.
   overdue: "warning",
   paid: "success",
   void: "neutral",

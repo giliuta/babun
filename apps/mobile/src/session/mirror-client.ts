@@ -2,7 +2,7 @@ import type { Client } from "@babun/shared/local/clients";
 
 import type { AccessLevel, MemberAccessMap } from "@/session/access-map";
 
-// ЗЕРКАЛО: СТРОКА КЛИЕНТА ГЛАЗАМИ СОТРУДНИКА (защита базы 30.09).
+// ЗЕРКАЛО: СТРОКА КЛИЕНТА ГЛАЗАМИ СОТРУДНИКА (защита базы).
 //
 // В «Посмотреть его глазами» строки клиентов приходят с сервера по токену
 // ВЛАДЕЛЬЦА — целиком, без `blocks` и `contacts_hidden`. Настоящему сотруднику
@@ -28,8 +28,8 @@ const CARD_KEYS = [
   "clients.requisites",
   "clients.history",
   "clients.sms",
-  // «Меню клиента» и «Удаление клиента» (03.10): без них «его глазами»
-  // никогда не показывало «⋯» и «Удалить», даже когда право дано (аудит).
+  // «Меню клиента» и «Удаление клиента»: без них «его глазами»
+  // никогда не показывало «⋯» и «Удалить», даже когда право дано.
   "clients.menu",
   "clients.delete",
 ] as const;
@@ -63,7 +63,7 @@ export function mirrorClientBlocks(
   for (const key of CARD_KEYS) {
     let best = 0;
     for (const levels of teams) {
-      // «Меняет» блока — своим правом, без «Меняет» у базы (02.10).
+      // «Меняет» блока — своим правом, без «Меняет» у базы.
       best = Math.max(best, RANK[levels[key] ?? "off"] ?? 0);
     }
     out[key] = word(best);
@@ -71,7 +71,7 @@ export function mirrorClientBlocks(
   return out;
 }
 
-/** Номер открыт, когда блок «Клиент» он видит (02.10), как
+/** Номер открыт, когда блок «Клиент» он видит, как
  *  `access_contact_client_ids`. */
 function mirrorContactsHidden(blocks: Readonly<Record<string, string>>): "right" | null {
   return blocks["clients.client"] === "read" || blocks["clients.client"] === "write" ? null : "right";
@@ -83,7 +83,7 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
   const off = (key: string) => blocks[key] !== "read" && blocks[key] !== "write";
   return {
     ...client,
-    // Номер — блок «Клиент» (03.10, `client_masked_for_member`): «Видит» —
+    // Номер — блок «Клиент» (`client_masked_for_member`): «Видит» —
     // контакты целиком, «Скрыт» — без контактов. Точек и двери больше нет.
     ...(off("clients.client")
       ? {
@@ -110,14 +110,14 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
     ...(off("clients.requisites")
       ? { legal_name: null, vat_number: null, reg_number: null, billing_address: null, requisites: [] }
       : {}),
-    // Деньги клиента — вместе с «Историей» (03.10).
+    // Деньги клиента — вместе с «Историей».
     ...(off("clients.history") ? { balance: 0, discount: 0 } : {}),
     contacts_hidden: mirrorContactsHidden(blocks),
     blocks,
   } as Client;
 }
 
-// ─── КАКИЕ КЛИЕНТЫ В ЕГО НАБОРЕ (проверка глазами 30.09) ─────────────────────
+// ─── КАКИЕ КЛИЕНТЫ В ЕГО НАБОРЕ ─────────────────────
 //
 // Маска выше гасит поля, но строк не убирает: по токену владельца сервер
 // отдаёт всю базу, и «Около записи» в зеркале показывало десять клиентов, а
@@ -125,9 +125,8 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
 // `access_client_ids_in` на сервере, И ПО КАЖДОЙ КОМАНДЕ ОТДЕЛЬНО: блоки
 // клиента сервер берёт самыми широкими по командам, ЧЕРЕЗ КОТОРЫЕ клиент
 // виден (`access_client_blocks`), а номер открыт у каждого видимого клиента
-// (`access_contact_client_ids`, 02.10). Видны ТОЛЬКО клиенты, закреплённые
-// за командой (владелец 02.10: «только база клиентов, которая закреплена за
-// командой»), а «Ограничение по времени» сужает их:
+// (`access_contact_client_ids`). Видны ТОЛЬКО клиенты, закреплённые
+// за командой, а «Ограничение по времени» сужает их:
 //   · «Без ограничения» — все клиенты команды;
 //   · «Неделя», «2 недели», «Месяц», «3 месяца», «Полгода» — у клиента есть
 //     запись этой команды не дальше этого срока до или после сегодня;
@@ -149,8 +148,8 @@ export interface MirrorClientData {
   appointments: readonly MirrorScopeAppointment[];
   /** Рабочий день компании (`tenant_business_date`). */
   today: string;
-  /** Клиенты, которых он завёл сам (`created_by`), с их командой: сервер с
-   *  03.10 держит их в наборе команды при любом «Ограничении» — иначе
+  /** Клиенты, которых он завёл сам (`created_by`), с их командой: сервер
+   *  держит их в наборе команды при любом «Ограничении» — иначе
    *  «Создание клиента» рождало клиента, которого тут же «нет». */
   created?: readonly { id: string; team_id: string | null }[];
 }
@@ -191,11 +190,11 @@ export function shiftDay(day: string, days: number): string {
 }
 
 export function mirrorView(map: MemberAccessMap, data: MirrorClientData): MirrorView {
-  // Окно едет вместе с днём (02.10): «2 недели» и «Месяц» до и после записи.
+  // Окно едет вместе с днём: «2 недели» и «Месяц» до и после записи.
   // Окна считаются, только когда день известен: у человека, у которого все
   // команды «Без ограничения», дня нет вовсе, и сдвиг пустой строки бросал
   // «Date value out of bounds» — набор не считался, и список в зеркале был
-  // пуст (владелец 03.10: «почему „Пока нет клиентов"»).
+  // пуст («Пока нет клиентов»).
   const windows: Partial<Record<MirrorScope, readonly [string, string]>> = data.today
     ? {
         week: [shiftDay(data.today, -7), shiftDay(data.today, 7)],

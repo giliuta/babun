@@ -25,8 +25,8 @@ export function useHomeReferences() {
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
   const accountsQuery = useAccountsWithBalances();
-  // Лист перевода — со СКРЫТЫМИ счетами (владелец 03.10: «в конце месяца
-  // переводить на накопительный»); плитки и панель «Счета» их не знают.
+  // Лист перевода — со СКРЫТЫМИ счетами (в конце месяца
+  // переводят на накопительный); плитки и панель «Счета» их не знают.
   const transferAccountsQuery = useAccountsWithBalances({ includeHidden: true });
   // С закрытыми — только ради имён в строках ленты: операция периода могла
   // пройти через счёт, который с тех пор закрыли.
@@ -37,7 +37,7 @@ export function useHomeReferences() {
     () => categoriesQuery.data ?? [],
     [categoriesQuery.data],
   );
-  // Скрытого календаря (владелец 04.10) в ленте и выборе разреза нет; деньги
+  // Скрытого календаря в ленте и выборе разреза нет; деньги
   // его счетов при этом никуда не деваются.
   // `isHidden` is a plain callback (no `this`), safe to destructure.
   const { isHidden } = useCalendarVisibility();

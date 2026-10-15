@@ -260,7 +260,7 @@ export async function restoreClient(
     .single();
   // Номер у клиента уникален среди живых (`clients_tenant_phone_e164_idx`):
   // пока этот лежал в «Удалённых», его номер мог достаться новому клиенту.
-  // Говорим словами, а не «duplicate key value violates…» (аудит 03.10).
+  // Говорим словами, а не «duplicate key value violates…».
   if (error?.code === "23505") {
     throw new Error("Его номер уже у другого клиента — вернуть нельзя, пока номер занят");
   }

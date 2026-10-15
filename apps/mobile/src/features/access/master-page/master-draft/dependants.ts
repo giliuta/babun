@@ -8,7 +8,7 @@ import { defaultLevel } from "./draft";
  *  а выставленное в них сбрасывается. «Новые записи» без «Календаря и записей»
  *  — право на то, чего человек не видит; «Телефоны клиентов» без «Клиентов» —
  *  тоже. Зависимые живут в той же области действия, что и главный
- *  (реестр `access_blocks`, 14.09): календарные — в том же календаре. */
+ *  (реестр `access_blocks`): календарные — в том же календаре. */
 export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // Деньги календаря — тоже под «Календарём и записями» (этап 2): сервер
   // открывает финансы в календаре, только если сам календарь не скрыт
@@ -16,7 +16,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // свёртки владелец выставил бы «Меняет» в деньгах скрытого календаря — и у
   // человека не открылось бы ничего.
   "calendar.records": [
-    // «Ограничения» записей (03.10): записей не видит — и окна у них нет.
+    // «Ограничения» записей: записей не видит — и окна у них нет.
     "calendar.window",
     "calendar.create",
     "calendar.move",
@@ -47,14 +47,14 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "calendar.booking_form",
     "calendar.services",
     "calendar.labels",
-    // Доход и расход дня (04.10) — деньги этого календаря.
+    // Доход и расход дня — деньги этого календаря.
     "calendar.day_money",
     "finance.income",
     "finance.expense",
     "finance.accounts",
     "finance.debts",
     "finance.documents",
-    // «Прибыль» и шестерёнка финансов (владелец 03.10) — деньги той же
+    // «Прибыль» и шестерёнка финансов — деньги той же
     // команды: скрыт календарь — свёрнуты и они.
     "finance.profit",
     "finance.window",
@@ -67,7 +67,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     // команды не гасит их у всей компании (сброс писал бы `team_id: null`).
   ],
   // Скрыты «Карточки клиентов» — нет ни охвата, ни номера, ни одного блока
-  // карточки (защита базы 30.09).
+  // карточки (защита базы).
   clients: [
     "clients.scope",
     "clients.create",
@@ -91,7 +91,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "clients.settings_tags",
     "clients.settings_sources",
   ],
-  // ЦЕПОЧКА ВНУТРИ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»):
+  // ЦЕПОЧКА ВНУТРИ ЗАПИСИ:
   // скрыты услуги — не видно и цен; скрыты цены — оплату не принять, сколько
   // брать, не видно. Строки сворачиваются, положения сбрасываются.
   "record.services": ["record.amount", "record.payment"],
@@ -100,8 +100,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // Сами «Записи событий» стоят под «Записями клиентов», поэтому и блоки
   // события сворачиваются вместе с ними.
   "calendar.events": ["event.label", "event.type", "event.client", "event.object", "event.note", "event.files"],
-  // МЕТКА ЗАПИСИ И СОБЫТИЯ — ПОД «МЕТКОЙ ДНЯ» (владелец 30.09: «на главной
-  // метку скрыл, а в записи клиентов он видит метку — странно выглядит»).
+  // МЕТКА ЗАПИСИ И СОБЫТИЯ — ПОД «МЕТКОЙ ДНЯ» (скрыть метку дня и видеть метку
+  // в записи выглядит странно).
   // Запись без своей метки показывает метку своего дня (`labelFromDay`):
   // скрыть день и оставить метку записи — значит показать половину.
   "calendar.day_labels": ["record.label", "event.label"],
@@ -117,16 +117,14 @@ export function resetOnHide(parentKey: string): readonly string[] {
   return KEEPS_DEPENDANTS.has(parentKey) ? [] : (DEPENDANT_BLOCKS[parentKey] ?? []);
 }
 
-/** «ЗАПИСИ КЛИЕНТОВ» ВЕДУТ «НОВЫЕ ЗАПИСИ» (владелец 30.09: «видит он записи,
- *  не видит вообще записи и может ли создавать запись»). Одна строка на два
+/** «ЗАПИСИ КЛИЕНТОВ» ВЕДУТ «НОВЫЕ ЗАПИСИ». Одна строка на два
  *  права: `calendar.records` — видит ли он записи команды (его проверяет
  *  лента записей на сервере), `calendar.create` — создаёт ли новые (его
  *  проверяет `member_appointment_create`). Строки «Новые записи» отдельно нет. */
 export const RECORDS_KEY = "calendar.records";
 export const CREATE_KEY = "calendar.create";
-/** «Перенос записей» ведёт «Цвет записи» (владелец 30.09: «если я перенос
- *  разрешаю — значит разрешаю свободное перемещение, перенести, копировать,
- *  цвет»): всё меню записи по долгому нажатию — одно право. */
+/** «Перенос записей» ведёт «Цвет записи» (разрешённый перенос — это и
+ *  перемещение, и копирование, и цвет): всё меню записи по долгому нажатию — одно право. */
 export const MOVE_KEY = "calendar.move";
 export const COLOR_KEY = "record.color";
 

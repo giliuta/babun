@@ -133,10 +133,9 @@ export const MonthView = memo(function MonthView({
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               const count = byDay.get(key)?.length ?? 0;
               const totals = totalsByDay.get(key) ?? null;
-              // Метка — и на хвостовых днях чужого месяца (повторный аудит
-              // 03.10): тап по ним открывает шторку метки, а поставленная
+              // Метка — и на хвостовых днях чужого месяца: тап по ним открывает шторку метки, а поставленная
               // метка точкой не показывалась — выбор пропадал на глазах.
-              // ВЫХОДНОЙ — И В МЕСЯЦЕ (аудит шестерёнки 03.10): «Выходной» из
+              // ВЫХОДНОЙ — И В МЕСЯЦЕ: «Выходной» из
               // шторки метки в Месяце не менял клетку вовсе, хотя Неделя и
               // День показывают его вместо метки.
               const dayOff = isDayOff?.(key) === true;
@@ -279,7 +278,7 @@ export const MonthView = memo(function MonthView({
                       <MoneyRow v={totals.debt} color={t.warning} skipZero />
                       <MoneyRow v={totals.income} color={t.success} skipZero />
                       <MoneyRow v={totals.expense} color={t.danger} skipZero />
-                      {/* Прибыль — только когда в дне были деньги (29.09): у дня с
+                      {/* Прибыль — только когда в дне были деньги: у дня с
                           одним планом синий «€0» читался как данные. */}
                       {totals.income !== 0 || totals.expense !== 0 ? (
                         <MoneyRow

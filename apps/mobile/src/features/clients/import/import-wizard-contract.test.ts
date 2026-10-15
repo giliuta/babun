@@ -5,8 +5,7 @@ import { fileURLToPath } from "node:url";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 import { readModuleSource } from "@/lib/module-source";
 
-// ИТОГ ИМПОРТА: ГЛАГОЛ — ТЕМ ЖЕ ПРАВИЛОМ ЧИСЛА, ЧТО «СТРОКА» (13.10, нашла
-// сессия 025). `errorCount === 1 ? "прошла" : "прошли"` давало «21 строка не
+// ИТОГ ИМПОРТА: ГЛАГОЛ — ТЕМ ЖЕ ПРАВИЛОМ ЧИСЛА, ЧТО «СТРОКА». `errorCount === 1 ? "прошла" : "прошли"` давало «21 строка не
 // прошли»; своё сравнение запрещено правилом 8.1 AGENTS.md.
 
 const here = dirname(fileURLToPath(import.meta.url));

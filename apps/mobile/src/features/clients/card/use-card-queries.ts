@@ -26,14 +26,14 @@ export function useCardQueries(id: string, isDraft: boolean, scope: ClientsScope
     isRefetching: clientRetrying,
     refetch: retryClient,
   } = clientQuery;
-  // Номер, открытый сотрудником дверью (30.09), — поверх строки окна: сам
+  // Номер, открытый сотрудником дверью, — поверх строки окна: сам
   // список контактов не несёт, открытое живёт только в памяти.
   const activeTenantId = useTenantId();
   const client = useRevealedClient(clientRow, scope?.tenantId ?? activeTenantId);
   const updateClient = useUpdateClient(isDraft ? "" : id);
   const deleteWithUndo = useDeleteWithUndo();
   const trashAsPartner = useTrashClientAsPartner();
-  // «Записать» в «⋯» (03.10) — тем же гейтом, что строка «Записать» блока
+  // «Записать» в «⋯» — тем же гейтом, что строка «Записать» блока
   // «История», и только с правом «Новые записи» в команде клиента.
   const guardedBook = useGuardedBookingNav();
   const calendarActionsFor = useCalendarActionsReader();

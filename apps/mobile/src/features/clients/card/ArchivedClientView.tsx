@@ -31,7 +31,7 @@ export function ArchivedClientView({
   onRestore: () => Promise<void>;
 }) {
   const t = useThemeColors();
-  // УДАЛЁННЫЙ КЛИЕНТ (архива с 03.10 нет). Срок есть — страница говорит,
+  // УДАЛЁННЫЙ КЛИЕНТ (архива нет). Срок есть — страница говорит,
   // когда его сотрут; нет (у клиента история) — только когда удалён.
   const daysToPurge = client.purge_at ? daysLeft(client.purge_at) : null;
   const archivedAt = client.deleted_at ? new Date(client.deleted_at) : null;

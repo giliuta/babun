@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
-// ДОКУМЕНТЫ БЕЗ СВЯЗИ ПАДАЮТ ЧЕСТНО (проверка системы 03.10).
+// ДОКУМЕНТЫ БЕЗ СВЯЗИ ПАДАЮТ ЧЕСТНО.
 //
 // По умолчанию react-query паркует запись без сети в «паузу» — без ошибки и
 // без конца: «Выставить», «Отменить», «Оплата по инвойсу» и «Выписать чек»

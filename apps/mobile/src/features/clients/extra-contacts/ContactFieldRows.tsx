@@ -51,8 +51,8 @@ export function ContactFieldRows({
         (f) => f.display(client).trim().length > 0 || addingField === f.id,
       ).map((f) => {
         const saved = f.display(client);
-        // Новая строка открывается СРАЗУ С ПРИСТАВКОЙ «@» (владелец
-        // 2026-08-02: «как код страны +357 у телефона»): стереть можно, но
+        // Новая строка открывается СРАЗУ С ПРИСТАВКОЙ «@» (как код страны +357
+        // у телефона): стереть можно, но
         // печатать её каждый раз не нужно.
         const shown = saved || (addingField === f.id ? (f.prefix ?? "") : "");
         const url = f.url(typing?.id === f.id ? typing.value : shown);

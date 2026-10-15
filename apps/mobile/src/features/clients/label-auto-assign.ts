@@ -19,8 +19,7 @@ import { dayCitiesQueryKey } from "@/features/reference/day-cities";
 import { clientsQueryKey } from "./queries";
 import { clientKeys } from "@/lib/client-query-keys";
 
-// Метка дня → метка клиента («Тихий лист 2», решение владельца
-// 2026-07-22). Best-effort вызов из onSuccess создания/переноса записи:
+// Метка дня → метка клиента («Тихий лист 2»). Best-effort вызов из onSuccess создания/переноса записи:
 // рабочая запись в день с ЯВНОЙ меткой (day_cities) переносит её на
 // клиента, пока метку не выбрали вручную (city_manual).
 //
@@ -40,7 +39,7 @@ export async function autoAssignClientLabel(opts: {
   clientId: string;
   teamId: string | null;
   date: string;
-  /** Метка САМОЙ записи (2026-09-04). Есть — она и переезжает на клиента:
+  /** Метка САМОЙ записи. Есть — она и переезжает на клиента:
    *  день в Лимассоле, а этого клиента возили в Пафос, и клиент должен
    *  запомнить Пафос. Нет — работает прежнее правило метки дня. */
   city?: string | null;

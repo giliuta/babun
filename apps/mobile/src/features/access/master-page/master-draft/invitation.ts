@@ -12,7 +12,7 @@ import type { MasterDraft } from "./draft";
  *  `undefined` — набран мусор (тогда кнопку уже остановил `inviteBlockers`, а
  *  здесь номер просто не уйдёт). */
 export interface MasterInvitationRequest {
-  /** Карточка мастера без аккаунта, по которой зовут (STORY-087). */
+  /** Карточка мастера без аккаунта, по которой зовут. */
   masterId?: string | null;
   email: string;
   fullName: string;
@@ -51,8 +51,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 
 /** Ждущее приглашение → черновик его карточки. Колонки `team_ids`,
- *  `master_title`, `master_color` и `access_changes` появились 15.09 и до
- *  обновления базы в строке их может не быть — тогда карточка честно
+ *  `master_title`, `master_color` и `access_changes` до
+ *  обновления базы в строке могут отсутствовать — тогда карточка честно
  *  показывает один домашний `team_id` и права по умолчанию. Незнакомое в
  *  строке пропускается: черновик — не проверка сервера, отказ пришёл бы уже
  *  на сохранении. */

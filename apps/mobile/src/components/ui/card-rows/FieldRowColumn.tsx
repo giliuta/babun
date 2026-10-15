@@ -20,7 +20,7 @@ export function renderFieldRowColumn(v: FieldRowView, column: number) {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          // Плотно, как строка имени (владелец 30.09: «компактно»): 44 —
+          // Плотно, как строка имени: 44 —
           // минимум Apple под палец.
           minHeight: 44,
           paddingLeft: 16,

@@ -92,7 +92,7 @@ export function startSyncRuntime(tenantId: string): () => void {
     onPermanentFailure: opts.onPermanentFailure,
     isOnline: opts.isOnline,
     // Вид только для чтения (шим постраничного календаря) подталкивает
-    // выгрузку собой — сливается она этим, настоящим клиентом (03.10).
+    // выгрузку собой — сливается она этим, настоящим клиентом.
     writeClient: supabase,
   });
   // The clients wrapper intentionally refuses junction-table tag edits while
@@ -118,7 +118,7 @@ export function startSyncRuntime(tenantId: string): () => void {
     unsubscribe = null;
     started = false;
     activeTenantId = null;
-    // ОСТАНОВКА ГАСИТ ВЫГРУЗКУ, НО НЕ ГЕЙТ — как пауза ниже (аудит 04.10).
+    // ОСТАНОВКА ГАСИТ ВЫГРУЗКУ, НО НЕ ГЕЙТ — как пауза ниже.
     // Рантайм останавливается и на выходе из аккаунта, а обёртки кэша зовут
     // `kickReplayer` напрямую: с обнулёнными умолчаниями такой заход сливал
     // очередь вовсе без проверки компании — и уже без входа. Взведённый

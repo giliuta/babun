@@ -28,7 +28,7 @@ export function useHomeGate(
   // and let repeat refunds silently overdraw the ledger.
   const refundTotalsQuery = useRefundTotals();
   const refundTotals = refundTotalsQuery.data;
-  // Σ ВОЗВРАТОВ — ВНЕ ПОЛНОГО ГЕЙТА (аудит финансов 2026-09-24). Витрина
+  // Σ ВОЗВРАТОВ — ВНЕ ПОЛНОГО ГЕЙТА. Витрина
   // операции и лист правки уже консервативны без неё: `alreadyRefunded` /
   // `refundedTotal` ниже подставляют Infinity, пока `refundTotals`
   // не приехал, — «Создать возврат» гасится сам, а не ждёт всей компании.

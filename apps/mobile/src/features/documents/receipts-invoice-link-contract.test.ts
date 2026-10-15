@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// ЧЕК, ВЫПИСАННЫЙ ДО ИНВОЙСА, ВИДЕН НА СТРАНИЦЕ ИНВОЙСА (аудит 03.10).
+// ЧЕК, ВЫПИСАННЫЙ ДО ИНВОЙСА, ВИДЕН НА СТРАНИЦЕ ИНВОЙСА.
 // `issue_invoice` по доходу (p_link_to_tx_id) чек этого дохода к инвойсу не
 // привязывает, а страница искала чеки только по `invoice_id`: старого чека
 // не было видно, «Выписать чек» стоял навсегда, сервер на нажатие отдавал

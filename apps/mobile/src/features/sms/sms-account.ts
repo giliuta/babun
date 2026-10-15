@@ -53,7 +53,7 @@ export {
 } from "./sms-account/checkout";
 
 export function useSmsAccount() {
-  // Баланс АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта —
+  // Баланс АККАУНТА СТРАНИЦЫ: в блоке пригласившего аккаунта —
   // его, а не того, что открыт на телефоне.
   const { tenantId, client, role } = useAccountScope();
   return useQuery({
@@ -88,7 +88,7 @@ export function useSaveTeamSender() {
 /** История: вся или одной команды / одного события. */
 export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; trigger?: string | null }) {
   // История сообщений — только владельцу ЭТОГО аккаунта: партнёр с правом
-  // «SMS» видит баланс, но не переписку с клиентами (04.10).
+  // «SMS» видит баланс, но не переписку с клиентами.
   const { tenantId, client, role } = useAccountScope();
   const teamId = filter?.teamId ?? null;
   const trigger = filter?.trigger ?? null;
@@ -134,8 +134,8 @@ export function useSmsHistoryPages(teamId: string | null) {
 
 /** Сколько ждать между сверками, пока SMS «в пути»; `false` — не сверять.
  *  Статус меняет сервер по отчёту оператора (секунды), а блок читается при
- *  открытии — и «Отправляется» висело, хотя SMS давно «Доставлено» (владелец
- *  03.10). Сверяем только свежие (10 мин): старые без отчёта не крутят сеть. */
+ *  открытии — и «Отправляется» висело бы, хотя SMS давно «Доставлено».
+ *  Сверяем только свежие (10 мин): старые без отчёта не крутят сеть. */
 export function smsInFlightInterval(messages: readonly SmsHistoryItem[] | undefined, now = Date.now()): number | false {
   const fresh = (messages ?? []).some(
     (m) =>
@@ -278,7 +278,7 @@ export function useSetClientSmsOptOut() {
       if (error) throw new Error(error.message);
       return input.value;
     },
-    // КАРТОЧКА ТОЖЕ (аудит 03.10): у неё свой ключ `["client", id, …]`, и после
+    // КАРТОЧКА ТОЖЕ: у неё свой ключ `["client", id, …]`, и после
     // одного `["clients"]` шторка трубки ещё предлагала «Отправить от
     // компании» клиенту, который просил не писать, — сервер отвечал отказом.
     onSettled: (_value, _error, input) => {

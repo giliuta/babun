@@ -19,7 +19,7 @@ export function buildInvoicePdfHtml(
 }
 
 function renderInvoiceHtml(doc: InvoiceDocument): string {
-  // ВИД — КАК У ИНВОЙСА AIRFIX #103 (владелец 2026-09-22), тот же, что у
+  // ВИД — КАК У ИНВОЙСА AIRFIX #103, тот же, что у
   // экранной `InvoicePaper`: логотип слева, INVOICE и номер справа, FROM и
   // BILL TO колонками, таблица в рамке, итоги столбиком, внизу «Notes &
   // payment instructions» и номер документа. Оба рендера правятся вместе.

@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { selectImportable, type MappedRow, type RowReason } from "./csv-validate";
 
-// ДУБЛЬ ИЗ БАЗЫ ПРИ ИМПОРТЕ НЕ ИМПОРТИРУЕТСЯ (аудит 03.10): номер у клиента
+// ДУБЛЬ ИЗ БАЗЫ ПРИ ИМПОРТЕ НЕ ИМПОРТИРУЕТСЯ: номер у клиента
 // уникален, и вариант «Импортировать» гарантированно падал на каждой строке.
 
 const row = (source: number, reasons: RowReason[] = []): MappedRow => ({

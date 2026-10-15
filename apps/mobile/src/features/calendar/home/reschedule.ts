@@ -46,13 +46,13 @@ export function createReschedule(deps: CreateRescheduleDeps) {
     newDate?: string,
     newTeam?: string | null,
   ) => {
-    // Свободное перемещение (24.09) двигает запись и по дням, и в другую
+    // Свободное перемещение двигает запись и по дням, и в другую
     // свою команду; обычная растяжка/перенос в дне даты и команды не несут.
     const date = newDate ?? apt.date;
     const teamId = newTeam === undefined ? apt.team_id : newTeam;
     const dateMoves = date !== apt.date;
     const teamMoves = teamId !== apt.team_id;
-    // ЗАПИСЬ СОТРУДНИКА НЕ УХОДИТ ИЗ СВОЕЙ КОМАНДЫ (владелец 30.09): он
+    // ЗАПИСЬ СОТРУДНИКА НЕ УХОДИТ ИЗ СВОЕЙ КОМАНДЫ: он
     // двигает её по времени и дням, но не в другую команду; сервер такой
     // перевод отбивает (`access:team_move`).
     if (isCrew && teamMoves) {
@@ -73,7 +73,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       return;
     }
     // Ничего не поменялось — ни начало, ни конец. Сравнивать одно начало
-    // нельзя: растяжка за нижний край меняет только конец (24.09).
+    // нельзя: растяжка за нижний край меняет только конец.
     if (
       apt.time_start === newStart &&
       apt.time_end === newEnd &&
@@ -82,7 +82,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
     )
       return;
     // Оплаченную — только в её дне: сервер отказал бы, а экран уже уехал бы
-    // на новую неделю, и запись пропала бы с глаз (повторный аудит 03.10).
+    // на новую неделю, и запись пропала бы с глаз.
     if ((dateMoves || teamMoves) && settledVisit(apt)) {
       toast(SETTLED_STAYS, "info");
       return;
@@ -129,7 +129,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
     };
     // Запись ушла за видимую неделю («вправо сильно — перелистнёт») —
     // календарь едет за ней, чтобы она осталась перед глазами. ТОЛЬКО ЗА
-    // неделю (повторный аудит 03.10): внутри недели смена выбранного дня
+    // неделю: внутри недели смена выбранного дня
     // перекручивала сетку к часу открытия того дня — запись уходила с экрана
     // посреди правки.
     if (dateMoves && !(mode === "week" && weekYmds.includes(date))) {

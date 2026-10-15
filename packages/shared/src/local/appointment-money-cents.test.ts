@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { getDebtAmount, getPaidAmount } from "./appointments";
 import type { Appointment } from "./appointments";
 
-// ДОЛГ И ОПЛАЧЕНО — ДО ЦЕНТА (проверка системы 03.10). Во float аванс 4,76 +
+// ДОЛГ И ОПЛАЧЕНО — ДО ЦЕНТА. Во float аванс 4,76 +
 // платёж 7,14 = 11.899999…, и у полностью оплаченной записи появлялся долг
 // 1.8e-15: строка «€0» в «Долгах», в долгах дня и у клиента.
 

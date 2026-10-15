@@ -47,7 +47,7 @@ export async function createClientTag(
     color: string;
     icon?: string | null;
     position?: number;
-    /** Команда тега — обязательна (у каждой команды свои теги, 30.09). */
+    /** Команда тега — обязательна (у каждой команды свои теги). */
     team_id: string;
   },
   tenantId: string,
@@ -158,7 +158,7 @@ export async function updateClientTag(
     expected_updated_at: null, // no updated_at column → no detection
   };
 
-  // ПОРЯДОК ПРАВОК ТЕГА — ПОРЯДОК ЖЕСТОВ (аудит работы без сети 03.10). У тега
+  // ПОРЯДОК ПРАВОК ТЕГА — ПОРЯДОК ЖЕСТОВ. У тега
   // нет `updated_at`, и очередь шлёт его правку без сторожа: правка A→B,
   // упавшая на обрыве в очередь, долетала ПОСЛЕ прошедшей в сети B→C и
   // возвращала B. Есть ждущие правки этого тега — новая встаёт за ними.

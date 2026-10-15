@@ -60,8 +60,8 @@ export function buildFacetConfig(
   applyFilter: (next: ClientsFilter) => void,
 ): Record<FacetSheet, FacetConfig> {
   const { cityOptions, tagOptions, teamOptions, facetCounts } = result;
-  // ТИКА У СТАТУСОВ НЕТ (владелец 2026-08-07: «убери жёлтые штучки
-  // должников слева, всё в одном стиле»). Цветная полоска — признак
+  // ТИКА У СТАТУСОВ НЕТ: всё в одном стиле, без жёлтых штучек у должников.
+  // Цветная полоска — признак
   // СУЩНОСТИ со своим цветом (метка, тег, команда); у статуса цвета нет,
   // и раскрашенные ряды рвали ровный список на пёстрый.
   const segmentBlocks: FacetOption[][] = SEGMENT_BLOCKS.map((block) =>

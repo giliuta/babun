@@ -13,15 +13,15 @@ import {
 
 /** Which blocks this team's record and event show, and how they are coloured. */
 export function useBookBlocks(teamId: string | null) {
-  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
-  // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
+  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись»: например, бьюти-мастерам объект не нужен — его
+  // можно убрать).
   const blocks = useBookingBlocks(teamId);
   const showObject = blocks.includes("object");
   const showLabelBlock = blocks.includes("label");
   const showPayment = blocks.includes("payment");
   const showNote = blocks.includes("note");
   const showFiles = blocks.includes("files");
-  // БЛОКИ СОБЫТИЯ — СВОИ (владелец 24.09, «Дизайн» → «Блоки события»): у
+  // БЛОКИ СОБЫТИЯ — СВОИ («Дизайн» → «Блоки события»): у
   // события заметка или объект включаются отдельно от записи.
   const eventBlocks = useEventBlocks(teamId);
   const evShowLabel = eventBlocks.includes("label");
@@ -38,7 +38,7 @@ export function useBookBlocks(teamId: string | null) {
   const fallbackColor = useFallbackColor(teamId);
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
-      // Подсветка — только у включённых блоков (владелец 25.09).
+      // Подсветка — только у включённых блоков.
       COLOR_SITUATIONS.map((s) => s.id).filter((id) =>
         id === "noObject" ? showObject : showPayment,
       ),

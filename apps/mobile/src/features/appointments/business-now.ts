@@ -22,8 +22,7 @@ export function businessNowFrom(date: Date): BusinessNow {
  *  `teamId` — команда записи: у команды бывает свой пояс, и запись стоит в
  *  ЕЁ часах. Без него лондонская команда кипрского аккаунта в 09:30 по
  *  Лондону (11:30 по Кипру) считала визит в 10:00 начавшимся — тап по счёту
- *  уходил окончательной оплатой и закрывал визит за полчаса до него (аудит
- *  формы записи 03.10). Тот же порядок, что у даты записи:
+ *  уходил окончательной оплатой и закрывал визит за полчаса до него. Тот же порядок, что у даты записи:
  *  `team.timezone ?? calendarSettings.timezone`. */
 export function useBusinessNow(teamId?: string | null): () => BusinessNow {
   const { data: calendarSettings } = useCalendarSettings();

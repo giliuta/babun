@@ -88,9 +88,9 @@ export async function setDayCity(
 /** Bulk-rename a label across every day assignment of the tenant —
  *  day_cities stores plain names, so a library rename must cascade
  *  here or old assignments silently orphan (grey ghost labels). */
-/** ПЕРЕИМЕНОВАНИЕ — ТОЛЬКО В СВОЕЙ КОМАНДЕ (2026-08-29).
+/** ПЕРЕИМЕНОВАНИЕ — ТОЛЬКО В СВОЕЙ КОМАНДЕ.
  *
- *  С тех пор как метка принадлежит команде (`cities.team_id`), одноимённые
+ *  Метка принадлежит команде (`cities.team_id`), поэтому одноимённые
  *  метки в разных календарях — РАЗНЫЕ метки. Правка по одному лишь имени
  *  переименовала бы дни всех команд разом: диспетчер правит «Лимассол» у
  *  своей бригады, а уезжает он у трёх чужих. */

@@ -37,13 +37,13 @@ export function useImportWizard({
   teamId: string | null;
 }) {
   const t = useThemeColors();
-  // Тег импорта — из тегов команды, в которую идёт импорт (30.09).
+  // Тег импорта — из тегов команды, в которую идёт импорт.
   const { data: allTags = [] } = useClientTags();
   const tags = useMemo(
     () => (teamId ? allTags.filter((tag) => !tag.team_id || tag.team_id === teamId) : allTags),
     [allTags, teamId],
   );
-  // Дубли — из той же компании, куда пишет импорт (компания вкладки, 03.10).
+  // Дубли — из той же компании, куда пишет импорт (компания вкладки).
   // Привязанный клиент строится в самой проверке: `useScopeCompany().client`
   // новый на каждый кадр и в зависимостях колбэка не живёт.
   const { tenantId, foreign: scopeForeign } = useScopeCompany();
@@ -53,7 +53,7 @@ export function useImportWizard({
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<ImportableField[]>([]);
-  // КОД СТРАНЫ — ИЗ ЧАСОВОГО ПОЯСА КОМАНДЫ, КУДА ИДЁТ ИМПОРТ (правило 02.10),
+  // КОД СТРАНЫ — ИЗ ЧАСОВОГО ПОЯСА КОМАНДЫ, КУДА ИДЁТ ИМПОРТ,
   // а не «CY» продукта: у греческой команды номера без кода — греческие.
   // Выбранный руками сильнее.
   const teamCountry = useDefaultCountry(teamId);

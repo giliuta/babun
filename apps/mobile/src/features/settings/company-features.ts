@@ -9,7 +9,7 @@ import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import { fetchCalendarSettings } from "@/session/company-fetchers";
 import { useCalendarSettings } from "./local-settings";
 
-// ФУНКЦИИ КОМПАНИИ НА ЭКРАНЕ (STORY-088). Читаются той же дверью, что
+// ФУНКЦИИ КОМПАНИИ НА ЭКРАНЕ. Читаются той же дверью, что
 // остальные настройки компании (`useCalendarSettings`: сервер + кэш телефона,
 // владелец и сотрудник), пишутся тем же патчем (`useSaveCalendarSettings`,
 // только владелец). Своего кэша и своей мутации у функций нет — второй двери
@@ -21,7 +21,7 @@ export function useDisabledFeatures(): readonly CompanyFeatureKey[] {
   return useCalendarSettings().data?.disabledFeatures ?? [];
 }
 
-/** Выключенные функции компании ЭКРАНА КЛИЕНТОВ (03.10): у строки
+/** Выключенные функции компании ЭКРАНА КЛИЕНТОВ: у строки
  *  работодателя в общем списке и у карточки с `?tenant=` — ЕГО компании, а не
  *  открытой в календаре (`useScopeCompany`). «Поделиться» его клиентом брал
  *  реквизиты по выключателю своей компании. Чужая читается привязанным
@@ -43,7 +43,7 @@ export function useScopeDisabledFeatures(): readonly CompanyFeatureKey[] {
 }
 
 /** Включена ли функция в компании. Выключенная прячется у ВСЕХ, у
- *  владельца тоже (владелец 24.09). */
+ *  владельца тоже. */
 export function useFeatureOn(key: CompanyFeatureKey): boolean {
   return isFeatureOn(useDisabledFeatures(), key);
 }

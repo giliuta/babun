@@ -3,7 +3,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 // Beta #54 — maps deep-link with the day's addresses as waypoints, in
 // visit order (web AgendaView). No route optimization (paid quota) — the
 // dispatcher just gets every address pinned in order.
-// МАРШРУТ — ТОЛЬКО ПО ВЫЕЗДАМ (повторный аудит 03.10): отменённый визит и
+// МАРШРУТ — ТОЛЬКО ПО ВЫЕЗДАМ: отменённый визит и
 // событие в него не входят, а адрес — как у блока сетки, с адресом клиента
 // вместо пустого снимка; иначе мастера везло на отменённый визит, а
 // старые записи без снимка из маршрута выпадали.

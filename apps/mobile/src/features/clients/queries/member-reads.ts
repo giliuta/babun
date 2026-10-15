@@ -28,10 +28,10 @@ export async function listMasterClientsSafe(
  *  такое же окно, и второй разборщик разошёлся бы с этим на первом же поле. */
 export function memberClientJsonToClient(row: unknown): Client {
   const record = row as Parameters<typeof rowToClient>[0] & { tag_ids?: unknown };
-  // Почему номера нет (30.09): у строки сотрудника ключ есть всегда, у
+  // Почему номера нет: у строки сотрудника ключ есть всегда, у
   // владельца его нет — и карточка ведёт себя по-прежнему.
   const hidden = contactsHiddenOf(record);
-  // Права по блокам карточки (015, 30.09): нет ключа — владелец.
+  // Права по блокам карточки: нет ключа — владелец.
   const blocks = parseClientBlocks((record as { blocks?: unknown }).blocks);
   return {
     ...rowToClient(record),
@@ -43,7 +43,7 @@ export function memberClientJsonToClient(row: unknown): Client {
   };
 }
 
-/** НОМЕР ОДНОГО КЛИЕНТА — ДВЕРЬЮ (015 + 014, 30.09). Пишет в журнал и
+/** НОМЕР ОДНОГО КЛИЕНТА — ДВЕРЬЮ. Пишет в журнал и
  *  тратит дневной лимит: звать только по действию человека (тап по
  *  звонку), не при открытии карточки, и не класть в офлайн-очередь. Отказ
  *  — ответом (`day` / `right` / `limit`), ошибка — только «клиента нет в

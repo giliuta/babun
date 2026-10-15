@@ -34,8 +34,7 @@ export function serviceLineActions({
   const setLinePrice = (id: string, price: number) => {
     setOverrides((p) => ({ ...p, [id]: { ...p[id], price: Math.max(0, price) } }));
   };
-  // СВОЯ СТРОКА ЗАПИСИ (владелец 2026-09-22: «в „Итого“ справа — добавить
-  // ещё одну услугу»). Не из прайса: имя, цена и время 0 держит замок
+  // СВОЯ СТРОКА ЗАПИСИ (в «Итого» справа — добавить ещё одну услугу). Не из прайса: имя, цена и время 0 держит замок
   // снимка (`locked`), как у сохранённой строки, — `buildServices` читает
   // их оттуда, каталог ей не нужен.
   const addCustomLine = () => {
@@ -61,8 +60,7 @@ export function serviceLineActions({
   const removeCustomLine = (id: string) => {
     setServiceIds((p) => p.filter((x) => x !== id));
   };
-  // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (владелец 2026-09-22: «стираем имя
-  // услуги — и она удаляется»).
+  // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (стёрли имя услуги — строка удаляется).
   const closeTotalSheet = () => {
     const empty = new Set(
       selectedServices

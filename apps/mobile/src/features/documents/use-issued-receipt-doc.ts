@@ -16,7 +16,7 @@ import { useReceiptAppointment } from "@/features/finances/receipts-queries";
 
 // БУМАГА ВЫПИСАННОГО ЧЕКА — ОДНО ПРАВИЛО НА СТРАНИЦУ ЧЕКА И PDF.
 //
-// Свой снимок строк сильнее любого источника (чеки с 20.09). У старых чеков
+// Свой снимок строк сильнее любого источника. У старых чеков
 // перечень собирается из инвойса или записи за спиной проводки — и только
 // когда чек закрывает источник ЦЕЛИКОМ: «Итого работ €250» рядом с
 // «Получено €100» без слова об остатке была бы неправдой.
@@ -56,7 +56,7 @@ export function useIssuedReceiptDoc(receipt: Receipt | null): {
       lineItems = receiptLinesFromAppointment(appointment);
     }
   }
-  // Как у черновика: язык инвойса, без инвойса — английский (владелец 04.10).
+  // Как у черновика: язык инвойса, без инвойса — английский.
   const paperLanguage = invoiceQuery.data?.language;
   const language: InvoiceLanguage = isUiLocale(paperLanguage) ? paperLanguage : "en";
   const invoiceNumber = invoiceQuery.data?.number ?? null;

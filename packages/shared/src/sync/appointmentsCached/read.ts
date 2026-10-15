@@ -124,7 +124,7 @@ async function refreshCacheFromSupabase(
   const appts = domain ?? (await repoListAppointments(supabase, tenantId));
   const rows = appts.map((a) => makeCachedRow(a, tenantId));
   const cachedRows = await safeCacheReadAppointments(tenantId);
-  // ЗАПИСЬ, НЕ ДОШЕДШАЯ ДО СЕРВЕРА, С СЕТКИ НЕ ПРОПАДАЕТ (аудит 03.10). Её
+  // ЗАПИСЬ, НЕ ДОШЕДШАЯ ДО СЕРВЕРА, С СЕТКИ НЕ ПРОПАДАЕТ. Её
   // вставка, отклонённая навсегда (например, клиента с этим номером успели
   // завести с другого телефона, и вставка записи упала на его отсутствии),
   // перечитку не держит — и замена кэша снимком сервера стирала запись с

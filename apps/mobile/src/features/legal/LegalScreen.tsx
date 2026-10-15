@@ -14,7 +14,7 @@ import { useThemeColors } from "@/theme/colors";
 import { fillLegal, LEGAL_SHORT, LEGAL_TEXTS, LEGAL_TEXTS_APP, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
 import { LEGAL_OPERATOR, legalEmail } from "./operator";
 
-// ДОКУМЕНТ — ПОЛИТИКА, УСЛОВИЯ, УДАЛЕНИЕ АККАУНТА (04.10, выпуск в магазины).
+// ДОКУМЕНТ — ПОЛИТИКА, УСЛОВИЯ, УДАЛЕНИЕ АККАУНТА (выпуск в магазины).
 //
 // Открывается без входа (babun.app/privacy и т. д. — ссылки из карточек App
 // Store и Google Play, с экрана регистрации и из «Помощи»). Шапка — короткое

@@ -32,7 +32,7 @@ import { PartnerPersonalBlocks } from "./PartnerPersonalBlocks";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
 
-// МАСТЕР БЕЗ АККАУНТА — ТА ЖЕ СТРАНИЦА (STORY-087). Карточка мастера без входа
+// МАСТЕР БЕЗ АККАУНТА — ТА ЖЕ СТРАНИЦА. Карточка мастера без входа
 // в CRM законна: владелец ставит его в календарь и сам ведёт записи. Раньше
 // она открывалась старым хабом (аватар, «Информация», «Визиты», тумблер), а
 // теперь — тем же телом, что сотрудник: «Сотрудник», «Календари», «Работа»,
@@ -183,8 +183,7 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
       areaLevels={null}
       onOpenArea={() => {}}
       phoneAction={card.phone ? <PhoneChannelButton number={card.phone} label={name} /> : undefined}
-      // ДОСТУП В CRM — ПЛИТКОЙ ПОД БЛОКОМ «СОТРУДНИК» (владелец 29.09,
-      // вариант 3), а не отдельным блоком: нет доступа — плитка зовёт
+      // ДОСТУП В CRM — ПЛИТКОЙ ПОД БЛОКОМ «СОТРУДНИК», а не отдельным блоком: нет доступа — плитка зовёт
       // пригласить, приглашение ушло — ведёт на него.
       access={
         pending

@@ -3,8 +3,8 @@
 
 import { entityNoun, type ChangeLogRow } from "./row";
 
-// ── ФИЛЬТРЫ ИСТОРИИ (владелец 03.10: «фильтрацию как в клиентах — просто
-//    красивые фильтры всех изменений») ─────────────────────────────────────
+// ── ФИЛЬТРЫ ИСТОРИИ (как в клиентах — просто
+//    красивые фильтры всех изменений) ─────────────────────────────────────
 
 /** Что изменили — крупными видами, а не по таблицам. */
 export type ChangeKind = "records" | "events" | "clients" | "money" | "people" | "settings";
@@ -54,7 +54,7 @@ export const HISTORY_PERIODS: { value: HistoryPeriod; label: string }[] = [
 /** Границы периода по часам телефона: с какого момента и до какого. */
 export function periodRange(period: HistoryPeriod, now: Date = new Date()): { from: string | null; to: string | null } {
   // Календарными днями, а не «минус 24 часа»: в ночь перехода на зимнее время
-  // (25.10) сутки длятся 25 часов, и вычитание сдвигало границу на час.
+  // сутки длятся 25 часов, и вычитание сдвигало границу на час.
   const dayStart = (back: number) => {
     const d = new Date(now);
     d.setHours(0, 0, 0, 0);
@@ -152,7 +152,7 @@ export function collapseBursts(rows: readonly ChangeLogRow[]): ChangeLogItem[] {
       last.row.entity === row.entity &&
       last.row.action === row.action &&
       // Одна команда и один вид предмета: событие и записи, доход и расход в
-      // одну «×3» не склеиваются (проверка 03.10).
+      // одну «×3» не склеиваются.
       last.row.team_id === row.team_id &&
       entityNoun(last.row).word === entityNoun(row).word &&
       (row.entity !== "member_access" || last.row.label === row.label) &&

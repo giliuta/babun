@@ -30,7 +30,7 @@ export function HourCells({
     slotTimeAt(hour, locationY, hourH);
   const onSlotPress = (hour: number, locationY: number) => {
     if (!onCreateAt) return;
-    // Касание свободного времени ощущается рукой (владелец 04.10).
+    // Касание свободного времени ощущается рукой.
     haptics.tap();
     onCreateAt(dateYmd, slotTime(hour, locationY));
   };
@@ -64,8 +64,7 @@ export function HourCells({
           <Pressable
             key={h}
             onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
-            // ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ (владелец 2026-09-24:
-            // «перерыв — интересная идея»): разметка дня без формы записи.
+            // ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ: разметка дня без формы записи.
             onLongPress={
               onSlotLongPress
                 ? (e) =>

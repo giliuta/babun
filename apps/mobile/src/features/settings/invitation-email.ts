@@ -2,7 +2,7 @@ import { uiLocale } from "@babun/shared/i18n/locale";
 import { supabase } from "@/lib/supabase";
 
 /**
- * ПИСЬМО-ПРИГЛАШЕНИЕ ПАРТНЁРУ (владелец 04.10). Зовётся сразу после
+ * ПИСЬМО-ПРИГЛАШЕНИЕ ПАРТНЁРУ. Зовётся сразу после
  * `create_invitation`: edge-функция `invite-email` шлёт письмо с адреса Babun
  * на языке того, кто зовёт. Права, лимиты и штамп отправки проверяет сервер
  * (`claim_invitation_email`).

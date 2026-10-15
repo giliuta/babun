@@ -68,7 +68,7 @@ export function CrewAppointmentSheet({
   const role = useCurrentRole().data;
   const access = useMyAccess().data;
 
-  // Функции компании плюс блоки «Дизайна» команды записи (24.09).
+  // Функции компании плюс блоки «Дизайна» команды записи.
   const disabledFeatures = useRecordFeaturesOff(appointment?.team_id ?? null);
   const blocks = crewBlocks({
     role,

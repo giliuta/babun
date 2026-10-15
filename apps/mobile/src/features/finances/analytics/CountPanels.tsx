@@ -120,7 +120,7 @@ export function TeamsPanel({ a, panel }: { a: Analytics; panel: "records" | "che
     <>
       <PanelHeader
         // Панель одна на три плитки — шапка называет, ЧТО сравнивается
-        // (аудит 2026-09-24): иначе, пролистав, не понять, часы это
+        //: иначе, пролистав, не понять, часы это
         // или записи.
         title={`${panelCount("Команды", teamRows.length)} · ${
           panel === "time" ? "часы" : panel === "check" ? "средний чек" : "записи"

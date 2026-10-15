@@ -16,7 +16,7 @@ import { calendarScreenSource } from "@/features/calendar/home/source-for-tests"
 import { readModuleSource } from "./module-source";
 import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
 
-// ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review, 06.10).
+// ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review).
 //
 // Журнал сервера: logout 07:10:53.414, через 0,4 с — `GET /cities` БЕЗ токена,
 // 200 и пусто; вход 07:11:13 — метки дней перечитаны, сами метки нет. На

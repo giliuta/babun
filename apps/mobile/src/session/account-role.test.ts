@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import { roleInAccount } from "./account-role";
 
-// РОЛЬ В АККАУНТЕ СТРАНИЦЫ (04.10): аккаунт со ссылки (`?tenant=`) на слово не
+// РОЛЬ В АККАУНТЕ СТРАНИЦЫ: аккаунт со ссылки (`?tenant=`) на слово не
 // берут — роль только из своих членств.
 describe("роль в аккаунте страницы Кабинета", () => {
   const memberships = [

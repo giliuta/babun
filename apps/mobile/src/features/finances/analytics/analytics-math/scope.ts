@@ -22,9 +22,9 @@ export interface Scope {
 export const cents = (v: number) => Math.round(v * 100);
 export const euros = (c: number) => c / 100;
 
-// СЕГОДНЯШНЯЯ ЗАПИСЬ — СДЕЛАНА, КОГДА ЕЁ ВРЕМЯ ПРОШЛО (аудит 2026-09-24).
-// Раньше хватало `date <= today`: запись на 18:00 ложилась в «Записи»,
-// «Время» и «Средний чек» с утра, и цифры росли весь день сами, раньше работы.
+// СЕГОДНЯШНЯЯ ЗАПИСЬ — СДЕЛАНА, КОГДА ЕЁ ВРЕМЯ ПРОШЛО.
+// Одного `date <= today` мало: запись на 18:00 ложилась бы в «Записи»,
+// «Время» и «Средний чек» с утра, и цифры росли бы весь день сами, раньше работы.
 export function isPerformed(a: Appointment, today: string, nowHm?: string): boolean {
   if (a.kind && a.kind !== "work") return false;
   if (a.status === "cancelled") return false;

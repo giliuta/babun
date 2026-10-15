@@ -26,13 +26,13 @@ export function useCalendarHeaderNav(deps: UseCalendarHeaderNavDeps) {
     setEditingApt, setMoving, rememberView, rememberViewRef, setMiniCalOpen,
   } = deps;
   // Неделя на стыке месяцев называет оба (`header-title.ts`). «Список» —
-  // месяц, как и его лента (владелец 2026-09-29).
+  // месяц, как и его лента.
   const headerTitle =
     mode === "week" && weekDays.length > 0
       ? weekTitle(weekDays[0], weekDays[weekDays.length - 1])
       : monthTitle(mode === "month" || mode === "agenda" ? monthAnchor : day);
 
-  // «Список» живёт месяцем, как и «Месяц» (повторный аудит 03.10): по дню
+  // «Список» живёт месяцем, как и «Месяц»: по дню
   // кнопка «Сегодня» появлялась в текущем месяце, а тап по ней только прятал
   // её — лента никуда не ехала.
   const isOnToday =
@@ -57,7 +57,7 @@ export function useCalendarHeaderNav(deps: UseCalendarHeaderNavDeps) {
     }
     // В Месяце и Списке тянуть нечего — «Свободное перемещение» снимается.
     // И перенос с копией: зелёных кубиков там нет, а плашка «Выберите
-    // зелёное время» висела над видом без них (аудит 03.10).
+    // зелёное время» висела над видом без них.
     if (m === "month" || m === "agenda") {
       setEditingApt(null);
       setMoving(null);

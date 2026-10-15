@@ -120,9 +120,8 @@ describe("уровни выбранной команды", () => {
     assert.deepEqual(access.footer("debt"), { enabled: true, reason: null });
     assert.deepEqual(access.footer("accounts"), { enabled: false, reason: null });
     assert.equal(access.view("accounts"), "all");
-    // ПЛАШКА «ДОКУМЕНТЫ» ОТКРЫВАЕТСЯ (владелец 20.09: «всё равно остаётся
-    // плашка „Документы“, и там просто не показываются документы»): вид
-    // включается, список приходит пустым, а футер гаснет — права нет.
+    // ПЛАШКА «ДОКУМЕНТЫ» ОТКРЫВАЕТСЯ И БЕЗ ДОСТУПА (просто не показываются документы):
+    // вид включается, список приходит пустым, а футер гаснет — права нет.
     assert.equal(access.view("documents"), "documents");
     assert.deepEqual(access.footer("documents"), { enabled: false, reason: null });
     assert.equal(access.view("debt"), "debt");

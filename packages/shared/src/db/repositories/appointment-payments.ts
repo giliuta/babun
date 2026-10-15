@@ -78,7 +78,7 @@ export interface RefundAppointmentOverpaymentInput {
 }
 
 /** Вернуть клиенту часть полученного по записи (итог стал меньше оплаты).
- *  Сервер (`refund_appointment_overpayment`, 04.10) пишет возвраты
+ *  Сервер (`refund_appointment_overpayment`) пишет возвраты
  *  «Возврат клиенту» по платежам от последнего к первому и возвращает
  *  свежую строку записи; повтор того же `requestId` ничего не задваивает. */
 export async function refundAppointmentOverpayment(

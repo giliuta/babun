@@ -6,8 +6,7 @@ import { clientKeys } from "@/lib/client-query-keys";
 
 export { pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
 
-// ФАЙЛЫ НОВОЙ ЗАПИСИ ЖДУТ ЕЁ ID — как ждёт оплата (владелец 2026-09-06: «тут
-// нет блока файлы» у новой записи). Пока записи нет, выбранное лежит в
+// ФАЙЛЫ НОВОЙ ЗАПИСИ ЖДУТ ЕЁ ID — как ждёт оплата. Пока записи нет, выбранное лежит в
 // очереди страницы и рисуется плитками; после «Создать запись» очередь
 // уезжает тем же путём, что тап по «Добавить» у сохранённой.
 
@@ -34,7 +33,7 @@ export async function uploadPendingFiles(args: {
     } catch (error) {
       // Не уехало — только то, что повтор отдал назад: уже выгруженные
       // файлы лежат на записи, и назвать их «не загружены» значило бы
-      // позвать добавить их второй раз (аудит формы записи 03.10).
+      // позвать добавить их второй раз.
       const left =
         error instanceof RetryableAppointmentPhotoUploadError
           ? new Set(error.retryInput.assets)

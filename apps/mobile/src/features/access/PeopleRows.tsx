@@ -9,7 +9,7 @@ import { readableForeground } from "@/theme/readable-color";
 import { waitSubtitle } from "./invitation-wait";
 import type { CalendarMember } from "@/session/access-queries";
 
-// СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах» (STORY-081): кто уже с доступом и кто
+// СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах»: кто уже с доступом и кто
 // ещё не ответил на приглашение. Ритм тот же, что у карточки мастера на экране:
 // один список не должен выглядеть тремя.
 
@@ -57,7 +57,7 @@ export function MemberRow({
 }
 
 /** Приглашение, на которое ещё не ответили. Тап открывает его карточку
- *  (владелец 15.09: приглашение — та же полная карточка мастера); «Поделиться
+ *  (приглашение — та же полная карточка мастера); «Поделиться
  *  ссылкой» и «Отозвать» живут в ⋯ этой карточки, а не в меню строки. */
 export function PendingInvitationRow({
   invitation,
@@ -81,8 +81,7 @@ export function PendingInvitationRow({
         <Mail color={t.faint} size={18} />
       </View>
       <View className="flex-1">
-        {/* Имя из приглашения (владелец 15.09: «мини-информация о человеке»);
-            без имени строку по-прежнему называет почта. */}
+        {/* Имя из приглашения; без имени строку по-прежнему называет почта. */}
         <Text style={{ fontSize: 16, fontWeight: "600", color: t.ink }} numberOfLines={1}>
           {invitation.full_name || invitation.email}
         </Text>

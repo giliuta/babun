@@ -52,12 +52,9 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     editingApt, setEditingApt, moving, placedFromRef, movingKind, workBandFor,
     setNotice, setSlotDraft, tenantId,
   } = deps;
-  /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ (владелец 2026-08-24: «в
-   *  прошлом чёрная плашка вылазит сверху — нельзя заполнить в прошлом, — и
-   *  там кнопочка: нажимаю, и тогда оно даёт возможность записи»). До этого
-   *  дня запрет был глухим (2026-08-07: «как можно записать то, что уже
-   *  было»), и он мешал ровно там, где выезд состоялся, а завести его забыли.
-   *  Теперь правило осталось правилом — но у него есть дверь, и человек
+  /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ: в прошлом сверху
+   *  выезжает плашка с кнопкой. Глухой запрет мешал бы ровно там, где выезд
+   *  состоялся, а завести его забыли. Поэтому у правила есть дверь, и человек
    *  открывает её осознанно, одним тапом по кнопке на плашке (см. createAt).
    *  Перенос существующей записи это не трогает: у него свои правила. */
   const isPastSlot = (dateYmd: string, timeStart: string): boolean =>
@@ -106,7 +103,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
   const copyToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
     setMoving(null);
-    // СОТРУДНИК КОПИРУЕТ НА СЕРВЕРЕ И ТОЛЬКО В ТУ ЖЕ КОМАНДУ (владелец 30.09):
+    // СОТРУДНИК КОПИРУЕТ НА СЕРВЕРЕ И ТОЛЬКО В ТУ ЖЕ КОМАНДУ:
     // копия встаёт туда же, где оригинал, какой бы чип ни был выбран.
     if (isCrew) {
       const attempt = `copy|${apt.id}|${dateYmd}|${timeStart}`;
@@ -155,11 +152,11 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
    *  снимается (оно целилось в старое время). Откат — из тоста. */
   const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
-    // Сотрудник переносит только внутри команды записи (владелец 30.09).
+    // Сотрудник переносит только внутри команды записи.
     const toTeam = isCrew || isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
     const teamChanges = toTeam !== apt.team_id;
     // Оплаченная — только в её дне; режим остаётся: кубик её дня ещё можно
-    // выбрать (повторный аудит 03.10).
+    // выбрать.
     if ((teamChanges || dateYmd !== apt.date) && settledVisit(apt)) {
       toast(SETTLED_STAYS, "info");
       return false;
@@ -218,12 +215,10 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
 
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
   const createAt = (dateYmd: string, timeStart: string) => {
-    // СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ: ТАП ПО ПУСТОМУ МЕСТУ — ГОТОВО (владелец 24.09:
-    // «поставил в нужное место — тапаю по любому незанятому месту, и она
-    // остаётся, перемещение заканчивается»). Запись двигают пальцем —
+    // СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ: ТАП ПО ПУСТОМУ МЕСТУ — ГОТОВО: запись двигают пальцем —
     // по времени, по дням, в соседнюю неделю краем экрана; тап только
-    // отпускает её. Раньше тап переносил запись в место тапа, и «отпустить»
-    // её было нечем, кроме крестика на плашке.
+    // отпускает её (если бы тап переносил запись в место тапа, «отпустить» её
+    // было бы нечем, кроме крестика на плашке).
     if (editingApt) {
       // Тик даёт сама колонка (`onSlotPress`) — второй здесь был бы дублем.
       setEditingApt(null);
@@ -231,7 +226,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     }
     // Режим переноса: тап по кубику — переезд записи, не новая запись.
     if (moving) {
-      // ОДИН ТАП — ОДНА КОПИЯ (повторный аудит 03.10). Второй тап по кубику
+      // ОДИН ТАП — ОДНА КОПИЯ. Второй тап по кубику
       // до перерисовки видел тот же `moving` и ставил вторую копию: настоящую
       // запись, а клиенту при включённом шаблоне — второе SMS о записи.
       if (placedFromRef.current === moving) return;
@@ -253,10 +248,8 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       setSlotDraft({ date: dateYmd, time: timeStart });
     };
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
-    // ПЛАШКА ВЫЕЗЖАЕТ НА ТАП ПО СЕТКЕ, И РОВНО ОДИН РАЗ (владелец 2026-08-24:
-    // «при тапе на свободное место сверху выезжает плашка и кнопка; топаю на
-    // кнопку — тогда открывается меню, чтоб указать время… не надо триггерить
-    // несколько раз»). Поэтому причина считается ЗДЕСЬ, до листа, и она одна:
+    // ПЛАШКА ВЫЕЗЖАЕТ НА ТАП ПО СЕТКЕ, И РОВНО ОДИН РАЗ: тап на кнопку плашки открывает
+    // выбор времени, не триггеря её несколько раз. Поэтому причина считается ЗДЕСЬ, до листа, и она одна:
     // прошлое сильнее нерабочего часа — в позавчерашний выходной незачем
     // говорить дважды. Дальше по дороге не спрашивает никто: ни лист выбора
     // времени, ни сама форма записи.
@@ -272,7 +265,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       const [ny, nm, nd] = dateYmd.split("-").map(Number);
       setNotice({
         id: Date.now(),
-        // Дата — всегда, и сегодня тоже (владелец 13.10: «13 октября, …»).
+        // Дата — всегда, и сегодня тоже.
         when: `${dayMonthLabel(new Date(ny, nm - 1, nd))}, ${timeStart}`,
         message: reason,
         onAction: () => {

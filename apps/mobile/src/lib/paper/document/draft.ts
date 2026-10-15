@@ -108,7 +108,7 @@ export function draftDocument({
     settlement: [],
     payments: [],
     notes: clean(draft.notes),
-    // ПРЕВЬЮ = БУМАГА, КАКОЙ ОНА ВЫЙДЕТ (владелец 2026-09-22 не понял
+    // ПРЕВЬЮ = БУМАГА, КАКОЙ ОНА ВЫЙДЕТ (иначе непонятно
     // «Draft. Number … will be assigned…»): подвал тот же, что у выставленной.
     footer: draft.number ? dict.footer(draft.number, draft.currency) : dict.numberPending,
   };

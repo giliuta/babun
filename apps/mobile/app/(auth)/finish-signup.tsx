@@ -23,8 +23,8 @@ import { CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 
-// «ПОЧТИ ГОТОВО» — ПОСЛЕДНИЙ ШАГ ЕДИНОГО ВХОДА (владелец 09.10: «вход через
-// Apple, Google… потом должны придумывать пароль»). Сюда гейт входа приводит
+// «ПОЧТИ ГОТОВО» — ПОСЛЕДНИЙ ШАГ ЕДИНОГО ВХОДА (после Apple/Google
+// нужно придумать пароль). Сюда гейт входа приводит
 // аккаунт, у которого `signupFinish(user).needed`:
 //   • вошёл через Apple/Google впервые — имя (уже подставлено) и пароль, чтобы
 //     потом входить и почтой;
@@ -75,7 +75,7 @@ export default function FinishSignupScreen() {
   }
 
   const trimmed = name.trim();
-  // Минимум пароля — как на регистрации и сбросе (12.10): иначе «Готово»
+  // Минимум пароля — как на регистрации и сбросе: иначе «Готово»
   // горело на одном символе, а отказ сервера приходил уже после нажатия.
   const valid = trimmed.length > 0 && (!finish.needsPassword || password.length >= PASSWORD_MIN);
 

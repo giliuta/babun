@@ -53,7 +53,7 @@ export async function replayUpdate(
     if (data && data.length > 0) {
       // Matched cleanly. Свежий `updated_at` — следующим правкам строки и
       // кэшу: иначе вторая офлайн-правка несла бы прежний сторож и ловила
-      // ложный «конфликт» (аудит 03.10).
+      // ложный «конфликт».
       const next = (data[0] as { updated_at?: unknown }).updated_at;
       if (typeof next === "string" && next !== op.expected_updated_at) {
         await carrySentinel(op, op.expected_updated_at, next);

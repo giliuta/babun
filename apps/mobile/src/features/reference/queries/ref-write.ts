@@ -20,12 +20,12 @@ export function assertCanWriteReference(
   role: ReturnType<typeof useDataRole>["data"],
 ): void {
   if (table === "cities") {
-    // Сотрудник — по праву «Метки» своей команды (30.09): строку чужой
+    // Сотрудник — по праву «Метки» своей команды: строку чужой
     // команды отобьёт политика `cities_write_access`.
     if (role === "owner" || role === "dispatcher" || role === "master") return;
     throw new Error("Изменять метки может владелец или диспетчер.");
   }
-  // Услуги сотрудник правит по праву «Услуги» своей команды (30.09): строку
+  // Услуги сотрудник правит по праву «Услуги» своей команды: строку
   // чужой команды отобьёт политика `services_write_access`.
   if (table === "services" && role === "master") return;
   if (role !== "owner") {
@@ -102,7 +102,7 @@ function useRefUpdate<Table extends RefTable>(table: Table) {
   const qc = useQueryClient();
   return useMutation({
     // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
-    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем.
     ...NEVER_PAUSE,
     mutationFn: async ({
       id,
@@ -126,7 +126,7 @@ function useRefDelete(table: RefTable) {
   const qc = useQueryClient();
   return useMutation({
     // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
-    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем.
     ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
@@ -146,8 +146,8 @@ function useRefDelete(table: RefTable) {
 export const useUpdateTeam = () => useRefUpdate("teams");
 export const useUpdateMaster = () => useRefUpdate("masters");
 export const useDeleteMaster = () => useRefDelete("masters");
-// Удаления КАЛЕНДАРЯ здесь больше нет. С 2026-09-21 оно в два шага — в архив и
-// стереть из архива — и живёт целиком в `features/calendar/useCalendarDelete`.
+// Удаления КАЛЕНДАРЯ здесь нет: оно в два шага — в архив и стереть из архива —
+// и живёт целиком в `features/calendar/useCalendarDelete`.
 export const useUpdateCity = () => useRefUpdate("cities");
 export const useDeleteCity = () => useRefDelete("cities");
 export const useUpdateService = () => useRefUpdate("services");

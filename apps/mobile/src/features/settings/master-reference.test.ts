@@ -41,7 +41,7 @@ describe("master reference projections", () => {
     const service = masterServiceJsonToService({
       id: "service-1",
       tenant_id: "tenant-1",
-      // Проекция мастера отдаёт команду-владельца: с 2026-08-17 услуга
+      // Проекция мастера отдаёт команду-владельца: услуга
       // принадлежит ровно одной команде, и по ней собирается его каталог.
       team_id: "team-1",
       name: "Чистка кондиционера",

@@ -84,7 +84,7 @@ describe("оплата по тапу — как сервер", () => {
     assert.equal(getDebtAmount(preBack), 50);
   });
 
-  // Аудит 2026-10-03: снятие считает статус, способ и счёт из ОСТАВШИХСЯ
+  // Снятие считает статус, способ и счёт из ОСТАВШИХСЯ
   // строк — как `cancel_appointment_payment`.
   test("снята предоплата при живой оплате — «частично», счёт оплаты", () => {
     const pre = optimisticRecordPayment(appt({ total_amount: 100 }), {

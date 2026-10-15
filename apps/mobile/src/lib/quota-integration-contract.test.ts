@@ -39,7 +39,7 @@ describe("mobile create quota integration", () => {
     const runtime = source("src/lib/sync-runtime.ts");
     const providers = source("src/providers/AppProviders.tsx");
     // Транзакция смены компании ПЕРЕЕХАЛА из приёма приглашения в
-    // `switch-tenant.ts` (2026-09-12): её же зовёт переключатель контуров, а
+    // `switch-tenant.ts`: её же зовёт переключатель контуров, а
     // двух способов менять компанию не бывает. Проверяем там, где она живёт
     // теперь, и отдельно — что приглашение не завело себе вторую копию.
     const switching = source("src/session/switch-tenant.ts");

@@ -124,7 +124,7 @@ function useRoleQuery() {
     queryFn: async (): Promise<UserRole | null> => {
       // СЕРВЕР НЕ ОТВЕТИЛ — ПРЕЖНЯЯ РОЛЬ ОСТАЁТСЯ (`role-unanswered.ts`):
       // иначе запросы, которые ждут «опрос роли успешен», выключались, и
-      // экраны висели загрузкой, пока сервер лежал (03.10).
+      // экраны висели загрузкой, пока сервер лежал.
       const known = qc.getQueryData<UserRole | null>(currentRoleQueryKey(tenantId));
       let result: Awaited<ReturnType<typeof supabase.rpc<"current_user_role">>>;
       try {
@@ -160,7 +160,7 @@ function friendlyTenantError(message: string): string {
  *  сломанный продукт, а настоящий замок всё равно стоит на сервере
  *  (`enforce_plan_limits`). Канон, правило 10: экран объясняет, база решает. */
 export function usePlanAllows(capability: PlanCapability): boolean {
-  // ТАРИФ АККАУНТА-ВЛАДЕЛЬЦА КОМАНДЫ (01.10): сервер отдаёт `tier` и
+  // ТАРИФ АККАУНТА-ВЛАДЕЛЬЦА КОМАНДЫ: сервер отдаёт `tier` и
   // партнёрам — у него серое и плашка те же, что у владельца.
   return tierAllows(tierOf(useTenant().data), capability);
 }

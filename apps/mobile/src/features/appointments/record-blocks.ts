@@ -2,15 +2,14 @@ import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access
 import type { EventBlocks, RecordBlocks, RecordLevel } from "./record-blocks/levels";
 import { asRecordWindow, type RecordWindow } from "./record-window";
 
-// ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — БЛОКИ ПО ПРАВАМ (владелец 21.09: «визуал
-// должен быть идентичный… берёшь чётко те блоки, даёшь просто разрешение на
-// них»). Мастер открывает ту же страницу записи, что и владелец; каждый блок
+// ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — БЛОКИ ПО ПРАВАМ (визуал идентичный, меняется только разрешение на
+// блоки). Мастер открывает ту же страницу записи, что и владелец; каждый блок
 // показывается по уровню своего права в календаре записи:
 //   • hidden — блока нет вовсе;
 //   • read   — тот же блок, без нажатий и стрелок выбора;
 //   • write  — как у владельца.
 //
-// STORY-088 (волна 1): сервер проверяет каждое поле правки сотрудника своим
+// STORY-088: сервер проверяет каждое поле правки сотрудника своим
 // блоком (`member_appointment_update`), поэтому «Меняет» здесь — обещание,
 // которое сервер держит. Блок, который сервер ещё не проверяет, сотрудник
 // видит без правки: сменить его ему сервер не даст.
@@ -41,7 +40,7 @@ export interface CalendarActions {
   dayLabels: RecordLevel;
   /** График команды: рабочие часы и перерывы. */
   schedule: RecordLevel;
-  /** «Ограничения» (03.10): за какой срок назад видна прошедшая работа. */
+  /** «Ограничения»: за какой срок назад видна прошедшая работа. */
   window: RecordWindow;
 }
 
@@ -152,7 +151,7 @@ export function recordBlocks(input: Input): RecordBlocks {
   const services = level("record.services");
   return {
     team: level("record.team"),
-    // Метка записи — под «Меткой дня» (30.09): день скрыт — метки записи нет.
+    // Метка записи — под «Меткой дня»: день скрыт — метки записи нет.
     label: read("calendar.day_labels") === "off" ? "hidden" : level("record.label"),
     when: writeOrRead("calendar.move"),
     client: level("record.client"),
@@ -166,7 +165,7 @@ export function recordBlocks(input: Input): RecordBlocks {
     // «Заметка» — своё право с 30.09; неживое — прежнее правило.
     note: read("record.note") === undefined ? "read" : level("record.note"),
     color: writeOrRead("record.color"),
-    // «SMS» записи (03.10): сервер отдаёт историю только вместе с «Клиентом»
+    // «SMS» записи: сервер отдаёт историю только вместе с «Клиентом»
     // (`sms_for_appointment`) — без клиента блок пустой, его нет.
     sms: level("record.client") === "hidden" ? "hidden" : level("record.sms"),
   };
@@ -203,7 +202,7 @@ export function eventBlocks(input: Input): EventBlocks {
   };
   const filesBefore: RecordLevel = asRecordLevel(read("record.files")) === "hidden" ? "hidden" : "write";
   return {
-    // Метка события — под «Меткой дня» (30.09).
+    // Метка события — под «Меткой дня».
     label: read("calendar.day_labels") === "off" ? "hidden" : level("event.label", "write"),
     type: level("event.type", "write"),
     client: level("event.client", "read"),

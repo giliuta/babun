@@ -15,12 +15,10 @@ const block = (over: Partial<AccessBlock>): AccessBlock => ({
   ...over,
 });
 
-/** Реестр боевой базы на 21.09: ключи и уровни — как на сервере.
- *  Живых тринадцать: волна 1 STORY-084 оживила оплату, волна 2 — статус и
- *  файлы, волна 3 — клиента и объект записи (у них два положения — слово
- *  владельца: «видит или не видит»), волна 4 — услуги и сумму (пока два
- *  положения: «Меняет» придёт с правкой в записи). Мешок «Категории,
- *  шаблоны, НДС» и «Заметка записи» сняты. */
+/** Реестр боевой базы: ключи и уровни — как на сервере. Живых тринадцать:
+ *  оплата, статус, файлы, клиент и объект записи (два положения: «видит или
+ *  не видит»), услуги и сумма (пока два положения: «Меняет» придёт с правкой
+ *  в записи). */
 const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.records", area: "calendar", scope: "calendar", live: false, title: "Календарь и записи" }),
   block({ key: "calendar.create", area: "calendar", scope: "calendar", levels: ["off", "write"], live: false, title: "Новые записи" }),
@@ -34,38 +32,38 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.settings", area: "calendar", live: false, title: "Настройки календаря" }),
   block({ key: "finance.accounts", area: "finance", scope: "calendar", title: "Счета" }),
   block({ key: "finance.debts", area: "finance", scope: "calendar", title: "Долги" }),
-  // «Финансы» по плиткам и шестерёнке (владелец 03.10).
+  // «Финансы» по плиткам и шестерёнке.
   block({ key: "finance.documents", area: "finance", scope: "calendar", title: "Документы" }),
   block({ key: "finance.profit", area: "finance", scope: "calendar", levels: ["off", "read"], title: "Прибыль" }),
-  // «Ограничения» финансов (03.10) — шкала сроков, как у клиентов.
+  // «Ограничения» финансов — шкала сроков, как у клиентов.
   block({ key: "finance.window", area: "finance", scope: "calendar", levels: ["week", "near", "month", "quarter", "half", "own"], title: "Ограничения" }),
   block({ key: "finance.settings_accounts", area: "finance", scope: "calendar", title: "Счета" }),
   block({ key: "finance.settings_trash", area: "finance", scope: "calendar", title: "Удалённые операции" }),
-  // Категории — по виду, как строки шестерёнки (03.10).
+  // Категории — по виду, как строки шестерёнки.
   block({ key: "finance.settings_categories_income", area: "finance", scope: "calendar", title: "Доходы" }),
   block({ key: "finance.settings_categories_expense", area: "finance", scope: "calendar", title: "Расходы" }),
   block({ key: "finance.settings_categories_debts", area: "finance", scope: "calendar", title: "Долги" }),
   // Валюта, реквизиты и бланк инвойса — одни на аккаунт, партнёр их только
-  // видит (03.10).
+  // видит.
   block({ key: "finance.settings_currency", area: "finance", levels: ["off", "read"], title: "Валюта" }),
   block({ key: "finance.settings_requisites", area: "finance", levels: ["off", "read"], title: "Реквизиты" }),
   block({ key: "clients", levels: ["off", "read"], title: "Клиенты" }),
   block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Ограничение по времени" }),
-  // «Долг и деньги» снято 03.10: деньги идут вместе с «Историей», у которой
+  // Деньги идут вместе с «Историей», у которой
   // три положения — «Скрыта / Своя команда / Все команды».
   block({ key: "clients.history", levels: ["off", "read", "write"], title: "История" }),
   block({ key: "services", area: "company", live: false, title: "Услуги и цены" }),
   block({ key: "masters", area: "company", live: false, title: "Мастера" }),
   block({ key: "company.currency", area: "company", levels: ["read", "write"], live: false, title: "Валюта" }),
   block({ key: "company.profile", area: "company", live: false, title: "Реквизиты" }),
-  // Запись разобрана на блоки её формы (21.09) — имена те же, что в
+  // Запись разобрана на блоки её формы — имена те же, что в
   // «Кабинет → Запись».
   block({ key: "calendar.move", area: "calendar", scope: "calendar", levels: ["off", "write"], live: false, title: "Переносить и копировать записи" }),
   block({ key: "calendar.event_types", area: "calendar", live: false, title: "Типы событий" }),
   block({ key: "record.team", area: "calendar", scope: "calendar", live: false, title: "Команда и мастер записи" }),
   block({ key: "record.label", area: "calendar", scope: "calendar", live: false, title: "Метка записи" }),
   block({ key: "record.when", area: "calendar", scope: "calendar", live: false, title: "Время записи" }),
-  // Заведены 21.09 (STORY-084): «каждый блок — свой переключатель». Все
+  // Каждый блок — свой переключатель. Все
   // спящие: сервер их ещё не проверяет, строки на странице нет.
   block({ key: "calendar.events", area: "calendar", scope: "calendar", live: false, title: "События" }),
   block({ key: "calendar.schedule", area: "calendar", scope: "calendar", live: false, title: "График команды" }),
@@ -107,7 +105,7 @@ describe("слова прав", () => {
       levelSentence("clients.history", "off"),
       "Историю записей на карточке клиента не видит",
     );
-    // Деньги — вместе с историей (03.10): фраза говорит, что с ней приходят суммы и долг.
+    // Деньги — вместе с историей: фраза говорит, что с ней приходят суммы и долг.
     assert.match(levelSentence("clients.history", "read"), /своих командах.*суммами и долгом/);
     assert.match(levelSentence("clients.history", "write"), /других команд.*суммами и долгом/);
   });
@@ -123,9 +121,7 @@ describe("слова прав", () => {
     const offered = offeredBlocks(REGISTRY);
     assert.deepEqual(
       offered.map((b) => b.key),
-      // Порядок — как в реестре по `position`; волна 2 (21.09) оживила
-      // «Фото и файлы записи», волна 3 — клиента и объект. «Статус записи»
-      // удалён (03.10).
+      // Порядок — как в реестре по `position`. «Статуса записи» нет.
       [
         "record.client",
         "record.object",
@@ -135,7 +131,7 @@ describe("слова прав", () => {
         "record.files",
         "finance.accounts",
         "finance.debts",
-        // «Финансы» по плиткам и шестерёнке (владелец 03.10).
+        // «Финансы» по плиткам и шестерёнке.
         "finance.documents",
         "finance.profit",
         "finance.window",

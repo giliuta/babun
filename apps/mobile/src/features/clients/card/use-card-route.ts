@@ -20,7 +20,7 @@ export function useCardRoute() {
   >();
   const router = useRouter();
   // Страницы карточки — во вкладке или поверх записи (`/client`), смотря
-  // откуда открыта сама карточка (аудит 03.10).
+  // откуда открыта сама карточка.
   const subPage = useReferenceHref().clientPage;
   const pathname = usePathname();
   const roleQuery = useCurrentRole();

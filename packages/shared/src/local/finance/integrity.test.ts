@@ -43,8 +43,7 @@ describe("transferValidationError", () => {
     expect(transferValidationError(from, account("same"), 1)).toBe("Выберите разные счета");
   });
 
-  // ЗАПРЕТ «МЕЖДУ БРИГАДАМИ ТОЛЬКО ЧЕРЕЗ ОБЩИЙ СЧЁТ» СНЯТ (владелец
-  // 2026-08-15): он существовал ради общего счёта, а того в продукте нет.
+  // ЗАПРЕТ «МЕЖДУ БРИГАДАМИ ТОЛЬКО ЧЕРЕЗ ОБЩИЙ СЧЁТ» СНЯТ: он существовал ради общего счёта, а того в продукте нет.
   // The snapshot no longer carries a team, so no cross-team rule can apply.
   it("allows a direct transfer between two brigades", () => {
     expect(

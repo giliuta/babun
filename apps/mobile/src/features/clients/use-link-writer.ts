@@ -71,7 +71,7 @@ export interface LinkWriter {
   setRole(item: ClientLinkItem, role: string): Promise<boolean>;
   detach(item: ClientLinkItem): Promise<boolean>;
   /** Вернуть только что убранную связь — «Отменить» в подсказке после
-   *  свайпа (23.09): убираем без вопроса, но ошибку пальца можно откатить. */
+   *  свайпа: убираем без вопроса, но ошибку пальца можно откатить. */
   restore(item: ClientLinkItem): Promise<boolean>;
 }
 
@@ -103,7 +103,7 @@ function freshMemberRow(
   }
   // Общий список клиентов. После «Убрать» человека уже нет в перечне
   // карточки-группы, и «Отменить» не находило его строку — связь молча не
-  // возвращалась (снято 23.09 на симуляторе).
+  // возвращалась.
   for (const [, rows] of qc.getQueriesData<Client[]>({ queryKey: clientKeys.all() })) {
     const found = Array.isArray(rows) ? rows.find((row) => row?.id === memberId) : undefined;
     if (found) return found;
@@ -287,7 +287,7 @@ export function useLinkWriter(): LinkWriter {
       const queue = linkQueueFor(ref.memberId);
       // ОТ ПОСЛЕДНЕЙ СВОЕЙ ЗАПИСИ, а не от строки кэша: строка ещё помнит
       // связь, которую только что убрали, — «уже есть, писать нечего», и
-      // «Отменить» молча ничего не делало (снято 23.09 на симуляторе).
+      // «Отменить» молча ничего бы не делало.
       const base = queue.latest ? [...queue.latest] : freshLinks(queue, clientMemberships(row));
       const next = membershipsWithLink(
         base,

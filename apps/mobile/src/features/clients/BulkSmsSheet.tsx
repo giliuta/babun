@@ -11,7 +11,7 @@
 //     operator never silently loses the personalisation.
 //
 // Text comes from the SMS templates of every team the operator sees
-// (useTeamTemplates(null), same text once — STORY-089 29.09); a
+// (useTeamTemplates(null), same text once — STORY-089); a
 // blank «Свой текст» option lets them type ad-hoc. Recipients without a
 // dialable phone are counted out up front (parity with the web sheet).
 
@@ -77,7 +77,7 @@ export function BulkSmsSheet({
   // Sequential cursor — index of the recipient whose composer opens next.
   const [seqIdx, setSeqIdx] = useState<number | null>(null);
 
-  // ЧЕРЕЗ СЕРВИС (STORY-089, 30.09): рассылка с баланса компании, от одной
+  // ЧЕРЕЗ СЕРВИС (STORY-089): рассылка с баланса компании, от одной
   // выбранной команды — её имя отправителя стоит подписью. Только владельцу
   // (так решает и база) и только когда у какой-то команды есть имя.
   const toast = useToast();
@@ -117,7 +117,7 @@ export function BulkSmsSheet({
   };
 
   // Платное и необратимое — только после вопроса. Сумма — только в вебе:
-  // в iOS-приложении о цене молчим (правило App Store, владелец 24.09).
+  // в iOS-приложении о цене молчим (правило App Store).
   const sendViaService = () => {
     if (!fromTeam || !body.trim() || withPhone.length === 0) return;
     const items = withPhone.map((c) => ({ clientId: c.id, body: bulkBodyFor(body, c) }));
@@ -207,7 +207,7 @@ export function BulkSmsSheet({
         onPress={close}
         accessible={false}
       />
-      {/* ПОДЪЁМ НАД КЛАВИАТУРОЙ (13.10). Окно Modal edge-to-edge: Android не
+      {/* ПОДЪЁМ НАД КЛАВИАТУРОЙ. Окно Modal edge-to-edge: Android не
           сжимает его под клавиатуру, и поле текста рассылки вместе с кнопками
           отправки уходило под неё — печатали вслепую. Рамка пропускает тапы
           к затемнению (`box-none`), панель лежит внутри неё внизу. */}

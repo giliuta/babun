@@ -34,10 +34,8 @@ import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { useFeatureOn } from "@/features/settings/company-features";
 
-// «БЛОКИ КЛИЕНТОВ» — ВСЁ О ВИДЕ КЛИЕНТА НА ОДНОЙ СТРАНИЦЕ (владелец 03.10:
-// «заметка, личная, метка, тег — раздельно, люди и так далее… назвать „блоки
-// клиентов“, как в календаре, и полноценно запихнуть всё в одну страницу»).
-// Анатомия — как у «Записей» календаря: обязательное одной строкой «Всегда:
+// «БЛОКИ КЛИЕНТОВ» — ВСЁ О ВИДЕ КЛИЕНТА НА ОДНОЙ СТРАНИЦЕ (заметка, личная, метка, тег,
+// люди и так далее — раздельными блоками, как в календаре). Анатомия — как у «Записей» календаря: обязательное одной строкой «Всегда:
 // …», выключаемое — строками с галкой.
 //
 //   • «Карточка клиента» — блоки страницы клиента у всей команды
@@ -69,7 +67,7 @@ const PAGE_BLOCKS: PageBlock[] = [
   { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
-// Денег в строке нет (владелец 01.10) — они на странице клиента.
+// Денег в строке нет — они на странице клиента.
 const ROW_FIELDS: { field: CardField; label: string; icon: LucideIcon }[] = [
   { field: "phone", label: "Телефон", icon: Phone },
   { field: "last", label: "Последняя запись", icon: Clock },
@@ -91,7 +89,7 @@ function ClientBlocksSettingsScreen() {
   const teamRow =
     (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
   const teamId = teamRow?.id ?? null;
-  // «Только видит» (владелец 01.10) — галки стоят, но не переключаются.
+  // «Только видит» — галки стоят, но не переключаются.
   const readOnly = useClientSettingLevel("card", teamId) !== "write";
 
   // Объекты выключаются у компании там, где их заводят («Записи»): без них

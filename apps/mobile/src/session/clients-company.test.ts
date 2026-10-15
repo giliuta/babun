@@ -39,7 +39,7 @@ const access = (over: Partial<CompanyAccess> = {}): CompanyAccess => ({
   ...over,
 });
 
-/** Мастер Giliuta, владелец AirFix — тот самый живой случай 19.09. */
+/** Мастер Giliuta, владелец AirFix — живой случай. */
 const EMPLOYEE_MEMBERSHIPS: MembershipRow[] = [
   row(GILIUTA, "master", "2026-09-15T08:57:41Z"),
   row(AIRFIX, "owner", "2026-04-28T18:50:39Z"),
@@ -291,11 +291,11 @@ describe("что можно в источнике", () => {
       money: false,
       // Календарь этой компании сейчас и открыт — запись пойдёт в него.
       book: true,
-      // Файлы и люди — по блокам карточки у самого клиента (`blocks`, 30.09).
+      // Файлы и люди — по блокам карточки у самого клиента (`blocks`).
       files: true,
       links: true,
       onlineOnly: true,
-      // Без передачи (владелец 30.09): видит и правит, вынести не может.
+      // Без передачи: видит и правит, вынести не может.
       export: false,
     });
   });
@@ -309,7 +309,7 @@ describe("что можно в источнике", () => {
     const caps = capabilitiesOf(
       memberScope(GILIUTA, "master", access({ clients: "read", contacts: "off" }), NAMES, GILIUTA)!,
     );
-    // Правка карточки — по блокам (02.10): что именно, решает `blocks` строки.
+    // Правка карточки — по блокам: что именно, решает `blocks` строки.
     assert.equal(caps.edit, true);
     assert.equal(caps.create, false);
     assert.equal(caps.contacts, false);
@@ -495,9 +495,8 @@ describe("двери шапки: своя компания, что бы ни б�
   });
 
   test("двери есть у своей компании и тогда, когда открыта чужая", () => {
-    // Здесь был промах первого захода: шестерёнка и аналитика гасли, пока
-    // своя компания не открыта в календаре (владелец 20.09: «у нас пропали
-    // шестерёнки… визуал вообще не меняется»).
+    // Шестерёнка и аналитика не должны гаснуть, пока своя компания не открыта в
+    // календаре.
     assert.equal(capabilitiesOf(own(false)).manage, true);
     assert.equal(capabilitiesOf(own(false)).create, true);
   });

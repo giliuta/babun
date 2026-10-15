@@ -5,9 +5,8 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { clientFileTimeline, fileDay, fileTime, groupFilesByDay } from "@/lib/client-files";
 
-// ФАЙЛЫ КЛИЕНТА — ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ» (владелец 03.10: «файлы —
-// как история, по датам… файлы, чеки, инвойсы — полноценные блоки, чтобы
-// можно было сразу открывать»). Две половины: чистое правило ленты — вызовом,
+// ФАЙЛЫ КЛИЕНТА — ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ»: файлы, чеки, инвойсы —
+// полноценные блоки, которые можно сразу открыть. Две половины: чистое правило ленты — вызовом,
 // и проводка — по исходникам (экран тянет react-native, которого в node:test
 // нет).
 
@@ -132,7 +131,7 @@ describe("«Файлы» — как «История»: последний на 
     assert.match(page(), /case "photo":[\s\S]{0,200}setViewer/);
     assert.match(page(), /case "file":\s*void openAttachment\(entry\.item\)/);
     assert.match(page(), /case "invoice":\s*router\.push\(`\/invoices\/\$\{entry\.item\.id\}`/);
-    // Чек — своей страницей, как инвойс (владелец 04.10).
+    // Чек — своей страницей, как инвойс.
     assert.match(page(), /case "receipt":[\s\S]{0,160}router\.push\(`\/documents\/receipt\/\$\{entry\.item\.id\}`/);
   });
 

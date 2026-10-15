@@ -64,10 +64,10 @@ export interface AnalyticsStart {
 export function useAnalytics(start: AnalyticsStart) {
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
-  // ДЕНЬГИ — ПО ФИНАНСОВОМУ ПРАВУ (как было у «Сводки» с 20.09): записи
+  // ДЕНЬГИ — ПО ФИНАНСОВОМУ ПРАВУ (как было у «Сводки»): записи
   // диспетчеру приходят с суммами, и выручка компании не должна утекать мимо
-  // блока «Доходы» (выручка — это доход; до наката — «Доходы и расходы»).
-  // РАСХОД — ПО СВОЕМУ ПРАВУ (аудит зеркала 03.10): без «Расходов» нет ни
+  // блока «Доходы» (выручка — это доход).
+  // РАСХОД — ПО СВОЕМУ ПРАВУ: без «Расходов» нет ни
   // расхода, ни прибыли, ни материалов услуг (`moneySides`).
   const sides = moneySides({ role, map: myAccess });
   const showMoney = sides.income;
@@ -78,7 +78,7 @@ export function useAnalytics(start: AnalyticsStart) {
     ? getCurrentTimeInZone(timezone)
     : getCurrentCyprusTime();
   const today = todayYmd(timezone);
-  // Строки журнала — по стороне и команде строки и «Ограничениям» (03.10),
+  // Строки журнала — по стороне и команде строки и «Ограничениям»,
   // как режет сервер: «его глазами» журнал читается токеном владельца.
   const readRules = useMemo(
     () => financeReadRules({ role, map: myAccess, today }),
@@ -94,8 +94,8 @@ export function useAnalytics(start: AnalyticsStart) {
   );
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
-  /** `null` — вся компания (так аналитика и открывается, владелец
-   *  2026-09-24: «захожу — показывает все команды, нажимаю команду — её»);
+  /** `null` — вся компания (так аналитика и открывается: все команды,
+   *  нажал команду — её);
    *  строка — выбранная команда, повторный тап по ней снимает выбор. */
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [pickedPanel, setPanel] = useState<Panel>("services");
@@ -113,8 +113,8 @@ export function useAnalytics(start: AnalyticsStart) {
     pickedTeam !== null && teams.some((team) => team.id === pickedTeam) ? pickedTeam : null;
 
   const apptsQuery = useAppointments();
-  // АРХИВНЫХ КАЛЕНДАРЕЙ В ЖИВЫХ ЦИФРАХ НЕТ (владелец 2026-09-21): на «всей
-  // компании» их записи и деньги попадали в итоги (аудит 2026-09-30).
+  // АРХИВНЫХ КАЛЕНДАРЕЙ В ЖИВЫХ ЦИФРАХ НЕТ: на «всей
+  // компании» их записи и деньги попадали в итоги.
   // Справочник ещё едет — не режем, иначе на кадр всё обнулилось бы.
   const liveTeam = useMemo(
     () => (teamsData ? new Set(teamsData.map((team) => team.id)) : null),
@@ -242,10 +242,10 @@ export function useAnalytics(start: AnalyticsStart) {
   );
   const cancelled = useMemo(() => cancelledCount(appointments, scope), [appointments, scope]);
   // ДЕНЬГИ ЕЩЁ ЕДУТ — плитка говорит «—», а не «€0»: ноль выглядел бы фактом
-  // (аудит 2026-09-24), хотя журнал просто не доехал. Смена периода меняет
+  // хотя журнал просто не доехал. Смена периода меняет
   // ключ журнала, и заглушка отдаёт строки ПРОШЛОГО диапазона: без проверки
   // заглушки «Прошлый год» до ответа показывал нули и обрывки текущего месяца
-  // (аудит финансов 03.10).
+  //.
   const moneyPending = showMoney && (ledger.data === undefined || awaitingAnswer(ledger));
   const scopedAppointments = useMemo(
     () => appointments.filter((a) => teamId === null || a.team_id === teamId),

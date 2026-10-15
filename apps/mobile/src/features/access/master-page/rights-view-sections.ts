@@ -49,11 +49,11 @@ export function viewSections({
   group?: CalendarGroup;
 }): ViewSection[] {
   // ПРАВА НА ВСЮ КОМПАНИЮ, КОТОРЫЕ СТОЯТ В БЛОКЕ РАЗДЕЛА («Валюта» — строка
-  // шестерёнки «Финансов», владелец 03.10: «права = строки шестерёнки»). На
+  // шестерёнки «Финансов»: права = строки шестерёнки). На
   // странице команды они стоят в своём блоке — там, где их видит человек, — а
   // из раздела «Кабинет» уходят, чтобы одно право не стояло дважды.
-  // «Реквизиты» с 04.10 — в «Кабинете», где их строка и живёт. Положение у них одно на всю компанию: строка читает и
-  // пишет его без команды (`blockChanges` → `team_id: null`).
+  // «Реквизиты» — в «Кабинете», где их строка и живёт. Положение у них одно на
+  // всю компанию: строка читает и пишет его без команды (`blockChanges` → `team_id: null`).
   const claimed = claimedKeys();
   const registry = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
     .map((section) => ({
@@ -68,7 +68,7 @@ export function viewSections({
             : true,
       ),
     }));
-  // РАЗДЕЛ «КАБИНЕТ» (04.10) — одной карточкой: права аккаунта из разных
+  // РАЗДЕЛ «КАБИНЕТ» — одной карточкой: права аккаунта из разных
   // разделов реестра («Реквизиты» числятся за финансами) стоят вместе, в
   // порядке строк Кабинета.
   if (onlyCompany) {
@@ -79,7 +79,7 @@ export function viewSections({
       : [];
   }
   if (!onlyCalendar) return registry.filter((section) => section.rows.length > 0);
-  // ПРАВА ОДНОЙ КОМАНДЫ — БЛОКАМИ РАЗДЕЛОВ ПРИЛОЖЕНИЯ (владелец 29.09):
+  // ПРАВА ОДНОЙ КОМАНДЫ — БЛОКАМИ РАЗДЕЛОВ ПРИЛОЖЕНИЯ:
   // «Календарь», «Запись» (в порядке блоков страницы записи), «Финансы»,
   // «Клиенты». В реестре первые два — один раздел «Записи».
   const calendarRows = registry.flatMap((section) => section.rows);
@@ -177,11 +177,11 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   if (open.length === section.rows.length) return "Всё открыто";
   const titles = open.map((row, i) => {
     const title = briefTitle(row.block);
-    // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета» (04.10).
+    // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета».
     const acronym = /^[A-ZА-ЯЁ]{2}/.test(title);
     return i === 0 || acronym ? title : title.charAt(0).toLowerCase() + title.slice(1);
   });
-  // ДЛИННЫЙ СПИСОК — ДВА ИМЕНИ И ЧИСЛО (04.10): подпись в одну строку
+  // ДЛИННЫЙ СПИСОК — ДВА ИМЕНИ И ЧИСЛО: подпись в одну строку
   // обрывалась на полуслове, и последнее открытое не читалось вовсе.
   if (titles.length > BRIEF_NAMES + 1) {
     return `${titles.slice(0, BRIEF_NAMES).join(", ")} и ещё ${titles.length - BRIEF_NAMES}`;

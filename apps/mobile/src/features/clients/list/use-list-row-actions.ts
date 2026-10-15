@@ -52,12 +52,11 @@ export function useListRowActions({
   // выглядеть по-разному в двух местах (раньше здесь был системный Alert).
   const [remindClient, setRemindClient] = useState<Client | null>(null);
   const openRemindMenu = (c: Client) => setRemindClient(c);
-  // Своя база без тарифа только смотрит (аудит 03.10): «Напомнить» и «В
+  // Своя база без тарифа только смотрит: «Напомнить» и «В
   // чёрный список» сервер отказал бы — карточка их и так гасит. Что ещё
   // можно со строкой — `rowActionsOf` ниже (`client-row-actions.ts`).
   const clientsInPlan = usePlanAllows("clients");
-  // «Записать» — только с правом «Новые записи» в команде записи (03.10:
-  // «если нет разрешения на запись — этого и не будет»).
+  // «Записать» — только с правом «Новые записи» в команде записи.
   const calendarActionsFor = useCalendarActionsReader();
   const trashAsPartner = useTrashClientAsPartner();
   // Удаление партнёра — своей дверью сервера; вернуть может владелец.
@@ -75,7 +74,7 @@ export function useListRowActions({
           // своей: там такого клиента нет.
           await trashAsPartner.mutateAsync({ id: c.id, source: guestOf.get(c.id) });
         } catch (e) {
-          // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+          // Обрыв — словами, а не «TypeError: Network request failed».
           const words = writeErrorWords(e, CLIENT_NOT_DELETED);
           notify(words.title, words.subtitle);
         }
@@ -108,8 +107,7 @@ export function useListRowActions({
     });
   };
 
-  // ЖЕСТЫ И МЕНЮ СТРОКИ — ПО КОМПАНИИ СТРОКИ (аудит 03.10,
-  // `client-row-actions.ts`). Своя строка — права своей базы, как было;
+  // ЖЕСТЫ И МЕНЮ СТРОКИ — ПО КОМПАНИИ СТРОКИ (`client-row-actions.ts`). Своя строка — права своей базы, как было;
   // строка работодателя — права его источника: «Записать» у неё есть, только
   // когда открыт ЕГО календарь (запись делается в открытом), а «Напомнить»,
   // «В чёрный список» и «Удалить» пишутся в его компанию (`source`).
@@ -134,14 +132,13 @@ export function useListRowActions({
   const menuActions = menuClient
     ? rowActionsOf(menuClient, false, calendarActionsFor(bookTeamOf(menuClient)).create)
     : null;
-  // КОМПАНИЯ ЛИСТА — КОМПАНИЯ СТРОКИ (03.10): его хуки (реквизиты для
+  // КОМПАНИЯ ЛИСТА — КОМПАНИЯ СТРОКИ: его хуки (реквизиты для
   // «Поделиться») читают её. Последняя держится, пока лист уезжает, — как и
   // сам клиент листа.
   const menuScope =
     useLastNonNull(menuClient ? (guestOf.get(menuClient.id) ?? scope) : null) ?? scope;
 
-  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет —
-  // удалить»). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся
+  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (архива нет). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся
   // через 30 дней; клиенту с визитами и деньгами база срок снимает сама
   // (`client_history_never_purges`) — его история в отчётах. Слова
   // подтверждения поэтому зависят от истории.
@@ -183,7 +180,7 @@ export function useListRowActions({
     updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted }, source: guestOf.get(c.id) });
 
   // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
-  // в нём — только когда их видно (аудит 03.10: из списка они уходили всегда,
+  // в нём — только когда их видно (иначе из списка они уходили бы всегда,
   // даже при скрытом блоке «Реквизиты»). Видно ли — решает лист меню в
   // компании строки (`menuScope` ниже): у клиента работодателя выключатели
   // его компании и команды, а не своей.

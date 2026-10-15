@@ -5,8 +5,8 @@ import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { dependantResets } from "./master-draft";
 import { sectionBrief, viewSections } from "./rights-view-sections";
 
-// СТРАНИЦЫ РАЗДЕЛОВ ДОСТУПА — БЛОКАМИ (владелец 30.09). Право стоит там, куда
-// его поставил владелец, и только там: «Доход» и «Расход» с 03.10 — в
+// СТРАНИЦЫ РАЗДЕЛОВ ДОСТУПА — БЛОКАМИ. Право стоит там, куда
+// его поставил владелец, и только там: «Доход» и «Расход» — в
 // «Главном» «Финансов» по плиткам страницы, а не в «Календаре».
 
 const block = (key: string, levels: AccessLevel[], position: number): AccessBlock => ({
@@ -70,9 +70,9 @@ const page = (group: "calendar" | "finance" | "record", open: Record<string, Acc
 describe("страница раздела доступа — блоками владельца", () => {
   test("«Календарь»: «Главное» одним блоком с записями (03.10), «Настройки команды» — строками шестерёнки", () => {
     assert.deepEqual(page("calendar"), [
-      // «Записи» влиты в «Главное» (владелец 03.10).
+      // «Записи» влиты в «Главное».
       { title: "Главное", keys: ["calendar.day_labels", "calendar.records", "calendar.events", "calendar.move", "calendar.cancel"] },
-      // Блоки внутри записи — здесь же (владелец 30.09); события скрыты —
+      // Блоки внутри записи — здесь же; события скрыты —
       // блока «Событие» нет.
       { title: "Запись клиента", keys: ["record.team", "record.when", "record.note"] },
       {
@@ -136,7 +136,7 @@ describe("страница раздела доступа — блоками вл
           "finance.profit",
         ],
       },
-      // Блоки шестерёнки «Финансов» — её названиями и в её порядке (03.10).
+      // Блоки шестерёнки «Финансов» — её названиями и в её порядке.
       { title: "Деньги", keys: ["finance.settings_accounts", "finance.settings_trash"] },
       {
         title: "Категории",
@@ -146,7 +146,7 @@ describe("страница раздела доступа — блоками вл
           "finance.settings_categories_debts",
         ],
       },
-      // «Реквизиты» с 04.10 — в разделе «Кабинет», не в шестерёнке.
+      // «Реквизиты» — в разделе «Кабинет», не в шестерёнке.
     ]);
   });
 

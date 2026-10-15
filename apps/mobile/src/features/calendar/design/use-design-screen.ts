@@ -28,13 +28,13 @@ import { designColorRows, eventTypesSubtitle, type ColorTarget } from "./design-
 /** Team, rights, colours and blocks of the «Записи» page. */
 export function useDesignScreen() {
   const router = useRouter();
-  // «ДИЗАЙН» — У КАЖДОЙ КОМАНДЫ СВОЙ (владелец 24.09). Команда едет адресом из
+  // «ДИЗАЙН» — У КАЖДОЙ КОМАНДЫ СВОЙ. Команда едет адресом из
   // настроек календаря; без неё — первая.
   const params = useLocalSearchParams<{ team?: string }>();
   const { data: allTeams = [] } = useTeams();
   const team = allTeams.find((x) => x.id === params.team) ?? allTeams[0];
   const teamId = team?.id ?? null;
-  // «ТОЛЬКО ВИДИТ» — СТРАНИЦА БЕЗ ПРАВКИ (владелец 30.09: «Записи» в
+  // «ТОЛЬКО ВИДИТ» — СТРАНИЦА БЕЗ ПРАВКИ (право «Записи» в
   // «Настройках команды»). Владельцу — всегда правка.
   const readOnly = useTeamSettingLevel("calendar.booking_form", teamId) !== "write";
   // Строку команды (её цвет, «Скрывать отменённые») сотрудник пишет своей
@@ -56,8 +56,8 @@ export function useDesignScreen() {
   const eventBlocks = useEventBlocks(teamId);
   const toggleEventBlock = useToggleEventBlock(teamId);
   const objectsOn = recordBlocks.includes("object");
-  // ПОРЯДОК БЛОКОВ (владелец 11.10: «поставить первым объект, вторым клиент
-  // и самому редактировать»). Пока строку тянут, страница не едет.
+  // ПОРЯДОК БЛОКОВ редактирует сам человек (например, объект первым, клиент
+  // вторым). Пока строку тянут, страница не едет.
   const recordOrder = useRecordBlockOrder(teamId);
   const eventOrder = useEventBlockOrder(teamId);
   const [dragging, setDragging] = useState(false);
@@ -67,16 +67,13 @@ export function useDesignScreen() {
   const typesQuery = usePersonalEventTypes(teamId);
   const typesSub = eventTypesSubtitle(typesQuery.isLoading, typesQuery.data ?? []);
 
-  // ВСЁ ЗАПОЛНЕНО — ЦВЕТОМ КОМАНДЫ (владелец 25.09: «убери „красить по“ —
-  // просто выбор самого цвета, в какой красить, когда всё заполнено»).
-  // Выбор здесь и есть цвет команды: так он один на сетку, ленту команд и
+  // ВСЁ ЗАПОЛНЕНО — ЦВЕТОМ КОМАНДЫ: выбирается просто цвет, в какой красить,
+  // когда всё заполнено. Выбор здесь и есть цвет команды: так он один на сетку, ленту команд и
   // её записи.
   const ordinary = team?.color || fallback;
   const updateTeam = useUpdateTeam();
 
-  // «СКРЫВАТЬ ОТМЕНЁННЫЕ» — ЗДЕСЬ, НА «КЛИЕНТЕ» (владелец 30.09: «скрывать
-  // отменённые закинем именно в блок клиентов»; раньше — последний тумблер
-  // шестерёнки). Пишется в КОМАНДУ (`teams.hide_cancelled`), как всё на этой
+  // «СКРЫВАТЬ ОТМЕНЁННЫЕ» — ЗДЕСЬ, НА «КЛИЕНТЕ». Пишется в КОМАНДУ (`teams.hide_cancelled`), как всё на этой
   // странице: календарь и так читает сперва её, а старое значение компании
   // (`calendar_settings`) — только пока у команды своего нет. Тумблер ставит
   // явное да/нет, не `null`: «как у компании» отсюда уже не выбрать.
@@ -98,11 +95,10 @@ export function useDesignScreen() {
     }
   };
 
-  // ПЕРЕКЛЮЧАТЕЛЬ СТРАНИЦЫ (владелец 25.09): «Клиент» — цвет записи и её
+  // ПЕРЕКЛЮЧАТЕЛЬ СТРАНИЦЫ: «Клиент» — цвет записи и её
   // блоки, «Событие» — блоки события и типы; открывается «Клиент».
   //
-  // БЕЗ ТАРИФА КЛИЕНТОВ НЕТ (владелец 04.10: «если нет тарифа, открывает
-  // сразу события, а клиента не может открыть»): «Клиент» серый, тап — плашка
+  // БЕЗ ТАРИФА КЛИЕНТОВ НЕТ: «Клиент» серый, тап — плашка
   // тарифа; страница стоит на «Событии».
   const clientsInPlan = usePlanAllows("book-clients");
   const nudgeTariff = useTariffNudge();

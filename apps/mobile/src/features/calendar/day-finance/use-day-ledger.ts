@@ -60,7 +60,7 @@ export function useDayLedger({
   }, [dateYmd, appointments, shownYmd]);
   const ymd = shownYmd ?? businessToday;
   const appts = shownAppts;
-  // Часы бизнеса, а не телефона (аудит 2026-10-03) — как у сетки.
+  // Часы бизнеса, а не телефона — как у сетки.
   const nowHm = nowHmProp ?? formatHM(new Date());
 
   const txQuery = useTransactions(ymd, ymd, {
@@ -68,7 +68,7 @@ export function useDayLedger({
     enabled: shownYmd != null,
   });
   // Операции записей дня — в любой день внесения: предоплата за запись
-  // стоит в дне записи (владелец 2026-10-01, правило в `day-money.ts`).
+  // стоит в дне записи (правило в `day-money.ts`).
   const recordsTxQuery = useAppointmentsLedger(
     useMemo(() => appts.map((a) => a.id), [appts]),
     { enabled: shownYmd != null },
@@ -87,7 +87,7 @@ export function useDayLedger({
   // Загрузка — пока ответ в пути (`awaitingAnswer`). По одному
   // `isPlaceholderData` день БЕЗ ЗАПИСЕЙ, открытый после дня с записями,
   // крутил загрузку вечно: запрос по записям у него выключен, а заглушку
-  // прошлого дня react-query держит и выключенному (повторный аудит 03.10).
+  // прошлого дня react-query держит и выключенному.
   const ledgerLoading = awaitingAnswer(txQuery) || awaitingAnswer(recordsTxQuery);
 
   const legacyExtras = useMemo(

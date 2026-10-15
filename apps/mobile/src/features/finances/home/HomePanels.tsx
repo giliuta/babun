@@ -71,7 +71,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         onOpenRecord={openRecordRow}
         refreshControl={refreshControl}
         canOpenSettings={access.settings}
-        // Настройки — на счетах выбранной команды (владелец 03.10).
+        // Настройки — на счетах выбранной команды.
         teamId={scope}
       />
     );
@@ -80,7 +80,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
     return (
       <DocumentsPanel
         // Документы выставляет владелец: у остальных панель не обещает
-        // кнопку, которой у них нет (владелец 20.09).
+        // кнопку, которой у них нет.
         canIssue={access.documents}
         readable={documentsReadable}
         invoices={scopedInvoices}
@@ -123,7 +123,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         clients={clients}
         services={services}
         teamId={scope}
-        // Долги выбранного периода (владелец 03.10, вечер).
+        // Долги выбранного периода.
         fromDate={period.from}
         toDate={period.to}
         todayYmd={businessToday}

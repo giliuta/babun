@@ -45,8 +45,7 @@ export function AddressForm({
   onState: (state: Exclude<LookupState, "pending">) => void;
 }) {
   const t = useThemeColors();
-  // Типы — только заведённые командой (владелец 03.10: готового набора
-  // нет). Не завела — выбора типа на странице нет вовсе.
+  // Типы — только заведённые командой (готового набора нет). Не завела — выбора типа на странице нет вовсе.
   const labels = info.labels;
   const [form, setForm] = useState<LocationForm>({ ...EMPTY_LOCATION_FORM, label: labels[0] ?? "" });
   // Точный адрес ОТКРЫТ сразу: подъезд, этаж и квартира — то, ради чего

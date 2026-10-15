@@ -73,13 +73,13 @@ export async function unsentChangesNow(): Promise<string | null> {
  *  empty screens. The wipe still runs before any next sign-in, so a
  *  shared device never leaks this account's cached data.
  *
- *  THIS DEVICE ONLY (`scope: "local"`, owner 2026-09-15). It used to be
+ *  THIS DEVICE ONLY (`scope: "local"`). It used to be
  *  `"global"`: «Выйти» on one phone revoked the account's sessions on every
  *  other device and did exactly what «Выйти со всех устройств» does. The
  *  global sign-out stays one explicit row in «Вход и безопасность»
  *  (`cabinet/account.tsx`); `sign-out-contract.test.ts` holds both.
  *
- *  UNSENT CHANGES ASK FIRST (audit 2026-10-03): the wipe takes the sync
+ *  UNSENT CHANGES ASK FIRST: the wipe takes the sync
  *  queue with it, so a non-empty queue needs an explicit «Выйти». */
 export async function signOutAndWipe(): Promise<void> {
   const unsent = await unsentChangesNow();
@@ -103,7 +103,7 @@ export async function signOutAndWipe(): Promise<void> {
   }
 }
 
-/** «ВЫЙТИ ИЗ АККАУНТА» В КАБИНЕТЕ — ВСЕГДА С ВОПРОСОМ (аудит Кабинета 03.10).
+/** «ВЫЙТИ ИЗ АККАУНТА» В КАБИНЕТЕ — ВСЕГДА С ВОПРОСОМ.
  *  Выход срабатывал с одного тапа и стирал с телефона напоминания «Напомнить»
  *  — они живут только здесь и после входа не вернутся. Вопрос один: в нём же
  *  и про неотправленные правки, второго окна нет. Остальные выходы
@@ -179,7 +179,7 @@ export async function handleAuthEvent(
     await suspendAllBabunNotifications();
     return;
   }
-  // PASSWORD_RECOVERY — тоже вход (аудит 03.10): ссылка сброса из письма
+  // PASSWORD_RECOVERY — тоже вход: ссылка сброса из письма
   // заводит сессию своего человека (`verifyOtp` шлёт это событие, а не
   // SIGNED_IN). Без этой строки вход по ссылке B поверх данных A,
   // оставшихся после выхода «со всех устройств» на другом телефоне, сверку

@@ -5,7 +5,6 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// 13.10, нашла сессия 025.
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (f: string) => readFileSync(resolve(here, f), "utf8");
 

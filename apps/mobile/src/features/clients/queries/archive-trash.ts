@@ -20,7 +20,7 @@ import type { ClientWriteTarget } from "./mutations-update";
 import { syncClientReminderWithFeedback } from "./reminder-feedback";
 import { assertOwnCompany, useQueryScope, writeClientOf } from "./scope";
 
-/** ПАРТНЁР С «УДАЛЕНИЕ КЛИЕНТА: МОЖЕТ» УДАЛЯЕТ КЛИЕНТА (владелец 03.10).
+/** ПАРТНЁР С «УДАЛЕНИЕ КЛИЕНТА: МОЖЕТ» УДАЛЯЕТ КЛИЕНТА.
  *  Своей дверью `member_trash_client`: клиент уходит в «Удалённые клиенты»;
  *  без истории он сотрётся через 30 дней, с историей — лежит там, пока
  *  владелец его не вернёт. */
@@ -29,7 +29,7 @@ export function useTrashClientAsPartner() {
   const qc = useQueryClient();
   return useMutation({
     // Без сети удаление не ждёт молча, чтобы сработать потом, когда его уже
-    // не ждут: отказ сразу, словами «Нет связи с сервером» (03.10).
+    // не ждут: отказ сразу, словами «Нет связи с сервером».
     networkMode: "always",
     mutationFn: async (target: string | ClientWriteTarget) => {
       const { id, source } = typeof target === "string" ? { id: target, source: undefined } : target;
@@ -47,8 +47,7 @@ export function useTrashClientAsPartner() {
         Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
       );
       // «Напомнить» об удалённом клиенте снимается и у партнёра, как у
-      // владельца (повторный аудит 03.10): иначе пуш приходил в срок и вёл на
-      // удалённую карточку.
+      // владельца: иначе пуш приходил бы в срок и вёл на удалённую карточку.
       void cancelClientReminder(id);
       void qc.invalidateQueries({ queryKey: clientKeys.all() });
       void qc.invalidateQueries({ queryKey: clientKeys.card(id) });
@@ -76,8 +75,8 @@ export interface ArchiveClientsResult {
 
 /** `trash: true` — клиент уходит в «Удалённые клиенты» со сроком 30 дней;
  *  иначе без срока (дубль после слияния). Клиенту с историей база срок
- *  снимает сама (`client_history_never_purges`, 03.10): архива как полки у
- *  клиентов больше нет — экран один. */
+ *  снимает сама (`client_history_never_purges`): архива как полки у
+ *  клиентов нет — экран один. */
 export interface ArchiveClientsInput {
   ids: string[];
   trash?: boolean;
@@ -122,9 +121,9 @@ export function useArchiveClients() {
       }
       return { archived, failed, archivedIds };
     },
-    // СТРОКА УХОДИТ СРАЗУ (аудит 29.09: «тост „Клиент в удалённых“ уже
-    // показан, а клиент ещё ~5 с в списке и счётчик „11 клиентов“»). Список
-    // ждал перечитки с сервера. Теперь убранные исчезают из списка до ответа;
+    // СТРОКА УХОДИТ СРАЗУ: иначе тост «Клиент в удалённых» уже показан, а
+    // клиент ещё секунды в списке и в счётчике (список ждал бы перечитки с
+    // сервера). Убранные исчезают из списка до ответа;
     // отказ возвращает список как был, а частичную неудачу исправит
     // перечитка в `onSettled` — не дошедшие до архива вернутся сами.
     onMutate: async ({ ids }) => {
@@ -173,7 +172,7 @@ function useHiddenClients(
   });
 }
 
-/** «Удалённые клиенты» — ОДНА ПОЛКА (владелец 03.10: архива нет): и те, кто
+/** «Удалённые клиенты» — ОДНА ПОЛКА (архива нет): и те, кто
  *  сотрётся по сроку, и клиенты с историей без срока; свежие удаления —
  *  сверху. */
 export function useTrashedClients() {
@@ -208,7 +207,7 @@ export function useRestoreClient() {
       if (restored.reminder_at) syncClientReminderWithFeedback(restored);
     },
     // Отказ — тоже повод перечитать: список «Удалённых» показывает правду
-    // сервера, а не оптимистичный шаг (аудит 03.10).
+    // сервера, а не оптимистичный шаг.
     onError: (_error, client) => {
       void qc.invalidateQueries({ queryKey: clientKeys.trashedAll() });
       void qc.invalidateQueries({ queryKey: clientKeys.card(client.id) });

@@ -5,8 +5,8 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
 
-// КРЕДИТ-НОТА — ФОРМА → ПРЕВЬЮ → «ВЫПИСАТЬ» (владелец 2026-10-04: «сначала
-// превью… закрепляется чётко за инвойсом»). Страница инвойса не выпускает
+// КРЕДИТ-НОТА — ФОРМА → ПРЕВЬЮ → «ВЫПИСАТЬ»: сначала превью, нота закреплена
+// чётко за инвойсом. Страница инвойса не выпускает
 // ноту сама: «Отменить инвойс» открывает форму, выпуск — только из её листа.
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "../../../app/invoices");

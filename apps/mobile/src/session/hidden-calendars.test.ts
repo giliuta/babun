@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import { calendarKey, canHideCalendar, effectiveHidden } from "./hidden-calendars";
 
-// Скрытый календарь (владелец 04.10): скрыть можно, пока есть другой видимый;
+// Скрытый календарь: скрыть можно, пока есть другой видимый;
 // другие пропали — скрытый сам возвращается.
 
 const own = { tenantId: "me", teamId: "personal" };

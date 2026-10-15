@@ -38,7 +38,7 @@ export function DayTiles({
           color={moneySign(money.income) < 0 ? t.danger : t.success}
           value={formatEUR(money.income)}
           // Ноль тише живых денег — как у плиток «Финансов»: красный
-          // «€0» у расхода врал цветом (повторный аудит 03.10).
+          // «€0» у расхода врал цветом.
           quiet={moneySign(money.income) === 0}
           active={view === "income"}
           onPress={() => pick("income")}

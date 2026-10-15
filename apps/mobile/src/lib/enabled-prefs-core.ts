@@ -19,7 +19,7 @@ export interface EnabledPrefsOptions<T extends string> {
   requireOne?: boolean;
   /** Пункты, которые СУЩЕСТВОВАЛИ до того, как набор начал помнить, что он
    *  знает (`:known`). У устройства со старым сохранённым списком новый
-   *  пункт из `defaults` иначе оказался бы выключенным молча — так 2026-09-06
+   *  пункт из `defaults` иначе оказался бы выключенным молча — так
    *  «Файлы» пропали бы у владельца. Не указано — считается, что старых
    *  списков с неполным набором нет. */
   legacyIds?: readonly T[];
@@ -36,8 +36,8 @@ export interface EnabledPrefsOptions<T extends string> {
 export function createEnabledPrefsStore<T extends string>(opts: EnabledPrefsOptions<T>) {
   const { storageKey, all, defaults, requireOne } = opts;
   const pinned = opts.pinned ?? [];
-  // НАБОР У КОМАНДЫ (владелец 30.09: «у каждой команды свои настройки
-  // клиентов»). Ключ команды — ключ компании плюс `:team:<id>`. Команда,
+  // НАБОР У КОМАНДЫ (у каждой команды свои настройки
+  // клиентов). Ключ команды — ключ компании плюс `:team:<id>`. Команда,
   // которая ещё ничего не меняла, живёт общим набором компании: нынешние
   // настройки не пропадают, а новая команда начинает с того, что уже есть.
   const key = (tenantId: string | null, teamId: string | null = null) => {
@@ -153,7 +153,7 @@ export function createEnabledPrefsStore<T extends string>(opts: EnabledPrefsOpti
     }
   };
 
-  /** НАБОР С СЕРВЕРА (`team_design`, 30.09) — по тем же правилам, что с
+  /** НАБОР С СЕРВЕРА (`team_design`) — по тем же правилам, что с
    *  телефона: закреплённое сверху и включено, незнакомое выброшено, новое из
    *  обновления встаёт в конец порядка, пустой набор при `requireOne` —
    *  умолчания. `null` — сервер набор не хранит. */

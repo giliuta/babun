@@ -14,15 +14,15 @@ import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 // выбора клиента (`SelectRow` с буквой). «Какие клиенты» меняет, сколько их в
 // списке; «Редактирует» — живая кнопка создания внизу, «Только видит» — та
 // же серая, как у списка клиентов. Видит клиентов — есть и номер под именем,
-// и переход на страницу (02.10: «Телефон» и «Открывает карточку» убраны).
+// и переход на страницу.
 //
-// Защита базы (30.09, окно — 02.10): «2 недели» и «Месяц» — в списке только
+// Защита базы: «2 недели» и «Месяц» — в списке только
 // клиент, у которого запись в этом окне до или после сегодня. Номер — с
-// блоком «Клиент» целиком (03.10, владелец: «точки не надо»).
+// блоком «Клиент» целиком.
 
 const noop = () => {};
 
-/** Окно «Ограничений» словами (вариант 1 владельца, 02.10). */
+/** Окно «Ограничений» словами. */
 const SCOPE_SPAN: Readonly<Record<string, string>> = {
   week: "Запись за неделю до или после",
   near: "Запись за две недели до или после",
@@ -31,7 +31,7 @@ const SCOPE_SPAN: Readonly<Record<string, string>> = {
   half: "Запись за полгода до или после",
 };
 
-/** Номер образца — открыт целиком, как в его списке (03.10). */
+/** Номер образца — открыт целиком, как в его списке. */
 const SAMPLE_NUMBER = "+357 99 123 456";
 
 const OWN = [
@@ -42,8 +42,7 @@ const OWN = [
 /** Пункты меню клиента — тем же видом, что в его меню (`ClientActionsSheet`). */
 type MenuItem = { label: string; icon: LucideIcon; tone: "accent" | "warning" | "danger" };
 
-/** Клиент и меню, открытое долгим нажатием на него (владелец 03.10: «добавь
- *  картинку того, когда оно открывается»), — как «Перенос записей» в
+/** Клиент и меню, открытое долгим нажатием на него, — как «Перенос записей» в
  *  календаре. */
 function ClientMenuPreview({ items, phones }: { items: readonly MenuItem[]; phones: boolean }) {
   const t = useThemeColors();
@@ -83,7 +82,7 @@ function ClientMenuPreview({ items, phones }: { items: readonly MenuItem[]; phon
   );
 }
 
-/** «Меню клиента» — всё меню, кроме «Удалить» (владелец 03.10), в его
+/** «Меню клиента» — всё меню, кроме «Удалить», в его
  *  порядке; «Записать» — только с правом «Новые записи» (ниже).
  *  «Удаление клиента» — удаление. */
 const BOOK_ITEM: MenuItem = { label: "Записать", icon: CalendarPlus, tone: "accent" };
@@ -107,7 +106,7 @@ export function ClientsPreview({
   const t = useThemeColors();
   const base = levels.clients ?? "off";
   const scope = levels["clients.scope"] ?? "week";
-  // Номер — блок «Клиент» карточки (02.10), переход на страницу — сама база.
+  // Номер — блок «Клиент» карточки, переход на страницу — сама база.
   const phones = levels["clients.client"] === "read" || levels["clients.client"] === "write";
   const canCreate = levels["clients.create"] === "write";
   // Переход на страницу клиента — шеврон строки (как в его списке).
@@ -137,7 +136,7 @@ export function ClientsPreview({
         }
       >
         <ClientMenuPreview
-          // «Если нет разрешения на запись — этого и не будет» (03.10).
+          // «Если нет разрешения на запись — этого и не будет».
           items={
             blockKey === "clients.menu" && levels["calendar.create"] === "write"
               ? [BOOK_ITEM, ...menuItems]
@@ -188,8 +187,7 @@ export function ClientsPreview({
           ))}
         </SelectList>
       </Card>
-      {/* Кнопка на своём месте и серая, как на его вкладке (владелец 20.09:
-          «визуал страницы сохраняем, потом отключаем»). */}
+      {/* Кнопка на своём месте и серая, как на его вкладке. */}
       <View style={{ marginHorizontal: 16, marginTop: 8 }}>
         <Button variant="secondary" label="Создать клиента" onPress={noop} disabled={!canCreate} />
       </View>

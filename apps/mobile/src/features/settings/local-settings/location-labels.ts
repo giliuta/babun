@@ -46,9 +46,9 @@ function rowsToLocationLabels(rows: LocationLabelRow[]): LocationLabel[] {
     }));
 }
 
-/** ТИПЫ ОБЪЕКТОВ КОМАНДЫ (владелец 30.09). Без команды — имена всей
- *  компании без повторов (у каждой команды своя «Вилла»); строки до миграции
- *  30.09 команды не знают и видны всем. */
+/** ТИПЫ ОБЪЕКТОВ КОМАНДЫ. Без команды — имена всей компании без
+ *  повторов (у каждой команды своя «Вилла»); строки старого кэша команды не
+ *  знают и видны всем. */
 export function locationLabelsOfTeam(
   labels: readonly LocationLabel[],
   teamId: string | null,
@@ -113,7 +113,7 @@ function cacheServerLocationLabels(
 }
 
 export function useLocationLabels(teamId: string | null = null) {
-  // КОМПАНИЯ ЭКРАНА, А НЕ КАЛЕНДАРЯ (01.10): типы объектов команды
+  // КОМПАНИЯ ЭКРАНА, А НЕ КАЛЕНДАРЯ: типы объектов команды
   // работодателя партнёр видит и правит из своей вкладки «Клиенты».
   const { tenantId, client, role, foreign } = useScopeCompany();
   return useQuery({
@@ -179,8 +179,8 @@ export function useSaveLocationLabels(teamId: string | null = null) {
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
-      // ПАРТНЁР ПРАВИТ ТИПЫ СВОЕЙ КОМАНДЫ ПО ПРАВУ «ТИПЫ ОБЪЕКТОВ» (владелец
-      // 01.10): решает сервер (`apply_team_location_label_changes`). Общий
+      // ПАРТНЁР ПРАВИТ ТИПЫ СВОЕЙ КОМАНДЫ ПО ПРАВУ «ТИПЫ ОБЪЕКТОВ»:
+      // решает сервер (`apply_team_location_label_changes`). Общий
       // справочник компании без команды — по-прежнему только владельцу.
       if (role !== "owner" && !(teamId && role === "master")) {
         throw new Error("Настраивать типы объектов может только владелец.");
