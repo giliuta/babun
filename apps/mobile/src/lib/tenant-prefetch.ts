@@ -61,7 +61,6 @@ import {
   fetchTeams,
 } from "@/features/reference/queries";
 import { fetchServices } from "@/features/services/queries";
-import { pagingClient } from "@/features/calendar/queries";
 import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appointments";
 import { listMasterClientsSafe } from "@/features/clients/queries";
 import { defaultPeriod } from "@/lib/period";
@@ -148,7 +147,7 @@ function readTarget(ctx: CompanyContext, target: WarmTarget): Promise<unknown> {
     case "appointments":
       return role === "master"
         ? listMasterAppointmentsSafePaged(client)
-        : repoListAppointments(pagingClient(client), tenantId);
+        : repoListAppointments(client, tenantId);
     case "services-all":
       return fetchServices(client, tenantId, role, { archived: true });
     case "cities":

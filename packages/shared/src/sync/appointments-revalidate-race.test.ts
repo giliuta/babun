@@ -43,18 +43,21 @@ function slowServer() {
   const pending: ((value: ListResult) => void)[] = [];
   const client = {
     from() {
+      // Список читается страницами: select → eq → order → range, и только
+      // ответ на запрос ждёт команды теста.
       const chain: Record<string, unknown> = {};
       chain.select = () => chain;
-      chain.eq = () => ({
-        then: (
-          onFulfilled: (value: ListResult) => unknown,
-          onRejected?: (reason: unknown) => unknown,
-        ) =>
-          new Promise<ListResult>((resolve) => pending.push(resolve)).then(
-            onFulfilled,
-            onRejected,
-          ),
-      });
+      chain.eq = () => chain;
+      chain.order = () => chain;
+      chain.range = () => chain;
+      chain.then = (
+        onFulfilled: (value: ListResult) => unknown,
+        onRejected?: (reason: unknown) => unknown,
+      ) =>
+        new Promise<ListResult>((resolve) => pending.push(resolve)).then(
+          onFulfilled,
+          onRejected,
+        );
       return chain;
     },
   };

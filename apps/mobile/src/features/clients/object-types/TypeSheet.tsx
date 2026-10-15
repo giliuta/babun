@@ -8,6 +8,7 @@ import {
   type TemplateItem,
 } from "@/components/ui/TemplatePicker";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { Button } from "@/components/ui/Button";
 import { NameColorField } from "@/components/ui/picker-fields";
 
@@ -47,19 +48,28 @@ export function TypeSheet({
   // пока лист открыт, значением владеет поле.
   const [seededFor, setSeededFor] = useState<string | null>(null);
   const key = editing == null ? null : isEdit ? editing.label.id : "create";
+  const seedName = editing?.mode === "edit" ? editing.label.name : "";
+  // НОВЫЙ ТИП РОЖДАЕТСЯ ЦВЕТНЫМ. Пустой вид у первой же строки читается как
+  // «сломалось»: соседние справочники цветные. Правка чужой вид не трогает.
+  const seedColor =
+    editing?.mode === "edit" ? (editing.label.color ?? null) : PRESET_COLOR_CYCLE[0].value;
+  const seedIcon = editing?.mode === "edit" ? (editing.label.icon ?? null) : "house";
   if (key !== seededFor) {
     setSeededFor(key);
     setPicking(false);
-    setName(editing?.mode === "edit" ? editing.label.name : "");
-    // НОВЫЙ ТИП РОЖДАЕТСЯ ЦВЕТНЫМ. Пустой вид у первой же строки читается как
-    // «сломалось»: соседние справочники цветные. Правка чужой вид не трогает.
-    setColor(
-      editing?.mode === "edit"
-        ? (editing.label.color ?? null)
-        : PRESET_COLOR_CYCLE[0].value,
-    );
-    setIcon(editing?.mode === "edit" ? (editing.label.icon ?? null) : "house");
+    setName(seedName);
+    setColor(seedColor);
+    setIcon(seedIcon);
   }
+  // НАБРАННОЕ НЕ ПРОПАДАЕТ ОТ СКРИМА И СВАЙПА — как у метки: сначала вопрос.
+  const dirty =
+    editing !== null && (name !== seedName || color !== seedColor || icon !== seedIcon);
+  const guard = useGuardedClose({
+    dirty,
+    busy,
+    onClose,
+    message: "Набранное в типе объекта не сохранится.",
+  });
 
   const applyTemplate = (tpl: LocationLabel) => {
     setName(tpl.name);
@@ -70,8 +80,9 @@ export function TypeSheet({
 
   return (
     <BottomSheet
-      visible={editing !== null}
-      onClose={onClose}
+      visible={editing !== null && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={isEdit ? "Тип объекта" : "Новый тип"}
       avoidKeyboard
       footer={picking ? undefined : (<Button

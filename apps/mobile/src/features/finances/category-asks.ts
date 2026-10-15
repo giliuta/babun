@@ -63,7 +63,12 @@ export function categoryInTeam(
 ): string | null {
   if (!categoryId) return null;
   const current = categories.find((c) => c.id === categoryId);
-  if (!current) return null;
+  // КАТЕГОРИИ НЕТ В СПИСКЕ — ВЫБОР НЕ ТРОГАЕМ. Список ещё грузится (на
+  // холодном старте он `[]`), не загрузился или не видит её — ни одно из
+  // этого не говорит «она у чужой команды». Прежний `null` здесь стирал
+  // категорию у открытой правки операции раньше, чем доезжал справочник, и
+  // «Сохранить» записывал операцию без категории.
+  if (!current) return categoryId;
   if (current.team_id == null || current.team_id === teamId) return categoryId;
   if (!teamId) return null;
   const key = current.name.trim().toLocaleLowerCase("ru");

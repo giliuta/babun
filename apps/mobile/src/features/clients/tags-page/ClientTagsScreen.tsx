@@ -349,7 +349,7 @@ export function ClientTagsScreen() {
       <TagSheet
         editing={editing}
         busy={busy}
-        onClose={() => (busy ? undefined : setEditing(null))}
+        onClose={() => setEditing(null)}
         onSubmit={submit}
         templates={tagTemplates}
       />

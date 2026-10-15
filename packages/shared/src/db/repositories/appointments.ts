@@ -311,18 +311,36 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
 
 // ─── Public API ────────────────────────────────────────────────
 
-/** Fetch every appointment for the tenant. STORY-049 — the photos
- *  column was dropped, so the result no longer carries blob data. */
+// PostgREST caps every response at `max_rows` (Supabase default 1000) and
+// says nothing about the rows it dropped. This list feeds the authoritative
+// cache resync (`cacheReplaceTenant`), which DELETES every cached row missing
+// from the snapshot — so a capped read would silently erase the tenant's
+// appointments past the cap from the device calendar. Same paging as
+// clients (`listClientRows`). The page must not exceed the server cap: a
+// short page is read as the last one.
+const APPOINTMENT_PAGE_SIZE = 1000;
+
+/** Fetch every appointment for the tenant, page by page (stable order by
+ *  primary key, so no row is skipped or repeated across pages). STORY-049 —
+ *  the photos column was dropped, so the result carries no blob data. */
 export async function listAppointments(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<Appointment[]> {
-  const { data: rows, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`listAppointments: ${error.message}`);
-  return (rows ?? []).map((r) => rowToAppointment(r));
+  const rows: Row[] = [];
+  for (let offset = 0; ; offset += APPOINTMENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("id", { ascending: true })
+      .range(offset, offset + APPOINTMENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listAppointments: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < APPOINTMENT_PAGE_SIZE) break;
+  }
+  return rows.map((r) => rowToAppointment(r));
 }
 
 /** Single appointment by id. Photos NOT included — caller fetches

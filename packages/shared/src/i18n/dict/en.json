@@ -1956,6 +1956,8 @@
  "Набранное в категории не сохранится.": "Your changes to the category won't be saved.",
  "Набранное в метке не сохранится.": "What you've entered in the label won't be saved.",
  "Набранное в операции не сохранится.": "What you've entered in this transaction won't be saved.",
+ "Набранное в теге не сохранится.": "What you've entered in the tag won't be saved.",
+ "Набранное в типе объекта не сохранится.": "What you've entered in the property type won't be saved.",
  "Набранное в типе события не сохранится.": "What you've entered in the event type won't be saved.",
  "Набранное в услуге не сохранится.": "What you've entered for the service won't be saved.",
  "Набранное в шаблоне не сохранится.": "What you've typed in the template won't be saved.",
