@@ -58,8 +58,10 @@
 ## Миграции
 
 - Новая миграция — файл `supabase/migrations/<YYYYMMDDHHMMSS>_<имя>.sql`.
-  Номер некруглый и уникальный: перед коммитом
-  `ls supabase/migrations | cut -c1-14 | sort | uniq -d` должен быть пуст.
+  Время настоящее и номер уникальный — это сторожит
+  `apps/mobile/src/lib/migration-names.test.ts`. Версии в
+  `supabase_migrations.schema_migrations` боевой базы с именами файлов не
+  совпадают, поэтому `supabase db push` для сверки не годится.
 - Накат на боевую — только по явному слову владельца.
 - Тело функции, которую меняешь, берётся из живой базы
   (`select pg_get_functiondef('public.<имя>'::regproc)`) или из
