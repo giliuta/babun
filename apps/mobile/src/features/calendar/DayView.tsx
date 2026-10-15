@@ -1055,14 +1055,12 @@ export const DayColumn = memo(function DayColumn({
 function DayHeader({
   dateYmd,
   isToday,
-  isPast,
   dayOff = false,
   label,
   onLabelTap,
 }: {
   dateYmd: string;
   isToday: boolean;
-  isPast: boolean;
   /** У команды на эту дату выходной — на месте метки встанет слово. */
   dayOff?: boolean;
   /** Метка дня (город команды). null при отсутствии — шапка чистая,
@@ -1091,7 +1089,6 @@ function DayHeader({
         date={date}
         size="lg"
         isToday={isToday}
-        isPast={isPast}
         label={label}
         dayOff={dayOff}
       />
@@ -1239,7 +1236,6 @@ export const DayView = memo(function DayView({
               <DayHeader
                 dateYmd={d}
                 isToday={d === todayYmd}
-                isPast={d < todayYmd}
                 label={labelFor?.(d) ?? null}
                 dayOff={workBandFor?.(d) === null}
                 onLabelTap={off === 0 ? onDayLabelTap : undefined}
