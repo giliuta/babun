@@ -9,7 +9,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { Check } from "lucide-react-native";
+import { Banknote, Check, CreditCard, Landmark, Wallet } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -19,12 +19,8 @@ import {
   CANCELLED_BORDER,
   type BlockColors,
 } from "@/features/calendar/status-colors";
-import {
-  blockLadder,
-  NAME_MIN_SCALE,
-  nameShrinkFits,
-  rowsThatFit,
-} from "@/features/calendar/block-geometry";
+import { blockLadder, rowsThatFit } from "@/features/calendar/block-geometry";
+import { blockMoney } from "@/features/calendar/block-status";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
 import { BLOCK_GLASS } from "@/components/ui/RecordMark";
 import { blockPropsEqual } from "@/features/calendar/grid-memo";
@@ -50,6 +46,33 @@ const EDGE_H = 16;
 const EDGE_PAGE = 28;
 /** Блик — общий со знаком записи в настройках (`BLOCK_GLASS`). */
 const GLASS = BLOCK_GLASS;
+/** Тающий хвост: ширина и ступени плотности плёнки (слева направо). */
+const FADE_W = 14;
+const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.92];
+/** Кегль значков нижней строки — меньше текста, чтобы не спорить с именем;
+ *  в широком блоке «Дня» 11 терялся — там 14. */
+const statusIcon = (width: number) => (width >= 96 ? 14 : 11);
+
+/** Значок оплаты: способ последнего платежа; не платили — кошелёк. */
+function MoneyIcon({
+  method,
+  size,
+  color,
+  opacity,
+}: {
+  method: "cash" | "card" | "transfer" | "other" | null;
+  size: number;
+  color: string;
+  opacity: number;
+}) {
+  const Icon =
+    method === "cash" ? Banknote : method === "card" ? CreditCard : method === "transfer" ? Landmark : Wallet;
+  return (
+    <View style={{ opacity }}>
+      <Icon color={color} size={size} strokeWidth={2.4} />
+    </View>
+  );
+}
 
 // `memo` со сравнением размещения по содержимому (`blockPropsEqual`): перенос
 // одной записи пересоздаёт размещения всей колонки, а перерисовать надо только
@@ -217,14 +240,15 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // канта просрочки нет (владелец 2026-10-01: «некрасиво») — незакрытая
   // запись говорит жирным временем.
   const bw = 1.5;
-  const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
-  // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
-  // Пока его резервировала и она, просроченный блок недели на экране 393pt
-  // давал textW 22.3 при гейте 24 — то есть был НЕМЫМ, без имени клиента.
-  const markReserve = markSize > 0 && completed ? markSize + 4 : 0;
+  // Гейт точки чужой метки: в колонке уже 40pt ей места нет.
+  const markSize = width >= 40 ? 8 : 0;
+  // УГЛОВОГО ЗНАКА «ВЫПОЛНЕНО» БОЛЬШЕ НЕТ (владелец 15.10: «что значит
+  // справа вверху… как будто точку поставили?»). В колонке недели галка не
+  // помещалась, и оставалась немая полупрозрачная точка. «Выполнено» ушло в
+  // строку значков внизу — галкой, рядом с оплатой.
   // Внутренняя ширина НЕ зависит от толщины канта: компенсация паддинга ниже
   // (`pad - (bw - 1)`) гасит лишний кант ровно, поэтому вычитаем 2, а не 2·bw.
-  const textW = width - 2 * pad - 2 - markReserve;
+  const textW = width - 2 * pad - 2;
   // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
   // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
   // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
@@ -250,19 +274,13 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // — имя и фамилия двумя строками), время, услуга, адрес — сколько влезает.
   // Потолка в три строки и гейта ширины 120pt у услуги с адресом больше нет:
   // владелец хочет, чтобы в блок «больше влазило».
-  const nameWords = label.trim().split(/\s+/);
+  const money = blockMoney(apt);
   const ladder = blockLadder({
     rowsFit,
-    textW,
-    nameWords: nameWords.length,
     hasService: !!service,
-    hasAddress: !!address,
+    hasStatus: !cancelled && (money !== null || completed),
   });
-  const nameParts =
-    ladder.nameRows === 2
-      ? [nameWords[0], nameWords.slice(1).join(" ")]
-      : [label];
-  const { showService, showAddress, lastRow } = ladder;
+  const { showService, showStatus, lastRow } = ladder;
   // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
   // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
   // адрес, и на карточке, где последней осталась услуга (или время), её хвост
@@ -274,8 +292,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // уже ПОСЛЕ гейта 24pt: у верхней карточки стопки в Неделе (две короткие
   // записи в одно время) имени оставалось ~14pt — «А…» (повторный аудит
   // 03.10). Гейт меряет то, что останется имени на самом деле.
-  const nameLineW =
-    textW + markReserve - Math.max(markReserve, deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
+  const nameLineW = textW - (deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
 
@@ -626,6 +643,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       ? fillIdle
       : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
   }));
+  // Плёнка тающего хвоста — та же заливка с тем же откликом под пальцем.
+  const fillStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
+  }));
 
 
   return (
@@ -729,10 +750,107 @@ export const AppointmentBlock = memo(function AppointmentBlock({
                 ),
               )
             : null}
-          {/* БЛИК СВЕРХУ (вариант 5, 24.09): три плёнки белого 7→5 % дают
-              плавный объём без градиентной библиотеки (её нативный модуль
-              потребовал бы пересборки клиента). Под текстом, касаний не
-              принимает; у отменённой блика нет. */}
+          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга (владелец 15.10: «самое
+              оптимальное — имя, время и услуга»; адреса на блоке нет). Имя
+              первым: время уже названо рельсом слева и позицией блока, а имя
+              не выводится ниоткуда. Кегль 13 — типографический пол продукта.
+              Лестница только дописывается вниз и не переставляется: при щипке
+              глаз не должен терять якорь. */}
+          {/* ЩИПОК ТЯНЕТ РАМКУ, НО НЕ БУКВЫ (владелец 04.10): обратный масштаб
+              жеста от верхнего края — текст карточки держит форму. */}
+          <Animated.View style={[{ transformOrigin: "top" }, unstretched]}>
+            {textW >= 24 && nameLineW >= 24 ? (
+              <Text
+                style={{
+                  color: nameColor,
+                  fontSize: 13,
+                  lineHeight: lineH,
+                  fontWeight: "700",
+                  marginRight: Math.max(
+                    deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
+                    lastRow === "name" ? dotReserve : 0,
+                  ),
+                  textDecorationLine: cancelled ? "line-through" : "none",
+                }}
+                numberOfLines={1}
+                // ОДИН КЕГЛЬ У ВСЕХ И ХВОСТ ТАЕТ (владелец 15.10: «имя всегда
+                // разных размеров — должно писаться одним размером и уходить в
+                // скрытие»). Подгонки кегля нет: короткие имена ужимались до
+                // 11pt, длинные — нет, и соседние блоки недели писали имя разным
+                // размером. Длинное имя режется по краю, а край прячет плёнка в
+                // цвет блока ниже. У отменённой заливка полупрозрачная, плёнке
+                // спрятать нечем — ей многоточие.
+                ellipsizeMode={cancelled ? "tail" : "clip"}
+                maxFontSizeMultiplier={1.3}
+              >
+                {label}
+              </Text>
+            ) : null}
+            {ladder.showTime && textW >= 24 ? (
+              <Text
+                style={{
+                  color: subColor,
+                  fontSize: 13,
+                  lineHeight: lineH,
+                  fontWeight: overdue ? "700" : "500",
+                  marginRight: lastRow === "time" ? dotReserve : 0,
+                  fontVariant: ["tabular-nums"],
+                }}
+                numberOfLines={1}
+                // Жирное время просрочки в узкой колонке не влезало и рубилось
+                // многоточием («13:…») — теперь тает, как имя.
+                ellipsizeMode={cancelled ? "tail" : "clip"}
+                maxFontSizeMultiplier={1.3}
+              >
+                {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
+              </Text>
+            ) : null}
+            {showService && textW >= 24 ? (
+              <Text
+                style={{
+                  color: subColor,
+                  fontSize: 13,
+                  lineHeight: lineH,
+                  marginRight: lastRow === "service" ? dotReserve : 0,
+                }}
+                numberOfLines={1}
+                ellipsizeMode={cancelled ? "tail" : "clip"}
+                maxFontSizeMultiplier={1.3}
+              >
+                {service}
+              </Text>
+            ) : null}
+          </Animated.View>
+          {/* ТАЮЩИЙ ХВОСТ — плёнка в цвет заливки у правого края, ступенями от
+              прозрачной к плотной: обрезанное имя и услуга растворяются, а не
+              рубятся по букве. Под ней короткое имя не меняется — плёнка того
+              же цвета, что фон. Ступени, а не градиент: градиентный модуль
+              нативный, а это обновление едет по воздуху. Отклик под пальцем
+              — тот же `fillStyle`, что у карточки. */}
+          {!cancelled && textW >= 24 ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: FADE_W + pad - (bw - 1),
+                flexDirection: "row",
+              }}
+            >
+              {FADE_STEPS.map((a) => (
+                <Animated.View key={a} style={[{ flex: 1, opacity: a }, fillStyle]} />
+              ))}
+              <Animated.View style={[{ width: pad - (bw - 1) }, fillStyle]} />
+            </View>
+          ) : null}
+          {/* БЛИК СВЕРХУ (вариант 5, 24.09): плёнки белого дают плавный объём
+              без градиентной библиотеки (её нативный модуль потребовал бы
+              пересборки клиента). С 15.10 лежит НАД текстом и тающим хвостом:
+              текст белый, и белая плёнка его не меняет, а хвост в цвет блока
+              иначе лёг бы тёмной полосой поверх блика. Касаний не принимает;
+              у отменённой блика нет. */}
           {cancelled
             ? null
             : GLASS.map(([h, a]) => (
@@ -778,106 +896,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               </Text>
             </View>
           ) : null}
-          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга → адрес. Имя первым, потому
-              что время уже названо рельсом слева и позицией блока, а имя не
-              выводится ниоткуда. Кегль 13 — типографический пол продукта;
-              девятка, которой неделя набиралась раньше, была нечитаема.
-              Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
-              при щипке глаз не должен терять якорь. */}
-          {/* ЩИПОК ТЯНЕТ РАМКУ, НО НЕ БУКВЫ (владелец 04.10): обратный масштаб
-              жеста от верхнего края — текст карточки держит форму. */}
-          <Animated.View style={[{ transformOrigin: "top" }, unstretched]}>
-            {textW >= 24 && nameLineW >= 24
-              ? nameParts.map((part, i) => (
-                  <Text
-                    key={i}
-                    style={{
-                      color: nameColor,
-                      fontSize: 13,
-                      lineHeight: lineH,
-                      fontWeight: "700",
-                      marginRight: Math.max(
-                        i === 0 ? markReserve : 0,
-                        i === 0 && deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
-                        lastRow === "name" && i === nameParts.length - 1
-                          ? dotReserve
-                          : 0,
-                      ),
-                      textDecorationLine: cancelled ? "line-through" : "none",
-                    }}
-                    numberOfLines={1}
-                    // УЗКАЯ КАРТОЧКА: КОРОТКОЕ ИМЯ СЖИМАЕТСЯ, А НЕ РЕЖЕТСЯ
-                    // ПОПОЛАМ БУКВЫ. Обрезка по краю оставляла огрызок глифа
-                    // («Андреі», «Перерı»); кегль до 11 (0.85 от 13 — пол шрифта
-                    // продукта) вмещает «Андрей», «Встреча», «Перерыв» целиком.
-                    // Режим «clip» подгонку кегля в iOS выключает, поэтому при
-                    // сжатии — «tail» (текст и так влез). Длинное имя, которому
-                    // и 11pt мало, режется по краю, как раньше: «Конс» говорит
-                    // больше, чем «Ко…».
-                    ellipsizeMode={
-                      (i === 0 ? nameLineW : textW) >= 96 ||
-                      nameShrinkFits(part, i === 0 ? nameLineW : textW)
-                        ? "tail"
-                        : "clip"
-                    }
-                    adjustsFontSizeToFit={
-                      (i === 0 ? nameLineW : textW) < 96 &&
-                      nameShrinkFits(part, i === 0 ? nameLineW : textW)
-                    }
-                    minimumFontScale={NAME_MIN_SCALE}
-                    maxFontSizeMultiplier={1.3}
-                  >
-                    {part}
-                  </Text>
-                ))
-              : null}
-            {ladder.showTime && textW >= 24 ? (
-              <Text
-                style={{
-                  color: subColor,
-                  fontSize: 13,
-                  lineHeight: lineH,
-                  fontWeight: overdue ? "700" : "500",
-                  marginRight: lastRow === "time" ? dotReserve : 0,
-                  fontVariant: ["tabular-nums"],
-                }}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.3}
-              >
-                {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
-              </Text>
-            ) : null}
-            {showService && textW >= 24 ? (
-              <Text
-                style={{
-                  color: subColor,
-                  fontSize: 13,
-                  lineHeight: lineH,
-                  marginRight: lastRow === "service" ? dotReserve : 0,
-                }}
-                numberOfLines={1}
-                ellipsizeMode={textW < 96 ? "clip" : "tail"}
-                maxFontSizeMultiplier={1.3}
-              >
-                {service}
-              </Text>
-            ) : null}
-            {showAddress && textW >= 24 ? (
-              <Text
-                style={{
-                  color: subColor,
-                  fontSize: 13,
-                  lineHeight: lineH,
-                  marginRight: dotReserve,
-                }}
-                numberOfLines={1}
-                ellipsizeMode={textW < 96 ? "clip" : "tail"}
-                maxFontSizeMultiplier={1.3}
-              >
-                {address}
-              </Text>
-            ) : null}
-          </Animated.View>
           {/* «+N» СТОПКИ — справа вверху верхней карточки: под ней ещё записи
               на то же время; тап откроет их списком. */}
           {deckMore > 0 ? (
@@ -913,34 +931,35 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               </Text>
             </View>
           ) : null}
-          {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: белый круг с галкой — работа
-              закрыта. Просрочка знака не носит: её сигнал — тёмный ободок
-              блока, и два разных знака в углу на колонке недели, где глиф не
-              рисуется, слились бы в два одинаковых кружка. Глиф рисуется только на широком
-              блоке: SVG монтирует отдельное дерево на каждый знак, а неделя
-              держит 21 колонку. */}
-          {markSize > 0 && completed ? (
+          {/* СТРОКА ЗНАЧКОВ ВНИЗУ (владелец 15.10: «внизу иконочки — оплатили
+              или не оплатили, без суммы в евро»). Порядок постоянный: деньги,
+              выполнено. Деньги — значком способа (наличные · карта · перевод),
+              частично — тот же значок вполсилы, не оплачено — бледный кошелёк.
+              Выполнено — галка; у невыполненной места нет, чтобы будущие записи
+              не мигали пустыми значками. «Нет объекта» говорит цвет блока. */}
+          {showStatus && textW >= 24 ? (
             <View
+              pointerEvents="none"
               style={{
                 position: "absolute",
-                top: 2,
-                right: 2,
-                width: markSize,
-                height: markSize,
-                borderRadius: 999,
-                // На плотной заливке зелёный круг тонул бы в зелёных записях;
-                // белая плёнка с белой галкой читается на любом цвете.
-                backgroundColor: "rgba(255,255,255,0.32)",
+                left: pad - (bw - 1),
+                bottom: 3 + bottomHandle,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
+                gap: width >= 96 ? 6 : 4,
               }}
             >
-              {markSize >= 14 ? (
-                <Check color={BLOCK_TEXT} size={10} strokeWidth={3.5} />
+              {money ? (
+                <MoneyIcon
+                  method={money.method}
+                  size={statusIcon(width)}
+                  color={BLOCK_TEXT}
+                  opacity={money.state === "paid" ? 1 : money.state === "partial" ? 0.62 : 0.38}
+                />
               ) : null}
+              {completed ? <Check color={BLOCK_TEXT} size={statusIcon(width)} strokeWidth={3} /> : null}
             </View>
           ) : null}
-
           {/* ЧУЖАЯ МЕТКА — точка в нижнем углу: сам блок залит цветом записи.
               Точка несёт цвет метки как есть, а белое кольцо отделяет её от
               чужой заливки при любом сочетании. */}
