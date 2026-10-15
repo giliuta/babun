@@ -1,4 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { serviceClient } from "../_shared/service-client.ts";
+import { json as jsonResponse } from "../_shared/http.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,39 +10,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
-  });
-}
+const json = (status: number, body: unknown): Response => jsonResponse(status, body, corsHeaders);
 
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const legacyServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  let serviceKey: string | undefined;
-  if (secretKeysJson) {
-    try {
-      const candidates = Object.values(
-        JSON.parse(secretKeysJson) as Record<string, unknown>,
-      ).filter(
-        (value): value is string =>
-          typeof value === "string" && value.length > 20,
-      );
-      serviceKey =
-        candidates.find((value) => value.startsWith("sb_secret_")) ??
-        candidates[0];
-    } catch {
-      // Fall back to the legacy service-role JWT below.
-    }
-  }
-  if (!serviceKey) serviceKey = legacyServiceKey || undefined;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 /** Подписки, которые ещё списывают деньги. */
 const LIVE_SUBSCRIPTION = new Set(["active", "trialing", "past_due", "unpaid", "incomplete"]);

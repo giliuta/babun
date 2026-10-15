@@ -18,7 +18,7 @@
 // Старые адреса babun.app/api/calendar/<user_id>.ics умерли вместе с вебом
 // (25.08) — подписчиков на них нет.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { serviceClient } from "../_shared/service-client.ts";
 
 /** 24 случайных байта hex — форма токена из `calendar_feed_tokens`. */
 const TOKEN_RE = /^[0-9a-f]{48}$/;
@@ -33,30 +33,6 @@ interface AptRow {
   comment: string | null;
 }
 
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const legacyServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  let serviceKey: string | undefined;
-  if (secretKeysJson) {
-    try {
-      const candidates = Object.values(
-        JSON.parse(secretKeysJson) as Record<string, unknown>,
-      ).filter(
-        (v): v is string => typeof v === "string" && v.length > 20,
-      );
-      serviceKey =
-        candidates.find((v) => v.startsWith("sb_secret_")) ?? candidates[0];
-    } catch {
-      // fall through to the legacy service-role JWT
-    }
-  }
-  if (!serviceKey) serviceKey = legacyServiceKey || undefined;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 function notFound(): Response {
   return new Response("Not Found", { status: 404 });
