@@ -68,6 +68,7 @@
  "Google Карты": "Google Maps",
  "ID пользователя": "User ID",
  "PDF пока недоступен": "PDF not available yet",
+ "PDF собирался слишком долго.": "The PDF took too long to create.",
  "PDF создан, но открыть меню экспорта не удалось. {0}": "PDF created, but the export menu couldn't be opened. {0}",
  "PDF создан, но системное меню экспорта на этом устройстве недоступно.": "PDF created, but the system export menu isn't available on this device.",
  "PDF-модуль ещё не установлен в текущую сборку приложения. Обновите приложение и попробуйте снова.": "The PDF module isn't in this build of the app yet. Update the app and try again.",

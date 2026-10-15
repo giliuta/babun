@@ -29,7 +29,7 @@ import { useInvoiceDetail } from "./use-invoice-detail";
 export function InvoiceDetailScreen() {
   const {
     router,
-    pendingAction,
+    action,
     invoice,
     clientsQuery,
     appointmentsQuery,
@@ -80,10 +80,16 @@ export function InvoiceDetailScreen() {
   // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА — ЭФФЕКТОМ ПОСЛЕ ОТРИСОВКИ, А НЕ В ТЕЛЕ (13.10,
   // нашла сессия 025). Раньше блок стоял в рендере ниже ранних возвратов:
   // правил ref и ставил таймер во время отрисовки, а замыкание читало
-  // `docWrite` и `awaitsPayment`, объявленные ещё ниже, — держалось на одной
-  // задержке. Теперь: эффект ждёт готовую страницу, таймер снимается при
-  // уходе, а само действие берётся из `runActionRef` в миг срабатывания —
-  // уже со свежими правами и остатком.
+  // `docWrite` и `awaitsPayment`, объявленные ещё ниже.
+  //
+  // ДЕЙСТВИЕ ЖИВЁТ В АДРЕСЕ И СТИРАЕТСЯ, КАК ТОЛЬКО ВЗЯТО (15.10). Прежде оно
+  // «взводилось» один раз при открытии страницы: ссылка с `?action=share` на
+  // уже открытый инвойс меняла параметр той же страницы, а она молчала.
+  // Стёртый параметр не повторит действие при возврате на страницу, а новая
+  // ссылка снова его взведёт. Таймер не снимается повторным запуском эффекта
+  // (стирание само его перезапускает) — только уходом со страницы; само
+  // действие берётся из `runActionRef` в миг срабатывания, со свежими
+  // правами и остатком.
   const pageReady = !loading && !!invoice.data && !!settlement && receiptsQuery.isSuccess;
   const runActionRef = useRef<((next: string) => void) | null>(null);
   const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,12 +100,12 @@ export function InvoiceDetailScreen() {
     [],
   );
   useEffect(() => {
-    if (!pageReady || !pendingAction.current || !runActionRef.current) return;
-    const next = pendingAction.current;
-    pendingAction.current = null;
+    if (!pageReady || !action || !runActionRef.current) return;
+    const next = action;
+    router.setParams({ action: undefined });
     // Пауза — дать странице встать, прежде чем поверх поднимется лист.
     actionTimer.current = setTimeout(() => runActionRef.current?.(next), 450);
-  }, [pageReady, pendingAction]);
+  }, [pageReady, action, router]);
 
   if (loading) {
     return (

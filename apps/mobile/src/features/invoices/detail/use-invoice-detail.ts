@@ -31,9 +31,8 @@ export function useInvoiceDetail() {
   const router = useRouter();
   const { id, action } = useLocalSearchParams<{ id: string; action?: string }>();
   // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА (04.10: долгое нажатие в «Документах» — «Поделиться
-  // PDF», «Принять оплату», «Выписать чек»): страница открывается и делает его
-  // сама, один раз, когда всё нужное загружено.
-  const pendingAction = useRef<string | null>(action ?? null);
+  // PDF», «Принять оплату», «Выписать чек»): страница делает его сама, когда
+  // всё нужное загружено (эффект в InvoiceDetailScreen), и стирает его из адреса.
   const invoice = useInvoice(id);
   const clientsQuery = useClients();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
@@ -146,8 +145,11 @@ export function useInvoiceDetail() {
     } as unknown as Href);
   };
 
+  // Одна печать за раз: действие из меню и тап по кнопке не должны запускать
+  // две сборки PDF разом (состояние `pdfBusy` до перерисовки этого не видит).
+  const pdfRunning = useRef(false);
   const sharePdf = async () => {
-    if (!invoice.data || !settlement) return;
+    if (!invoice.data || !settlement || pdfRunning.current) return;
     if (!tenant && !invoice.data.seller_snapshot) {
       notify(
         "PDF пока недоступен",
@@ -155,6 +157,7 @@ export function useInvoiceDetail() {
       );
       return;
     }
+    pdfRunning.current = true;
     setPdfBusy(true);
     try {
       await shareInvoicePdf({
@@ -174,6 +177,7 @@ export function useInvoiceDetail() {
     } catch (error) {
       notify("Не удалось поделиться PDF", (error as Error).message);
     } finally {
+      pdfRunning.current = false;
       setPdfBusy(false);
     }
   };
@@ -181,7 +185,7 @@ export function useInvoiceDetail() {
   return {
     router,
     id,
-    pendingAction,
+    action,
     invoice,
     clientsQuery,
     appointmentsQuery,

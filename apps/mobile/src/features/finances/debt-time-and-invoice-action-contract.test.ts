@@ -16,13 +16,19 @@ test("час долга без часа — по часам бизнеса, а �
   assert.match(sheet, /const businessNow = useBusinessNow\(\);/);
 });
 
-test("действие из меню списка инвойсов — эффектом, а не в теле отрисовки", () => {
+test("действие из меню списка инвойсов — эффектом, из адреса, и стирается после", () => {
   // Маршрут — тонкий вход; страница живёт в `features/invoices/detail/`.
   const page = read("../invoices/detail/InvoiceDetailScreen.tsx");
-  assert.doesNotMatch(page, /if \(pendingAction\.current && receiptsQuery\.isSuccess\)/);
-  const effectAt = page.indexOf("useEffect(() => {\n    if (!pageReady || !pendingAction.current");
+  const detail = readModuleSource(resolve(here, "../invoices/detail/InvoiceDetailScreen.tsx"), resolve(here, "../invoices/detail"));
+  assert.doesNotMatch(detail, /pendingAction/);
+  const effectAt = page.indexOf("useEffect(() => {\n    if (!pageReady || !action || !runActionRef.current) return;");
   const firstReturn = page.indexOf("  if (loading) {");
   assert.ok(effectAt > 0 && effectAt < firstReturn, "эффект стоит до ранних возвратов");
+  // Ссылка на уже открытый инвойс меняет параметр — эффект обязан его слышать.
+  assert.match(page, /\}, \[pageReady, action, router\]\);/);
+  assert.match(page, /router\.setParams\(\{ action: undefined \}\);/);
   assert.match(page, /runActionRef\.current = \(next\) => \{/);
   assert.ok(page.indexOf("runActionRef.current = (next)") > page.indexOf("const docWrite ="));
+  // Одна печать за раз (действия PDF живут в хуке страницы).
+  assert.match(detail, /if \(!invoice\.data \|\| !settlement \|\| pdfRunning\.current\) return;/);
 });
