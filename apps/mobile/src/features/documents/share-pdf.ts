@@ -21,6 +21,17 @@ export interface SharePdfInput {
   dialogTitle: string;
 }
 
+const PRINT_TIMEOUT_MS = 60_000;
+
+/** Обещание с пределом: не дождались — ошибка с `message`, а не вечное ожидание. */
+export function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
 export async function shareHtmlAsPdf({
   html,
   fileName,
@@ -50,12 +61,20 @@ export async function shareHtmlAsPdf({
 
   let uri: string;
   try {
-    const result = await Print.printToFileAsync({
-      html,
-      width: 595,
-      height: 842,
-      margins: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
+    // ПРЕДЕЛ ОЖИДАНИЯ (15.10). Печать идёт в скрытом WebView; на Android она
+    // однажды не вернулась вовсе (13.10, приложение открыто ссылкой снаружи), и
+    // кнопка крутилась без конца. Теперь через минуту человек получает
+    // понятную ошибку и может нажать ещё раз.
+    const result = await withTimeout(
+      Print.printToFileAsync({
+        html,
+        width: 595,
+        height: 842,
+        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+      }),
+      PRINT_TIMEOUT_MS,
+      "PDF собирался слишком долго.",
+    );
     uri = result.uri;
   } catch (error) {
     throw new Error(`Не удалось создать PDF. ${errorMessage(error)}`);
