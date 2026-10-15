@@ -3,8 +3,8 @@
 // Было сорок; 03.10 владелец попросил больше — «чтоб под офис был значок
 // офиса, под дом — дома»: добавлены ещё пять восьмёрок (здания · жильё и
 // отдых · внутри · техника и стройка · разное), всего восемьдесят. 15.10 —
-// сто («сделай 100 значков и 100 цветов»): услуги и уход · транспорт и офис ·
-// успех (последний ряд — неполная четвёрка).
+// сто четыре («сделай 100 значков и 100 цветов», затем «ещё четыре, чтоб
+// красиво стало»): услуги и уход · транспорт и офис · успех — 13 полных рядов.
 // Рисует их `IconPicker`; читают — экраны, где значок уже выбран (счета).
 //
 // Порядок задаёт картинку так же, как в палитре: сетка идёт в ВОСЕМЬ столбцов,
@@ -50,10 +50,12 @@ import {
   Fan,
   Fence,
   FileText,
+  Flag,
   Flame,
   Flower2,
   Fuel,
   Gauge,
+  Gem,
   Gift,
   Globe,
   Hammer,
@@ -72,6 +74,7 @@ import {
   Lock,
   Mail,
   MapPin,
+  Medal,
   Mountain,
   Package,
   PaintRoller,
@@ -99,6 +102,7 @@ import {
   Stethoscope,
   Store,
   Sun,
+  Target,
   Tent,
   Thermometer,
   TreePalm,
@@ -242,6 +246,10 @@ export const ICON_PRESETS: IconPreset[] = [
   { value: "crown", label: "Корона", icon: Crown },
   { value: "rocket", label: "Ракета", icon: Rocket },
   { value: "recycle", label: "Переработка", icon: Recycle },
+  { value: "gem", label: "Бриллиант", icon: Gem },
+  { value: "medal", label: "Медаль", icon: Medal },
+  { value: "target", label: "Цель", icon: Target },
+  { value: "flag", label: "Флаг", icon: Flag },
 ];
 
 /** Глиф по слагу. Старые значения-эмодзи из веб-мастера слагами не являются и
