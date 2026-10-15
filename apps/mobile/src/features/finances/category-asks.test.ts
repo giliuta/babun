@@ -63,6 +63,14 @@ describe("зарплата — расход с получателем", () => {
     assert.equal(categoryInTeam(list, null, "B"), null);
   });
 
+  test("справочник ещё не доехал — выбранная категория операции цела", () => {
+    // Холодный старт: правка операции открыта, список категорий пока `[]`.
+    assert.equal(categoryInTeam([], "fuel", "A"), "fuel");
+    assert.equal(categoryInTeam([], "fuel", "B"), "fuel");
+    // Список есть, но этой категории в нём нет — тоже не снимаем молча.
+    assert.equal(categoryInTeam([cat("rent")], "fuel", "B"), "fuel");
+  });
+
   test("строка-дверь считает имена, а не копии команд", () => {
     const list = [
       cat("fuel", { name: "Топливо" }),
