@@ -16,6 +16,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
@@ -373,7 +374,7 @@ function ClientTagsScreen() {
       <TagSheet
         editing={editing}
         busy={busy}
-        onClose={() => (busy ? undefined : setEditing(null))}
+        onClose={() => setEditing(null)}
         onSubmit={submit}
         templates={tagTemplates}
       />
@@ -406,13 +407,25 @@ function TagSheet({
   // key-remount через editing==null → null; локальный стейт инициализируем от
   // editing при каждом открытии (паттерн «render-time reset», как у меток).
   const [seeded, setSeeded] = useState<Editing | null>(null);
+  const seedName = isEdit ? editing.tag.name : "";
+  const seedColor = isEdit ? editing.tag.color || DEFAULT_COLOR : DEFAULT_COLOR;
+  const seedIcon = isEdit ? (editing.tag.icon ?? null) : null;
   if (editing !== seeded) {
     setSeeded(editing);
     setPicking(false);
-    setName(isEdit ? editing.tag.name : "");
-    setColor(isEdit ? editing.tag.color || DEFAULT_COLOR : DEFAULT_COLOR);
-    setIcon(isEdit ? (editing.tag.icon ?? null) : null);
+    setName(seedName);
+    setColor(seedColor);
+    setIcon(seedIcon);
   }
+  // НАБРАННОЕ НЕ ПРОПАДАЕТ ОТ СКРИМА И СВАЙПА — как у метки: сначала вопрос.
+  const dirty =
+    editing !== null && (name !== seedName || color !== seedColor || icon !== seedIcon);
+  const guard = useGuardedClose({
+    dirty,
+    busy,
+    onClose,
+    message: "Набранное в теге не сохранится.",
+  });
 
   const applyTemplate = (tpl: ClientTag) => {
     setName(tpl.name);
@@ -423,18 +436,19 @@ function TagSheet({
 
   return (
     <BottomSheet
-      visible={editing !== null}
-      onClose={onClose}
+      visible={editing !== null && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={isEdit ? "Тег" : "Новый тег"}
       avoidKeyboard
-      footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
-          <Button
-            label={isEdit ? "Сохранить" : "Создать тег"}
-            disabled={!name.trim() || busy}
-            loading={busy}
-            onPress={() => onSubmit({ name, color, icon })}
-          />
-        </View>)}
+      // Боковые отступы задаёт сам `SheetFooter` (GUTTER): своя обёртка
+      // делала кнопку уже, чем в соседних листах справочников.
+      footer={picking ? undefined : (<Button
+          label={isEdit ? "Сохранить" : "Создать тег"}
+          disabled={!name.trim() || busy}
+          loading={busy}
+          onPress={() => onSubmit({ name, color, icon })}
+        />)}
     
       headerAction={
         !isEdit && (templates?.length ?? 0) > 0 ? (
