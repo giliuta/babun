@@ -5,7 +5,7 @@
 --   { "error": "app_settings: permission denied for table app_settings" }
 -- even though the function uses a service-role JWT. Root cause is the
 -- same JWT-Signing-Keys migration that bit STORY-053b's hotfix
--- 20260501_002_push_subscriptions_service_role.sql:
+-- 20260501000002_push_subscriptions_service_role.sql:
 --   * legacy `service_role` keys auto-bypassed RLS at the Postgres
 --     level via an implicit privilege
 --   * post-migration service-role JWTs are signed by SUPABASE_SECRET_KEYS

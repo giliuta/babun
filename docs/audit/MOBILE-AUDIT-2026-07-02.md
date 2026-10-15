@@ -84,8 +84,8 @@
 - Кабинет: нет SMS-шаблонов (текущие «Шаблоны» — только финансовые операции), настроек SMS-отправителя, онлайн-записи (booking_slug), интеграций (Telegram/webhooks), участников и приглашений (web settings/team)
 - Не портирован экран «Незакрытые дни» (web /dashboard/unclosed) — в группе «Смена» кабинета его нет, хотя data-слой готов
 - Повторяющиеся ТО: нет авто-создания напоминания из завершённой записи (основной источник на вебе), нет «Записать» (создание брони из напоминания), нет выбора даты последнего ТО и разделения «пора / будущие»
-- Склад: не мигрирован на public.equipment (таблица есть с 20260624_001); нет per-team представления, поиска и выбора цвета
-- Настройки Календарь/Лояльность/Типы событий: не мигрированы на таблицы Supabase (calendar_settings + repo, tenant loyalty 20260624_003, personal_event_types 20260624_002) — живут в MMKV устройства
+- Склад: не мигрирован на public.equipment (таблица есть с 20260624000001); нет per-team представления, поиска и выбора цвета
+- Настройки Календарь/Лояльность/Типы событий: не мигрированы на таблицы Supabase (calendar_settings + repo, tenant loyalty 20260624000003, personal_event_types 20260624000002) — живут в MMKV устройства
 - Настройки финансов веба (VAT-режим/ставка, web settings/finance) не представлены в кабинете
 
 ### auth-security
@@ -374,11 +374,11 @@ onChangeText={(v) => update({ phone: v })} (стр. 77), а также updateExt
   Фикс: Обернуть в try/catch с Alert.alert("Ошибка", message) по образцу business.tsx, либо добавить общий onError в мутации.
 
 - **Настройки кабинета (Календарь, Лояльность, Типы событий) пишутся в MMKV, хотя канонические таблицы Supabase уже существуют** — `babun-crm/apps/mobile/src/features/settings/local-settings.ts:32`
-  Все хуки файла (useCalendarSettings/useSaveCalendarSettings, useLoyalty, usePersonalEventTypes, useLocationLabels) читают/пишут локальное устройство через storage seam. При этом в БД есть calendar_settings (репозиторий packages/shared/src/db/repositories/calendar-settings.ts, «one row per tenant», используется вебом через DashboardClientLayout), tenant loyalty (миграция 20260624_003) и personal_event_types (миграция 20260624_002). Итог: рабочие часы/шаг сетки/лояльность, изменённые на вебе, мобильное приложение не видит и наоборот; при переустановке приложения настройки теряются. Это расходится с locked-решением миграции «all ref-data in DB day 1».
+  Все хуки файла (useCalendarSettings/useSaveCalendarSettings, useLoyalty, usePersonalEventTypes, useLocationLabels) читают/пишут локальное устройство через storage seam. При этом в БД есть calendar_settings (репозиторий packages/shared/src/db/repositories/calendar-settings.ts, «one row per tenant», используется вебом через DashboardClientLayout), tenant loyalty (миграция 20260624000003) и personal_event_types (миграция 20260624000002). Итог: рабочие часы/шаг сетки/лояльность, изменённые на вебе, мобильное приложение не видит и наоборот; при переустановке приложения настройки теряются. Это расходится с locked-решением миграции «all ref-data in DB day 1».
   Фикс: Переключить хуки на shared-репозитории Supabase (для calendar-settings репозиторий уже готов), MMKV оставить как офлайн-кеш.
 
 - **Склад хранится только в MMKV устройства, хотя таблица public.equipment существует в БД** — `babun-crm/apps/mobile/src/features/inventory/queries.ts:14`
-  useEquipment/useSaveEquipment используют loadEquipment/saveEquipment из @babun/shared/local/equipment (локальное хранилище). Миграция 20260624_001_reference_entities.sql создала public.equipment (tenant_id, assigned_team_id, is_active, service_interval_months и т.д.). Данные склада не синхронизируются между устройствами/вебом и безвозвратно теряются при переустановке приложения.
+  useEquipment/useSaveEquipment используют loadEquipment/saveEquipment из @babun/shared/local/equipment (локальное хранилище). Миграция 20260624000001_reference_entities.sql создала public.equipment (tenant_id, assigned_team_id, is_active, service_interval_months и т.д.). Данные склада не синхронизируются между устройствами/вебом и безвозвратно теряются при переустановке приложения.
   Фикс: Завести shared-репозиторий equipment по образцу recurring-reminders и перевести экран Кабинет → Склад на Supabase.
 
 - **Команда, созданная с мобилы, остаётся без цвета — цветные чипы календаря ломаются** — `babun-crm/apps/mobile/src/features/reference/queries.ts:38`
@@ -408,7 +408,7 @@ onChangeText={(v) => update({ phone: v })} (стр. 77), а также updateExt
   Фикс: Перевести письмо восстановления на шаблон с {{ .TokenHash }} (PKCE-путь через verifyOtp уже реализован) и/или использовать universal links (associated domains) вместо голой кастомной схемы.
 
 - **Роли (owner/dispatcher/crew) не учитываются — не-владелец получит сырую ошибку RLS** — `babun-crm/apps/mobile/src/features/settings/tenant.ts:30`
-  RLS в проде ролевая: tenants UPDATE разрешён только owner (web migration 20260430_008_team_roles.sql, policy tenants_update_owner), clients insert/update — owner|dispatcher. В мобильном приложении роль нигде не читается (нет ни current_user_role, ни app_metadata.role — grep по src пустой), useUpdateTenant доступен любому вошедшему через экран «Бизнес» (cabinet/business.tsx:38), а ошибка отдаётся как error.message — сырое английское «new row violates row-level security policy…» вместо локализованного «недостаточно прав». Пользователь с ролью crew/dispatcher увидит редактируемую форму, которая молча не сохраняется с непонятной ошибкой.
+  RLS в проде ролевая: tenants UPDATE разрешён только owner (web migration 20260430000008_team_roles.sql, policy tenants_update_owner), clients insert/update — owner|dispatcher. В мобильном приложении роль нигде не читается (нет ни current_user_role, ни app_metadata.role — grep по src пустой), useUpdateTenant доступен любому вошедшему через экран «Бизнес» (cabinet/business.tsx:38), а ошибка отдаётся как error.message — сырое английское «new row violates row-level security policy…» вместо локализованного «недостаточно прав». Пользователь с ролью crew/dispatcher увидит редактируемую форму, которая молча не сохраняется с непонятной ошибкой.
   Фикс: Прокинуть роль (из tenant_members/current_user_role или JWT) в контекст, скрывать/дизейблить недоступные действия и маппить RLS-ошибки в понятный русский текст.
 
 ### design-system

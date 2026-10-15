@@ -66,7 +66,7 @@ create index idx_recurring_reminders_client
 create index idx_recurring_reminders_due
   on public.recurring_reminders(tenant_id, status, next_due_date);
 
--- updated_at maintenance — reuses the helper from 20260427_001_init_clients.sql.
+-- updated_at maintenance — reuses the helper from 20260427000001_init_clients.sql.
 create trigger recurring_reminders_set_updated_at
   before update on public.recurring_reminders
   for each row execute function public.set_updated_at();

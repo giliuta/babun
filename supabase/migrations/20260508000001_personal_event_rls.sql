@@ -17,7 +17,7 @@
 --      are author-scoped while work appointments keep the previous
 --      tenant + role rules.
 --
--- Roles preserved (matching 20260430_008_team_roles.sql convention):
+-- Roles preserved (matching 20260430000008_team_roles.sql convention):
 --   • SELECT — anon + authenticated
 --   • INSERT/UPDATE/DELETE — authenticated only
 --

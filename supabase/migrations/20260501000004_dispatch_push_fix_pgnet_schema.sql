@@ -7,7 +7,7 @@
 --
 -- Why: pg_net always installs its functions in the `net` schema,
 -- ignoring the `WITH SCHEMA extensions` clause we passed at
--- `CREATE EXTENSION pg_net WITH SCHEMA extensions` in 20260501_003.
+-- `CREATE EXTENSION pg_net WITH SCHEMA extensions` in 20260501000003.
 -- The original `_dispatch_push` called `extensions.http_post(...)`,
 -- which does not exist. The function's `EXCEPTION WHEN OTHERS`
 -- handler swallowed the "function does not exist" error so the

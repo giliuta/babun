@@ -72,7 +72,7 @@ function withRoleLookupTimeout<T>(work: PromiseLike<T>): Promise<T> {
 export { currentRoleQueryKey };
 
 // Role of the signed-in user within the active tenant (tenant_members via
-// the current_user_role() RPC from 20260430_008). RLS gates tenants UPDATE
+// the current_user_role() RPC from 20260430000008). RLS gates tenants UPDATE
 // to owner only — screens use this to disable what would fail anyway.
 /** РОЛЬ ДЛЯ ЧТЕНИЯ ДАННЫХ — ВСЕГДА СВОЯ, ДАЖЕ В ЗЕРКАЛЕ.
  *

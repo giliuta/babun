@@ -20,7 +20,7 @@
 * `available_weekdays = []` — у ВСЕХ шести. Писателя в мобильном нет; пишет только мёртвый веб
   (`apps/web/src/app/dashboard/services/page.tsx:374`).
 * `online_enabled = true` — у ВСЕХ шести, потому что таково `default true` из
-  `20260624_001_reference_entities.sql:164`. **Ни один человек этого не включал.**
+  `20260624000001_reference_entities.sql:164`. **Ни один человек этого не включал.**
 * Лестницу завёл ровно один: `svc-mrj20sn0-vno2z` «A/C Cleaning» — `price_tiers` (от 2 → 50, от 3 →
   45) и `duration_tiers` (от 2 → 60 мин, от 3 → 90 мин). У остальных пяти `null`.
 * `description` — `null` у всех шести (колонка заведена 21.08 вместе с дорогой до PDF).
@@ -293,7 +293,7 @@
 ## 4. Дни недели: минимальная честная модель
 
 **Колонка есть, писателя нет, читателя нет.** `services.available_weekdays jsonb not null
-default '[]'` (`20260624_001_reference_entities.sql:163`), пусто у всех шести услуг прода. Новых
+default '[]'` (`20260624000001_reference_entities.sql:163`), пусто у всех шести услуг прода. Новых
 колонок не заводим: ISO 1..7, пустой массив = «любой день». `WEEKDAY_LABELS` уже лежит в
 `packages/shared/src/local/services.ts`.
 

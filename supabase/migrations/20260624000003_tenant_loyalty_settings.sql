@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════
--- 20260624_003 — tenant_loyalty_settings (one singleton row per tenant)
+-- 20260624000003 — tenant_loyalty_settings (one singleton row per tenant)
 --
 -- Mirrors packages/shared/src/local/loyalty.ts (LoyaltySettings:
 -- { enabled, tiers: LoyaltyTier[] }). Per-tenant owner-edited config, so

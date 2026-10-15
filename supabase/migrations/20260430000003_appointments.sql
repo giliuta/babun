@@ -6,7 +6,7 @@
 -- without splitting nested arrays into auxiliary tables (decision A1).
 --
 -- RLS uses the same `current_tenant_id()` helper introduced in
--- 20260429_001_rls_policies.sql; cross-tenant reads return zero rows
+-- 20260429000001_rls_policies.sql; cross-tenant reads return zero rows
 -- and tenant-stealing UPDATEs trip the WITH CHECK clause.
 --
 -- master_id / team_id stay as text (NOT FKs) because masters and
@@ -75,7 +75,7 @@ create index idx_appointments_tenant_date on public.appointments(tenant_id, date
 -- Client profile timeline: join from clients to appointments.
 create index idx_appointments_client      on public.appointments(client_id) where client_id is not null;
 
--- updated_at maintenance — reuses the helper from 20260427_001_init_clients.sql.
+-- updated_at maintenance — reuses the helper from 20260427000001_init_clients.sql.
 create trigger appointments_set_updated_at
   before update on public.appointments
   for each row execute function public.set_updated_at();

@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════
--- 20260624_001 — Canonical reference-entity tables (localStorage → cloud)
+-- 20260624000001 — Canonical reference-entity tables (localStorage → cloud)
 --
 -- Closes the sync gap for the entity records that the mature live schema
 -- already references by app-generated TEXT id but that only exist in
@@ -15,7 +15,7 @@
 -- guaranteed unique PER TENANT, so PK is composite (tenant_id, id) and all
 -- future referencing columns must join on (tenant_id, <col>).
 --
--- Conventions mirror 20260528_002_finance_redesign.sql + 20260429_001_
+-- Conventions mirror 20260528000002_finance_redesign.sql + 20260429000001_
 -- rls_policies.sql: tenant_id uuid → tenants(id) ON DELETE CASCADE,
 -- created_at/updated_at, ENABLE RLS, single `for all` policy keyed off
 -- current_tenant_id() (anon → NULL → 0 rows, authenticated scoped),
@@ -24,7 +24,7 @@
 -- before CREATE.
 --
 -- NO FK constraints are added on existing text-id columns here — orphan/
--- mixed-id-family risk. See 20260624_004_reference_fk_hardening.sql
+-- mixed-id-family risk. See 20260624000004_reference_fk_hardening.sql
 -- (REVIEW BEFORE APPLY).
 -- ════════════════════════════════════════════════════════════════════
 

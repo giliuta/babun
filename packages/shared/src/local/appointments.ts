@@ -57,7 +57,7 @@ export function getPaidAmount(apt: Appointment): number {
   // а не «леджер вытесняет зеркала»: у смешанных строк первый мобильный
   // платёж ложится в леджер поверх зеркальной истории веба, и приоритет
   // леджера «воскрешал» уже погашенный долг. paid_amount при
-  // payment_status 'unpaid' игнорируем: бэкфилл миграции 20260517_001
+  // payment_status 'unpaid' игнорируем: бэкфилл миграции 20260517000001
   // записал туда prepaid_amount всех старых строк — чтение задваивало бы
   // аванс (prepaid_amount прибавляется отдельно строкой ниже).
   const ledger = apt.payments.reduce((sum, p) => sum + p.amount, 0);

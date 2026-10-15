@@ -1,4 +1,4 @@
--- 20260625_001 — fix sync_appointment_finance_insert() trigger.
+-- 20260625000001 — fix sync_appointment_finance_insert() trigger.
 -- The trigger does `insert into finance_transactions ... on conflict
 -- (appointment_id, type) do nothing`, but no matching unique index existed
 -- → every appointment INSERT failed with 42P10. A PARTIAL index can't be

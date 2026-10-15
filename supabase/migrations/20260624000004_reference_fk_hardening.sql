@@ -1,10 +1,10 @@
 -- ════════════════════════════════════════════════════════════════════
--- 20260624_004 — Reference-data FK hardening   ⚠️  REVIEW BEFORE APPLY
+-- 20260624000004 — Reference-data FK hardening   ⚠️  REVIEW BEFORE APPLY
 --
 -- This migration is DELIBERATELY a no-op (everything below is commented
 -- out). Do NOT run it blind. It documents how/when to add referential
 -- integrity from the existing text-id columns to the new reference
--- tables created in 20260624_001.
+-- tables created in 20260624000001.
 --
 -- TWO BLOCKERS that must be resolved first:
 --

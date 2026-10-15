@@ -46,7 +46,7 @@ revoke update (
 
 comment on column public.tenants.plan is
   'Stripe-managed. Owner cannot UPDATE this column directly — column '
-  'grant revoked from authenticated in 20260506_003. Mutated only via '
+  'grant revoked from authenticated in 20260506000003. Mutated only via '
   'the /api/stripe/webhook handler running with service_role.';
 
 comment on column public.tenants.plan_override is

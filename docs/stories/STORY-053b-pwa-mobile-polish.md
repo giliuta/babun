@@ -67,7 +67,7 @@ create policy push_subscriptions_delete_own on push_subscriptions
 -- No update policy — subscriptions are insert-or-delete only
 ```
 
-Migration filename: `supabase/migrations/20260501_001_push_subscriptions.sql`.
+Migration filename: `supabase/migrations/20260501000001_push_subscriptions.sql`.
 
 ### Server-side helper
 - `apps/web/src/app/api/push/subscribe/route.ts` (POST) — auth check, parse `{ endpoint, keys, deviceLabel }`, INSERT (ON CONFLICT DO NOTHING).
@@ -125,7 +125,7 @@ Both `owner.new_member` and `inviter.invite_accepted` use the same body shape: `
 
 ### Supabase extension-schema gotcha (G3 hotfix learning)
 
-`pg_net` installs its functions into the **`net`** schema regardless of the `CREATE EXTENSION pg_net WITH SCHEMA extensions` clause. The original `_dispatch_push` body called `extensions.http_post(...)` which silently failed inside the function's exception handler — pipeline appeared healthy from the trigger side but no HTTP request ever fired. Fixed in `20260501_004_dispatch_push_fix_pgnet_schema.sql` by calling `net.http_post(...)` and adding `net` to the function's `search_path`.
+`pg_net` installs its functions into the **`net`** schema regardless of the `CREATE EXTENSION pg_net WITH SCHEMA extensions` clause. The original `_dispatch_push` body called `extensions.http_post(...)` which silently failed inside the function's exception handler — pipeline appeared healthy from the trigger side but no HTTP request ever fired. Fixed in `20260501000004_dispatch_push_fix_pgnet_schema.sql` by calling `net.http_post(...)` and adding `net` to the function's `search_path`.
 
 **Pattern for future stories using pg_net / pg_cron / postgis / similar:**
 
@@ -293,8 +293,8 @@ Owner generates the keypair locally so the private key never enters the chat tra
    - Add `VAPID_PUBLIC_KEY` = `publicKey` from step 1.
    - Add `VAPID_SUBJECT` = `mailto:support@babun.app`.
 3. Vercel env `NEXT_PUBLIC_VAPID_PUBLIC_KEY` = same `publicKey` (Production + Preview + Development).
-4. Apply migration `20260501_001_push_subscriptions.sql` via Supabase Dashboard → SQL Editor.
-5. Apply migration `20260501_002_push_subscriptions_service_role.sql` (service_role bypass — see post-JWT-migration gotcha below).
+4. Apply migration `20260501000001_push_subscriptions.sql` via Supabase Dashboard → SQL Editor.
+5. Apply migration `20260501000002_push_subscriptions_service_role.sql` (service_role bypass — see post-JWT-migration gotcha below).
 6. Deploy Edge Function: `supabase functions deploy send_push --no-verify-jwt --project-ref <project>` (or Dashboard UI deploy if CLI not installed).
 7. After deploy, set Verify JWT = OFF in the function's settings (pg_net trigger in G3 calls without an auth token).
 
@@ -315,7 +315,7 @@ create policy <table_name>_service_role_all
 
 **Don't make this the default for every new table** — only the ones that genuinely need server-side cross-user reads. Tables that should remain user-scoped (the vast majority) keep their original `for select to authenticated using (user_id = auth.uid())` shape with no service_role addition.
 
-Applied to `push_subscriptions` in `20260501_002_push_subscriptions_service_role.sql`.
+Applied to `push_subscriptions` in `20260501000002_push_subscriptions_service_role.sql`.
 
 ### VAPID public key (rotated 2026-05-01) — for traceability
 

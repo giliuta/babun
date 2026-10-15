@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────
 -- Beta #52 security gap fix — `master_ratings` was created in
--- 20260517_003 with a permissive `with check (true)` policy for the
+-- 20260517000003 with a permissive `with check (true)` policy for the
 -- public feedback form. As-is, any bot that knows a master_id and
 -- tenant_id can spam 5-star ratings indefinitely. This migration
 -- closes the gap with three layers:

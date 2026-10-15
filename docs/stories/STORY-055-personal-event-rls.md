@@ -29,7 +29,7 @@ UI privacy already exists ([dashboard/page.tsx](babun-crm/apps/web/src/app/dashb
 
 ### DB layer (one migration, no rollback)
 
-`babun-crm/apps/web/supabase/migrations/20260508_001_personal_event_rls.sql`:
+`babun-crm/apps/web/supabase/migrations/20260508000001_personal_event_rls.sql`:
 
 1. **Column**
 
@@ -71,7 +71,7 @@ UI privacy already exists ([dashboard/page.tsx](babun-crm/apps/web/src/app/dashb
    WHERE a.kind IN ('event','personal') AND a.created_by IS NULL;
    ```
 
-4. **Policy rewrite** — drop the four old policies, install four new ones. Refinement vs the user-provided SQL: schema-qualify `public.appointments`, restore explicit `to anon, authenticated` / `to authenticated` role clauses (the existing convention from [20260430_008_team_roles.sql](babun-crm/apps/web/supabase/migrations/20260430_008_team_roles.sql)).
+4. **Policy rewrite** — drop the four old policies, install four new ones. Refinement vs the user-provided SQL: schema-qualify `public.appointments`, restore explicit `to anon, authenticated` / `to authenticated` role clauses (the existing convention from [20260430000008_team_roles.sql](babun-crm/apps/web/supabase/migrations/20260430000008_team_roles.sql)).
 
    ```sql
    DROP POLICY IF EXISTS appointments_select_member            ON public.appointments;
@@ -130,7 +130,7 @@ UI privacy already exists ([dashboard/page.tsx](babun-crm/apps/web/src/app/dashb
 
 | File | Action | Notes |
 |---|---|---|
-| `babun-crm/apps/web/supabase/migrations/20260508_001_personal_event_rls.sql` | Create | New migration described above |
+| `babun-crm/apps/web/supabase/migrations/20260508000001_personal_event_rls.sql` | Create | New migration described above |
 | `babun-crm/packages/shared/src/common/utils/version.ts` | Modify | `BUILD_VERSION` bump |
 | `babun-crm/apps/web/public/sw.js` | Modify | `CACHE_VERSION` bump |
 | `docs/stories/STORY-055-personal-event-rls.md` | Create | This file |

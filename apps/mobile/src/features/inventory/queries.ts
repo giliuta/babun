@@ -21,7 +21,7 @@ import { useDataRole } from "@/session/tenant";
 export type { Equipment } from "@babun/shared/local/equipment";
 
 // Inventory lives in the canonical public.equipment table (migration
-// 20260624_001) so it syncs across devices and survives reinstalls.
+// 20260624000001) so it syncs across devices and survives reinstalls.
 // MMKV via the storage seam is only a tenant-scoped read cache. Canonical
 // writes must succeed on Supabase before the cache/UI reports success.
 

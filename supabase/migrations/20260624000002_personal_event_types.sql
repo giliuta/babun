@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════
--- 20260624_002 — personal_event_types (calendar event categories)
+-- 20260624000002 — personal_event_types (calendar event categories)
 --
 -- Mirrors packages/shared/src/local/personal-event-types.ts. TEXT PK
 -- because the appointment model references it via the text field
@@ -12,7 +12,7 @@
 -- (app ids unique per tenant).
 --
 -- RLS is author-scoped (created_by = auth.uid()), mirroring the personal-
--- event isolation in 20260508_001_personal_event_rls.sql. Idempotent.
+-- event isolation in 20260508000001_personal_event_rls.sql. Idempotent.
 -- ════════════════════════════════════════════════════════════════════
 
 create table if not exists public.personal_event_types (

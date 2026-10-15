@@ -164,7 +164,7 @@ Read-only inventory of:
 
 ## G1 — DB schema (specced, not yet shipped)
 
-Migration `20260502_001_sms_config.sql`:
+Migration `20260502000001_sms_config.sql`:
 - `tenant_sms_config` table + RLS (owner-only via `current_user_role()` helper)
 - `sms_messages` table + RLS (tenant-scoped, service-role bypass for inserts)
 - Indexes on `tenant_id`, `status`, `created_at`
@@ -191,7 +191,7 @@ query + render path verification before real Twilio fan-out (G3b).
 
 ### G3 hotfix (caught during deploy smoke-ping)
 
-Migration: `20260502_002_service_role_grants_hotfix.sql`. Same root
+Migration: `20260502000002_service_role_grants_hotfix.sql`. Same root
 cause as the STORY-053b push_subscriptions hotfix — JWT-Signing-Keys
 service-role JWTs don't auto-bypass RLS like the legacy single key
 did. Tightened to **read-only**: `grant select` + `for select to
@@ -225,7 +225,7 @@ Show code for review BEFORE deploy.
 
 ## G4 — Cron setup (specced)
 
-Migration `20260502_002_sms_cron.sql`:
+Migration `20260502000002_sms_cron.sql`:
 - `create extension if not exists pg_cron with schema extensions` (first time we use pg_cron — verify Supabase managed permission, fallback strategy if needed)
 - `cron.schedule('sms_reminder_check', '*/5 * * * *', ...)` posting to `send_sms` Edge Function via `extensions.http_post`
 - Heartbeat-only: cron fires unconditionally, Edge Function gates on `app_settings.sms_enabled = 'on'` and early-returns OFF

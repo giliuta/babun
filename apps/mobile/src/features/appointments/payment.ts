@@ -95,7 +95,7 @@ export function buildDebtPaidPatch(
   // Способ синтетики: нал/карта раздельно из payment-объекта, пока их
   // хватает на дефицит; одинокая колонка paid_amount способа не знает →
   // «нал» (искажает лишь разбивку по способам у легаси-строк, не суммы).
-  // paid_amount при статусе 'unpaid' — эхо бэкфилла 20260517_001 (аванс,
+  // paid_amount при статусе 'unpaid' — эхо бэкфилла 20260517000001 (аванс,
   // он живёт в prepaid_amount) — НЕ сеем; та же ветка, что в getPaidAmount.
   const existing = apt?.payments ?? [];
   const ledgerSum = existing.reduce((sum, p) => sum + p.amount, 0);

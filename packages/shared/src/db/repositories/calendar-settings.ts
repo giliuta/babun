@@ -1,7 +1,7 @@
 // Calendar settings repository — STORY-044.
 //
 // One row per tenant (PRIMARY KEY = tenant_id). The trigger from
-// 20260430_005 inserts a default row at signup; the 20260430_005
+// 20260430000005 inserts a default row at signup; the 20260430000005
 // backfill covers existing tenants. So getCalendarSettings always
 // finds a row in steady state.
 //

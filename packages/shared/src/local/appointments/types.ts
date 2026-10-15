@@ -161,7 +161,7 @@ export interface Appointment {
    *  переводе записи в status=completed через PaymentBlock. */
   payment: AppointmentPayment | null;
   /** P0 #14 (CRM Core brief) — explicit status enum so reports +
-   *  the auto-sync trigger (Supabase 20260517_001) can branch
+   *  the auto-sync trigger (Supabase 20260517000001) can branch
    *  without summing the `payments` array. Defaults to 'unpaid' for
    *  fresh rows; 'partial' / 'paid' / 'refunded' written by the
    *  payment block when the operator marks the appointment paid. */

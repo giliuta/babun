@@ -99,7 +99,7 @@ Confirm:
 
 ### G1 — SQL migration (interactive: stop and apply via Dashboard)
 
-**File: `apps/web/supabase/migrations/20260430_001_onboarding.sql`**
+**File: `apps/web/supabase/migrations/20260430000001_onboarding.sql`**
 
 ```sql
 -- ─────────────────────────────────────────────────────────────────────
@@ -411,7 +411,7 @@ If 9/9 pass → G8.
 
 | Path | Purpose |
 |---|---|
-| `apps/web/supabase/migrations/20260430_001_onboarding.sql` | city + onboarded_at columns + backfill |
+| `apps/web/supabase/migrations/20260430000001_onboarding.sql` | city + onboarded_at columns + backfill |
 | `apps/web/src/app/onboarding/page.tsx` | server gate |
 | `apps/web/src/components/onboarding/OnboardingWizard.tsx` | client wizard root |
 | `apps/web/src/components/onboarding/OnboardingShell.tsx` | logo + progress bar + step container |

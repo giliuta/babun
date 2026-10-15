@@ -41,7 +41,7 @@ record_account_transfer (последнее определение в репо):
 ### [x] C1 · P1 · bug · `../../packages/shared/src/db/repositories/finance-transactions.ts:490`
 **Доход с возвратами можно удалить: возвраты становятся сиротами, остаток счёта занижается**
 
-deleteTransaction фильтрует только `.eq("source","manual").neq("type","transfer").is("invoice_id", null)` (стр. 494-500) — наличие возвратов не проверяется ни тут, ни в TransactionPopup (canDelete = `!isAppointmentLedger && !tx.invoice_id && tx.type !== "transfer"`, src/features/finances/TransactionPopup.tsx:124-125), ни на сервере (assert_finance_transaction_integrity на DELETE просто `return old`). FK объявлен `refund_of_id uuid references finance_transactions(id) on delete set null` (../../apps/web/supabase/migrations/20260528_002_finance_redesign.sql:54). Удаляем доход 100 с возвратом 100 → возврат остаётся и продолжает минусовать баланс (signedAmount), в «Разборе прибыли» вырастает ведро «Возвраты», а деньги на счёте занижены на 100.
+deleteTransaction фильтрует только `.eq("source","manual").neq("type","transfer").is("invoice_id", null)` (стр. 494-500) — наличие возвратов не проверяется ни тут, ни в TransactionPopup (canDelete = `!isAppointmentLedger && !tx.invoice_id && tx.type !== "transfer"`, src/features/finances/TransactionPopup.tsx:124-125), ни на сервере (assert_finance_transaction_integrity на DELETE просто `return old`). FK объявлен `refund_of_id uuid references finance_transactions(id) on delete set null` (../../apps/web/supabase/migrations/20260528000002_finance_redesign.sql:54). Удаляем доход 100 с возвратом 100 → возврат остаётся и продолжает минусовать баланс (signedAmount), в «Разборе прибыли» вырастает ведро «Возвраты», а деньги на счёте занижены на 100.
 [дубль линзы operations: Правка/удаление дохода с выданным чеком не трогает сам чек]
 
 **Фикс:** Серверный guard: запрещать DELETE строки, на которую ссылаются type='refund' (raise exception), и в UI прятать «Удалить» при refundTotals.get(tx.id) > 0 с подсказкой «сначала удалите возвраты».
@@ -264,7 +264,7 @@ invalidateLedger (queries.ts:129-133) сбрасывает только ["transa
 ### [x] C38 · P1 · bug · `../web/supabase/migrations/20260809120000_receipts_and_credit_notes.sql:237`
 **cancel_invoice упадёт на unique(tenant_id, year, seq): серия кредит-нот пересекается с инвойсами**
 
-note_seq считается как max(seq) только по kind='credit_note' (строки 237-239), а вставка идёт в таблицу invoices с общим ключом unique (tenant_id, year, seq) (../web/supabase/migrations/20260528_002_finance_redesign.sql:137) — первая же CN получит seq=1 и столкнётся с инвойсом seq=1 того же года. Обратная асимметрия: next_invoice_number считает max(seq) БЕЗ фильтра kind (20260810120000:94-104), т.е. кредит-ноты пробивали бы дыры в серии инвойсов.
+note_seq считается как max(seq) только по kind='credit_note' (строки 237-239), а вставка идёт в таблицу invoices с общим ключом unique (tenant_id, year, seq) (../web/supabase/migrations/20260528000002_finance_redesign.sql:137) — первая же CN получит seq=1 и столкнётся с инвойсом seq=1 того же года. Обратная асимметрия: next_invoice_number считает max(seq) БЕЗ фильтра kind (20260810120000:94-104), т.е. кредит-ноты пробивали бы дыры в серии инвойсов.
 
 **Фикс:** Включить kind в уникальный ключ (unique (tenant_id, kind, year, seq)) и согласовать оба счётчика: инвойсный max(seq) фильтровать по kind='invoice'.
 
@@ -837,7 +837,7 @@ effectiveVatSettings (строки 141–153) повторяет логику SQ
 ### [ ] U1 · P3 · design · `app/(dashboard)/finances/index.tsx:266`
 **Материалы in_progress-записей уменьшают прибыль периода до того, как появился их доход**
 
-materialSummary считает записи `status !== "completed" && status !== "in_progress" → continue` (стр. 266), а авто-доход по записи сервер пишет только при completed+paid (sync_appointment_finance, 20260528_002:267+). Пока бригада на объекте, расход по материалам уже вычтен из прибыли периода, а доход этой работы ещё не существует — прибыль дня системно занижена.
+materialSummary считает записи `status !== "completed" && status !== "in_progress" → continue` (стр. 266), а авто-доход по записи сервер пишет только при completed+paid (sync_appointment_finance, 20260528000002:267+). Пока бригада на объекте, расход по материалам уже вычтен из прибыли периода, а доход этой работы ещё не существует — прибыль дня системно занижена.
 
 **Фикс:** Считать материалы только по completed-записям (симметрично признанию дохода) или явно решить и задокументировать базис «расход при старте работ».
 
@@ -859,7 +859,7 @@ materialSummary считает записи `status !== "completed" && status !=
 ### [x] U4 · P3 · copy · `app/(dashboard)/finances/index.tsx:841`
 **Комментарий про авто-расход по материалам врёт: сервер пишет только income/refund**
 
-«Правило одно на доход и расход: расход тоже родится сам, если у услуги записаны материалы» (стр. 841-843) — sync_appointment_finance вставляет только type='income' и type='refund' (20260528_002_finance_redesign.sql:267+), авто-expense в леджере не существует; материалы живут только клиентским расчётом materialSummary. Комментарий о движении денег, вводящий следующего разработчика в заблуждение.
+«Правило одно на доход и расход: расход тоже родится сам, если у услуги записаны материалы» (стр. 841-843) — sync_appointment_finance вставляет только type='income' и type='refund' (20260528000002_finance_redesign.sql:267+), авто-expense в леджере не существует; материалы живут только клиентским расчётом materialSummary. Комментарий о движении денег, вводящий следующего разработчика в заблуждение.
 
 **Фикс:** Переписать комментарий: авто-проводки — только доход/возврат; материалы — расчётная величина клиента.
 

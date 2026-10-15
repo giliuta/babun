@@ -1,7 +1,7 @@
 // finance_categories repository — read-only for the UI.
 //
 // Rows with tenant_id IS NULL are global defaults seeded in the
-// 20260517_001 migration; per-tenant rows can override the slug.
+// 20260517000001 migration; per-tenant rows can override the slug.
 // The list call returns BOTH so the UI can pick whichever is most
 // specific. type ('income' / 'expense' / 'debt') is the primary filter.
 
