@@ -3,8 +3,8 @@ import { colorName } from "./colors";
 
 describe("colorName", () => {
   test("цвет набора — своим именем, регистр не важен", () => {
-    expect(colorName("#cc9900")).toBe("Золотой");
-    expect(colorName("#CC9900")).toBe("Золотой");
+    expect(colorName("#dd9900")).toBe("Янтарный");
+    expect(colorName("#DD9900")).toBe("Янтарный");
   });
   test("пусто — «Не красить»", () => {
     expect(colorName(null)).toBe("Не красить");
