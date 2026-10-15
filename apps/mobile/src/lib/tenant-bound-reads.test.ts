@@ -34,12 +34,12 @@ describe("SQLite-обёртки читают под компанией ключ�
     const calendar = flat("../features/calendar/queries.ts");
     assert.match(
       calendar,
-      /listAppointmentsCached\(pagingClient\(tenantBoundClient\(tenantId\)\), tenantId\)/,
+      /listAppointmentsCached\(readOnlyClient\(tenantBoundClient\(tenantId\)\), tenantId\)/,
     );
     assert.doesNotMatch(
       calendar,
-      /listAppointmentsCached\(pagingClient\(\)/,
-      "шим поверх глобального клиента берёт заголовок на каждую страницу",
+      /listAppointmentsCached\(readOnlyClient\(\)/,
+      "вид поверх глобального клиента берёт заголовок на каждую страницу",
     );
   });
 
