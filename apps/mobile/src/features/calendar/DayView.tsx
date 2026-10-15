@@ -708,7 +708,7 @@ export const DayColumn = memo(function DayColumn({
           winStartMin={winStartMin}
           winEndMin={winEndMin}
           // Выходной без единой записи — темнее: день пуст и не рабочий.
-          color={band === null && appointments.length === 0 ? `${t.ink}4a` : offHoursFill}
+          color={band === null && appointments.length === 0 ? `${t.ink}5c` : offHoursFill}
         />
       ) : null}
 
