@@ -628,27 +628,32 @@ export async function restoreClient(
 ): Promise<void> {
   assertWritesAllowed("restoreClient");
   refuseOfflineWrite(opts);
-  const restoredAt = new Date().toISOString();
+  // Строка, какой она была до возврата: отказ сервера кладёт её обратно.
+  const before = await readCachedClient(client.id, tenantId);
+  // updated_at НЕ трогаем — как у архива: это сторожок LWW, он принадлежит
+  // серверу. Своё время телефона в кэше при `expected_updated_at: null`
+  // оставалось версией строки, которой на сервере нет (триггер ставит своё
+  // `now()`), и следующая офлайн-правка клиента ловила ложный «конфликт».
+  // С прежней версией сторожа реплеер сам переносит свежую на следующие
+  // правки строки и в кэш (`carrySentinel`). Строки в кэше нет — версии не
+  // знаем, остаётся безусловный возврат.
+  const expectedUpdatedAt = before?.updated_at ?? null;
   // Возврат снимает ОБА признака невидимости разом: клиент из корзины
   // возвращается в работу, а не в архив «на полпути».
   const cachedRow = makeCachedRow(
     { ...client, deleted_at: null, purge_at: null },
     tenantId,
-    restoredAt,
+    expectedUpdatedAt ?? undefined,
   );
   const restoreOp = {
     table: "clients" as const,
     op: "update" as const,
     row_id: client.id,
     payload: { deleted_at: null, purge_at: null, tenant_id: tenantId },
-    expected_updated_at: null,
+    expected_updated_at: expectedUpdatedAt,
   };
 
   if (isOnline() && !(await mustQueueBehind(client.id, opts))) {
-    // Строка, какой она была до возврата: отказ сервера кладёт её обратно.
-    const before = await cacheGetOne<CachedClientData>("clients", client.id, tenantId).catch(
-      () => null,
-    );
     await cacheUpsert("clients", cachedRow);
     try {
       await repoRestoreClient(supabase, client.id, tenantId);
