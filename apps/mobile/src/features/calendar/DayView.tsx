@@ -656,6 +656,31 @@ export const DayColumn = memo(function DayColumn({
   // верхней кромке окна и кроет колонку целиком одним слоем.
   const workEnd = band ? clampWin(band.endMin) : winStartMin;
 
+  // Рабочие отрезки дня: смена минус перерывы, в границах окна. Только на
+  // них ложатся серый «прошло» и плёнка метки.
+  const workSegs: { from: number; to: number }[] = [];
+  if (workEnd > workStart) {
+    const breaks = (band?.breaks ?? [])
+      .map((b) => ({ from: clampWin(b.startMin), to: clampWin(b.endMin) }))
+      .filter((b) => b.to > b.from)
+      .sort((a, b) => a.from - b.from);
+    let cur = workStart;
+    for (const b of breaks) {
+      if (cur >= workEnd) break;
+      if (b.from > cur) workSegs.push({ from: cur, to: Math.min(b.from, workEnd) });
+      cur = Math.max(cur, b.to);
+    }
+    if (cur < workEnd) workSegs.push({ from: cur, to: workEnd });
+  }
+  // До какой минуты окна время уже прошло (null — ничего не прошло).
+  const pastEnd =
+    (todayYmd && dateYmd < todayYmd) ||
+    (isToday && nowMinutes != null && nowMinutes > winEndMin)
+      ? winEndMin
+      : nowMin != null
+        ? winStartMin + nowMin
+        : null;
+
   /** Время под пальцем в ячейке часа, с шагом TAP_STEP. */
   const slotTime = (hour: number, locationY: number) => {
     // Sub-hour snap by touch position (web handleColumnClick parity):
@@ -729,51 +754,41 @@ export const DayColumn = memo(function DayColumn({
         ) : null,
       )}
 
-      {nowMin != null ? (
-        // Прошедшее время затемняется ОТЧЁТЛИВО (запрос владельца
-        // 2026-07-16: «затемним участки, которые прошли») — 0.05 читается
-        // сразу, но остаётся легче серых нерабочих часов (0.12).
-        <MinuteBand
-          fromMin={winStartMin}
-          toMin={winStartMin + nowMin}
-          winStartMin={winStartMin}
-          winEndMin={winEndMin}
-          color={pastFill}
-        />
-      ) : null}
-      {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
-          позади» видно при сканировании, тем же слоем, что «до сейчас».
-          И сегодня после конца окна: в 19:59 колонка затемнена до низа, а
-          в 20:30 была белой, как будущее (повторный аудит 03.10). */}
-      {(todayYmd && dateYmd < todayYmd) ||
-      (isToday && nowMinutes != null && nowMinutes > winEndMin) ? (
-        <MinuteBand
-          fromMin={winStartMin}
-          toMin={winEndMin}
-          winStartMin={winStartMin}
-          winEndMin={winEndMin}
-          color={pastFill}
-        />
-      ) : null}
-
-      {tintColor ? (
-        // ~5% alpha of the label colour — reads as a hue, not a fill, so
-        // gridlines / blocks above keep their contrast. ПОВЕРХ серых слоёв
-        // (владелец 15.10: «метка не должна становиться серой, всегда того
-        // цвета, что была»): прошедший день и нерабочие часы под ней не
-        // гасят цвет метки.
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: `${tintColor}0d`,
-          }}
-        />
-      ) : null}
+      {/* ПРОШЕДШЕЕ И МЕТКА — ТОЛЬКО НА РАБОЧИХ ЧАСАХ (владелец 15.10: «нерабочее
+          время или выходной — полностью одним цветом, и неважно, прошло оно
+          или нет»). Серый «прошло» и плёнка метки ложатся лишь на отрезки
+          смены без перерывов; нерабочее закрыто одним `offHoursFill` и под
+          ними не темнеет и не окрашивается. «Прошло» — до сейчас у сегодня,
+          весь день у прошедших дней и у сегодня после конца окна (повторный
+          аудит 03.10: в 20:30 колонка была белой, как будущее). */}
+      {pastEnd != null
+        ? workSegs.map((seg) =>
+            seg.from < pastEnd ? (
+              <MinuteBand
+                key={`past-${seg.from}`}
+                fromMin={seg.from}
+                toMin={Math.min(seg.to, pastEnd)}
+                winStartMin={winStartMin}
+                winEndMin={winEndMin}
+                color={pastFill}
+              />
+            ) : null,
+          )
+        : null}
+      {/* Метка дня — ~5% её цвета поверх серого «прошло»: прошедший день
+          метку не гасит (владелец 15.10: «всегда того цвета, что была»). */}
+      {tintColor
+        ? workSegs.map((seg) => (
+            <MinuteBand
+              key={`tint-${seg.from}`}
+              fromMin={seg.from}
+              toMin={seg.to}
+              winStartMin={winStartMin}
+              winEndMin={winEndMin}
+              color={`${tintColor}0d`}
+            />
+          ))
+        : null}
       {/* hour cells: gridline + create-slot in one flex node. Часовые ряды
           чистые (Bumpix); получасовая волосяная линия появляется только на
           достаточном зуме (HALF_MARK_MIN_H) — иначе частокол. */}
