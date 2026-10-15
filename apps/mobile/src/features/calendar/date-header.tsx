@@ -70,7 +70,6 @@ export function DateCell({
           alignItems: "center",
           justifyContent: "center",
           paddingVertical: 3,
-          opacity: dim ? 0.4 : 1,
         }}
       >
         <Text
@@ -82,6 +81,7 @@ export function DateCell({
             letterSpacing: 0.5,
             textTransform: "uppercase",
             color: dowColor,
+            opacity: dim ? 0.4 : 1,
           }}
         >
           {dow}
@@ -89,6 +89,7 @@ export function DateCell({
         <Text
           maxFontSizeMultiplier={1.2}
           style={{ fontVariant: ["tabular-nums"],
+            opacity: dim ? 0.4 : 1,
             height: 28,
             fontSize: 24,
             lineHeight: 28,
@@ -138,7 +139,9 @@ export function DateCell({
     >
       {/* Ряды фиксированной высоты: число у ВСЕХ ячеек на одной строке —
           слот метки резервируется и пустым, ничего не прыгает. */}
-      <View style={{ alignItems: "center", opacity: dim ? 0.4 : 1 }}>
+      {/* Гаснут только день недели и число прошедшего дня; метка — нет
+          (владелец 15.10: «метка всегда того цвета, что была»). */}
+      <View style={{ alignItems: "center" }}>
         <Text
           maxFontSizeMultiplier={1.2}
           style={{
@@ -148,6 +151,7 @@ export function DateCell({
             letterSpacing: 0.5,
             textTransform: "uppercase",
             color: dowColor,
+            opacity: dim ? 0.4 : 1,
           }}
         >
           {dow}
@@ -155,6 +159,7 @@ export function DateCell({
         <Text
           maxFontSizeMultiplier={1.2}
           style={{ fontVariant: ["tabular-nums"],
+            opacity: dim ? 0.4 : 1,
             height: 27,
             fontSize: 22,
             lineHeight: 27,

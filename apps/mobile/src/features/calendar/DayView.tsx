@@ -622,6 +622,10 @@ export const DayColumn = memo(function DayColumn({
   // 12% — плоский, явно читаемый wash нерабочего времени.
   const gridLine = `${t.ink}33`;
   const offHoursFill = `${t.ink}1f`;
+  // ПЕРЕПАДЫ ЧИТАЮТСЯ СРАЗУ (владелец 15.10: «как будто сплошное — давит на
+  // глаза»): будущее — чистый белый, прошедшее — заметно серее прежнего
+  // (0.05 → 0.08), выходной без записей — гораздо темнее нерабочих часов.
+  const pastFill = "rgba(11,18,32,0.08)";
 
   // Off-hours wash band: per-date team schedule wins (workBand), else the
   // global hour props.
@@ -687,21 +691,6 @@ export const DayColumn = memo(function DayColumn({
         backgroundColor: t.surface,
       }}
     >
-      {tintColor ? (
-        // ~5% alpha of the label colour — reads as a hue, not a fill, so
-        // gridlines / washes / blocks above keep their contrast.
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: `${tintColor}0d`,
-          }}
-        />
-      ) : null}
       {/* off-hours wash: before work start / after work end */}
       {workStart > winStartMin ? (
         <MinuteBand
@@ -718,7 +707,8 @@ export const DayColumn = memo(function DayColumn({
           toMin={winEndMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={offHoursFill}
+          // Выходной без единой записи — темнее: день пуст и не рабочий.
+          color={band === null && appointments.length === 0 ? `${t.ink}38` : offHoursFill}
         />
       ) : null}
 
@@ -747,7 +737,7 @@ export const DayColumn = memo(function DayColumn({
           toMin={winStartMin + nowMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color="rgba(11,18,32,0.05)"
+          color={pastFill}
         />
       ) : null}
       {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
@@ -761,10 +751,28 @@ export const DayColumn = memo(function DayColumn({
           toMin={winEndMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color="rgba(11,18,32,0.05)"
+          color={pastFill}
         />
       ) : null}
 
+      {tintColor ? (
+        // ~5% alpha of the label colour — reads as a hue, not a fill, so
+        // gridlines / blocks above keep their contrast. ПОВЕРХ серых слоёв
+        // (владелец 15.10: «метка не должна становиться серой, всегда того
+        // цвета, что была»): прошедший день и нерабочие часы под ней не
+        // гасят цвет метки.
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: `${tintColor}0d`,
+          }}
+        />
+      ) : null}
       {/* hour cells: gridline + create-slot in one flex node. Часовые ряды
           чистые (Bumpix); получасовая волосяная линия появляется только на
           достаточном зуме (HALF_MARK_MIN_H) — иначе частокол. */}
