@@ -408,13 +408,15 @@ export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
 // сходились в один янтарь. Морковный и Янтарный разведены по тону и после
 // затемнения блока; серого в наборе нет намеренно, он остаётся заводским
 // нейтральным сигналом. 25.09: «нет клиента» и «нет услуг» сняты, «не
-// оплачено» — рубиновый из набора (деньги, которые должны).
+// оплачено» — рубиновый из набора (деньги, которые должны). 15.10 палитра
+// сменилась на 24 цвета — заводские переставлены на её «Красный»,
+// «Оранжевый» и «Синий», иначе в настройке снова встал бы «Свой».
 const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
-  unpaid: "#E8145D",
-  noObject: "#DF510F",
+  unpaid: "#FF2233",
+  noObject: "#DD6600",
 };
 
-const FALLBACK_DEFAULT = "#3276FB";
+const FALLBACK_DEFAULT = "#3333FF";
 
 export type SituationPalette = Record<ColorSituation, string | null>;
 
