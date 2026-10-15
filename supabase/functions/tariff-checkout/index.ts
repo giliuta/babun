@@ -34,6 +34,8 @@
 // Секреты: STRIPE_SECRET_KEY (заводит владелец) и служебный ключ проекта.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { keyFromEnv, serviceClient } from "../_shared/service-client.ts";
+import { json as jsonResponse } from "../_shared/http.ts";
 
 type Period = "month" | "year";
 
@@ -57,34 +59,12 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const json = (status: number, body: unknown): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "content-type": "application/json" },
-  });
+const json = (status: number, body: unknown): Response => jsonResponse(status, body, cors);
 
-function keysFrom(envName: string, prefix: string): string | undefined {
-  const raw = Deno.env.get(envName);
-  if (!raw) return undefined;
-  try {
-    const keys = Object.values(JSON.parse(raw) as Record<string, unknown>).filter(
-      (v): v is string => typeof v === "string" && v.length > 20,
-    );
-    return keys.find((v) => v.startsWith(prefix)) ?? keys[0];
-  } catch {
-    return undefined;
-  }
-}
 
 const publishableKey = () =>
-  keysFrom("SUPABASE_PUBLISHABLE_KEYS", "sb_publishable_") ?? (Deno.env.get("SUPABASE_ANON_KEY") || undefined);
+  keyFromEnv("SUPABASE_PUBLISHABLE_KEYS", "sb_publishable_") ?? (Deno.env.get("SUPABASE_ANON_KEY") || undefined);
 
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const key = keysFrom("SUPABASE_SECRET_KEYS", "sb_secret_") ?? (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || undefined);
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
 
 function safeReturn(value: unknown): string {
   if (typeof value !== "string") return DEFAULT_RETURN;
