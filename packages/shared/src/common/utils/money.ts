@@ -143,13 +143,16 @@ export function formatMoneyForInput(amount: number): string {
 // вырезается ЦЕЛИКОМ («zł», «R$», «kr»), а не по буквам: побуквенный класс
 // съедал бы латиницу вообще, и «12abc» проходило бы как 12. Длинные — первыми,
 // чтобы «R$» не распался на «R» и «$».
-const CURRENCY_TOKENS = new RegExp(
-  [...new Set(ALL_CURRENCIES.map((c) => c.symbol))]
-    .sort((a, b) => b.length - a.length)
-    .map((sym) => sym.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
-    .join("|"),
-  "g",
-);
+//
+// ТОЛЬКО С КРАЁВ: символ стоит перед суммой или после неё («€12», «12 zł»,
+// «−€12»). Вырезанный из середины, он склеивал цифры: «1E3» (E — символ
+// свазилендского лилангени) давало 1 300, «12m» — 1 200.
+const CURRENCY_ALTERNATION = [...new Set(ALL_CURRENCIES.map((c) => c.symbol))]
+  .sort((a, b) => b.length - a.length)
+  .map((sym) => sym.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
+  .join("|");
+const LEADING_CURRENCY = new RegExp(`^(-?)(?:${CURRENCY_ALTERNATION})`);
+const TRAILING_CURRENCY = new RegExp(`(?:${CURRENCY_ALTERNATION})$`);
 
 // Европейская группировка точками распознаётся только целиком — точки
 // строго по три цифры И запятая с копейками. Без запятой «1.005» остаётся
@@ -167,8 +170,9 @@ const EUROPEAN_GROUPED = /^-?\d{1,3}(?:\.\d{3})+,\d{1,2}$/;
 function normalizeMoneyInput(value: string): string {
   const cleaned = value
     .replace(/\s/g, "") // \s покрывает NBSP и узкие пробелы разрядов
-    .replace(CURRENCY_TOKENS, "")
-    .replace(/[−–]/g, "-");
+    .replace(/[−–]/g, "-")
+    .replace(LEADING_CURRENCY, "$1")
+    .replace(TRAILING_CURRENCY, "");
   const degrouped = EUROPEAN_GROUPED.test(cleaned)
     ? cleaned.replace(/\./g, "")
     : cleaned;

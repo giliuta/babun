@@ -157,3 +157,17 @@ describe("moneyInputProblem — настоящая причина отказа",
     expect(moneyInputProblem("999999999999")).toMatch(/^Сумма слишком большая: не больше /);
   });
 });
+
+describe("символ валюты — только с краёв суммы", () => {
+  it("снимается перед суммой и после неё", () => {
+    expect(parseMoneyInputToCents("€12")).toBe(1200);
+    expect(parseMoneyInputToCents("12 €")).toBe(1200);
+    expect(parseMoneyInputToCents("R$ 10,50")).toBe(1050);
+    expect(parseMoneyInputToCents("−€12", { allowNegative: true })).toBe(-1200);
+  });
+
+  it("посреди числа — ошибка, а не склейка цифр", () => {
+    expect(parseMoneyInputToCents("1E3")).toBeNull();
+    expect(parseMoneyInputToCents("1€2")).toBeNull();
+  });
+});
