@@ -254,10 +254,11 @@ export function useInsertTransaction() {
       insertTransaction(supabase, tenantId as string, draft),
     // Расход мог перевалить бюджет категории — владелец узнаёт сразу
     // (`budget-notify.ts`).
-    onSuccess: () => {
-      invalidateLedger(qc);
-      checkBudgetsAfterWrite(qc, tenantId);
-    },
+    // Лента перечитывается и после отказа: оборванный ответ мог уже
+    // записать строку, а «проверьте, записалась ли» без свежей ленты
+    // приглашает ввести её второй раз.
+    onSettled: () => invalidateLedger(qc),
+    onSuccess: () => checkBudgetsAfterWrite(qc, tenantId),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
@@ -269,10 +270,11 @@ export function useUpdateTransaction() {
     ...NEVER_PAUSE,
     mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
       updateTransaction(supabase, id, patch),
-    onSuccess: () => {
-      invalidateLedger(qc);
-      checkBudgetsAfterWrite(qc, tenantId);
-    },
+    // Лента перечитывается и после отказа: оборванный ответ мог уже
+    // записать строку, а «проверьте, записалась ли» без свежей ленты
+    // приглашает ввести её второй раз.
+    onSettled: () => invalidateLedger(qc),
+    onSuccess: () => checkBudgetsAfterWrite(qc, tenantId),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

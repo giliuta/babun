@@ -114,14 +114,14 @@ export function DayFinanceSheet({
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
   const me = useSession().session?.user.id ?? null;
-  const canWriteDayMoney = dayMoneyGate({ role, map: myAccess, teamId }) === "write";
   // СУММЫ ВОЗВРАТОВ — ТЕ ЖЕ, ЧТО У ФОРМЫ НА «ФИНАНСАХ». Без них форма
-  // считала, что возвратов нет: доход с возвратом уходил на другой счёт, а
-  // возврат оставался на старом и уводил его в минус (сервер счёт дохода с
-  // возвратами не держит). Пока суммы едут — Infinity, как там.
+  // считала, что возвратов нет: давала опустить сумму дохода ниже
+  // возвращённого и сменить его счёт, а сервер (`guard_income_with_refunds`)
+  // отвечал отказом уже после «Сохранить». Пока суммы едут — Infinity, как там.
   const refundTotalsQuery = useRefundTotals();
   const refundTotalsFailed =
     refundTotalsQuery.data === undefined && refundTotalsQuery.error != null;
+  const canWriteDayMoney = dayMoneyGate({ role, map: myAccess, teamId }) === "write";
   const canWriteIncome = canWriteDayMoney;
   const canWriteExpense = canWriteDayMoney;
   /** Старые «ручные операции дня» (day_extras): их сервер правит по сторонам

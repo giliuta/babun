@@ -227,7 +227,8 @@ export function useCreateTransfer() {
     ...NEVER_PAUSE,
     mutationFn: (draft: TransferDraft) =>
       createTransfer(supabase, tenantId as string, draft),
-    onSuccess: () => {
+    // И после отказа: оборванный ответ мог уже провести перевод.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
     },
@@ -245,7 +246,8 @@ export function useDeleteTransfer() {
     // получилось», а не тихо ждать связи, пока тост уже уехал.
     ...NEVER_PAUSE,
     mutationFn: (groupId: string) => deleteTransfer(supabase, groupId),
-    onSuccess: () => {
+    // И после отказа: оборванный ответ мог уже провести перевод.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
     },

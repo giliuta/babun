@@ -246,7 +246,7 @@ export function useIssueInvoice() {
       }
       return invoice;
     },
-    onSuccess: () => invalidateInvoices(qc),
+    onSettled: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
 }
@@ -271,7 +271,7 @@ export function useUpdateInvoice(id: string) {
       }
       return invoice;
     },
-    onSuccess: () => invalidateInvoices(qc),
+    onSettled: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
 }
@@ -287,7 +287,7 @@ export function useDeleteCreditNote() {
       const { error } = await supabase.rpc("delete_credit_note", { p_note_id: noteId });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => invalidateInvoices(qc),
+    onSettled: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
 }
@@ -298,7 +298,7 @@ export function useDeleteInvoice() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => deleteInvoice(supabase, id),
-    onSuccess: () => invalidateInvoices(qc),
+    onSettled: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
 }
@@ -341,7 +341,7 @@ export function useIssuePartialCreditNote(id: string) {
       if (!data) throw new Error("Кредит-нота не подтверждена сервером");
       return data;
     },
-    onSuccess: () => invalidateInvoices(qc),
+    onSettled: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
 }
@@ -363,7 +363,7 @@ export function useCancelInvoice(id: string) {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => invalidateInvoices(qc),
+    onSettled: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
 }
@@ -374,7 +374,10 @@ export function useRecordInvoicePayment(invoiceId: string) {
     ...NEVER_PAUSE,
     mutationFn: (draft: RecordInvoicePaymentDraft) =>
       recordInvoicePayment(supabase, invoiceId, draft),
-    onSuccess: () => {
+    // И после отказа: «платёж не подтверждён сервером» бывает и у
+    // записанного — остаток на экране обязан быть свежим, иначе повтор
+    // проведёт вторую оплату.
+    onSettled: () => {
       invalidateInvoices(qc);
       qc.invalidateQueries({ queryKey: ["accounts"] });
     },
