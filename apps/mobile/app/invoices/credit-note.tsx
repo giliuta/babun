@@ -84,8 +84,12 @@ export default function CreditNoteScreen() {
   const issued = useRef<string | null>(null);
 
   const row = original.data ?? null;
+  // ГОД НОТЫ — ГОД СЕГОДНЯШНЕГО ДНЯ КОМПАНИИ, а не инвойса: сервер нумерует
+  // ноту по дате выпуска. Декабрьский инвойс, отменённый в январе, показывал
+  // в превью «CN-2025-…», а выходил «CN-2026-0001».
+  const noteYear = Number(businessToday.slice(0, 4));
   const series = useNextInvoiceSeries(
-    row?.year ?? new Date().getFullYear(),
+    noteYear,
     row?.company_id ?? null,
     !!row,
     "credit_note",
@@ -247,7 +251,7 @@ export default function CreditNoteScreen() {
               row.company_id
                 ? {
                     companyId: row.company_id,
-                    year: row.year,
+                    year: noteYear,
                     next: series.data
                       ? { ...series.data, canSetStart: false }
                       : null,
