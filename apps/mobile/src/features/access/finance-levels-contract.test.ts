@@ -66,9 +66,9 @@ function latestDefinition(fn: string): Definition {
   return latest;
 }
 
-/** ОКНО И ПРАВА ПАРТНЁРА (20261016170100) переопределили обе сводки счетов:
+/** ОКНО И ПРАВА ПАРТНЁРА (20261016180100) переопределили обе сводки счетов:
  *  живая — либо эта миграция, либо та, и фильтр видимых счетов в ней цел. */
-const PARTNER_WINDOW_MIGRATION = "20261016170100_finance_hidden_accounts_window_vat.sql";
+const PARTNER_WINDOW_MIGRATION = "20261016180100_finance_hidden_accounts_window_vat.sql";
 function assertLiveKeepsVisibleAccounts(fn: string): void {
   const live = latestDefinition(fn);
   assert.ok([MIGRATION, PARTNER_WINDOW_MIGRATION].includes(live.file), `${fn}: ${live.file}`);

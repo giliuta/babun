@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = path.resolve(here, "../../../../supabase/migrations");
-const FILE = "20261016170100_finance_hidden_accounts_window_vat.sql";
+const FILE = "20261016180100_finance_hidden_accounts_window_vat.sql";
 const sql = readFileSync(path.join(MIGRATIONS, FILE), "utf8");
 
 function body(name: string): string {

@@ -4,13 +4,13 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// ПЕРЕВОД, ДОЛГ И КАТЕГОРИЯ НА СЕРВЕРЕ (20261016170000). Удаление календаря
+// ПЕРЕВОД, ДОЛГ И КАТЕГОРИЯ НА СЕРВЕРЕ (20261016180000). Удаление календаря
 // оставляло одну ногу перевода навсегда, долг гасился операцией чужой компании
 // или не той стороны денег, категория с историей уезжала в другую команду.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = path.resolve(here, "../../../../supabase/migrations");
-const FILE = "20261016170000_finance_calendar_debt_category_guards.sql";
+const FILE = "20261016180000_finance_calendar_debt_category_guards.sql";
 const sql = readFileSync(path.join(MIGRATIONS, FILE), "utf8").replace(/\s+/g, " ");
 
 test("удаление календаря стирает перевод целиком и его запрос по любому счёту", () => {
