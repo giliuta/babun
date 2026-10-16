@@ -157,4 +157,13 @@ describe("двери и подписи по уровню", () => {
     // закрыта без права настроек.
     assert.match(panel, /onSettings=\{canOpenSettings \? \(\) => onOpen\(accountsSettingsHref\(teamId, NO_TEAM\)\) : undefined\}/);
   });
+
+  test("лента под «Счетами» удаляется свайпом по тому же правилу, что лента «Финансов»", () => {
+    // Панель счетов не передавала удаление в список: бензин удалялся свайпом
+    // в «Расходе» и не удалялся в ленте «Наличных».
+    const panel = read("AccountsPanel.tsx");
+    const panels = read("home/HomePanels.tsx");
+    assert.match(panel, /<RecordRowsPanel [^>]*canDeleteRow=\{canDeleteRow\} onDeleteRow=\{onDeleteRow\}/);
+    assert.match(panels, /<AccountsPanel [^>]*canDeleteRow=\{canDeleteRow\} onDeleteRow=\{deleteRow\}/);
+  });
 });

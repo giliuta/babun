@@ -63,6 +63,8 @@ export function AccountsPanel({
   refreshControl,
   canOpenSettings = true,
   teamId = null,
+  canDeleteRow,
+  onDeleteRow,
 }: {
   /** Ровно тот набор, который просуммирован плиткой «Счета»: плитки и цифра
    *  над ними обязаны сходиться пальцем. */
@@ -88,6 +90,10 @@ export function AccountsPanel({
   /** Команда чипа над плитками: настройки открываются на её счетах
    *  `null` и «Без команды» — все счета. */
   teamId?: string | null;
+  /** Свайп «Удалить» — тот же, что в ленте «Финансов»: одно правило на строку,
+   *  в какой бы панели она ни стояла. */
+  canDeleteRow?: (row: RecordRow) => boolean;
+  onDeleteRow?: (row: RecordRow) => void;
 }) {
   const t = useThemeColors();
   // Ширина плитки оплаты: три в ряд. В ленте во всю ширину экрана четвёртая
@@ -237,6 +243,8 @@ export function AccountsPanel({
         }
         refreshControl={refreshControl}
         onOpenRecord={onOpenRecord}
+        canDeleteRow={canDeleteRow}
+        onDeleteRow={onDeleteRow}
       />
     </View>
   );

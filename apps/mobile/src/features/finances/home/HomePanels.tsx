@@ -73,6 +73,8 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         canOpenSettings={access.settings}
         // Настройки — на счетах выбранной команды.
         teamId={scope}
+        canDeleteRow={canDeleteRow}
+        onDeleteRow={deleteRow}
       />
     );
   }
