@@ -5425,5 +5425,6 @@
  "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: a refund will appear in the till. The appointment can be restored — without the payment.",
  "Выбрать дату барабаном": "Choose a date on the wheel",
  "Перейти к выбранной дате": "Go to the chosen date",
- "Перейти": "Go"
+ "Перейти": "Go",
+ "Клиент убран из чёрного списка": "Client removed from blacklist"
 }

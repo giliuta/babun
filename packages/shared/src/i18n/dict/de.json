@@ -5425,5 +5425,6 @@
  "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: in der Kasse erscheint eine Erstattung. Der Termin kann wiederhergestellt werden — ohne Zahlung.",
  "Выбрать дату барабаном": "Datum mit dem Rad wählen",
  "Перейти к выбранной дате": "Zum gewählten Datum",
- "Перейти": "Los"
+ "Перейти": "Los",
+ "Клиент убран из чёрного списка": "Kunde von der Sperrliste entfernt"
 }

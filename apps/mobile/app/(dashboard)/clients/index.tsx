@@ -581,8 +581,23 @@ function ClientsListScreen() {
 
   // Правки по строке — в компанию строки: у работодателя — его клиентом
   // (`source`), у своей — источником экрана, как было.
-  const onToggleBlacklist = (c: Client) =>
-    updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted }, source: guestOf.get(c.id) });
+  // Чёрный список отменяется тем же тапом из тоста: пометка вслепую из
+  // меню строки иначе замечалась только по значку в списке.
+  const onToggleBlacklist = (c: Client) => {
+    const next = !c.blacklisted;
+    const source = guestOf.get(c.id);
+    updateById.mutate(
+      { id: c.id, patch: { blacklisted: next }, source },
+      {
+        onSuccess: () =>
+          toast(next ? "Клиент в чёрном списке" : "Клиент убран из чёрного списка", "info", {
+            label: "Отменить",
+            onPress: () =>
+              updateById.mutate({ id: c.id, patch: { blacklisted: !next }, source }),
+          }),
+      },
+    );
+  };
 
   // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
   // в нём — только когда их видно (аудит 03.10: из списка они уходили всегда,

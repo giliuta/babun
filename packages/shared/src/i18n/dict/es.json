@@ -5425,5 +5425,6 @@
  "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: aparecerá un reembolso en caja. La cita se podrá restaurar, sin el pago.",
  "Выбрать дату барабаном": "Elegir fecha con la rueda",
  "Перейти к выбранной дате": "Ir a la fecha elegida",
- "Перейти": "Ir"
+ "Перейти": "Ir",
+ "Клиент убран из чёрного списка": "Cliente quitado de la lista negra"
 }

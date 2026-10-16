@@ -29,6 +29,7 @@
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
 // blocks stay free of screen-level concerns.
 
+import { useToast } from "@/components/ui/Toast";
 import { useMemo, useRef, useState } from "react";
 import {
   Linking,
@@ -260,6 +261,7 @@ export function ClientDetailScreen() {
   });
 
   // Единый persist-путь для блоков: черновик — локально, карточка — PATCH.
+  const toast = useToast();
   const update = async (patch: Partial<Client>): Promise<boolean> => {
     if (isDraft) {
       updateDraft(patch);
@@ -561,9 +563,17 @@ export function ClientDetailScreen() {
     }
   };
 
+  // Чёрный список отменяется тем же тапом из тоста.
   const onToggleBlacklist = () => {
     setMenuOpen(false);
-    update({ blacklisted: !c.blacklisted });
+    const next = !c.blacklisted;
+    void update({ blacklisted: next }).then((ok) => {
+      if (!ok) return;
+      toast(next ? "Клиент в чёрном списке" : "Клиент убран из чёрного списка", "info", {
+        label: "Отменить",
+        onPress: () => void update({ blacklisted: !next }),
+      });
+    });
   };
 
 
