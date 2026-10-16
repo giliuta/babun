@@ -9,7 +9,7 @@ import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 import { dayMonthLabel } from "./day-month-label";
-import { MonthYearGrid } from "@/components/ui/MonthYearGrid";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 
 // ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ (владелец 2026-08-27: «стрелочки
 // влево-вправо это классно, но я хотел бы ещё листать свайпом»).
@@ -32,9 +32,9 @@ import { MonthYearGrid } from "@/components/ui/MonthYearGrid";
 // Web-parity date jumper (web MiniCalendar, trimmed): tap the «Месяц Год ⌄»
 // header title → this popover; pick any day to jump the calendar there.
 // Dot under a day = it has non-cancelled appointments. «Сегодня» at the
-// bottom returns home. Тап по заголовку месяца открывает год и месяц
-// решёткой (`MonthYearGrid`) — к записи двухлетней давности два тапа, а не
-// двадцать свайпов.
+// bottom returns home. Тап по заголовку месяца ставит на место сетки барабан
+// даты — тот же, каким дата выбирается во всём продукте: к записи двухлетней
+// давности — прокрутить год и «Перейти», а не двадцать свайпов.
 export function MiniCalendar({
   visible,
   currentDate,
@@ -60,8 +60,9 @@ export function MiniCalendar({
   const insets = useSafeAreaInsets();
   const [viewYear, setViewYear] = useState(currentDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(currentDate.getMonth());
-  // Режим «год и месяц»: тот же поповер, вместо дней — решётка месяцев.
+  // Режим барабана: тот же поповер, вместо сетки дней — барабан даты.
   const [picking, setPicking] = useState(false);
+  const [wheelDate, setWheelDate] = useState(currentDate);
 
   // Re-anchor to the calendar's date every time the popover opens.
   const [anchorKey, setAnchorKey] = useState("");
@@ -71,6 +72,7 @@ export function MiniCalendar({
     setViewYear(currentDate.getFullYear());
     setViewMonth(currentDate.getMonth());
     setPicking(false);
+    setWheelDate(currentDate);
   }
   // Зеркальная ветка: без сброса якоря повторное открытие на ТОЙ ЖЕ дате
   // показывало бы пролистанный в прошлый раз месяц.
@@ -86,11 +88,6 @@ export function MiniCalendar({
   }, [appointments]);
 
   const DAY_HEADERS = weekdayLabels();
-
-  // В режиме «год и месяц» стрелки листают год.
-  const prevYear = () => setViewYear(viewYear - 1);
-  const nextYear = () => setViewYear(viewYear + 1);
-  const [todayY, todayM] = todayYmd.split("-").map(Number);
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -112,7 +109,9 @@ export function MiniCalendar({
     onCommit: (dir) => (dir === 1 ? nextMonth() : prevMonth()),
   });
 
-  const monthTitle = new Date(viewYear, viewMonth, 1)
+  // На барабане заголовок следует за колесом: видно, куда уведёт «Перейти».
+  const titleDate = picking ? wheelDate : new Date(viewYear, viewMonth, 1);
+  const monthTitle = titleDate
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
     // «г.» (русский, болгарский) и «р.» (украинский) после года — лишние.
     .replace(/\s*[гр]\.?\s*$/i, "");
@@ -168,10 +167,11 @@ export function MiniCalendar({
             }}
           >
             <Pressable
-              onPress={picking ? prevYear : prevMonth}
+              onPress={prevMonth}
+              disabled={picking}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={picking ? "Предыдущий год" : "Предыдущий месяц"}
+              accessibilityLabel="Предыдущий месяц"
               style={({ pressed }) => ({
                 width: 32,
                 height: 32,
@@ -181,13 +181,16 @@ export function MiniCalendar({
                 backgroundColor: pressed ? t.pressed : "transparent",
               })}
             >
-              <ChevronLeft color={t.sub} size={16} strokeWidth={2.5} />
+              {picking ? null : <ChevronLeft color={t.sub} size={16} strokeWidth={2.5} />}
             </Pressable>
             <Pressable
-              onPress={() => setPicking(!picking)}
+              onPress={() => {
+                if (!picking) setWheelDate(new Date(viewYear, viewMonth, 1));
+                setPicking(!picking);
+              }}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={picking ? "Вернуться к дням" : "Выбрать год и месяц"}
+              accessibilityLabel={picking ? "Вернуться к дням" : "Выбрать дату барабаном"}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
@@ -202,7 +205,7 @@ export function MiniCalendar({
                 maxFontSizeMultiplier={1.2}
                 style={{ fontSize: 15, fontWeight: "600", color: t.ink, textTransform: "capitalize" }}
               >
-                {picking ? String(viewYear) : monthTitle}
+                {monthTitle}
               </Text>
               {picking ? (
                 <ChevronUp color={t.sub} size={14} strokeWidth={2.5} />
@@ -211,10 +214,11 @@ export function MiniCalendar({
               )}
             </Pressable>
             <Pressable
-              onPress={picking ? nextYear : nextMonth}
+              onPress={nextMonth}
+              disabled={picking}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={picking ? "Следующий год" : "Следующий месяц"}
+              accessibilityLabel="Следующий месяц"
               style={({ pressed }) => ({
                 width: 32,
                 height: 32,
@@ -224,24 +228,22 @@ export function MiniCalendar({
                 backgroundColor: pressed ? t.pressed : "transparent",
               })}
             >
-              <ChevronRight color={t.sub} size={16} strokeWidth={2.5} />
+              {picking ? null : <ChevronRight color={t.sub} size={16} strokeWidth={2.5} />}
             </Pressable>
           </View>
 
           {picking ? (
             // Та же высота, что у дней с подписями недели: поповер не прыгает
             // при переключении.
-            <View style={{ height: GRID_H + 22, justifyContent: "center" }}>
-              <MonthYearGrid
-                year={viewYear}
-                month={viewMonth}
-                todayYear={todayY}
-                todayMonth={(todayM || 1) - 1}
-                width={7 * CELL}
-                onYear={setViewYear}
-                onMonth={(m) => {
-                  setViewMonth(m);
-                  setPicking(false);
+            <View style={{ height: GRID_H + 22, alignItems: "center", justifyContent: "center" }}>
+              <DateTimeInput
+                themeVariant="light"
+                value={wheelDate}
+                mode="date"
+                display="spinner"
+                locale="ru-RU"
+                onChange={(_, d) => {
+                  if (d) setWheelDate(d);
                 }}
               />
             </View>
@@ -364,11 +366,15 @@ export function MiniCalendar({
 
           <Pressable
             onPress={() => {
+              if (picking) {
+                onSelectDate(wheelDate);
+                return;
+              }
               const [y, m, d] = todayYmd.split("-").map(Number);
               onSelectDate(new Date(y, (m || 1) - 1, d || 1));
             }}
             accessibilityRole="button"
-            accessibilityLabel="Перейти к сегодняшней дате"
+            accessibilityLabel={picking ? "Перейти к выбранной дате" : "Перейти к сегодняшней дате"}
             // 44 — минимальная высота нажимаемой области HIG; радиус 14 = input.
             style={({ pressed }) => ({
               marginTop: 8,
@@ -384,7 +390,7 @@ export function MiniCalendar({
               maxFontSizeMultiplier={1.2}
               style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
             >
-              Сегодня
+              {picking ? "Перейти" : "Сегодня"}
             </Text>
           </Pressable>
         </Pressable>

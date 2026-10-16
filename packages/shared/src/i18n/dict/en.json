@@ -5418,12 +5418,12 @@
  "Открывает выбор тегов": "Opens tag selection",
  "Теги клиента": "Client tags",
  "{0} год": "Year {0}",
- "Предыдущий год": "Previous year",
- "Следующий год": "Next year",
  "Вернуться к дням": "Back to days",
- "Выбрать год и месяц": "Choose year and month",
  "Вернуть запись?": "Restore the appointment?",
  "Вернуть запись": "Restore appointment",
  "При отмене оплата вернулась клиенту. Запись вернётся неоплаченной — новую оплату примете как обычно.": "The payment was refunded to the client on cancellation. The appointment will come back unpaid — take a new payment as usual.",
- "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: a refund will appear in the till. The appointment can be restored — without the payment."
+ "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: a refund will appear in the till. The appointment can be restored — without the payment.",
+ "Выбрать дату барабаном": "Choose a date on the wheel",
+ "Перейти к выбранной дате": "Go to the chosen date",
+ "Перейти": "Go"
 }

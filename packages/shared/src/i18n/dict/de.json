@@ -5418,12 +5418,12 @@
  "Открывает выбор тегов": "Öffnet die Tag-Auswahl",
  "Теги клиента": "Kunden-Tags",
  "{0} год": "Jahr {0}",
- "Предыдущий год": "Vorheriges Jahr",
- "Следующий год": "Nächstes Jahr",
  "Вернуться к дням": "Zurück zu den Tagen",
- "Выбрать год и месяц": "Jahr und Monat wählen",
  "Вернуть запись?": "Termin wiederherstellen?",
  "Вернуть запись": "Termin wiederherstellen",
  "При отмене оплата вернулась клиенту. Запись вернётся неоплаченной — новую оплату примете как обычно.": "Die Zahlung wurde bei der Stornierung erstattet. Der Termin kommt unbezahlt zurück — nehmen Sie die neue Zahlung wie gewohnt an.",
- "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: in der Kasse erscheint eine Erstattung. Der Termin kann wiederhergestellt werden — ohne Zahlung."
+ "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: in der Kasse erscheint eine Erstattung. Der Termin kann wiederhergestellt werden — ohne Zahlung.",
+ "Выбрать дату барабаном": "Datum mit dem Rad wählen",
+ "Перейти к выбранной дате": "Zum gewählten Datum",
+ "Перейти": "Los"
 }
