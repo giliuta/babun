@@ -9,7 +9,7 @@ import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 import { dayMonthLabel } from "./day-month-label";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 
 // ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ (владелец 2026-08-27: «стрелочки
 // влево-вправо это классно, но я хотел бы ещё листать свайпом»).
@@ -32,9 +32,8 @@ import { DateTimeInput } from "@/components/ui/DateTimeInput";
 // Web-parity date jumper (web MiniCalendar, trimmed): tap the «Месяц Год ⌄»
 // header title → this popover; pick any day to jump the calendar there.
 // Dot under a day = it has non-cancelled appointments. «Сегодня» at the
-// bottom returns home. Тап по заголовку месяца ставит на место сетки барабан
-// даты — тот же, каким дата выбирается во всём продукте: к записи двухлетней
-// давности — прокрутить год и «Перейти», а не двадцать свайпов.
+// bottom returns home. Тап по заголовку месяца ставит вместо сетки барабан даты
+// продукта: к записи двухлетней давности — год и «Перейти», без свайпов.
 export function MiniCalendar({
   visible,
   currentDate,
@@ -185,7 +184,16 @@ export function MiniCalendar({
             </Pressable>
             <Pressable
               onPress={() => {
-                if (!picking) setWheelDate(new Date(viewYear, viewMonth, 1));
+                if (picking) {
+                  // Назад к дням — на месяц барабана: прокрученное не пропадает.
+                  setViewYear(wheelDate.getFullYear());
+                  setViewMonth(wheelDate.getMonth());
+                } else {
+                  // Барабан — на открытый день в его месяце, иначе на 1-е число.
+                  const sameMonth =
+                    currentDate.getFullYear() === viewYear && currentDate.getMonth() === viewMonth;
+                  setWheelDate(sameMonth ? currentDate : new Date(viewYear, viewMonth, 1));
+                }
                 setPicking(!picking);
               }}
               hitSlop={8}
@@ -236,16 +244,8 @@ export function MiniCalendar({
             // Та же высота, что у дней с подписями недели: поповер не прыгает
             // при переключении.
             <View style={{ height: GRID_H + 22, alignItems: "center", justifyContent: "center" }}>
-              <DateTimeInput
-                themeVariant="light"
-                value={wheelDate}
-                mode="date"
-                display="spinner"
-                locale="ru-RU"
-                onChange={(_, d) => {
-                  if (d) setWheelDate(d);
-                }}
-              />
+              {/* Барабан продукта: у него свой двойник под каждую платформу. */}
+              <DateSpinner value={wheelDate} onChange={setWheelDate} />
             </View>
           ) : (
             <>
