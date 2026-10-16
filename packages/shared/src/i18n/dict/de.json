@@ -5426,5 +5426,11 @@
  "Выбрать дату барабаном": "Datum mit dem Rad wählen",
  "Перейти к выбранной дате": "Zum gewählten Datum",
  "Перейти": "Los",
- "Клиент убран из чёрного списка": "Kunde von der Sperrliste entfernt"
+ "Клиент убран из чёрного списка": "Kunde von der Sperrliste entfernt",
+ ", оплачена частично": ", teilweise bezahlt",
+ ", оплачена наличными": ", bar bezahlt",
+ ", оплачена картой": ", mit Karte bezahlt",
+ ", оплачена переводом": ", per Überweisung bezahlt",
+ ", оплачена": ", bezahlt",
+ ", выполнена": ", erledigt"
 }

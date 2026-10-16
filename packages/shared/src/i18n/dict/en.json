@@ -5426,5 +5426,11 @@
  "Выбрать дату барабаном": "Choose a date on the wheel",
  "Перейти к выбранной дате": "Go to the chosen date",
  "Перейти": "Go",
- "Клиент убран из чёрного списка": "Client removed from blacklist"
+ "Клиент убран из чёрного списка": "Client removed from blacklist",
+ ", оплачена частично": ", partly paid",
+ ", оплачена наличными": ", paid in cash",
+ ", оплачена картой": ", paid by card",
+ ", оплачена переводом": ", paid by transfer",
+ ", оплачена": ", paid",
+ ", выполнена": ", done"
 }

@@ -6,6 +6,7 @@ import {
   chipTextW,
   chipsThatFit,
   blockLadder,
+  textOverflows,
   rowsThatFit,
   textRows,
   TEXT_MIN_W,
@@ -146,5 +147,20 @@ describe("лестница содержимого блока", () => {
   });
   test("самый низкий блок печатает хотя бы имя", () => {
     assert.equal(blockLadder({ ...base, rowsFit: 0 }).lastRow, "name");
+  });
+});
+
+describe("тающий хвост — только у строки, что не влезает", () => {
+  test("время «10:00» в колонке недели влезает — без плёнки", () => {
+    assert.equal(textOverflows("10:00", 40, { bold: true }), false);
+  });
+  test("длинное имя в узкой колонке — с плёнкой", () => {
+    assert.equal(textOverflows("Константин", 40, { bold: true }), true);
+  });
+  test("короткое имя в широком блоке — без плёнки", () => {
+    assert.equal(textOverflows("Артем", 300, { bold: true }), false);
+  });
+  test("нулевая ширина — без плёнки", () => {
+    assert.equal(textOverflows("А", 0), false);
   });
 });

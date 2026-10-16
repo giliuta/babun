@@ -107,3 +107,28 @@ export function chipsThatFit(cellW: number, total: number): number {
   while (shown > 1 && !fits(shown)) shown -= 1;
   return shown;
 }
+
+// ── ТАЮЩИЙ ХВОСТ: КАКАЯ СТРОКА НЕ ВЛЕЗАЕТ ──
+
+/** Средняя ширина знака в долях кегля: цифры табличные, двоеточие и пробел
+ *  узкие, жирные буквы шире обычных. Оценка с запасом в пользу «влезает»:
+ *  ложная плёнка гасит край короткого времени («10:00»), а пропущенная лишь
+ *  оставляет обрезок буквы. */
+function glyphEm(ch: string, bold: boolean): number {
+  if (ch >= "0" && ch <= "9") return 0.6;
+  if (ch === ":" || ch === " " || ch === "." || ch === "," || ch === "–") return 0.3;
+  return bold ? 0.6 : 0.54;
+}
+
+/** Не влезает ли строка в ширину — тогда её край тает под плёнкой. */
+export function textOverflows(
+  text: string,
+  width: number,
+  opts: { fontSize?: number; bold?: boolean } = {},
+): boolean {
+  if (width <= 0) return false;
+  const size = opts.fontSize ?? 13;
+  let em = 0;
+  for (const ch of text) em += glyphEm(ch, opts.bold ?? false);
+  return em * size > width;
+}

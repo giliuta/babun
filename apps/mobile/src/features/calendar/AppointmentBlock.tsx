@@ -19,7 +19,7 @@ import {
   CANCELLED_BORDER,
   type BlockColors,
 } from "@/features/calendar/status-colors";
-import { blockLadder, rowsThatFit } from "@/features/calendar/block-geometry";
+import { blockLadder, rowsThatFit, textOverflows } from "@/features/calendar/block-geometry";
 import { blockMoney } from "@/features/calendar/block-status";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
 import { BLOCK_GLASS } from "@/components/ui/RecordMark";
@@ -52,6 +52,16 @@ const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.92];
 /** Кегль значков нижней строки — меньше текста, чтобы не спорить с именем;
  *  в широком блоке «Дня» 11 терялся — там 14. */
 const statusIcon = (width: number) => (width >= 96 ? 14 : 11);
+
+/** Значки оплаты словами — для VoiceOver: значок без подписи немой. */
+function moneyWords(money: ReturnType<typeof blockMoney>): string {
+  if (!money || money.state === "unpaid") return "";
+  if (money.state === "partial") return ", оплачена частично";
+  if (money.method === "cash") return ", оплачена наличными";
+  if (money.method === "card") return ", оплачена картой";
+  if (money.method === "transfer") return ", оплачена переводом";
+  return ", оплачена";
+}
 
 /** Значок оплаты: способ последнего платежа; не платили — кошелёк. */
 function MoneyIcon({
@@ -295,6 +305,21 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   const nameLineW = textW - (deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
+  // Строки, чей край тает: только те, что не влезают. Плёнка по всей кромке
+  // гасила бы и короткое время «10:00» в узкой колонке недели.
+  const timeText = textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start;
+  const fadeRows: number[] = [];
+  if (!cancelled && textW >= 24) {
+    const nameW = nameLineW - (lastRow === "name" ? dotReserve : 0);
+    if (nameLineW >= 24 && textOverflows(label, nameW, { bold: true })) fadeRows.push(0);
+    if (
+      ladder.showTime &&
+      textOverflows(timeText, textW - (lastRow === "time" ? dotReserve : 0), { bold: overdue })
+    )
+      fadeRows.push(1);
+    if (showService && service && textOverflows(service, textW - (lastRow === "service" ? dotReserve : 0)))
+      fadeRows.push(2);
+  }
 
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
   const edge = blockEdge(colors, apt.status);
@@ -656,7 +681,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
         accessibilityRole="button"
         // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
         // высота, и гейты вёрстки для неё не существуют.
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}${cancelled ? ", отменена" : ""}${overdue ? ", не оплачена" : ""}${address ? `, ${address}` : ""}`}
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}${cancelled ? ", отменена" : ""}${completed ? ", выполнена" : ""}${moneyWords(money)}${overdue ? ", не оплачена" : ""}${address ? `, ${address}` : ""}`}
         accessibilityActions={
           onReschedule
             ? [
@@ -802,7 +827,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
                 ellipsizeMode={cancelled ? "tail" : "clip"}
                 maxFontSizeMultiplier={1.3}
               >
-                {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
+                {timeText}
               </Text>
             ) : null}
             {showService && textW >= 24 ? (
@@ -821,19 +846,19 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               </Text>
             ) : null}
           </Animated.View>
-          {/* ТАЮЩИЙ ХВОСТ — плёнка в цвет заливки у правого края, ступенями от
-              прозрачной к плотной: обрезанное имя и услуга растворяются, а не
-              рубятся по букве. Под ней короткое имя не меняется — плёнка того
-              же цвета, что фон. Ступени, а не градиент: градиентный модуль
-              нативный, а это обновление едет по воздуху. Отклик под пальцем
-              — тот же `fillStyle`, что у карточки. */}
-          {!cancelled && textW >= 24 ? (
+          {/* ТАЮЩИЙ ХВОСТ — плёнка в цвет заливки у правого края строки,
+              ступенями от прозрачной к плотной: не влезающие имя, время или
+              услуга растворяются, а не рубятся по букве. Ступени, а не
+              градиент: градиентный модуль нативный, а блок обновляется по
+              воздуху. Отклик под пальцем — тот же `fillStyle`, что у карточки. */}
+          {fadeRows.map((row) => (
             <View
+              key={row}
               pointerEvents="none"
               style={{
                 position: "absolute",
-                top: 0,
-                bottom: 0,
+                top: 2 - (bw - 1) + topHandle + row * lineH,
+                height: lineH,
                 right: 0,
                 width: FADE_W + pad - (bw - 1),
                 flexDirection: "row",
@@ -844,13 +869,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               ))}
               <Animated.View style={[{ width: pad - (bw - 1) }, fillStyle]} />
             </View>
-          ) : null}
-          {/* БЛИК СВЕРХУ (вариант 5, 24.09): плёнки белого дают плавный объём
-              без градиентной библиотеки (её нативный модуль потребовал бы
-              пересборки клиента). С 15.10 лежит НАД текстом и тающим хвостом:
-              текст белый, и белая плёнка его не меняет, а хвост в цвет блока
-              иначе лёг бы тёмной полосой поверх блика. Касаний не принимает;
-              у отменённой блика нет. */}
+          ))}
+          {/* БЛИК СВЕРХУ: плёнки белого дают плавный объём без градиентной
+              библиотеки (её нативный модуль потребовал бы пересборки клиента).
+              Лежит НАД текстом и тающим хвостом: текст белый, и белая плёнка
+              его не меняет, а хвост в цвет блока иначе лёг бы тёмной полосой
+              поверх блика. Касаний не принимает; у отменённой блика нет. */}
           {cancelled
             ? null
             : GLASS.map(([h, a]) => (

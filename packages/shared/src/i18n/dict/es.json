@@ -5426,5 +5426,11 @@
  "Выбрать дату барабаном": "Elegir fecha con la rueda",
  "Перейти к выбранной дате": "Ir a la fecha elegida",
  "Перейти": "Ir",
- "Клиент убран из чёрного списка": "Cliente quitado de la lista negra"
+ "Клиент убран из чёрного списка": "Cliente quitado de la lista negra",
+ ", оплачена частично": ", pagada en parte",
+ ", оплачена наличными": ", pagada en efectivo",
+ ", оплачена картой": ", pagada con tarjeta",
+ ", оплачена переводом": ", pagada por transferencia",
+ ", оплачена": ", pagada",
+ ", выполнена": ", hecha"
 }
