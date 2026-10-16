@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
 import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 import { dayMonthLabel } from "./day-month-label";
+import { MonthYearGrid } from "./MonthYearGrid";
 
 // ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ (владелец 2026-08-27: «стрелочки
 // влево-вправо это классно, но я хотел бы ещё листать свайпом»).
@@ -31,7 +32,9 @@ import { dayMonthLabel } from "./day-month-label";
 // Web-parity date jumper (web MiniCalendar, trimmed): tap the «Месяц Год ⌄»
 // header title → this popover; pick any day to jump the calendar there.
 // Dot under a day = it has non-cancelled appointments. «Сегодня» at the
-// bottom returns home. (Long-press preview + year grid stay web-only.)
+// bottom returns home. Тап по заголовку месяца открывает год и месяц
+// решёткой (`MonthYearGrid`) — к записи двухлетней давности два тапа, а не
+// двадцать свайпов.
 export function MiniCalendar({
   visible,
   currentDate,
@@ -57,6 +60,8 @@ export function MiniCalendar({
   const insets = useSafeAreaInsets();
   const [viewYear, setViewYear] = useState(currentDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(currentDate.getMonth());
+  // Режим «год и месяц»: тот же поповер, вместо дней — решётка месяцев.
+  const [picking, setPicking] = useState(false);
 
   // Re-anchor to the calendar's date every time the popover opens.
   const [anchorKey, setAnchorKey] = useState("");
@@ -65,6 +70,7 @@ export function MiniCalendar({
     setAnchorKey(openKey);
     setViewYear(currentDate.getFullYear());
     setViewMonth(currentDate.getMonth());
+    setPicking(false);
   }
   // Зеркальная ветка: без сброса якоря повторное открытие на ТОЙ ЖЕ дате
   // показывало бы пролистанный в прошлый раз месяц.
@@ -80,6 +86,11 @@ export function MiniCalendar({
   }, [appointments]);
 
   const DAY_HEADERS = weekdayLabels();
+
+  // В режиме «год и месяц» стрелки листают год.
+  const prevYear = () => setViewYear(viewYear - 1);
+  const nextYear = () => setViewYear(viewYear + 1);
+  const [todayY, todayM] = todayYmd.split("-").map(Number);
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -157,10 +168,10 @@ export function MiniCalendar({
             }}
           >
             <Pressable
-              onPress={prevMonth}
+              onPress={picking ? prevYear : prevMonth}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Предыдущий месяц"
+              accessibilityLabel={picking ? "Предыдущий год" : "Предыдущий месяц"}
               style={({ pressed }) => ({
                 width: 32,
                 height: 32,
@@ -172,17 +183,38 @@ export function MiniCalendar({
             >
               <ChevronLeft color={t.sub} size={16} strokeWidth={2.5} />
             </Pressable>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.ink, textTransform: "capitalize" }}
-            >
-              {monthTitle}
-            </Text>
             <Pressable
-              onPress={nextMonth}
+              onPress={() => setPicking(!picking)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={picking ? "Вернуться к дням" : "Выбрать год и месяц"}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 8,
+                height: 32,
+                borderRadius: t.radius.card,
+                backgroundColor: pressed ? t.pressed : "transparent",
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 15, fontWeight: "600", color: t.ink, textTransform: "capitalize" }}
+              >
+                {picking ? String(viewYear) : monthTitle}
+              </Text>
+              {picking ? (
+                <ChevronUp color={t.sub} size={14} strokeWidth={2.5} />
+              ) : (
+                <ChevronDown color={t.sub} size={14} strokeWidth={2.5} />
+              )}
+            </Pressable>
+            <Pressable
+              onPress={picking ? nextYear : nextMonth}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Следующий месяц"
+              accessibilityLabel={picking ? "Следующий год" : "Следующий месяц"}
               style={({ pressed }) => ({
                 width: 32,
                 height: 32,
@@ -196,6 +228,25 @@ export function MiniCalendar({
             </Pressable>
           </View>
 
+          {picking ? (
+            // Та же высота, что у дней с подписями недели: поповер не прыгает
+            // при переключении.
+            <View style={{ height: GRID_H + 22, justifyContent: "center" }}>
+              <MonthYearGrid
+                year={viewYear}
+                month={viewMonth}
+                todayYear={todayY}
+                todayMonth={(todayM || 1) - 1}
+                width={7 * CELL}
+                onYear={setViewYear}
+                onMonth={(m) => {
+                  setViewMonth(m);
+                  setPicking(false);
+                }}
+              />
+            </View>
+          ) : (
+            <>
           <View style={{ flexDirection: "row" }}>
             {DAY_HEADERS.map((d) => (
               <Text
@@ -307,6 +358,9 @@ export function MiniCalendar({
               />
             </View>
           </GestureDetector>
+
+            </>
+          )}
 
           <Pressable
             onPress={() => {
