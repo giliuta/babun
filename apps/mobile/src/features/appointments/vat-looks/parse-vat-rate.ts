@@ -5,7 +5,11 @@
 export function parseVatRate(text: string): number | null {
   const trimmed = text.replace(",", ".").trim();
   if (trimmed === "") return null;
-  const value = Number(trimmed);
-  if (!Number.isFinite(value) || value < 0 || value >= 100) return null;
-  return Math.round(value * 100) / 100;
+  // Только десятичная запись: `Number` понимал «0x10» и «1e1» из вставки.
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) return null;
+  // Предел — после округления: «99.999» округлялось до 100, которые память
+  // не принимает, и поле показывало одну ставку, а считало другой.
+  const value = Math.round(Number(trimmed) * 100) / 100;
+  if (!Number.isFinite(value) || value >= 100) return null;
+  return value;
 }

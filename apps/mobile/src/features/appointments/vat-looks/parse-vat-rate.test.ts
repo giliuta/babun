@@ -21,3 +21,13 @@ describe("ставка VAT из набранного", () => {
     assert.equal(parseVatRate("5.555"), 5.56);
   });
 });
+
+test("только десятичная запись и предел после округления", () => {
+  assert.equal(parseVatRate("0x10"), null);
+  assert.equal(parseVatRate("1e1"), null);
+  assert.equal(parseVatRate("99.999"), null);
+  assert.equal(parseVatRate("99.99"), 99.99);
+  assert.equal(parseVatRate("12."), 12);
+  assert.equal(parseVatRate(",5"), 0.5);
+  assert.equal(parseVatRate("0"), 0);
+});
