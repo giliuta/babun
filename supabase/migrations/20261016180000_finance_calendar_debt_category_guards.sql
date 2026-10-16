@@ -1,8 +1,8 @@
--- СЕРВЕР ФИНАНСОВ, ВТОРОЙ КРУГ (16.10): три дыры, найденные на локальной базе.
+-- СЕРВЕР ФИНАНСОВ, ВТОРОЙ КРУГ: три дыры, найденные на локальной базе.
 --
--- 1. `delete_calendar` стирал проводки только счетов календаря: перевод с
---    соседним календарём оставлял на живом счёте одну ногу навсегда (отмена —
---    «перевод повреждён», удаление ноги — «нельзя удалить одну часть»).
+-- 1. `delete_calendar` чистил запросы переводов только по команде источника:
+--    перевод В удаляемый календарь оставлял «живой» запрос со ссылкой на
+--    стёртый счёт. Нога на живом счёте остаётся нарочно — это его деньги.
 -- 2. `guard_debt_payment_total` не сверял компанию и сторону денег: доход
 --    гасил долг чужой компании (и раскрывал его остаток), расход — долг «мне
 --    должны».
@@ -13,9 +13,6 @@
 -- Проверка перед накатом на боевой — уже лежащие пары долг/операция:
 --   select t.id from finance_transactions t join debts d on d.id = t.debt_id
 --    where d.tenant_id <> t.tenant_id or (d.direction = 'incoming') <> (t.type = 'income');
--- и перевод без пары:
---   select transfer_group_id from finance_transactions where type = 'transfer'
---    group by 1 having count(*) <> 2;
 
 create or replace function public.delete_calendar(p_team_id text)
  RETURNS jsonb
@@ -91,22 +88,12 @@ begin
        )
      );
 
-  -- ПЕРЕВОД УХОДИТ ЦЕЛИКОМ. Стирались только проводки счетов календаря, и
-  -- перевод с соседним календарём терял одну ногу: на живом счёте оставалась
-  -- половина (+40 из ниоткуда), а отменить её было нельзя — «перевод
-  -- повреждён». Обе ноги группы, задевшей счёт календаря, — вместе.
+  -- НОГА ПЕРЕВОДА НА ЖИВОМ СЧЁТЕ ОСТАЁТСЯ: это настоящие деньги. Наличные
+  -- уходящего мастера, сданные на счёт владельца, лежат в банке — стерев
+  -- вторую ногу, мы бы списали их с живого остатка. Уходят только проводки
+  -- счетов календаря.
   delete from public.finance_transactions
-   where tenant_id = v_tenant
-     and (
-       account_id = any (v_accounts)
-       or transfer_group_id in (
-         select tx.transfer_group_id
-           from public.finance_transactions tx
-          where tx.tenant_id = v_tenant
-            and tx.account_id = any (v_accounts)
-            and tx.transfer_group_id is not null
-       )
-     );
+   where tenant_id = v_tenant and account_id = any (v_accounts);
   get diagnostics n_operations = row_count;
 
   update public.finance_transactions
@@ -213,6 +200,8 @@ begin
   end if;
   if tg_op = 'UPDATE'
      and new.debt_id is not distinct from old.debt_id
+     and new.type is not distinct from old.type
+     and new.tenant_id is not distinct from old.tenant_id
      and abs(new.amount) <= abs(old.amount) then
     return new;
   end if;
@@ -304,3 +293,12 @@ begin
   return new;
 end;
 $function$;
+
+-- Сторона денег и компания проверяются и при смене ТИПА или компании
+-- операции: триггер ждал только суммы и ссылки на долг, и доход, гасивший
+-- долг «мне должны», можно было перевернуть в расход.
+drop trigger if exists trg_guard_debt_payment_total on public.finance_transactions;
+create trigger trg_guard_debt_payment_total
+  before insert or update of amount, debt_id, type, tenant_id on public.finance_transactions
+  for each row execute function public.guard_debt_payment_total();
+
