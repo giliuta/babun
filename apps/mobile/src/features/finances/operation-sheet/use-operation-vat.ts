@@ -51,7 +51,11 @@ export function useOperationVat({
   // страницы VAT нет): написанная последней на
   // этом телефоне, а пока не писали — ставка команды из прежних настроек.
   const rememberedVat = useRememberedVatRate(settingsVat.rate);
-  const vat = { ...settingsVat, rate: rememberedVat.rate };
+  // ЗАПОМНЕННЫЙ НОЛЬ СТАВКУ КОМАНДЫ НЕ ГАСИТ. «0» в поле ставки запоминался
+  // на телефон, и у каждой новой операции пропадала клавиша «+ VAT»
+  // (`vatControlsVisible` ждёт ставку больше нуля) — 19 % команды больше не
+  // предлагались. Операция без налога — это «Без VAT», а не ставка 0.
+  const vat = { ...settingsVat, rate: rememberedVat.rate > 0 ? rememberedVat.rate : settingsVat.rate };
   // КЛАВИШИ ГАСИТ ТОЛЬКО ТУМБЛЕР КОМПАНИИ, А НЕ ПИН СЧЁТА.
   //
   // ТУМБЛЕРА VAT У КОМПАНИИ НЕТ (всё включено): клавиши видны, как только известна ставка — её пишут в

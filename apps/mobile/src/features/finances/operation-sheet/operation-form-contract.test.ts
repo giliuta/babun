@@ -55,3 +55,21 @@ describe("строка VAT не зависит от набранной став�
     assert.match(looks, /if \(next != null && next !== vat\.rate\)/);
   });
 });
+
+describe("ставка VAT 0 (16.10)", () => {
+  test("ставка 0 из формы уходит явным «без налога», а не режимом без снимка", () => {
+    const save = read("use-operation-save.ts");
+    assert.match(save, /namedMode && namedMode !== "none" && !\(s\.opVatRate > 0\) && \(!s\.isEdit \|\| s\.vatRetouched\)\s*\? "none"/);
+  });
+
+  test("запомненный ноль не гасит ставку команды", () => {
+    const vat = read("use-operation-vat.ts");
+    assert.match(vat, /rate: rememberedVat\.rate > 0 \? rememberedVat\.rate : settingsVat\.rate/);
+  });
+
+  test("форма сверяет замок чека и долг по сумме с налогом", () => {
+    const sheet = read("../OperationSheet.tsx");
+    assert.match(sheet, /useReceiptLock\(\{ visible, transaction, amountCents: grossCents, accountId, date \}\)/);
+    assert.match(sheet, /\n\s+grossCents,\n/);
+  });
+});

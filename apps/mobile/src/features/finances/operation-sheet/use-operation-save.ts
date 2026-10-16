@@ -126,7 +126,7 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
       // Новая операция называет серверу ровно то, что на экране: без
       // открытого «+ VAT» — явное «без налога», у кого бы ни
       // была форма. Правка — по прежним правилам (`vatModeForDraft`).
-      const vatModeToSend = !s.isEdit
+      const namedMode = !s.isEdit
         ? s.vatMode
         : vatModeForDraft({
             mode: s.vatMode,
@@ -134,6 +134,15 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
             canReadSettings: s.isOwner,
             settingsKnown: s.vatSettingsKnown,
           });
+      // СТАВКА 0 — ЭТО «БЕЗ НАЛОГА», а не «посчитай сам». Форма показала VAT
+      // €0, но режим без снимка сервер досчитывал ставкой счёта, команды или
+      // компании — и в отчёт VAT ложились 19%, которых человек не видел.
+      // Только для ставки, которую форма знает сама (новая операция или VAT
+      // нажат заново): у старой операции без снимка 0 значит «неизвестно».
+      const vatModeToSend =
+        namedMode && namedMode !== "none" && !(s.opVatRate > 0) && (!s.isEdit || s.vatRetouched)
+          ? "none"
+          : namedMode;
       const vatSnapshot = vatSnapshotForDraft({
         mode: vatModeToSend,
         rate: s.opVatRate,
