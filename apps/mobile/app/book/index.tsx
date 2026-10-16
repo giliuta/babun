@@ -1408,8 +1408,11 @@ function BookForm() {
   // поставить другого. Самого клиента — телефон, имя, объекты — править можно
   // всегда: тап открывает его карточку, а не выбор, который всё равно
   // кончился бы отказом. Без оплаты тап, как везде, открывает выбор.
+  // Как у сервера: возвращённая оплата клиента уже не держит.
   const moneyHoldsClient =
-    !!editing && ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
+    !!editing &&
+    editing.payment_status !== "refunded" &&
+    ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
   const pickClientOrOpenCard = () => {
     if (moneyHoldsClient) {
       openClientCard();
@@ -2815,6 +2818,7 @@ function BookForm() {
                   client={client}
                   stats={clientStats}
                   onPick={can.editClient ? pickClientOrOpenCard : undefined}
+                  pickOpensCard={moneyHoldsClient}
                   onOpenCard={openClientCard}
                   note={
                     clientNoteOn ? (
@@ -3261,6 +3265,7 @@ function BookForm() {
                   client={client}
                   stats={clientStats}
                   onPick={can.editClient ? pickClientOrOpenCard : undefined}
+                  pickOpensCard={moneyHoldsClient}
                   onOpenCard={openClientCard}
                   onClear={
                     can.editClient
