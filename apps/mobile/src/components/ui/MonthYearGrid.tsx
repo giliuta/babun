@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import { TYPE } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
 // БЫСТРЫЙ ПРЫЖОК К ГОДУ И МЕСЯЦУ. Листать месяцы по одному до записи двухлетней
@@ -70,7 +71,7 @@ export function MonthYearGrid({
                   <Text
                     maxFontSizeMultiplier={1.2}
                     style={{
-                      fontSize: 14,
+                      ...TYPE.callout,
                       fontWeight: "700",
                       fontVariant: ["tabular-nums"],
                       color: on ? t.onAccent : y === todayYear ? t.accent : t.ink,
@@ -117,7 +118,7 @@ export function MonthYearGrid({
                   <Text
                     maxFontSizeMultiplier={1.2}
                     style={{
-                      fontSize: 15,
+                      ...TYPE.body,
                       fontWeight: on || now ? "700" : "500",
                       textTransform: "capitalize",
                       color: on || now ? t.accent : t.ink,
