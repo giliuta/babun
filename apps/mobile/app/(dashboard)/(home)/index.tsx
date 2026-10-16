@@ -18,8 +18,6 @@ import {
   type Href,
 } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
-import { Ban } from "lucide-react-native";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -155,7 +153,6 @@ import {
 import { DayFinanceSheet } from "@/features/calendar/DayFinanceSheet";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { ModePlaque } from "@/features/calendar/ModePlaque";
-import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
 import { serverReason } from "@/features/calendar/server-reason";
 import {
   cancelAppointmentReminders,
@@ -2018,18 +2015,18 @@ export default function CalendarTab() {
   const trashAppt = useTrashAppointment();
   const restoreAppt = useRestoreAppointment();
 
-  /** Отмена и возврат в план — одна дорога с откатом из тоста. Причина
-   *  ложится в cancel_reason (список — cancel-reasons.ts) и стирается при
-   *  «Восстановить». */
-  const setCancelled = (apt: Appointment, reason: string | null) => {
-    const to: Appointment["status"] = reason ? "cancelled" : "scheduled";
+  /** Отмена и возврат в план — одна дорога с откатом из тоста. Причины
+   *  отмены нет: визит отменяется одним тапом, а прежняя причина у старой
+   *  записи стирается при «Восстановить». */
+  const setCancelled = (apt: Appointment, cancel: boolean) => {
+    const to: Appointment["status"] = cancel ? "cancelled" : "scheduled";
     const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
     // У отмены с деньгами в тосте нет «Отменить»: сервер уже вернул оплату
     // клиенту, и откат вернул бы визит неоплаченным — это решение человек
     // принимает осознанно через «Восстановить» с вопросом, а не тапом по тосту.
     const undoable = to !== "cancelled" || !holdsMoney(apt);
     updateAppt.mutate(
-      { id: apt.id, patch: { status: to, cancel_reason: reason } },
+      { id: apt.id, patch: { status: to, cancel_reason: null } },
       {
         onSuccess: () => {
           haptics.success();
@@ -2064,7 +2061,7 @@ export default function CalendarTab() {
    *  визит вернётся неоплаченным — человек узнаёт это до, а не после. */
   const restoreCancelled = (apt: Appointment) => {
     if (apt.payment_status !== "refunded") {
-      setCancelled(apt, null);
+      setCancelled(apt, false);
       return;
     }
     void confirmAction("Вернуть запись?", {
@@ -2072,40 +2069,25 @@ export default function CalendarTab() {
         "При отмене оплата вернулась клиенту. Запись вернётся неоплаченной — новую оплату примете как обычно.",
       confirmLabel: "Вернуть запись",
     }).then((ok) => {
-      if (ok) setCancelled(apt, null);
+      if (ok) setCancelled(apt, false);
     });
   };
 
-  /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
-   *  отмена без причины в отчёте дня читается как «забыли». */
-  const cancelWithReason = (apt: Appointment) => {
-    // ОТМЕНА ВИЗИТА С ДЕНЬГАМИ — ЭТО ВОЗВРАТ (жёсткая проверка 03.10). Сервер
-    // при отмене сам возвращает клиенту всю полученную оплату: в кассе
-    // появляется возврат, и вернуть запись назад уже нельзя — «Возвращённую
-    // оплату нельзя изменить». Раньше это делал один тап по причине, а тост
-    // предлагал «Отменить», которое всегда кончалось отказом.
+  /** «Отменить визит» — сразу, без причины. Отмена визита с деньгами — это
+   *  возврат: сервер сам возвращает клиенту всю полученную оплату, поэтому о
+   *  ней — вопрос с суммой, а вернуть визит потом можно уже без оплаты. */
+  const cancelVisit = (apt: Appointment) => {
+    if (!holdsMoney(apt)) {
+      setCancelled(apt, true);
+      return;
+    }
     const paid = getPaidAmount(apt);
-    const cancel = (label: string) =>
-      holdsMoney(apt)
-        ? void confirmAction("Отменить визит с оплатой?", {
-            message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.`,
-            confirmLabel: "Отменить визит",
-            destructive: true,
-          }).then((ok) => {
-            if (ok) setCancelled(apt, label);
-          })
-        : setCancelled(apt, label);
-    // Та же наша шторка, что меню записи: подменю не имеет права выглядеть
-    // системным листом посреди нашего.
-    setSheetMenu({
-      title: "Причина отмены",
-      subtitle: clientName(apt) || apt.comment || undefined,
-      items: CANCEL_REASONS.map((label) => ({
-        label,
-        icon: Ban,
-        color: SETTINGS_TILE.yellow,
-        run: () => cancel(label),
-      })),
+    void confirmAction("Отменить визит с оплатой?", {
+      message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.`,
+      confirmLabel: "Отменить визит",
+      destructive: true,
+    }).then((ok) => {
+      if (ok) setCancelled(apt, true);
     });
   };
 
@@ -2518,7 +2500,7 @@ export default function CalendarTab() {
         items.push(
           apt.status === "cancelled"
             ? { label: "Восстановить", run: () => restoreCancelled(apt) }
-            : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+            : { label: "Отменить визит", run: () => cancelVisit(apt) },
         );
       if (event ? ownEvent : can.cancel)
         items.push({
@@ -2572,7 +2554,7 @@ export default function CalendarTab() {
         items.push(
           apt.status === "cancelled"
               ? { label: "Восстановить", run: () => restoreCancelled(apt) }
-              : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+              : { label: "Отменить визит", run: () => cancelVisit(apt) },
           );
       }
       if (mutable)
