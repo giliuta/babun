@@ -28,5 +28,5 @@ export function unpaidVisits(
     list.push(a);
     total += owed;
   }
-  return { list, total: Math.round(total) };
+  return { list, total: Math.round(total * 100) / 100 };
 }

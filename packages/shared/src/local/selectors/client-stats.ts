@@ -184,7 +184,9 @@ export function buildStats(
   return computeNonAptFields(client, {
     visits,
     totalSpent: Math.round(totalSpent),
-    debt: Math.round(debt),
+    // Долг — в центах, а не до евро: €0,40 иначе пропадал вместе с клиентом
+    // из «Должников», а €12,60 печаталось как «€13».
+    debt: Math.round(debt * 100) / 100,
     expectedRevenue: Math.round(expectedRevenue),
     lastTeamId,
     lastVisitDate,
