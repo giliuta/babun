@@ -26,6 +26,7 @@ import { buildInvoiceDocument } from "@/lib/paper/document";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
+import { creditNoteLeftToPay } from "@/features/invoices/credit-note-amounts";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import {
@@ -261,7 +262,7 @@ export default function CreditNoteScreen() {
                     : { text: "Вся сумма — инвойс будет отменён" }
                   : toRefund > 0
                     ? { text: `Часть — инвойс остаётся, клиенту вернётся ${formatInvoiceMoney(toRefund, row.currency)}` }
-                    : { text: `Часть — инвойс остаётся, к оплате ${formatInvoiceMoney(Math.max(0, due - value), row.currency)}` }
+                    : { text: `Часть — инвойс остаётся, к оплате ${formatInvoiceMoney(creditNoteLeftToPay(due, paid, value), row.currency)}` }
             }
           />
 

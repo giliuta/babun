@@ -121,3 +121,19 @@ export function paymentReceiptLines(
   if (fromVisit.length > 0) return fromVisit;
   return [customLine(fallbackTitle, 1, paymentLinesTotal(tx), null)];
 }
+
+/**
+ * СКИДКА ИНВОЙСА — СКИДКОЙ ЧЕКА. В перечень строка скидки (цена с минусом) не
+ * идёт: это не работа. Но и молча выбросить её нельзя — чек напечатал бы
+ * «Итого работ €200» над «Получено €180» без строки скидки. Её сумма
+ * встаёт в «Итого» черновика той же фиксированной скидкой, что у записи.
+ */
+export function paymentReceiptDiscount(
+  invoiceLines: readonly Pick<InvoiceLineLedger, "qty" | "unit_price">[] | null | undefined,
+): { discountType: "fixed"; discountValue: string } | null {
+  const off = (invoiceLines ?? [])
+    .filter((line) => line.unit_price < 0)
+    .reduce((sum, line) => sum + cents(Math.abs(line.qty * line.unit_price)), 0);
+  if (off <= 0) return null;
+  return { discountType: "fixed", discountValue: String(off / 100) };
+}

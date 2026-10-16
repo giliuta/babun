@@ -99,3 +99,48 @@ describe("кредит-нота на бумаге", () => {
     assert.equal(invoice.reference, null);
   });
 });
+
+// ПОЛНАЯ НОТА НЕСЁТ ПОЗИЦИИ ИНВОЙСА С МИНУСОМ (`_issue_credit_note`,
+// `_issue_receipt_credit_note`). Бумага отбрасывала их как «скидку» и печатала
+// пустую таблицу и «Discount −€100» вместо сторнированных работ.
+describe("полная кредит-нота с позициями", () => {
+  const line = (id: string, title: string, qty: number, unit_price: number) => ({
+    id, invoice_id: "cn-1", position: 0, title, qty, unit_price, total: qty * unit_price, description: null, unit: null,
+  });
+  const full = (lines: ReturnType<typeof line>[], total: number) =>
+    buildInvoiceDocument({
+      ...input,
+      invoice: { ...note, subtotal_net: total, vat_amount: 0, vat_mode: "off", total, lines } as InvoiceLedgerWithLines,
+    });
+
+  it("позиции печатаются с минусом, скидки нет", () => {
+    const doc = full([line("a", "Чистка кондиционера", 2, -50)], -100);
+    assert.deepEqual(doc.lines.map((l) => l.title), ["Чистка кондиционера"]);
+    assert.match(doc.lines[0]?.total ?? "", /-.*100\.00|−.*100\.00/);
+    assert.equal(doc.totals.some((row) => row.label === "Discount"), false);
+    assert.match(doc.totals.find((row) => row.grand)?.value ?? "", /100\.00/);
+  });
+
+  it("скидка инвойса в ноте — плюсом в итогах, а не позицией", () => {
+    const doc = full([line("a", "Чистка кондиционера", 2, -50), line("d", "Скидка", 1, 20)], -80);
+    assert.deepEqual(doc.lines.map((l) => l.title), ["Чистка кондиционера"]);
+    const subtotal = doc.totals.find((row) => row.label === "Subtotal");
+    const discount = doc.totals.find((row) => row.label === "Discount");
+    assert.match(subtotal?.value ?? "", /^[-−].*100\.00$/);
+    assert.match(discount?.value ?? "", /^€20\.00$/);
+    assert.match(doc.totals.find((row) => row.grand)?.value ?? "", /80\.00/);
+  });
+
+  it("обычный инвойс со скидкой — как раньше", () => {
+    const doc = buildInvoiceDocument({
+      ...input,
+      creditNote: null,
+      invoice: {
+        ...note, number: "INV-1", notes: "", subtotal_net: 80, vat_amount: 0, vat_mode: "off", total: 80,
+        lines: [line("a", "Чистка", 2, 50), line("d", "Скидка", 1, -20)],
+      } as InvoiceLedgerWithLines,
+    });
+    assert.deepEqual(doc.lines.map((l) => l.title), ["Чистка"]);
+    assert.match(doc.totals.find((row) => row.label === "Discount")?.value ?? "", /^[-−]€20\.00$/);
+  });
+});

@@ -83,8 +83,17 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
   const docs: FinanceDocument[] = [];
   // Номер кредит-ноты ищется по её инвойсу: своей строки у ноты нет.
   const noteNumberOf = new Map<string, string>();
-  // Чеки с возвратом: нота к самому чеку или к его инвойсу.
+  // Чеки с возвратом: нота к самому чеку…
   const receiptNotes = new Map<string, string>();
+  // …или строка возврата на проводку чека. Нота к инвойсу сама по себе
+  // признаком не служит: частичная нота без возврата денег не трогает, и чек
+  // её платежа остаётся невозвращённым.
+  const refundedIncome = new Set<string>();
+  for (const rows of Object.values(sources.payments)) {
+    for (const row of rows) {
+      if (row.type === "refund" && row.refund_of_id) refundedIncome.add(row.refund_of_id);
+    }
+  }
   for (const invoice of sources.invoices) {
     if (invoice.kind === "credit_note" && invoice.credit_note_of_id) {
       noteNumberOf.set(invoice.credit_note_of_id, invoice.number);
@@ -173,7 +182,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       state: (() => {
         const returned =
           receiptNotes.has(receipt.id)
-          || (!!receipt.invoice_id && noteNumberOf.has(receipt.invoice_id));
+          || (!!receipt.transaction_id && refundedIncome.has(receipt.transaction_id));
         if (receipt.status === "void") return returned ? "Возвращён" : "Аннулирован";
         return returned ? "Частично возвращён" : null;
       })(),

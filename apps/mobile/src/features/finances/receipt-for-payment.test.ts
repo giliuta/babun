@@ -5,6 +5,7 @@ import {
   incomesAwaitingInvoice,
   incomesAwaitingReceipt,
   paymentLinesTotal,
+  paymentReceiptDiscount,
   paymentReceiptLines,
 } from "./receipt-for-payment";
 
@@ -131,5 +132,35 @@ describe("инвойс на принятую оплату", () => {
       { ...tx({ id: "d", created_at: "2026-10-03T07:00:00Z" }), invoice_id: null },
     ];
     assert.deepEqual(incomesAwaitingInvoice(ledger).map((t) => t.id), ["d", "a"]);
+  });
+});
+
+// СКИДКА ИНВОЙСА НЕ ТЕРЯЕТСЯ В ЧЕКЕ НА ЕГО ОПЛАТУ. Строка скидки (цена с
+// минусом) — не работа, в перечень она не идёт; но и выбросить её молча
+// нельзя: чек печатал «Итого работ €200» без скидки над «Получено €180».
+describe("скидка инвойса в чеке на оплату", () => {
+  const invoiceLines = [
+    { title: "Монтаж", qty: 1, unit: null, unit_price: 200 },
+    { title: "Скидка", qty: 1, unit: null, unit_price: -20 },
+  ];
+
+  it("строка скидки уходит в скидку черновика, работы — в перечень", () => {
+    const lines = paymentReceiptLines({ amount: 180, vat_mode: null, vat_amount: null }, { invoiceLines }, "Оплата");
+    assert.deepEqual(lines.map((l) => [l.serviceName, l.totalPrice]), [["Монтаж", 200]]);
+    assert.deepEqual(paymentReceiptDiscount(invoiceLines), { discountType: "fixed", discountValue: "20" });
+  });
+
+  it("без строки скидки — скидки нет", () => {
+    assert.equal(paymentReceiptDiscount([invoiceLines[0]]), null);
+    assert.equal(paymentReceiptDiscount(null), null);
+  });
+
+  it("источник чека кладёт скидку в черновик", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { dirname, resolve } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(resolve(here, "../documents/use-receipt-source.ts"), "utf8");
+    assert.match(source, /\.\.\.paymentReceiptDiscount\(invoiceRow\?\.lines \?\? null\)/);
   });
 });

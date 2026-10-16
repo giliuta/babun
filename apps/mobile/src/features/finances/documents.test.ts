@@ -374,3 +374,58 @@ describe("возврат по чеку в «Документах» (04.10)", () 
     assert.equal(filterDocuments(docs, "receipt", "CN-2026-011").length, 1);
   });
 });
+
+// «ЧАСТИЧНО ВОЗВРАЩЁН» — ТОЛЬКО ПРИ ВОЗВРАТЕ ДЕНЕГ ЭТОГО ЧЕКА. Частичная нота к
+// инвойсу без возврата (получено меньше нового «к оплате») денег не трогает, и
+// чек её платежа не возвращён. Признак — строка возврата на проводку чека.
+describe("возврат чека — по строкам возврата его проводки", () => {
+  const partialNote = invoice({
+    id: "cn",
+    number: "CN-2026-020",
+    kind: "credit_note",
+    credit_note_of_id: "inv-1",
+    credit_partial: true,
+    total: -30,
+  } as never);
+  const payment = (patch: Record<string, unknown>) => ({
+    id: "tx-1",
+    invoice_id: "inv-1",
+    type: "income" as const,
+    amount: 60,
+    account_id: "acc-1",
+    payment_method: "cash",
+    occurred_on: "2026-08-07",
+    refund_of_id: null,
+    notes: null,
+    created_at: "2026-08-07T10:00:00Z",
+    ...patch,
+  });
+
+  test("нота к инвойсу без возврата — чек не возвращён", () => {
+    const docs = collectDocuments(
+      sources({
+        invoices: [invoice(), partialNote],
+        payments: { "inv-1": [payment({})] },
+        receipts: [receipt({ invoice_id: "inv-1", transaction_id: "tx-1" })],
+      }),
+    );
+    assert.equal(docs.find((d) => d.id === "rc-1")?.state, null);
+  });
+
+  test("возврат по проводке чека — «Частично возвращён», и без ноты тоже", () => {
+    const docs = collectDocuments(
+      sources({
+        invoices: [invoice()],
+        payments: {
+          "inv-1": [payment({}), payment({ id: "rf-1", type: "refund", amount: -20, refund_of_id: "tx-1" })],
+        },
+        receipts: [
+          receipt({ invoice_id: "inv-1", transaction_id: "tx-1" }),
+          receipt({ id: "rc-2", number: "RC-2026-002", invoice_id: "inv-1", transaction_id: "tx-2" }),
+        ],
+      }),
+    );
+    assert.equal(docs.find((d) => d.id === "rc-1")?.state, "Частично возвращён");
+    assert.equal(docs.find((d) => d.id === "rc-2")?.state, null);
+  });
+});

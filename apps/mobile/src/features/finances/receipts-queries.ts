@@ -9,6 +9,7 @@ import type {
 } from "@babun/shared/local/finance/receipt";
 import { invalidateLedger, useInsertTransaction } from "@/features/finances/queries";
 import { randomUuid } from "@babun/shared/sync";
+import { composeReceipt } from "@/features/finances/compose-receipt";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { toJson } from "@babun/shared/db/json";
@@ -166,24 +167,22 @@ export function useIssueReceipt() {
  *
  * ЕСЛИ ВТОРОЙ ШАГ УПАЛ, деньги остаются записанными — и это правильнее
  * отката: приход был, человек его подтвердил, и молча стирать движение денег
- * из-за неудачи с бумагой нельзя. Чек на эту же проводку выписывается второй
- * попыткой, кнопкой на самой операции.
+ * из-за неудачи с бумагой нельзя. Повторное «Выписать» на том же экране
+ * второго прихода не пишет: приход идёт с id попытки (`composeReceipt`), и
+ * чек выписывается на уже записанную строку.
  */
 export function useComposeReceipt() {
   const insert = useInsertTransaction();
   const issue = useIssueReceipt();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: async ({
-      draft,
-      lines,
-    }: {
+    mutationFn: (input: {
       draft: TransactionDraft;
       lines: ReceiptLineSnapshot[];
-    }): Promise<Receipt> => {
-      const tx = await insert.mutateAsync(draft);
-      return issue.mutateAsync({ transactionId: tx.id, lines });
-    },
+      /** Id попытки — один на экран до успешной выписки. */
+      requestId: string;
+    }): Promise<Receipt> =>
+      composeReceipt(input, { insert: insert.mutateAsync, issue: issue.mutateAsync }),
     meta: { errorHandled: true },
   });
 }

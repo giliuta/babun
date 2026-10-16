@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { View } from "react-native";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
+import { randomUuid } from "@babun/shared/sync";
 import { RowCaption } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
@@ -33,6 +35,7 @@ import { useCurrentRole, useTenant } from "@/session/tenant";
 import { useServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/lib/paper/format";
+import { confirmThen } from "@/lib/confirm";
 
 // НОВЫЙ ЧЕК — ТОНКИЙ МАРШРУТ НАД СОСТАВИТЕЛЕМ, как `invoices/new.tsx` над
 // `InvoiceEditor`: экран держит только действие и переход, все блоки и листы
@@ -57,6 +60,9 @@ export default function NewReceiptScreen() {
   const params = useLocalSearchParams<{ teamId?: string; transactionId?: string; receiptId?: string }>();
   const [draft, change] = useReceiptDraft(businessToday, params.teamId ?? null);
   const compose = useComposeReceipt();
+  // Id попытки чека с нуля: повтор после ошибки бумаги не пишет второй
+  // приход (`composeReceipt`). Новый — только после успешной выписки.
+  const [composeRequestId, setComposeRequestId] = useState(() => randomUuid());
   const issueForPayment = useIssueReceipt();
   const updateReceipt = useUpdateReceipt();
 
@@ -153,6 +159,7 @@ export default function NewReceiptScreen() {
             clientRequisitesId: draft.clientRequisitesId,
           })
         : await compose.mutateAsync({
+        requestId: composeRequestId,
         // Перечень замораживается в чеке сервером: выданный документ больше
         // не зависит от того, что потом станет с прайсом.
         lines,
@@ -176,6 +183,7 @@ export default function NewReceiptScreen() {
           business_today: businessToday,
         },
       });
+      if (!source.editing && !paymentTx) setComposeRequestId(randomUuid());
       setPreviewOpen(false);
       toast(editing ? `Чек ${receipt.number} сохранён` : `Чек ${receipt.number} выписан`, "success");
       // ВЫПИСАННЫЙ ЧЕК ОТКРЫВАЕТСЯ СВОЕЙ СТРАНИЦЕЙ, как инвойс (после
@@ -189,13 +197,43 @@ export default function NewReceiptScreen() {
 
   const actionLabel = editing ? "Сохранить чек" : "Выписать чек";
 
+  // ЗАПОЛНЕННЫЙ ЧЕК НЕ ИСЧЕЗАЕТ ПО ОДНОМУ ТАПУ — как черновик инвойса: на любой
+  // уход («‹», свайп от края, системное «назад») спрашивает сама навигация.
+  // Грязным черновик делают только правки человека: заполнение из оплаты —
+  // не его работа, и уход с нетронутого чека вопроса не стоит.
+  const [dirty, setDirty] = useState(false);
+  const edit = (next: Parameters<typeof change>[0]) => {
+    setDirty(true);
+    change(next);
+  };
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  usePreventRemove(dirty, ({ data }) => {
+    if (leavingRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    confirmThen(
+      "Черновик не сохранён",
+      {
+        message: "Выйти и потерять заполненное?",
+        confirmLabel: "Выйти",
+        destructive: true,
+      },
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
+    );
+  });
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title={source.editing ? `Чек ${source.editing.number}` : "Новый чек"} />
       <ReceiptComposer
         draft={draft}
         businessToday={businessToday}
-        onChange={change}
+        onChange={edit}
         forPayment={forPayment}
         number={numberTarget}
         companyLocked={editing || !!source.invoiceCompanyId}
@@ -226,6 +264,8 @@ export default function NewReceiptScreen() {
           // Правка уже стоит поверх страницы чека — возвращаемся на неё;
           // новый чек встаёт на место составителя своей страницей.
           if (!receipt) return;
+          // Чек выписан — черновика больше нет, уход без вопроса.
+          leavingRef.current = true;
           if (editing) router.back();
           else router.replace(`/documents/receipt/${receipt.id}` as Href);
         }}

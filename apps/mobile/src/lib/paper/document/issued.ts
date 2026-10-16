@@ -60,6 +60,11 @@ export function issuedDocument({
       || dict.sellerMissing
     : firstNonEmpty(tenant?.legal_name, tenant?.name) || dict.sellerMissing;
   const vatMode = invoiceVatMode(invoice);
+  // ЗНАК ПОЗИЦИЙ. У кредит-ноты строки инвойса записаны с минусом
+  // (`_issue_credit_note`, `_issue_receipt_credit_note`): работы — минусом,
+  // а строка скидки — плюсом. Работы и скидку различаем по знаку документа,
+  // иначе вся нота уходит в «Discount», а таблица остаётся пустой.
+  const sign = creditNote ? -1 : 1;
 
   return {
     title: creditNote ? dict.creditNote : dict.invoice,
@@ -118,12 +123,13 @@ export function issuedDocument({
     dueShort: invoice.due_on ? shortDate(invoice.due_on, dict.locale) : null,
     currency: invoice.currency,
     // СКИДКА — НЕ УСЛУГА.
-    // На сервере она строка с отрицательной ценой; на бумаге её
+    // На сервере она строка с ценой против знака документа; на бумаге её
     // строки в таблице нет — она стоит в итогах под «Subtotal».
     //
-    // У КРЕДИТ-НОТЫ ПОЗИЦИЙ НЕТ: сервер (`_issue_credit_note`) пишет только
-    // суммы с минусом. Таблица говорит одной строкой, что отменено и на
-    // сколько, — а не «No lines yet» над итогом −€100.
+    // КРЕДИТ-НОТА БЕЗ ПОЗИЦИЙ (частичная, частичный возврат по чеку, ноты
+    // старше копирования строк) несёт только суммы с минусом. Таблица говорит
+    // одной строкой, что отменено и на сколько, — а не «No lines yet» над
+    // итогом −€100.
     lines:
       creditNote && invoice.lines.length === 0
         ? [
@@ -140,7 +146,7 @@ export function issuedDocument({
               total: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
             },
           ]
-        : invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
+        : invoice.lines.filter((line) => sign * line.unit_price >= 0).map((line) => ({
             title: line.title,
             description: line.description?.trim() || null,
             qty: formatQty(line.qty, line.unit, dict.locale),
@@ -156,7 +162,7 @@ export function issuedDocument({
       vatPercent: invoice.vat_percent,
       vatMode,
       total: invoice.total,
-      discount: splitDiscount(invoice.lines.map((line) => line.total)),
+      discount: signedDiscount(invoice.lines.map((line) => line.total), sign),
     }),
     // Кредит-ноту не оплачивают: реквизиты для оплаты на ней — приглашение
     // перевести деньги по документу, который их возвращает.
@@ -197,14 +203,41 @@ export function issuedDocument({
     // на бумаге её уже говорят шапка и строка таблицы на языке документа.
     // Своя причина, набранная человеком, печатается как есть.
     notes:
-      creditNote &&
-      /^(Отмена инвойса|Частичная отмена инвойса|Возврат по чеку) \S+$/.test(clean(invoice.notes))
+      creditNote && isDefaultReason(clean(invoice.notes), original)
         ? ""
         : clean(invoice.notes),
     footer: creditNote
       ? dict.creditNoteFooter(invoice.number)
       : dict.footer(invoice.number, invoice.currency),
   };
+}
+
+/** Скидка документа при знаке его позиций: у кредит-ноты всё зеркально —
+ *  работы минусом, скидка плюсом, и итоги печатаются так же зеркально
+ *  («Subtotal −€100», «Discount €20», «Total −€80»). */
+function signedDiscount(
+  lineTotals: readonly number[],
+  sign: 1 | -1,
+): { services: number; amount: number } | null {
+  const discount = splitDiscount(lineTotals.map((total) => sign * total));
+  return discount && { services: sign * discount.services, amount: sign * discount.amount };
+}
+
+/**
+ * ПРИЧИНА ПО УМОЛЧАНИЮ — НА ЛЮБОМ ЯЗЫКЕ. Сервер пишет её по-русски, и её
+ * ловит регулярка (RegExp i18n-плагин не трогает). Превью ноты подставляет её
+ * само тем же шаблоном, что здесь, — а шаблон плагин переводит при сборке на
+ * язык интерфейса; поэтому и сравнение здесь — с шаблоном, переведённым так
+ * же: с одной регуляркой английский интерфейс печатает причину в примечаниях.
+ */
+function isDefaultReason(notes: string, number: string | null): boolean {
+  if (/^(Отмена инвойса|Частичная отмена инвойса|Возврат по чеку) \S+$/.test(notes)) return true;
+  if (!number) return false;
+  return [
+    `Отмена инвойса ${number}`,
+    `Частичная отмена инвойса ${number}`,
+    `Возврат по чеку ${number}`,
+  ].includes(notes);
 }
 
 /** Способ платежа НА ЯЗЫКЕ БУМАГИ. Общий `paymentMethodLabel` остаётся для
