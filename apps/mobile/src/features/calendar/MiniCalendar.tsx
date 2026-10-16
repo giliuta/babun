@@ -9,7 +9,7 @@ import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 import { dayMonthLabel } from "./day-month-label";
-import { MonthYearGrid } from "./MonthYearGrid";
+import { MonthYearGrid } from "@/components/ui/MonthYearGrid";
 
 // ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ (владелец 2026-08-27: «стрелочки
 // влево-вправо это классно, но я хотел бы ещё листать свайпом»).

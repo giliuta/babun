@@ -3,9 +3,12 @@ import { describe, test } from "node:test";
 import {
   defaultPeriod,
   makePeriod,
+  monthPeriod,
   periodDates,
+  periodTitle,
   presetHint,
   presetRange,
+  yearPeriod,
 } from "./period";
 
 // period.ts — граница ВСЕХ денежных запросов: from/to отсюда уходят в ленты
@@ -128,5 +131,24 @@ describe("квартал — для VAT", () => {
     const feb = new Date(2026, 1, 10);
     assert.deepEqual(presetRange("quarter", feb), { from: "2026-01-01", to: "2026-03-31" });
     assert.deepEqual(presetRange("lastquarter", feb), { from: "2025-10-01", to: "2025-12-31" });
+  });
+});
+
+describe("месяц и год быстрым выбором", () => {
+  test("месяц — с первого по последнее число, имя словами", () => {
+    const p = monthPeriod(2024, 10);
+    assert.deepEqual([p.from, p.to], ["2024-11-01", "2024-11-30"]);
+    assert.equal(periodTitle(p), "Ноябрь 2024");
+  });
+  test("февраль високосного года", () => {
+    assert.equal(monthPeriod(2024, 1).to, "2024-02-29");
+  });
+  test("год — «2024 год»", () => {
+    const p = yearPeriod(2024);
+    assert.deepEqual([p.from, p.to], ["2024-01-01", "2024-12-31"]);
+    assert.equal(periodTitle(p), "2024 год");
+  });
+  test("произвольный отрезок остаётся «Свой период»", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-11-03", to: "2024-11-20" }), "Свой период");
   });
 });
