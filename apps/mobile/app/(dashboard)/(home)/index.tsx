@@ -2020,7 +2020,9 @@ export default function CalendarTab() {
   const setCancelled = (apt: Appointment, reason: string | null) => {
     const to: Appointment["status"] = reason ? "cancelled" : "scheduled";
     const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
-    // Отмена с деньгами необратима (сервер вернул оплату) — откатывать нечем.
+    // У отмены с деньгами в тосте нет «Отменить»: сервер уже вернул оплату
+    // клиенту, и откат вернул бы визит неоплаченным — это решение человек
+    // принимает осознанно через «Восстановить» с вопросом, а не тапом по тосту.
     const undoable = to !== "cancelled" || !holdsMoney(apt);
     updateAppt.mutate(
       { id: apt.id, patch: { status: to, cancel_reason: reason } },
