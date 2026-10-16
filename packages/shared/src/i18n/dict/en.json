@@ -2852,7 +2852,6 @@
  "Основные реквизиты выбирает владелец": "Only the owner can choose the main business details",
  "Основные реквизиты — {0}": "Default business details – {0}",
  "Осталось {0}": "{0} left",
- "Осталось по записи": "Remaining for appointment",
  "Останется {0}": "{0} will remain",
  "Остановить рассылку": "Stop sending",
  "Остатки, порядок, скрытые": "Balances, order, hidden",
@@ -5449,5 +5448,6 @@
  "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Changes to this appointment haven't reached the server yet — delete it after syncing",
  "Календаря этой записи больше нет — вернуть её некуда": "This appointment's calendar no longer exists — there is nowhere to restore it",
  "Событие может вернуть только его автор": "Only the event's author can restore it",
- "Эта запись уже в календаре": "This appointment is already in the calendar"
+ "Эта запись уже в календаре": "This appointment is already in the calendar",
+ "Получено по записи": "Received for appointment"
 }

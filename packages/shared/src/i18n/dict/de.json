@@ -2852,7 +2852,6 @@
  "Основные реквизиты выбирает владелец": "Die primären Firmendaten wählt der Inhaber",
  "Основные реквизиты — {0}": "Standard-Firmendaten – {0}",
  "Осталось {0}": "Noch {0}",
- "Осталось по записи": "Restbetrag des Termins",
  "Останется {0}": "Danach offen {0}",
  "Остановить рассылку": "Versand stoppen",
  "Остатки, порядок, скрытые": "Salden, Reihenfolge, ausgeblendete",
@@ -5449,5 +5448,6 @@
  "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Änderungen an diesem Termin sind noch nicht beim Server — löschen Sie ihn nach der Synchronisierung",
  "Календаря этой записи больше нет — вернуть её некуда": "Der Kalender dieses Termins existiert nicht mehr — er kann nirgendwohin zurück",
  "Событие может вернуть только его автор": "Nur der Ersteller des Ereignisses kann es wiederherstellen",
- "Эта запись уже в календаре": "Dieser Termin ist bereits im Kalender"
+ "Эта запись уже в календаре": "Dieser Termin ist bereits im Kalender",
+ "Получено по записи": "Erhalten für den Termin"
 }

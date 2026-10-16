@@ -2852,7 +2852,6 @@
  "Основные реквизиты выбирает владелец": "Los datos fiscales principales los elige el propietario",
  "Основные реквизиты — {0}": "Datos fiscales principales — {0}",
  "Осталось {0}": "Quedan {0}",
- "Осталось по записи": "Pendiente de la cita",
  "Останется {0}": "Quedará {0}",
  "Остановить рассылку": "Detener envío",
  "Остатки, порядок, скрытые": "Saldos, orden, ocultas",
@@ -5449,5 +5448,6 @@
  "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Los cambios de esta cita aún no han llegado al servidor; elimínela después de sincronizar",
  "Календаря этой записи больше нет — вернуть её некуда": "El calendario de esta cita ya no existe: no hay dónde restaurarla",
  "Событие может вернуть только его автор": "Solo el autor del evento puede restaurarlo",
- "Эта запись уже в календаре": "Esta cita ya está en el calendario"
+ "Эта запись уже в календаре": "Esta cita ya está en el calendario",
+ "Получено по записи": "Cobrado por la cita"
 }
