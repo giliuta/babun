@@ -2848,6 +2848,7 @@
  "Перерыв после услуги · {0}": "Break after service · {0}",
  "Перерывы": "Breaks",
  "Пересекается с работой этой команды": "Overlaps with this team's work",
+ "Пересекается с событием этой команды": "Overlaps with this team's event",
  "Пересечение с {0}–{1}": "Overlaps {0}–{1}",
  "Период": "Period",
  "Период: {0}": "Period: {0}",

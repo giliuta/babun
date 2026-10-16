@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { tierAllows, tierOf } from "@/session/tiers";
 import { setDefaultCurrency } from "@babun/shared/common/utils/money";
 import {
@@ -7,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import type { Database } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useMirror } from "@/session/mirror-state";
 import {
@@ -26,6 +28,7 @@ import {
 } from "@/lib/switch-revalidate-plan";
 import { rearmRolePollers } from "@/lib/role-poll-rearm";
 import { roleLookupUnanswered } from "./role-unanswered";
+import { assertAnswerOfTenant } from "./tenant-match";
 
 const ROLE_POLL_MS = 60 * 1000;
 
@@ -128,7 +131,12 @@ function useRoleQuery() {
       const known = qc.getQueryData<UserRole | null>(currentRoleQueryKey(tenantId));
       let result: Awaited<ReturnType<typeof supabase.rpc<"current_user_role">>>;
       try {
-        result = await withRoleLookupTimeout(supabase.rpc("current_user_role"));
+        // Компанию называет КЛЮЧ, а не окружение: замороженная вкладка прежней
+        // компании опрашивает роль и после перехода, и глобальный клиент
+        // отправил бы опрос с заголовком новой — её роль легла бы под чужой ключ.
+        result = await withRoleLookupTimeout(
+          tenantBoundClient(tenantId as string).rpc("current_user_role"),
+        );
       } catch (error) {
         if (known && roleLookupUnanswered({ thrown: true })) return known;
         throw error;
@@ -178,21 +186,30 @@ export function useTenant() {
     queryKey: tenantQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: async () => {
+      // Привязанным клиентом и со сверкой id — как роль выше: опрос
+      // замороженной вкладки не должен положить профиль новой компании под
+      // ключ прежней.
       const profile = await fetchTenantProfile(
-        supabase,
+        tenantBoundClient(tenantId as string),
         tenantId as string,
         role as UserRole,
       );
-      // ВАЛЮТА СТАВИТСЯ ЗДЕСЬ, А НЕ В ЧТЕНИИ, И ЭТО РЕШЕНИЕ. Хук работает только
-      // для активной компании (tenantId — из устройства), поэтому валюта в
-      // реестре форматтеров всегда её. Прогрев чужой компании читает тот же
-      // профиль через `fetchTenantProfile` и валюты не касается — иначе экран
-      // компании A печатал бы суммы в валюте B. Момент прежний: валюта
-      // выставляется, когда пришёл профиль.
-      setDefaultCurrency(profile?.currency);
+      assertAnswerOfTenant(profile.id, tenantId);
       return profile;
     },
   });
+}
+
+/** ВАЛЮТА ФОРМАТТЕРОВ — ВАЛЮТА АКТИВНОЙ КОМПАНИИ. Ставится эффектом от её
+ *  профиля, а не в чтении: прогретый профиль после перехода отдаётся из кэша
+ *  без чтения, и валюта оставалась прежней компании; а чтение замороженной
+ *  вкладки прежней компании, наоборот, вернуло бы её валюту поверх активной.
+ *  Монтируется один раз на всё приложение (`AppProviders`). */
+export function useActiveCurrency(): void {
+  const profile = useTenant().data;
+  useEffect(() => {
+    setDefaultCurrency(profile?.currency);
+  }, [profile?.currency]);
 }
 
 export function useUpdateTenant() {

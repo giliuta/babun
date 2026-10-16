@@ -49,6 +49,7 @@ import {
 } from "./rights-rows";
 import { ActionMenuSheet, type ActionMenu } from "@/components/blocks/ActionMenuSheet";
 import { calendarToggler } from "./member-calendar-toggle";
+import { createCalendarSendQueue } from "./calendar-send-queue";
 import { memberMenuActions } from "./member-menu";
 
 // СОТРУДНИК — ТА ЖЕ КАРТОЧКА МАСТЕРА: личность, календари, четыре раздела
@@ -93,6 +94,7 @@ export function MasterMemberCard({
   const updateMaster = useUpdateMaster();
   const remove = useRemoveTenantMember();
   const setCalendars = useSetMemberCalendars(userId);
+  const calendarQueue = useRef(createCalendarSendQueue()).current;
   const setAccess = useSetMemberAccess(userId);
   const preview = usePreview();
   const [nameText, setNameText] = useState<string | null>(null);
@@ -184,6 +186,7 @@ export function MasterMemberCard({
     manager,
     teamsAllowed,
     draft,
+    calendarQueue,
     blocks,
     teamNameOf,
     setCalendars,

@@ -25,7 +25,8 @@ export interface SaveStateInput {
   workInPlan: boolean;
   archivedRecord: boolean;
   hydrated: boolean;
-  overlap: unknown;
+  /** Найденное пересечение: его жанр называет предупреждение. */
+  overlap: { kind?: string | null } | null;
   timeWarning: string | null;
 }
 
@@ -119,7 +120,9 @@ export function useSaveState({
   // событие той же команды.
   const workWarning =
     overlap != null
-      ? "Пересекается с работой этой команды"
+      ? overlap.kind === "event"
+        ? "Пересекается с событием этой команды"
+        : "Пересекается с работой этой команды"
       : timeMovedHere
         ? timeWarning
         : null;

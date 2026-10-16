@@ -124,6 +124,7 @@ export function useBookForm() {
   const slot = useSlotWarnings({
     allAppts,
     editId: draft.editId,
+    kind,
     teamId,
     date,
     timeStart,

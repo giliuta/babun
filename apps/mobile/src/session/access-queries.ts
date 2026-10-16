@@ -8,6 +8,7 @@ import {
   myAccessQueryKey,
 } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useMirror } from "@/session/mirror-state";
 
@@ -26,6 +27,7 @@ import {
   recordLevelsChanged,
 } from "@/session/my-access";
 import { forgetRevealedContacts } from "@/session/revealed-contacts";
+import { assertAnswerOfTenant } from "@/session/tenant-match";
 
 // ПРАВА СОТРУДНИКА — ДОРОГА К СЕРВЕРУ ПО «КОНТРАКТУ v1.1» (STORY-081).
 //
@@ -176,9 +178,14 @@ export function useMyAccess() {
     refetchInterval: MY_ACCESS_BACKSTOP_MS,
     refetchIntervalInBackground: false,
     queryFn: async (): Promise<MemberAccessMap> => {
-      const { data, error } = await supabase.rpc("my_access_map");
+      // Привязанным клиентом и со сверкой компании ДО стирания по карте:
+      // опрос замороженной вкладки прежней компании иначе ушёл бы с
+      // заголовком новой, и её права легли бы под чужой ключ — а сравнение с
+      // ними стёрло бы деньги и клиентов прежней.
+      const { data, error } = await tenantBoundClient(tenantId as string).rpc("my_access_map");
       if (error) throw new AccessRequestError(error);
       const next = parseMemberAccessMap(data);
+      assertAnswerOfTenant(next.tenantId, tenantId);
       // ЗАБРАЛИ ДОСТУП К ДЕНЬГАМ — ОНИ УХОДЯТ С ТЕЛЕФОНА СРАЗУ (план доступа:
       // «понижение стирает данные блока»). Иначе закрытая вкладка ещё показала
       // бы прежние суммы из памяти, пока экран не сходит в сеть.

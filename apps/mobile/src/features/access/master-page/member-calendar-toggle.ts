@@ -2,6 +2,7 @@ import type { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { notify } from "@/lib/notify";
 import type { AccessBlock, AccessChange } from "@/session/access-map";
+import { queuedTeamIds, sendInOrder, type CalendarSendQueue } from "./calendar-send-queue";
 import { copyCalendarLevels, starterCalendarChanges, type MasterDraft } from "./master-draft";
 import { memberRefusalText } from "./member-rights-writer";
 import type { PartnerManager } from "@/session/partner-manager";
@@ -10,6 +11,8 @@ export interface CalendarTogglerDeps {
   manager: PartnerManager;
   teamsAllowed: ReadonlySet<string> | null;
   draft: MasterDraft;
+  /** Живёт дольше рендера: набор второго быстрого тапа считается от него. */
+  calendarQueue: CalendarSendQueue;
   blocks: readonly AccessBlock[];
   teamNameOf: (id: string) => string | null;
   setCalendars: { mutateAsync: (teamIds: readonly string[]) => Promise<unknown> };
@@ -28,6 +31,7 @@ export function calendarToggler({
   manager,
   teamsAllowed,
   draft,
+  calendarQueue,
   blocks,
   teamNameOf,
   setCalendars,
@@ -46,7 +50,9 @@ export function calendarToggler({
       notify("Эту команду назначает владелец", "Добавлять и снимать можно только команды, где работаете вы.");
       return;
     }
-    const current = draft.teamIds;
+    // От последнего отправленного набора, а не от карточки: до ответа она
+    // рисует прежний список (см. `calendar-send-queue.ts`).
+    const current = queuedTeamIds(calendarQueue, draft.teamIds);
     const attached = current.includes(id);
     const next = attached ? current.filter((teamId) => teamId !== id) : [...current, id];
     // ЖДЁМ ОТВЕТ ПРЯМО (`mutateAsync`), а не обратным вызовом `mutate`:
@@ -54,7 +60,7 @@ export function calendarToggler({
     // react-query молча не зовёт — вопрос про права не появлялся бы.
     const save = async (): Promise<boolean> => {
       try {
-        await setCalendars.mutateAsync(next);
+        await sendInOrder(calendarQueue, next, (ids) => setCalendars.mutateAsync(ids));
         return true;
       } catch (error) {
         toast(memberRefusalText(error), "error");
@@ -119,8 +125,7 @@ export function calendarToggler({
     toast(`Убран из «${teamName}»`, "success", {
       label: "Отменить",
       onPress: () =>
-        void setCalendars
-          .mutateAsync(current)
+        void sendInOrder(calendarQueue, current, (ids) => setCalendars.mutateAsync(ids))
           .then(() => setAccess.mutateAsync(restoreLevels))
           .catch((error) => toast(memberRefusalText(error), "error")),
     });
