@@ -257,10 +257,8 @@ export async function drain(
         opts.supabase,
         sendOp,
         legacyUpdate,
-        (to) => {
-          if (op.expected_updated_at) {
-            sentinels.set(rowKey(op), { from: op.expected_updated_at, to });
-          }
+        (to, from = op.expected_updated_at ?? undefined) => {
+          if (from) sentinels.set(rowKey(op), { from, to });
         },
         gateTenantId ? () => readTenantId(opts) === gateTenantId : undefined,
       );

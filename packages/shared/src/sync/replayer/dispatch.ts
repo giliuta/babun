@@ -2,6 +2,7 @@
 
 import type { QueuedOp } from "../../db/cache/sql";
 import type { DbSupabase } from "./relay";
+import type { AppliedFn } from "./sentinel";
 import { replayDelete } from "./replay-delete";
 import { replayInsert } from "./replay-insert";
 import { replayUpdate } from "./replay-update";
@@ -21,7 +22,7 @@ export async function dispatch(
    *  конфликте побеждает сервер, а не она. */
   serverWinsOnConflict = false,
   /** Правка легла чисто, и у строки теперь новое `updated_at`. */
-  onApplied?: (updatedAt: string) => void,
+  onApplied?: AppliedFn,
   /** Компания устройства всё ещё та, под которой начат слив. */
   tenantStill?: () => boolean,
 ): Promise<boolean | "server-won"> {
@@ -39,7 +40,7 @@ export async function dispatch(
     return replayDelete(supabase, op, tableName, tenantStill);
   }
   if (op.op === "insert") {
-    return replayInsert(supabase, op, tableName);
+    return replayInsert(supabase, op, tableName, onApplied);
   }
   return replayUpdate(
     supabase,
