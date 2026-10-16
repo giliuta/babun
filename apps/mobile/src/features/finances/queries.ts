@@ -23,6 +23,7 @@ import {
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
 import { containsPattern } from "@/lib/like-pattern";
+import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useTenantId } from "@/lib/tenant";
 import {
   financeCategoriesQueryKey,
@@ -150,6 +151,33 @@ export function useAppointmentsLedger(
  * enables it just while the period is honestly empty. Key sits under the
  * `["transactions", company]` prefix, so ledger invalidation refreshes it.
  */
+/** Значение в фильтре `or` — в кавычках: запятая в «12,50» иначе рвёт
+ *  синтаксис PostgREST на два условия. */
+function orValue(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/** Поиск за всё время — как обещает шапка: «Сумма, счёт, заметка».
+ *  Сумма — точная, со знаком и без (расход и возврат хранятся по-разному);
+ *  счёт — по имени. Раньше искалась одна заметка. */
+async function allTimeSearchFilter(tenantId: string, query: string): Promise<string> {
+  const parts = [`notes.ilike.${orValue(containsPattern(query))}`];
+  const cents = parseMoneyInputToCents(query, { allowNegative: true });
+  if (cents != null) {
+    const amount = Math.abs(cents) / 100;
+    parts.push(`amount.eq.${amount}`, `amount.eq.${-amount}`);
+  }
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .ilike("name", containsPattern(query))
+    .limit(50);
+  const ids = (accounts ?? []).map((a: { id: string }) => a.id);
+  if (ids.length > 0) parts.push(`account_id.in.(${ids.join(",")})`);
+  return parts.join(",");
+}
+
 export function useAllTimeNoteSearch(trimmedQuery: string, enabled: boolean) {
   const tenantId = useTenantId();
   return useQuery({
@@ -160,7 +188,7 @@ export function useAllTimeNoteSearch(trimmedQuery: string, enabled: boolean) {
         .from("finance_transactions")
         .select("*")
         .eq("tenant_id", tenantId as string)
-        .ilike("notes", containsPattern(trimmedQuery))
+        .or(await allTimeSearchFilter(tenantId as string, trimmedQuery))
         .order("occurred_on", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
