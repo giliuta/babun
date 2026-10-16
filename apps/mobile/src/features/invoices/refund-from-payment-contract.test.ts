@@ -15,4 +15,5 @@ test("номер платежа идёт от строки до сервера",
   assert.match(screen, /paymentId: paymentParam/);
   assert.match(screen, /language: paperLanguage,\s*paymentId,/);
   assert.match(read("../finances/invoices-queries.ts"), /\.\.\.\(input\.paymentId \? \{ p_payment_id: input\.paymentId \} : \{\}\)/);
+  assert.match(read("../finances/invoices-queries.ts"), /error\.code === "PGRST202"/);
 });

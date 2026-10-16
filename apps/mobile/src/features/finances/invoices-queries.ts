@@ -320,14 +320,23 @@ export function useIssuePartialCreditNote(id: string) {
       /** Платёж, с которого вернуть деньги первыми; без него — с новейших. */
       paymentId?: string | null;
     }) => {
-      const { data, error } = await supabase.rpc("issue_partial_credit_note", {
+      const base = {
         p_invoice_id: id,
         p_request_id: input.requestId,
         p_amount: input.amount,
         ...(input.reason ? { p_reason: input.reason } : {}),
         p_language: input.language,
+      };
+      let { data, error } = await supabase.rpc("issue_partial_credit_note", {
+        ...base,
         ...(input.paymentId ? { p_payment_id: input.paymentId } : {}),
       });
+      // База без p_payment_id (миграция ещё не накачена) отвечает «функции с
+      // такими аргументами нет» — тогда прежний вызов: возврат с новейших
+      // платежей лучше, чем никакого.
+      if (error && input.paymentId && error.code === "PGRST202") {
+        ({ data, error } = await supabase.rpc("issue_partial_credit_note", base));
+      }
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Кредит-нота не подтверждена сервером");
       return data;
