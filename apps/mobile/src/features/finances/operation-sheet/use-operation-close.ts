@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { confirmAction } from "@/lib/confirm";
-import { operationIsDirty } from "../operation-dirty";
+import { operationIsDirty, vatDirtyKey } from "../operation-dirty";
 import type { OperationDraft } from "./use-operation-draft";
 
 // Пока мутация в полёте, лист не закрывается ни скримом, ни свайпом:
@@ -18,6 +18,7 @@ export function useOperationClose({
   onClose,
   onExited,
   draft,
+  vatRate,
 }: {
   busy: boolean;
   onClose: () => void;
@@ -37,7 +38,10 @@ export function useOperationClose({
     | "whenTouched"
     | "date"
     | "time"
+    | "vatMode"
   >;
+  /** Ставка, по которой считается сумма (`opVatRate`). */
+  vatRate: number;
 }) {
   /** Отложенное до полного ухода листа: см. `guardedClose` и `runAfterExit`. */
   const afterExit = useRef<(() => void) | null>(null);
@@ -52,6 +56,7 @@ export function useOperationClose({
     masterId: draft.masterId,
     clientId: draft.clientId,
     when: draft.whenTouched ? `${draft.date} ${draft.time ?? ""}` : null,
+    vat: vatDirtyKey(draft.vatMode, vatRate),
   });
   /** Закрыть — или уйти по строке «Ещё» (возврат, инвойс, клиент): набранное
    *  не пропадает молча ни тем, ни другим путём (иначе строки

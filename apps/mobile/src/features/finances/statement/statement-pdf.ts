@@ -31,6 +31,7 @@ export function buildStatementPdfHtml(doc: StatementDocument): string {
     .eyebrow { color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
     h1 { margin: 3px 0 0; color: #111827; font-size: 21px; letter-spacing: -0.3px; }
     .team { margin-top: 2px; color: #64748b; font-size: 10.5px; }
+    .notice { margin-top: 8px; color: #111827; font-size: 10.5px; font-weight: 600; line-height: 1.4; }
     .rows { margin-top: 14px; }
     .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid #e8edf3; }
     .row .label { color: #64748b; }
@@ -61,6 +62,7 @@ export function buildStatementPdfHtml(doc: StatementDocument): string {
     <div class="eyebrow">Выписка по счёту</div>
     <h1>${escapeHtml(doc.accountName)}</h1>
     ${doc.teamName ? `<div class="team">${escapeHtml(doc.teamName)}</div>` : ""}
+    ${doc.notice ? `<div class="notice">${escapeHtml(doc.notice)}</div>` : ""}
 
     <div class="rows">
       <div class="row"><span class="label">Период</span><span class="value">${escapeHtml(doc.period)}</span></div>

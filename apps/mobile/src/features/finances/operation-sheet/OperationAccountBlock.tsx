@@ -23,6 +23,7 @@ export function OperationAccountBlock({
   busy,
   refundHoldsAccount,
   refundsKnown,
+  refundsFailed = false,
   txAccountId,
   onPick,
 }: {
@@ -33,6 +34,8 @@ export function OperationAccountBlock({
   busy: boolean;
   refundHoldsAccount: boolean;
   refundsKnown: boolean;
+  /** Σ возвратов упала — ждать бессмысленно. */
+  refundsFailed?: boolean;
   /** Account of the edited operation; `null` for a new one. */
   txAccountId: string | null | undefined;
   onPick: (id: string) => void;
@@ -89,7 +92,9 @@ export function OperationAccountBlock({
                     "Счёт не сменить",
                     refundsKnown
                       ? "По этому доходу есть возврат — он лежит на этом счёте. Сначала удалите возврат."
-                      : "Возвраты по доходу ещё загружаются — счёт можно сменить, когда они придут.",
+                      : refundsFailed
+                        ? "Не удалось проверить возвраты по доходу — счёт не сменить. Закройте форму и откройте заново."
+                        : "Возвраты по доходу ещё загружаются — счёт можно сменить, когда они придут.",
                   );
                   return;
                 }

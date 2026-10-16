@@ -5,7 +5,8 @@ import type {
 } from "@babun/shared/local/finance/transaction";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
-import { isOnline, randomUuid } from "@babun/shared/sync";
+import { isOnline } from "@babun/shared/sync";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 import type { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
@@ -17,6 +18,8 @@ import {
   type OperationPatchBaseline,
 } from "../operation-patch";
 import { CLOSED_ACCOUNT_REASON, OFFLINE_OPERATION } from "./operation-guards";
+import type { createOperationRequestIds } from "./request-ids";
+import { saveErrorText } from "./save-error";
 import type { OperationDebtPayment, OperationType } from "./types";
 
 /** Everything `save` reads, as of the render that built it. */
@@ -52,8 +55,9 @@ export interface OperationSaveInput {
   accountMismatch: boolean;
   belowRefunded: boolean;
   lowersWhileRefundsUnknown: boolean;
-  requestId: string;
-  setRequestId: (id: string) => void;
+  refundsFailed: boolean;
+  /** Id вставки по содержимому формы: правка полей — новый id. */
+  requestIds: ReturnType<typeof createOperationRequestIds>;
   patchBaseline: MutableRefObject<OperationPatchBaseline | null>;
   insert: ReturnType<typeof useInsertTransaction>;
   update: ReturnType<typeof useUpdateTransaction>;
@@ -88,8 +92,10 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
     }
     if (s.lowersWhileRefundsUnknown) {
       notify(
-        "Сверяем возвраты",
-        "Возвраты по этому доходу ещё не загрузились — уменьшить сумму можно, когда они придут.",
+        s.refundsFailed ? "Возвраты не проверены" : "Сверяем возвраты",
+        s.refundsFailed
+          ? "Не удалось проверить, сколько уже возвращено по этому доходу. Повторите проверку под кнопкой и уменьшайте сумму после."
+          : "Возвраты по этому доходу ещё не загрузились — уменьшить сумму можно, когда они придут.",
       );
       return;
     }
@@ -179,22 +185,46 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
         }
         await s.update.mutateAsync({ id: s.transaction.id, patch });
       } else {
-        // request_id стабилен на время попытки: ретрай после потерянного
-        // ответа не задваивает деньги (duplicate key = успех в репозитории).
+        // request_id привязан к СОДЕРЖИМОМУ формы: ретрай без правок после
+        // потерянного ответа не задваивает деньги (duplicate key с тем же
+        // содержимым = успех в репозитории), а правка суммы или счёта даёт
+        // новый id и не упирается в старую строку.
+        const requestId = s.requestIds.idFor({
+          type: s.type,
+          amountCents: Math.round(breakdown.gross * 100),
+          categoryId: s.categoryId,
+          accountId: s.accountId,
+          teamId: s.teamId,
+          date: s.date,
+          time: s.time,
+          notes: s.notes,
+          vatMode: vatModeToSend ?? null,
+          vatRate: vatModeToSend && vatModeToSend !== "none" ? s.opVatRate : 0,
+          masterId: draft.master_id,
+          clientId: s.attachClient ? s.clientId : (s.debtPayment?.clientId ?? null),
+          receiptUrl: s.receiptUrl,
+          debtId: s.debtPayment?.debtId ?? null,
+        });
         await s.insert.mutateAsync({
           type: s.type,
-          request_id: s.requestId,
+          request_id: requestId,
           ...(s.fromCalendar ? { from_calendar: true } : {}),
           ...draft,
           ...(vatSnapshot ?? {}),
         });
-        s.setRequestId(randomUuid());
+        s.requestIds.done();
       }
       haptics.success();
       s.toast(s.isEdit ? "Сохранено" : "Операция добавлена");
       s.onClose();
     } catch (e) {
-      notify("Ошибка", (e as Error).message);
+      // Обрыв связи — по-человечески: сырое «Aborted» или «Network request
+      // failed» не отвечает на единственный вопрос — записалась ли операция.
+      const failure = saveErrorText(e, isOnline());
+      notify(
+        failure.kind === "connection" ? "Нет связи" : "Ошибка",
+        failure.kind === "connection" ? failure.text : tDynamic(failure.text),
+      );
     } finally {
       savingRef.current = false;
     }

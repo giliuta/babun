@@ -137,13 +137,21 @@ export function useReorderAccounts() {
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: (ids: readonly string[]) =>
-      Promise.all(
-        ids.map((id, index) =>
-          updateAccount(supabase, id, { position: index }),
-        ),
-      ),
-    onSuccess: () => invalidateAccounts(qc),
+    // ДО КОНЦА ВСЕХ, а не до первого отказа: `Promise.all` отпускал мутацию на
+    // первой ошибке, пока остальные записи ещё шли, — перечитывание успевало
+    // раньше них и показывало смесь старых и новых позиций.
+    mutationFn: async (ids: readonly string[]) => {
+      const results = await Promise.allSettled(
+        ids.map((id, index) => updateAccount(supabase, id, { position: index })),
+      );
+      const failed = results.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failed) throw failed.reason;
+    },
+    // Перечитываем при ЛЮБОМ исходе: частичный отказ оставляет часть позиций
+    // записанной, и экран обязан показать то, что есть в базе.
+    onSettled: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

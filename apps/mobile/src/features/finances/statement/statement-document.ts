@@ -37,6 +37,8 @@ export interface StatementDay {
 export interface StatementDocument {
   accountName: string;
   teamName: string | null;
+  /** Выписка неполная — слова об этом; `null` у полной. */
+  notice: string | null;
   period: string;
   opening: string;
   days: StatementDay[];
@@ -61,6 +63,11 @@ export interface StatementInput {
   refs: StatementRefs;
   /** Сегодня по поясу команды — конец «всего времени». */
   today: string;
+  /** Человеку видны ВСЕ операции счёта. Нет (доступ ограничен сторонами денег
+   *  или окном) — остаток считался бы по обрезанному журналу и разошёлся бы с
+   *  настоящим «На счёте»: выписка помечается неполной и остатков не печатает.
+   *  Не задано — полная. */
+  complete?: boolean;
   /** ПЕРИОД ВЫПИСКИ.
    *  Нет — всё время: от первой операции до сегодня. Остаток на начало —
    *  остаток счёта к началу периода (остаток на начало счёта + всё, что
@@ -68,7 +75,15 @@ export interface StatementInput {
   period?: { from: string; to: string } | null;
 }
 
+/** Слова неполной выписки — одни на экран и на файл. */
+export const INCOMPLETE_STATEMENT_NOTICE =
+  "Выписка неполная: в ней только операции, которые вам доступны. Остатки не сверяются с остатком счёта и не печатаются.";
+
+/** Вместо остатка, который по обрезанному журналу не посчитать. */
+const NO_BALANCE = "—";
+
 export function buildStatementDocument(input: StatementInput): StatementDocument {
+  const complete = input.complete ?? true;
   // Валюта — компании (`money`), как у «На счёте» в листе счёта.
   const fmt = (value: number) => money(value);
   const signed = (value: number) => formatSignedMoneyExact(value);
@@ -112,7 +127,7 @@ export function buildStatementDocument(input: StatementInput): StatementDocument
       title,
       detail: rowDetail(tx, title),
       amount: signed(cents / 100),
-      balance: fmt(running / 100),
+      balance: complete ? fmt(running / 100) : NO_BALANCE,
     });
   }
 
@@ -121,12 +136,13 @@ export function buildStatementDocument(input: StatementInput): StatementDocument
   return {
     accountName: input.account.name,
     teamName: input.teamName,
+    notice: complete ? null : INCOMPLETE_STATEMENT_NOTICE,
     period: `${formatStatementDate(from)} — ${formatStatementDate(to)}`,
-    opening: fmt(openingCents / 100),
+    opening: complete ? fmt(openingCents / 100) : NO_BALANCE,
     days,
     income: signed(incomeCents / 100),
     expense: signed(-expenseCents / 100),
-    closing: fmt(running / 100),
+    closing: complete ? fmt(running / 100) : NO_BALANCE,
   };
 }
 

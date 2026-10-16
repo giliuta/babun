@@ -5,6 +5,7 @@ import {
   type CloseDecision,
 } from "../close-decision";
 import { routeParam } from "../finance-route";
+import { sumAccountBalances } from "../accounts-sections";
 import { isUuid } from "@babun/shared/sync/uuid";
 
 // СТРАНИЦА «СЧЕТА» ЗА ШЕСТЕРЁНКОЙ — ЕЁ РЕШЕНИЯ ЧИСТЫМИ ФУНКЦИЯМИ.
@@ -123,4 +124,41 @@ export function presetTeamFor(
 ): string | null {
   const live = teams.filter((team) => team.is_active);
   return live.length === 1 ? live[0].id : null;
+}
+
+/**
+ * Подытог группы счетов. Скрытый и закрытый счета в сумму не входят — как на
+ * плитке «Счета». Хоть у одного счёта остаток неизвестен (нет права на деньги
+ * команды) — подытога нет вовсе, `null`: сумма из выдуманных нулей врала бы.
+ */
+export function groupBalanceTotal(
+  accounts: readonly {
+    balance: number;
+    balance_known: boolean;
+    is_active: boolean;
+    is_hidden?: boolean | null;
+  }[],
+): number | null {
+  const counted = accounts.filter((account) => account.is_active && !account.is_hidden);
+  if (counted.some((account) => !account.balance_known)) return null;
+  return sumAccountBalances(counted);
+}
+
+/**
+ * Оптимистичные позиции после ответа сервера: снимаются у тех счетов, которых
+ * больше не касался более поздний перенос. Позиция, оставленная после успеха,
+ * перекрывала бы свежую с сервера (порядок поменял другой телефон), а
+ * сброшенная вслепую съела бы позицию второго переноса, ещё летящего в сеть.
+ */
+export function clearSettledMoves(
+  moved: Readonly<Record<string, number>>,
+  ids: readonly string[],
+  latest: ReadonlyMap<string, number>,
+  seq: number,
+): Record<string, number> {
+  const next = { ...moved };
+  for (const id of ids) {
+    if (latest.get(id) === seq) delete next[id];
+  }
+  return next;
 }

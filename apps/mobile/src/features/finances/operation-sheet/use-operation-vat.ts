@@ -8,6 +8,7 @@ import {
   useVatSettings,
 } from "../vat-queries";
 import { defaultOperationVatMode } from "../operation-vat";
+import { vatControlsVisible } from "./vat-controls";
 import type { OperationDraft } from "./use-operation-draft";
 
 /** The tax of this operation: settings in force, the remembered rate, the
@@ -32,10 +33,12 @@ export function useOperationVat({
     | "setVatShown"
     | "setVatTouched"
     | "setVatRetouched"
+    | "vatShown"
   >;
 }) {
-  const { teamId, type, vatRetouched, setVatMode, setVatShown, setVatTouched, setVatRetouched } =
-    draft;
+  const {
+    teamId, type, vatRetouched, vatShown, setVatMode, setVatShown, setVatTouched, setVatRetouched,
+  } = draft;
   // ДЕЙСТВУЮЩИЙ НАЛОГ ЭТОЙ ОПЕРАЦИИ: счёт → команда → компания.
   const vatSettingsQuery = useVatSettings();
   const teamVatOverrides = useTeamVatOverrides();
@@ -67,7 +70,10 @@ export function useOperationVat({
   // КЛАВИШИ — ТОЛЬКО ТОМУ, КТО ВИДИТ НАСТРОЙКУ НАЛОГА. Сотруднику настройки
   // НДС не отдаются: «Без НДС» у него вышло бы не выбором, а последствием
   // отказа чтения — и молча уносило бы налог из операции компании.
-  const vatVisible = isOwner && vat.rate > 0;
+  //
+  // Открытая строка VAT не пропадает от того, что в поле ставки сейчас ноль:
+  // иначе набранный «0» уносил бы и саму строку, и клавишу «Без VAT».
+  const vatVisible = vatControlsVisible({ isOwner, rate: vat.rate, shown: vatShown });
   // Настройки компании И переопределения команд доехали — только тогда режим
   // формы что-то значит для сервера (`operation-vat.ts`).
   const vatSettingsKnown =

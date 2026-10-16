@@ -6,7 +6,7 @@ import { SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useThemeColors } from "@/theme/colors";
-import type { AccountWithBalance } from "../accounts";
+import { balanceText, type AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
 import type { StageAccount } from "./types";
 
@@ -49,7 +49,10 @@ export function AccountMoneyGroup({
     account.is_active
     && accounts.some((other) => other.is_active && other.id !== account.id);
   // СКОЛЬКО VAT НА СЧЁТЕ К УПЛАТЕ — сколько VAT мы должны будем заплатить.
-  const vatDue = useAccountVatDue(account.id, true).data ?? 0;
+  // Остаток не назван сервером — прочерк, и VAT рядом с ним не рисуется.
+  const vatDueQuery = useAccountVatDue(account.id, account.balance_known);
+  const vatDue = account.balance_known ? (vatDueQuery.data ?? 0) : 0;
+  const balance = balanceText(account, money);
   const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
 
   return (
@@ -70,8 +73,8 @@ export function AccountMoneyGroup({
             onPress={noop}
             accessibilityLabel={
               moneySign(vatDue) !== 0
-                ? `На счёте ${money(account.balance)}, в том числе VAT ${money(vatDue)}`
-                : `На счёте ${money(account.balance)}`
+                ? `На счёте ${balance}, в том числе VAT ${money(vatDue)}`
+                : `На счёте ${balance}`
             }
             trailing={
               // ДВЕ КОЛОНКИ ПОСТОЯННОЙ ШИРИНЫ: «VAT …» серым перед суммой, чётким рядом
@@ -98,11 +101,11 @@ export function AccountMoneyGroup({
                     textAlign: "right",
                     fontSize: 15,
                     fontWeight: "700",
-                    color: moneySign(account.balance) < 0 ? t.danger : t.ink,
+                    color: account.balance_known && moneySign(account.balance) < 0 ? t.danger : t.ink,
                     fontVariant: ["tabular-nums"],
                   }}
                 >
-                  {money(account.balance)}
+                  {balance}
                 </Text>
               </View>
             }

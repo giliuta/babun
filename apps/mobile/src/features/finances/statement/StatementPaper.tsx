@@ -44,6 +44,11 @@ export function StatementPaper({ doc }: { doc: StatementDocument }) {
       {doc.teamName ? (
         <Text style={{ marginTop: 2, fontSize: 10.5, color: PAPER.muted }}>{doc.teamName}</Text>
       ) : null}
+      {doc.notice ? (
+        <Text style={{ marginTop: 8, fontSize: 10.5, lineHeight: 15, fontWeight: "600", color: PAPER.ink }}>
+          {doc.notice}
+        </Text>
+      ) : null}
 
       <View style={{ marginTop: 14 }}>
         <PaperRow label="Период" value={doc.period} />

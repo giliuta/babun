@@ -25,6 +25,7 @@ import { TransferSheet } from "../TransferSheet";
 import { AccountCloseGroup } from "./AccountCloseGroup";
 import { AccountMoneyGroup } from "./AccountMoneyGroup";
 import { AccountNameCard } from "./AccountNameCard";
+import { duplicateNameNote, findDuplicateName } from "./account-names";
 import { editorView, type EditorView } from "./editor-logic";
 import { ACCOUNT_SHEET_RATIO, accountSaver, type AlertError } from "./types";
 import { useCloseFlow } from "./use-close-flow";
@@ -130,7 +131,24 @@ export function EditAccountSheet({
         return;
       }
       if (name === saved.name) delete patch.name;
-      else patch.name = name;
+      else {
+        // ТО ЖЕ ПРАВИЛО, ЧТО У СОЗДАНИЯ: переименование не должно давать два
+        // счёта команды с одним названием (свой же счёт — не дубль).
+        const duplicate = findDuplicateName(
+          accounts.filter((other) => other.id !== saved.id),
+          name,
+          saved.brigade_id,
+        );
+        if (duplicate) {
+          notify(
+            "Такое название уже есть",
+            duplicateNameNote(duplicate, teamById.get(saved.brigade_id ?? "")?.name ?? null)
+              ?? "Дайте счёту другое название.",
+          );
+          return;
+        }
+        patch.name = name;
+      }
     }
     if (Object.keys(patch).length === 0) {
       setPending({});

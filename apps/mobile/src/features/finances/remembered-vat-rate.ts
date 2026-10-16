@@ -46,6 +46,8 @@ export function useRememberedVatRate(fallback = 0): {
   const stored = readStoredVatRate(tenantId);
   const remember = useCallback(
     (next: number) => {
+      // Негодное число память не портит: читается она только в 0…99.99.
+      if (!Number.isFinite(next) || next < 0 || next >= 100) return;
       getStorage().set(vatRateKey(tenantId), next);
       setWrites((n) => n + 1);
     },

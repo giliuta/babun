@@ -41,6 +41,7 @@ describe("бумага выписки и PDF печатают одну моде�
     assert.deepEqual(fields, [
       "accountName",
       "teamName",
+      "notice",
       "period",
       "opening",
       "days",

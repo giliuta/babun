@@ -5,6 +5,7 @@ import { DebtSheet } from "../DebtSheet";
 import { OperationSheet } from "../OperationSheet";
 import { PeriodPresetModal, PeriodWheelsModal } from "../PeriodSheets";
 import { TransactionPopup } from "../TransactionPopup";
+import { useRefundTotals } from "../queries";
 import type { FinanceHome } from "./use-finance-home";
 
 /** Сколько ждать полного ухода OperationSheet, прежде чем показать второй
@@ -19,6 +20,9 @@ const OPERATION_SHEET_EXIT_MS = 450;
  *  two period pickers. */
 export function HomeSheets({ home }: { home: FinanceHome }) {
   const router = useRouter();
+  // Тот же запрос, что держит экран (общий ключ, второго похода в сеть нет):
+  // здесь нужен только его повтор — по тапу на причину под кнопкой формы.
+  const refundTotalsQuery = useRefundTotals();
   const {
     access,
     view,
@@ -83,6 +87,7 @@ export function HomeSheets({ home }: { home: FinanceHome }) {
         }
         refundTotalsLoading={refundTotalsLoading}
         refundTotalsError={refundTotalsFailed}
+        onRetryRefundTotals={() => void refundTotalsQuery.refetch()}
         // Что этому человеку открыто: возврат и инвойс пока владельческие, а
         // удаление — ровно то же правило, что у правки строки. Отмена перевода
         // сотруднику не открывается: вторую ногу знает только сама витрина, а
@@ -184,6 +189,10 @@ export function HomeSheets({ home }: { home: FinanceHome }) {
               : Number.POSITIVE_INFINITY
             : 0
         }
+        // Различаем «едет» и «упала»: на ошибке форма не обещает «загружается»,
+        // а зовёт повторить.
+        refundsFailed={refundTotalsFailed}
+        onRetryRefunds={() => void refundTotalsQuery.refetch()}
       />
 
       {/* Долг — своя шторка из тех же блоков, что операция: направление,

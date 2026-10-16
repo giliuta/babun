@@ -52,6 +52,8 @@ export function OperationSheet({
   transaction,
   debtPayment,
   refundedTotal = 0,
+  refundsFailed: refundsFailedProp = false,
+  onRetryRefunds,
   canWrite: canWriteProp = true,
   canWriteType,
   fromCalendar = false,
@@ -147,6 +149,11 @@ export function OperationSheet({
     belowRefunded, lowersWhileRefundsUnknown, dateInFuture, accountMismatch,
     teamId, teamAccountsCount: teamAccounts.length, accountId, categoryId,
     receiptMissing, categoryName: category?.name,
+    refundsFailed: !refundsKnown && refundsFailedProp,
+    // Категории заводит владелец (справочник владельческий): партнёру в команде
+    // без категорий выбирать нечего, и причина должна сказать, к кому идти.
+    noCategories: cats.length === 0,
+    canCreateCategory: isOwner,
     debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
@@ -175,8 +182,9 @@ export function OperationSheet({
     attachClient, vatMode, vatTouched: draft.vatTouched,
     vatRetouched: draft.vatRetouched, vatSettingsKnown: vat.vatSettingsKnown,
     opVatRate, txAccountClosed, accountMismatch, belowRefunded,
-    lowersWhileRefundsUnknown, requestId: draft.requestId,
-    setRequestId: draft.setRequestId, patchBaseline: draft.patchBaseline,
+    lowersWhileRefundsUnknown, refundsFailed: gate.refundsFailed === true,
+    requestIds: draft.requestIds,
+    patchBaseline: draft.patchBaseline,
     insert, update, toast, onClose,
   });
 
@@ -234,6 +242,7 @@ export function OperationSheet({
           onSave={save}
           canSave={canSave}
           busy={busy}
+          onRetry={onRetryRefunds}
         />
       }
     >
@@ -316,6 +325,7 @@ export function OperationSheet({
           busy={busy}
           refundHoldsAccount={refundHoldsAccount}
           refundsKnown={refundsKnown}
+          refundsFailed={gate.refundsFailed}
           txAccountId={transaction?.account_id}
           onPick={(id) => {
             setAccountTouched(true);
