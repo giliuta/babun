@@ -346,7 +346,7 @@ export function InvoiceDetailScreen() {
                       docWrite && refundDestination === "invoice" && refundable > 0
                         ? () =>
                             router.push(
-                              `/invoices/credit-note?invoiceId=${row.id}&amount=${refundable}` as Href,
+                              `/invoices/credit-note?invoiceId=${row.id}&amount=${refundable}&paymentId=${payment.id}` as Href,
                             )
                         : undefined
                     }

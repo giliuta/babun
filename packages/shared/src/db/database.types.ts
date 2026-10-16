@@ -5583,6 +5583,7 @@ export type Database = {
           p_amount: number
           p_invoice_id: string
           p_language?: string
+          p_payment_id?: string
           p_reason?: string
           p_request_id: string
         }

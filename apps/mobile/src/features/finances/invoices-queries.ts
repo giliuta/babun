@@ -317,6 +317,8 @@ export function useIssuePartialCreditNote(id: string) {
       amount: number;
       reason: string | null;
       language: string;
+      /** Платёж, с которого вернуть деньги первыми; без него — с новейших. */
+      paymentId?: string | null;
     }) => {
       const { data, error } = await supabase.rpc("issue_partial_credit_note", {
         p_invoice_id: id,
@@ -324,6 +326,7 @@ export function useIssuePartialCreditNote(id: string) {
         p_amount: input.amount,
         ...(input.reason ? { p_reason: input.reason } : {}),
         p_language: input.language,
+        ...(input.paymentId ? { p_payment_id: input.paymentId } : {}),
       });
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Кредит-нота не подтверждена сервером");
