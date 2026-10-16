@@ -208,9 +208,17 @@ function matchesPiece(
   // «00» — тот же международный выход, что «+»: номер, вставленный как
   // «0035799123456», не находил «+357 99 123 456».
   const qPlain = qDigits.length >= 10 && qDigits.startsWith("00") ? qDigits.slice(2) : qDigits;
+  // Один ведущий «0» — местный формат («07700 900123»), а в базе номер с кодом
+  // страны («+44 7700 900123»). Без нуля это ХВОСТ номера: только конец, чтобы
+  // «0» + цифры из середины чужого номера совпадением не стали.
+  const qLocal =
+    qDigits.length >= 9 && qDigits.startsWith("0") && !qDigits.startsWith("00")
+      ? qDigits.slice(1)
+      : null;
   if (qDigits.length >= 4) {
     for (const d of hay.digits) {
       if (d.includes(qDigits) || d.includes(qPlain)) return true;
+      if (qLocal && d.endsWith(qLocal)) return true;
     }
   }
   if (qNorm.length === 0) return false;

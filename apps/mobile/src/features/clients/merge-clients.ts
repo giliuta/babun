@@ -269,11 +269,16 @@ export function mergeClientPatch(primary: Client, dup: Client): Partial<Client> 
     );
   }
 
-  // ── тег: ОДИН, как метка — тег основной карточки
-  //    главнее; своего нет — берём тег дубля. Склеивать наборы нельзя:
-  //    клиент получил бы два тега, а выбор держит один. ──
-  if ((primary.tag_ids ?? []).length === 0 && (dup.tag_ids ?? []).length > 0) {
-    patch.tag_ids = [dup.tag_ids[0]];
+  // ── теги: НАБОР, наборы складываются без повторов. Порядок — сначала
+  //    теги основной карточки (первый из них главный и остаётся главным на
+  //    плитке), затем новые теги дубля. Брать один тег дубля нельзя: дубль
+  //    уходит в архив, и остальные его теги пропали бы вместе с ним. ──
+  const ownTags = primary.tag_ids ?? [];
+  const addTags = (dup.tag_ids ?? []).filter(
+    (tag, i, all) => !ownTags.includes(tag) && all.indexOf(tag) === i,
+  );
+  if (addTags.length > 0) {
+    patch.tag_ids = [...ownTags, ...addTags];
   }
 
   // ── реквизиты: наборы дубля переезжают сюда без повторов (окно обещает

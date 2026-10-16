@@ -9,6 +9,7 @@ import { GUTTER, ICON } from "@/components/ui/tokens";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { TagPickerSheet } from "@/features/clients/TagPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
+import { tagsOfferedFor } from "@/features/clients/picker-tags";
 import { useReferenceHref } from "@/lib/reference-href";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useCities } from "@/features/reference/queries";
@@ -71,17 +72,6 @@ export function ClientLabelTags({
   const doorway = useSheetDoorway();
   const teamParams = client.team_id ? { team: client.team_id } : undefined;
   const tagsDoor = useClientSettingsDoor("tags", client.team_id ?? null);
-  // ТЕГИ — КОМАНДЫ КЛИЕНТА (закреплены за командой).
-  // Предлагаются теги его команды; уже стоящий тег другой команды на плитке
-  // остаётся виден (он берётся из всего каталога ниже).
-  const teamTags = useMemo(
-    () =>
-      client.team_id
-        ? tags.filter((tag) => !tag.team_id || tag.team_id === client.team_id)
-        : tags,
-    [tags, client.team_id],
-  );
-
   const label = client.city.trim();
   const labelColor = cities.find((c) => c.name === label)?.color ?? getAvatarColor(label);
   const labelAuto = !!label && !client.city_manual;
@@ -93,6 +83,12 @@ export function ClientLabelTags({
   );
   const [shownTags, setShownTags] = useState<string[]>(client.tag_ids);
   useEffect(() => setShownTags(client.tag_ids), [client.tag_ids]);
+  // ТЕГИ — КОМАНДЫ КЛИЕНТА (закреплены за командой): в шторке теги его
+  // команды и уже стоящие на нём теги других команд (`picker-tags.ts`).
+  const offeredTags = useMemo(
+    () => tagsOfferedFor(tags, client.team_id ?? null, shownTags),
+    [tags, client.team_id, shownTags],
+  );
   // ТЕГОВ НЕСКОЛЬКО: шторка отдаёт весь набор по «Применить», карточка
   // показывает его сразу и откатывает, если запись не прошла.
   const applyTags = (next: string[]) => {
@@ -198,7 +194,8 @@ export function ClientLabelTags({
       />
       <TagPickerSheet
         visible={tagsOpen && !doorway.parked}
-        tags={teamTags}
+        open={tagsOpen}
+        tags={offeredTags}
         selected={shownTags}
         onApply={applyTags}
         // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены. Дверь

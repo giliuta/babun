@@ -68,7 +68,10 @@ export function ContactsImportSheet({
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
-  const cancelled = useRef(false);
+  // ПОКОЛЕНИЕ ЗАПУСКА, А НЕ ФЛАГ «ОТМЕНЕНО». Флаг сбрасывало следующее
+  // открытие листа, и цикл прошлого запуска, ещё ждавший сервер, досоздавал
+  // отменённых клиентов. Закрытие меняет поколение; открытие его не трогает.
+  const generation = useRef(0);
 
   const known = useMemo(() => {
     const set = new Set<string>();
@@ -90,8 +93,12 @@ export function ContactsImportSheet({
   const knownRef = useRef(known);
   knownRef.current = known;
   useEffect(() => {
-    if (!visible) return;
-    cancelled.current = false;
+    if (!visible) {
+      // Лист спрятали снаружи, мимо его собственного закрытия, — запуск тоже
+      // устарел.
+      generation.current += 1;
+      return;
+    }
     if (!Contacts) {
       setDenied(true);
       return;
@@ -153,13 +160,14 @@ export function ContactsImportSheet({
     // дважды.
     if (!rows || picked.size === 0 || running.current) return;
     running.current = true;
+    const gen = generation.current;
     setBusy(true);
     let added = 0;
     const failed: string[] = [];
     for (const row of rows) {
       // Лист закрыли на ходу — прекращаем. Раньше цикл продолжал заводить
       // клиентов уже после того, как человек смахнул лист вниз.
-      if (cancelled.current) break;
+      if (generation.current !== gen) break;
       if (!picked.has(row.key) || row.exists) continue;
       try {
         await create.mutateAsync({
@@ -184,7 +192,8 @@ export function ContactsImportSheet({
         : `Добавлено ${added}, не удалось ${failed.length}`,
       failed.length === 0 ? "success" : "error",
     );
-    onClose();
+    // Лист уже закрыт (и, может быть, открыт заново) — новый не закрываем.
+    if (generation.current === gen) onClose();
   };
 
   const toggle = (key: string) =>
@@ -200,7 +209,7 @@ export function ContactsImportSheet({
       padded={false}
       visible={visible}
       onClose={() => {
-        cancelled.current = true;
+        generation.current += 1;
         onClose();
       }}
       maxHeightRatio={0.92}

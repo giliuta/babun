@@ -209,11 +209,19 @@ describe("слияние дублей", () => {
   });
 });
 
-describe("слияние: тег один, реквизиты переезжают", () => {
+describe("слияние: теги складываются, реквизиты переезжают", () => {
   const base = (over: Partial<Client>): Client => ({ ...createBlankClient({ full_name: "x" }), ...over });
-  test("тег основной главнее; своего нет — берём тег дубля", () => {
-    assert.equal(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["b"] })).tag_ids, undefined);
-    assert.deepEqual(mergeClientPatch(base({ tag_ids: [] }), base({ tag_ids: ["b", "c"] })).tag_ids, ["b"]);
+  test("теги дубля добавляются к основным без повторов, основные первыми", () => {
+    assert.deepEqual(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["b"] })).tag_ids, ["a", "b"]);
+    assert.deepEqual(mergeClientPatch(base({ tag_ids: [] }), base({ tag_ids: ["b", "c"] })).tag_ids, ["b", "c"]);
+    assert.deepEqual(
+      mergeClientPatch(base({ tag_ids: ["a", "b"] }), base({ tag_ids: ["b", "c", "a"] })).tag_ids,
+      ["a", "b", "c"],
+    );
+  });
+  test("у дубля нет новых тегов — набор не трогаем", () => {
+    assert.equal(mergeClientPatch(base({ tag_ids: ["a", "b"] }), base({ tag_ids: ["b"] })).tag_ids, undefined);
+    assert.equal(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: [] })).tag_ids, undefined);
   });
   test("наборы реквизитов дубля переезжают без повторов, основной остаётся", () => {
     const set = (id: string, legal: string, vat: string, def: boolean) => ({
