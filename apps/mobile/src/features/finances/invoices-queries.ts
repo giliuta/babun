@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
+import { persistInvoiceLanguage } from "@/features/finances/persist-invoice-language";
 import {
   deleteInvoice,
   getInvoice,
@@ -60,8 +61,8 @@ export function useInvoice(id: string | undefined) {
 export interface NextInvoiceNumber {
   seq: number;
   number: string;
-  /** Можно ли задать старт серии: владелец, и в серии года ещё нет ни
-   *  одного инвойса. Потом номер двигает только выпуск. */
+  /** Можно ли двигать номер вручную: только владелец, и только вперёд — не
+   *  ниже уже выданного. Пропущенные при переходе номера остаются дырой. */
   canSetStart: boolean;
 }
 
@@ -117,10 +118,11 @@ export function useNextInvoiceNumber(year: number, companyId?: string | null, en
 }
 
 /**
- * «Первый инвойс — 104»: старт серии при переходе из прежней программы.
- * Сервер принимает его, только пока в серии года нет ни одного инвойса —
- * дальше номер двигает лишь выпуск (перескок дал бы дыру в серии, а закон
- * о VAT требует сплошную нумерацию).
+ * «Следующий инвойс — 104»: ручной номер серии, в любой момент и только
+ * вперёд — номер не ниже уже выданного (отказ сервер называет словами).
+ * Переход вперёд оставляет в серии дыру из пропущенных номеров, а закон о VAT
+ * требует сплошную нумерацию, поэтому экран переспрашивает человека, прежде
+ * чем вызвать эту мутацию (`InvoiceNumberRow`).
  */
 export function useSetInvoiceNextNumber() {
   const tenantId = useTenantId();
@@ -228,7 +230,8 @@ export function useIssueInvoice() {
     // выставленного языка нет). Ронять из-за этого выставленный документ было
     // бы куда хуже — но и молчать нельзя: вернувшийся документ
     // несёт язык, который реально записан, и экран говорит о расхождении.
-    // Вторая попытка — на случай одного моргания сети.
+    // Вторая попытка — на случай одного моргания сети; «записан» — только
+    // после сверки строки (`setInvoiceLanguage`), а не по отсутствию ошибки.
     mutationFn: async ({
       language,
       ...draft
@@ -236,14 +239,10 @@ export function useIssueInvoice() {
       if (!tenantId) throw new Error("Нет активного тенанта");
       const invoice = await issueInvoice(supabase, tenantId, draft);
       if (language && language !== "ru") {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            await setInvoiceLanguage(supabase, invoice.id, language);
-            return { ...invoice, language };
-          } catch {
-            if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
-          }
-        }
+        const saved = await persistInvoiceLanguage(() =>
+          setInvoiceLanguage(supabase, invoice.id, language),
+        );
+        if (saved) return { ...invoice, language };
       }
       return invoice;
     },
@@ -267,14 +266,8 @@ export function useUpdateInvoice(id: string) {
       // выставления). Иначе сбой языка отвергал бы всю мутацию — экран говорил бы
       // «ошибка» про сохранённые суммы, а кэш инвойса оставался бы старым.
       if (language && language !== invoice.language) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            await setInvoiceLanguage(supabase, id, language);
-            return { ...invoice, language };
-          } catch {
-            if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
-          }
-        }
+        const saved = await persistInvoiceLanguage(() => setInvoiceLanguage(supabase, id, language));
+        if (saved) return { ...invoice, language };
       }
       return invoice;
     },

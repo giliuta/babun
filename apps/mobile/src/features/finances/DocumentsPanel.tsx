@@ -27,6 +27,7 @@ import { useReceiptMenu } from "@/features/finances/receipt-menu";
 import { useDocumentWriter } from "@/session/document-rights";
 import { invoiceDeleteBlock } from "@/features/finances/invoice-delete";
 import { useInvoiceMenu } from "@/features/finances/invoice-menu";
+import { receiptRefusal } from "@/lib/receipt-eligibility";
 import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
@@ -233,9 +234,15 @@ export function DocumentsPanel({
       const settlement = calculateInvoiceSettlement(invoice, own);
       const isInvoice = (invoice.kind ?? "invoice") === "invoice";
       const awaits = isInvoice && invoice.status === "issued" && settlement.remaining > 0;
-      const withReceipt = new Set((receipts ?? []).map((r) => r.transaction_id));
+      const withReceipt = new Set(
+        (receipts ?? []).flatMap((r) => (r.transaction_id ? [r.transaction_id] : [])),
+      );
+      // «Выписать чек» — только там, где сервер его выпустит: клиент есть,
+      // оплата не возвращена целиком (`receiptRefusal`, одно правило с
+      // кнопкой страницы инвойса).
       const needsReceipt =
-        isInvoice && own.some((p) => p.type === "income" && !withReceipt.has(p.id));
+        isInvoice &&
+        receiptRefusal({ invoice, payments: own, receiptTransactionIds: withReceipt }) === null;
       setSheetMenu(
         invoiceMenu.menuFor(invoice, menuContext(invoice), [
           { ...open, run: () => onOpen(path) },

@@ -65,9 +65,10 @@ export function resolveReturnTo(from: string | undefined): string | null {
   }
   if (!from.startsWith("invoice:")) return null;
   const id = from.slice("invoice:".length).trim();
-  // Пустой id дал бы `/invoices/` — маршрут, которого нет. Лучше остаться на
-  // календаре, чем увести человека на «страница не найдена».
-  return id ? `/invoices/${id}` : null;
+  // Не uuid (пустой, с «/» или «?») дал бы маршрут, которого нет, или чужой
+  // путь из адреса. Лучше остаться на календаре, чем увести человека на
+  // «страница не найдена» — так же закрыта и ветка чека.
+  return isUuid(id) ? `/invoices/${id}` : null;
 }
 
 /** Путь вкладки денег по метке без команды. */

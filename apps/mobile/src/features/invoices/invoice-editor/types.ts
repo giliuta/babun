@@ -64,6 +64,9 @@ export interface InvoiceEditorProps {
   generator: InvoiceGeneratorSettings;
   teams: Team[];
   businessToday: string;
+  /** Сегодня по часам бизнеса В ЭТУ МИНУТУ: `businessToday` — снимок отрисовки,
+   *  а форма могла простоять открытой всю ночь. Нет — берётся `businessToday`. */
+  currentBusinessToday?: () => string;
   /** Реквизиты и логотип компании — их печатает документ. */
   tenant?: Tenant;
   submitting: boolean;

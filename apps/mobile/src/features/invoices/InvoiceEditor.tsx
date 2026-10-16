@@ -29,6 +29,7 @@ export function InvoiceEditor({
   generator,
   teams,
   businessToday,
+  currentBusinessToday,
   tenant,
   submitting,
   onSubmit,
@@ -40,7 +41,7 @@ export function InvoiceEditor({
   });
   const {
     language, setLanguage, languageOpen, setLanguageOpen, newLine, incomeAmount,
-    issuedOn, dueOn, setDueOn, changeIssuedOn, clientId, locationId,
+    issuedOn, dueOn, setDueOn, changeIssuedOn, datesAt, clientId, locationId,
     setLocationId, clientRequisitesId, setClientRequisitesId, appointmentId,
     teamId, changeTeam, vatMode, setVatMode, rememberedRate, setRateOverride,
     vatTouched, notes, setNotes, lines, setLines, discountKind, setDiscountKind,
@@ -90,6 +91,9 @@ export function InvoiceEditor({
       setError(reason.text);
       return;
     }
+    // ДАТА — НА МОМЕНТ ВЫСТАВЛЕНИЯ: форму могли открыть вчера, а нажать
+    // сегодня (`rolledIssueDates`); тронутую руками дату это не меняет.
+    const dates = datesAt(currentBusinessToday?.() ?? businessToday);
     try {
       await onSubmit({
         language,
@@ -100,8 +104,8 @@ export function InvoiceEditor({
         // скрытого A его серией и реквизитами.
         company_id: owner ? (companyId ?? pickedCompany?.id ?? null) : null,
         account_id: accountId,
-        issued_on: issuedOn,
-        due_on: dueOn,
+        issued_on: dates.issuedOn,
+        due_on: dates.dueOn,
         client_id: clientId,
         location_id: locationId,
         client_requisites_id: clientRequisitesId,

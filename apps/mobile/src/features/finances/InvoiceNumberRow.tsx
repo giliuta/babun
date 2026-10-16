@@ -4,9 +4,11 @@ import { ChevronRight } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { DocMetaRow } from "@/components/blocks/DocMetaRow";
+import { jumpMessage, numberWithSeq, skippedNumbers } from "./invoice-number-jump";
 import { useSetInvoiceNextNumber, type NextInvoiceNumber } from "./invoices-queries";
 
 // НОМЕР ИНВОЙСА — СТРОКА В БЛОКЕ «РЕКВИЗИТЫ».
@@ -16,10 +18,11 @@ import { useSetInvoiceNextNumber, type NextInvoiceNumber } from "./invoices-quer
 // — в его блоке: сменил набор — видишь его номер.
 //
 // СВОЙ НОМЕР — В ЛЮБОЙ МОМЕНТ: номер идёт автоматически последовательно, но вместо
-// 005 можно написать свой (ограничение «только до первого инвойса года» снято
-// миграцией 20261004021143).
+// 005 можно написать свой.
 // Одно правило — вперёд: номер не ниже уже выданного, отказ сервер говорит
-// словами («Номер 4 уже выдан — следующий может быть от 5»). Шторка — только
+// словами («Номер 4 уже выдан — следующий может быть от 5»). Переход вперёд
+// оставляет дыру в серии, поэтому перед записью человек подтверждает его,
+// увидев пропадающие номера (`invoice-number-jump.ts`). Шторка — только
 // владельцу.
 
 export interface InvoiceNumberTarget {
@@ -28,11 +31,6 @@ export interface InvoiceNumberTarget {
   next: NextInvoiceNumber | null;
   /** Чей номер: инвойса или чека (чек — как инвойс). */
   docType?: "invoice" | "receipt";
-}
-
-/** «INV-2026-104» с другим хвостом: префикс и год — из серии сервера. */
-export function withSeq(number: string, seq: number): string {
-  return number.replace(/(\d+)$/, (tail) => String(seq).padStart(tail.length, "0"));
 }
 
 export function InvoiceNumberRow({
@@ -78,12 +76,24 @@ export function InvoiceNumberRow({
       setOpen(false);
       return;
     }
-    save.mutate(
-      { companyId: target.companyId, year: target.year, number: typed, docType: target.docType },
-      {
-        onSuccess: () => setOpen(false),
-        onError: (error) => notify("Номер не сохранён", error.message),
-      },
+    const write = () =>
+      save.mutate(
+        { companyId: target.companyId, year: target.year, number: typed, docType: target.docType },
+        {
+          onSuccess: () => setOpen(false),
+          onError: (error) => notify("Номер не сохранён", error.message),
+        },
+      );
+    // Переход вперёд оставляет дыру в серии — без вопроса он не пишется.
+    const skipped = skippedNumbers(next, typed);
+    if (!skipped) {
+      write();
+      return;
+    }
+    confirmThen(
+      `Начать с ${shown && next ? numberWithSeq(shown, typed) : String(typed)}?`,
+      { message: jumpMessage(skipped), confirmLabel: "Перейти на этот номер" },
+      write,
     );
   };
 
@@ -169,7 +179,7 @@ export function InvoiceNumberRow({
           />
           <Text style={{ fontSize: 13, color: t.sub }}>
             {shown && valid && typed != null
-              ? `${withSeq(shown, typed)}, следующий — ${withSeq(shown, typed + 1)}.`
+              ? `${numberWithSeq(shown, typed)}, следующий — ${numberWithSeq(shown, typed + 1)}.`
               : "Цифры номера. Следующие инвойсы продолжат с него."}
           </Text>
         </View>

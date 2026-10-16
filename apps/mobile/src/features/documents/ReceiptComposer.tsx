@@ -90,7 +90,11 @@ export function ReceiptComposer({
   const t = useThemeColors();
   const clients = useClients();
   const services = useServices();
-  const accounts = useAccountsWithBalances();
+  // Чек на оплату показывает счёт ПРОВОДКИ, даже скрытый или закрытый после
+  // оплаты: в живом списке его нет, и блок «Счёт» пустовал бы.
+  const accounts = useAccountsWithBalances(
+    forPayment ? { includeInactive: true, includeHidden: true, includeDeleted: true } : undefined,
+  );
   const appointments = useAppointments();
   const tileWidth = useTileWidth();
   const router = useRouter();
@@ -292,7 +296,9 @@ export function ReceiptComposer({
             </View>
           ) : (
             <Text className="px-4 py-3 text-sm" style={{ color: t.faint }}>
-              {draft.teamId
+              {forPayment
+                ? "Счёт этой оплаты недоступен — на чек это не влияет: деньги уже записаны."
+                : draft.teamId
                 ? "У этой команды нет счёта — заведите его в «Счетах», иначе деньги некуда записать."
                 : "Кассы принадлежат командам. Выберите команду чипом на «Финансах» и откройте чек заново."}
             </Text>

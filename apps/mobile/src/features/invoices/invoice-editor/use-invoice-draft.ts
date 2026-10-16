@@ -14,8 +14,10 @@ import { addDaysYmd, type EditableInvoiceLine } from "@/lib/paper/format";
 import {
   appointmentVatOf,
   existingDiscountOf,
+  firstIssuedOnFor,
   incomeAmountOf,
   initialInvoiceVatMode,
+  rolledIssueDates,
 } from "./invoice-rules";
 import type { InvoiceEditorProps } from "./types";
 
@@ -136,23 +138,52 @@ export function useInvoiceDraft({
   // считался от него, и документ рождался «Просрочен», а номер вставал после
   // уже выданных, но с датой раньше их — серия шла не по датам. Визит в
   // будущем остаётся своей датой; руками дату по-прежнему можно сменить.
-  const sourceIssuedOn = seed?.issuedOn ?? prefill?.issuedOn ?? businessToday;
-  const firstIssuedOn = sourceIssuedOn > businessToday ? sourceIssuedOn : businessToday;
+  //
+  // ДАТА, КОТОРУЮ НЕ ТРОГАЛИ, ЕДЕТ ЗА ЧАСАМИ БИЗНЕСА (`rolledIssueDates`): форма,
+  // открытая до полуночи, выставляет документ уже новым днём и годом.
+  const sourceIssuedOn = seed?.issuedOn ?? prefill?.issuedOn ?? null;
+  const firstIssuedOn = firstIssuedOnFor(sourceIssuedOn, businessToday);
   const [issuedOn, setIssuedOn] = useState(existing?.issued_on ?? firstIssuedOn);
-  const [dueOn, setDueOn] = useState<string | null>(
+  const [dueOn, setDueOnState] = useState<string | null>(
     // Срок — из настроек компании, а не зашитая неделя,
     // и считается от даты выставления, а не от визита.
     existing
       ? existing.due_on
       : addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
   );
+  const issuedTouched = useRef(!!existing);
+  const dueTouched = useRef(!!existing);
+  const setDueOn = (value: string | null) => {
+    dueTouched.current = true;
+    setDueOnState(value);
+  };
   // Общая на «Правку» (строка-дверь) и «Документ» (барабан бумаги): смена
   // даты выставления подтягивает «Оплатить до», если та уже оказалась раньше.
   const changeIssuedOn = (value: string | null) => {
     if (!value) return;
+    issuedTouched.current = true;
     setIssuedOn(value);
-    if (dueOn && dueOn < value) setDueOn(value);
+    if (dueOn && dueOn < value) setDueOnState(value);
   };
+  /** Даты документа на момент `today` — для превью и для самого выставления. */
+  const datesAt = (today: string) =>
+    rolledIssueDates({
+      issuedOn,
+      dueOn,
+      issuedTouched: issuedTouched.current,
+      dueTouched: dueTouched.current,
+      sourceIssuedOn,
+      today,
+    });
+  // Часы бизнеса перевалили за полночь, пока форма открыта: превью и номер
+  // серии следуют за новым днём, если даты не трогали.
+  useEffect(() => {
+    const rolled = datesAt(businessToday);
+    if (rolled.issuedOn === issuedOn) return;
+    setIssuedOn(rolled.issuedOn);
+    setDueOnState(rolled.dueOn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessToday]);
   const [clientId, setClientId] = useState<string | null>(
     existing ? existing.client_id : seed?.clientId ?? prefill?.clientId ?? null,
   );
@@ -307,6 +338,9 @@ export function useInvoiceDraft({
     dueOn,
     setDueOn,
     changeIssuedOn,
+    datesAt,
+    issuedTouched,
+    dueTouched,
     clientId,
     setClientId,
     locationId,

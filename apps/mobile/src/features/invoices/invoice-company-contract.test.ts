@@ -27,7 +27,7 @@ describe("реквизиты инвойса", () => {
 describe("дата нового инвойса (аудит 03.10)", () => {
   test("не раньше сегодня: прошлый визит не рождает документ просроченным", () => {
     const src = editor();
-    assert.match(src, /const firstIssuedOn = sourceIssuedOn > businessToday \? sourceIssuedOn : businessToday;/);
+    assert.match(src, /const firstIssuedOn = firstIssuedOnFor\(sourceIssuedOn, businessToday\);/);
     // Новый счёт — срок от даты выставления; выставленный (правка) — свой.
     assert.match(src, /existing\s*\? existing\.due_on\s*: addDaysYmd\(firstIssuedOn, Math\.max\(0, generator\.dueDays\)\),/);
     assert.match(src, /useState\(existing\?\.issued_on \?\? firstIssuedOn\)/);

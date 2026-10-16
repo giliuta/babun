@@ -39,6 +39,8 @@ import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
+import { persistInvoiceLanguage } from "@/features/finances/persist-invoice-language";
 import { useThemeColors } from "@/theme/colors";
 
 // КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК: сначала превью с
@@ -195,11 +197,19 @@ export default function CreditNoteScreen() {
             language: paperLanguage,
           });
       // Язык — вторым шагом, как у инвойса: сервер копирует язык инвойса.
-      // Не записался — нота остаётся на языке инвойса и меняется в «⋯».
+      // Не записался — нота остаётся на языке инвойса, и человек узнаёт об
+      // этом сразу: документ уже выписан, а язык бумаги у кредит-ноты потом
+      // не меняется.
       if (paperLanguage !== row.language) {
-        await setInvoiceLanguage(supabase, note.id, paperLanguage).catch(
-          () => undefined,
+        const saved = await persistInvoiceLanguage(() =>
+          setInvoiceLanguage(supabase, note.id, paperLanguage),
         );
+        if (!saved) {
+          notify(
+            "Кредит-нота выписана, язык бумаги не сохранился",
+            "Документ остался на языке инвойса.",
+          );
+        }
       }
       haptics.success();
       issued.current = note.id;

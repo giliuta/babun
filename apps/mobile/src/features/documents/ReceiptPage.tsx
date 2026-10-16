@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { FileMinus, MoreHorizontal, Share2 } from "lucide-react-native";
@@ -26,6 +26,7 @@ import { buildReceiptPdfHtml } from "./receipt-pdf";
 import { useReceipt } from "@/features/finances/receipts-queries";
 import { shareHtmlAsPdf } from "@/lib/share-pdf";
 import { useIssuedReceiptDoc } from "./use-issued-receipt-doc";
+import { usePageAction } from "@/lib/use-page-action";
 
 // СТРАНИЦА ЧЕКА — КАК СТРАНИЦА ИНВОЙСА: конструкция, превью, «сохранить» — и
 // чек можно отправлять. Выписанный чек живёт здесь, а не в листе: бумага, что
@@ -47,9 +48,11 @@ export function ReceiptPage({ id }: { id: string }) {
   // «Выставляет» в команде чека (владельцу — всегда).
   const docWrite = useDocumentLevel(receipt?.team_id ?? null) === "write";
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
-  // «Поделиться PDF» из меню списка — один раз, когда бумага готова.
+  // «Поделиться PDF» из меню списка — один раз, когда бумага готова: тем же
+  // `usePageAction`, что и у страницы инвойса (параметр стирается, таймер
+  // снимается только уходом со страницы).
   const { action } = useLocalSearchParams<{ action?: string }>();
-  const pendingAction = useRef<string | null>(action ?? null);
+  const runActionRef = usePageAction(action, !!receipt && !!paper.doc && !paper.linesLoading);
 
   if (!receipt) {
     return (
@@ -125,10 +128,10 @@ export function ReceiptPage({ id }: { id: string }) {
       }),
     );
 
-  if (pendingAction.current === "share" && docWrite && paper.doc && !paper.linesLoading) {
-    pendingAction.current = null;
-    setTimeout(() => void sharePdf(), 450);
-  }
+  // Присваивание без побочных эффектов: таймер ставит эффект после отрисовки.
+  runActionRef.current = (next) => {
+    if (next === "share" && docWrite) void sharePdf();
+  };
 
   const openAppointment = () => {
     if (!appointment) return;
