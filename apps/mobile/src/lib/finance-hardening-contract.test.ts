@@ -37,19 +37,23 @@ test("функции миграции не переопределены позж
   for (const fn of [
     "build_invoice_client_snapshot",
     "update_invoice_draft",
-    "issue_invoice",
-    "issue_receipt",
     "update_receipt",
     "record_invoice_payment",
     "validate_invoice_payment_insert",
     "delete_credit_note",
     "enforce_plan_limits",
-    "issue_partial_credit_note",
-    "_refund_invoice_money",
     "void_receipt_on_income_delete",
     "void_receipt_on_refund",
   ]) {
     assert.equal(lastDefiner(fn), FILE, `${fn} переопределён позже`);
+  }
+});
+
+test("скрытые счета и VAT (20261016170100) — единственное позднейшее переопределение", () => {
+  // Четыре функции поправлены ещё раз: скрытые счета, окончательная доля VAT,
+  // повтор кредит-ноты. Позже — никто.
+  for (const fn of ["issue_invoice", "issue_receipt", "issue_partial_credit_note", "_refund_invoice_money"]) {
+    assert.equal(lastDefiner(fn), "20261016170100_finance_hidden_accounts_window_vat.sql", `${fn} переопределён позже`);
   }
 });
 
