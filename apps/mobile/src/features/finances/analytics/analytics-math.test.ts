@@ -369,10 +369,12 @@ describe("прибыль по услугам: материалы как у «Р�
   test("прошедшая незакрытая запись материалов не списывает", () => {
     const svc = [{ id: "c", name: "Чистка", materials: [{ name: "Химия", cost: 10 }] } as never];
     const row = [{ id: "c", name: "Чистка", quantity: 3, records: 1, amount: 150 }];
-    const open = serviceProfit(row, [appt({ id: "1", status: "scheduled", services: [line("c", 3, 50)] as never })], svc);
-    const done = serviceProfit(row, [appt({ id: "1", status: "completed", services: [line("c", 3, 50)] as never })], svc);
+    const frozen = [{ serviceId: "c", serviceName: "Чистка", quantity: 3, unitCost: 10, totalCost: 30 }];
+    const open = serviceProfit(row, [appt({ id: "1", status: "scheduled", material_lines: frozen } as never)], svc);
+    const done = serviceProfit(row, [appt({ id: "1", status: "completed", material_lines: frozen } as never)], svc);
     assert.equal(open[0].materials, 0);
-    assert.ok(done[0].materials > 0);
+    assert.equal(done[0].materials, 30);
+    assert.equal(done[0].profit, 120);
   });
 });
 
