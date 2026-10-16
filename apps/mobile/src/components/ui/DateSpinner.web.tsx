@@ -185,7 +185,9 @@ export function DateSpinner({ value, minimumDate, maximumDate, onChange }: DateS
       />
       <Column
         label="Месяц"
-        width={116}
+        // По самому длинному названию на любом языке интерфейса: греческое
+        // «Σεπτεμβρίου» в прежние 116px не влезало и обрезалось.
+        width={150}
         items={MONTHS}
         index={month}
         onPick={(i) => commit({ month: i })}

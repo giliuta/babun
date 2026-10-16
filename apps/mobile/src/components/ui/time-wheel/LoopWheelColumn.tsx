@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, Text, View } from "react-native";
 import { useThemeColors } from "@/theme/colors";
 import {
   COLUMN_W,
@@ -11,6 +11,7 @@ import {
   rowAt,
   wrapIndex,
 } from "./wheel-geometry";
+import { createScrollSettle, offRow } from "./scroll-settle";
 
 export function WheelWithLines({ children }: { children: ReactNode }) {
   return (
@@ -138,9 +139,22 @@ export function LoopWheelColumn({
     // при этом не меняется, поэтому переезда не видно.
     if (recenter && outsideSafeRange(absolute, len, REPS)) {
       ref.current?.scrollTo({ y: (mid + picked) * ITEM_H, animated: false });
+    } else if (Platform.OS === "web" && offRow(y)) {
+      // Браузер не знает `snapToInterval`: ленту до строки доводим сами.
+      ref.current?.scrollTo({ y: absolute * ITEM_H, animated: true });
     }
     if (picked !== value) onChange(picked);
   };
+  // ВЕБ: конец прокрутки — по тишине (`scroll-settle.ts`). Таймер зовёт
+  // САМЫЙ СВЕЖИЙ `settle`: через 120 мс у замыкания с прошлого рендера были
+  // бы устаревшие `value` и `onChange`.
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+  const webSettle = useRef<ReturnType<typeof createScrollSettle> | null>(null);
+  if (Platform.OS === "web" && !webSettle.current) {
+    webSettle.current = createScrollSettle((y) => settleRef.current(y, true));
+  }
+  useEffect(() => () => webSettle.current?.cancel(), []);
 
   const adjust = (delta: number) => {
     const next = norm(value + delta);
@@ -162,12 +176,15 @@ export function LoopWheelColumn({
       decelerationRate="fast"
       scrollEventThrottle={16}
       onScroll={(e) => {
-        const i = idxAt(e.nativeEvent.contentOffset.y);
+        const y = e.nativeEvent.contentOffset.y;
+        const i = idxAt(y);
         if (i !== live) setLive(i);
+        webSettle.current?.scroll(y);
       }}
       // Оба события нужны: быстрый флик заканчивается momentum-end, медленное
       // перетаскивание без инерции — drag-end (momentum тогда не стреляет).
-      // Переставлять ленту вправе только первый: см. `settle`.
+      // Переставлять ленту вправе только первый: см. `settle`. В вебе ни
+      // одно из двух не приходит — там конец ловит `webSettle`.
       onMomentumScrollEnd={(e) => settle(e.nativeEvent.contentOffset.y, true)}
       onScrollEndDrag={(e) => settle(e.nativeEvent.contentOffset.y, false)}
       accessible

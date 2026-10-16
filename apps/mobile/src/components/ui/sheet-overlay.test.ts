@@ -61,10 +61,13 @@ test("уезжающий лист не тянется, отклонённый с
   assert.match(sheet, /if \(!visibleRef\.current\) return;\s*ty\.value = withSpring\(0/);
 });
 
-test("массовая SMS поднимается над клавиатурой и не глотает тап мимо", () => {
-  // Сырой Modal edge-to-edge: поле текста и кнопки отправки уходили под
-  // клавиатуру Android, печатали вслепую.
+test("массовая SMS — канонический лист: подъём над клавиатурой и вопрос в его окне", () => {
+  // Сырой Modal был вторым окном: «Отправить через сервис?» ложилось третьим
+  // окном поверх, iOS его не показывал, а невидимый вопрос глушил все
+  // следующие. Канонический лист стоит в стопке, и вопрос ложится в него;
+  // поле текста и кнопки отправки не уходят под клавиатуру Android.
   const sheet = read("../../features/clients/BulkSmsSheet.tsx");
-  assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
-  assert.doesNotMatch(sheet, /className="absolute bottom-0 left-0 right-0/);
+  assert.doesNotMatch(sheet, /<Modal\b/);
+  assert.match(sheet, /<BottomSheet[\s\S]{0,900}?\n\s+avoidKeyboard\n/);
+  assert.match(sheet, /confirmThen\(/);
 });

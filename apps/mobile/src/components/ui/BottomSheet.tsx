@@ -293,7 +293,11 @@ export function BottomSheet({
           {shown.children}
         </ScrollView>
       ) : padded ? (
-        <View style={{ paddingHorizontal: GUTTER }}>{shown.children}</View>
+        // СЖИМАЕТСЯ ТЕЛО, А НЕ ПОДВАЛ. Без flexShrink содержимое выше потолка
+        // выталкивало подвал, и панель (`overflow: hidden`) срезала кнопку.
+        // minHeight: 0 — иначе браузер не даёт flex-ребёнку стать ниже
+        // содержимого.
+        <View style={{ paddingHorizontal: GUTTER, flexShrink: 1, minHeight: 0 }}>{shown.children}</View>
       ) : (
         shown.children
       )}

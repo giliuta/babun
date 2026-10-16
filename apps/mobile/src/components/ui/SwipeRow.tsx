@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import {
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
+import {
+  Pressable,
+  Text,
+  View,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
+} from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -11,6 +25,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { SWIPE_LEADING, SWIPE_TRAILING, mergeSwipeActions } from "./swipe-a11y";
 
 // СМАХНУТЬ ВЛЕВО → ОДНО ДЕЙСТВИЕ. Тот же жест, что в Почте и Сообщениях —
 // объяснять его не нужно.
@@ -55,6 +70,12 @@ const FULL_AT = ACTION_W * 1.6;
 /** Кто сейчас раскрыт. Модульная переменная, а не контекст: ряды живут в
  *  разных списках и разных экранах, а правило у них одно. */
 let closeOpenRow: (() => void) | null = null;
+
+/** То, что строка могла объявить для ротора сама. */
+type RowA11y = {
+  accessibilityActions?: readonly AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+};
 
 export function SwipeRow({
   label,
@@ -146,6 +167,27 @@ export function SwipeRow({
   const hasLeading = !!leading;
   /** Правая кромка существует только вместе со своим действием. */
   const hasTrailing = !!onAction && !!label;
+
+  // СВАЙП — ЕЩЁ И ДЕЙСТВИЯ РОТОРА (`swipe-a11y.ts`). Вешаются на саму строку:
+  // фокус VoiceOver стоит на ней, а не на обёртке жеста. Свои действия строки
+  // сливаются с кромками, а не затираются.
+  const edges = { leading: leading?.label, trailing: hasTrailing ? label : undefined };
+  const own: RowA11y | null =
+    (edges.leading || edges.trailing) && isValidElement<RowA11y>(children) && children.type !== Fragment
+      ? children.props
+      : null;
+  const row =
+    own && isValidElement<RowA11y>(children)
+      ? cloneElement(children, {
+          accessibilityActions: mergeSwipeActions(own.accessibilityActions, edges),
+          onAccessibilityAction: (event: AccessibilityActionEvent) => {
+            const name = event.nativeEvent.actionName;
+            if (name === SWIPE_TRAILING) fire();
+            else if (name === SWIPE_LEADING) fireLead();
+            else own.onAccessibilityAction?.(event);
+          },
+        })
+      : children;
   const pan = Gesture.Pan()
     // По горизонтали: вертикальный скролл списка должен побеждать.
     .activeOffsetX([-12, 12])
@@ -190,8 +232,9 @@ export function SwipeRow({
           насколько её сдвинули.
 
           ДЛЯ РОТОРА ЕЁ НЕ СУЩЕСТВУЕТ. Кромка — часть жеста, а не элемент
-          списка: то же действие строка отдаёт через `accessibilityActions`, и
-          без этого VoiceOver читал под каждым счётом фантомную кнопку. */}
+          списка: то же действие строка отдаёт через `accessibilityActions`
+          (их вешает сам SwipeRow, см. `row`), и без этого VoiceOver читал под
+          каждым счётом фантомную кнопку. */}
       {hasTrailing ? (
         <View
           accessibilityElementsHidden
@@ -272,7 +315,7 @@ export function SwipeRow({
 
       <GestureDetector gesture={pan}>
         <Animated.View style={[rowStyle, { backgroundColor: t.surface }]}>
-          {children}
+          {row}
         </Animated.View>
       </GestureDetector>
     </View>
