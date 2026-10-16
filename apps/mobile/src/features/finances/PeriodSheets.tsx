@@ -3,7 +3,6 @@ import { Pressable, Text, View } from "react-native";
 import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { MonthYearGrid } from "@/components/ui/MonthYearGrid";
 import { haptics } from "@/lib/haptics";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
@@ -12,11 +11,9 @@ import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import {
   dmyShort,
   makePeriod,
-  monthPeriod,
   PERIOD_BLOCKS,
   PERIOD_LABELS,
   presetHint,
-  yearPeriod,
   type Period,
 } from "./period";
 
@@ -43,30 +40,6 @@ export function PeriodPresetModal({
   onApply: (p: Period) => void;
 }) {
   const t = useThemeColors();
-  // Ширина решётки — замером плашки: у шторки свои поля, и счёт от ширины
-  // экрана выталкивал последний год за край.
-  const [gridW, setGridW] = useState(0);
-  // ГОД И МЕСЯЦ ДВУМЯ ТАПАМИ: месяц и год любого года без колёс «Своего
-  // периода». Год показанных месяцев — год текущего периода, пока его не
-  // сменили тапом.
-  const nowYear = businessNow.getFullYear();
-  const periodYear = current ? Number(current.from.slice(0, 4)) : nowYear;
-  const [gridYear, setGridYear] = useState(periodYear);
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (visible && !wasOpen.current) setGridYear(periodYear);
-    wasOpen.current = visible;
-  }, [visible, periodYear]);
-  const chosenMonth = (() => {
-    if (!current) return -1;
-    for (let m = 0; m < 12; m++) {
-      const p = monthPeriod(gridYear, m);
-      if (p.from === current.from && p.to === current.to) return m;
-    }
-    return -1;
-  })();
-  const wholeYear = yearPeriod(gridYear);
-  const wholeYearOn = !!current && current.from === wholeYear.from && current.to === wholeYear.to;
 
   const row = (
     label: string,
@@ -119,7 +92,7 @@ export function PeriodPresetModal({
   );
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Период" scroll>
+    <BottomSheet visible={visible} onClose={onClose} title="Период">
       <View className="px-5 pb-8">
         {allTime ? (
           <View
@@ -146,38 +119,6 @@ export function PeriodPresetModal({
             )}
           </View>
         ))}
-        <View
-          className="mb-2 overflow-hidden"
-          style={{ backgroundColor: t.fill, borderRadius: t.radius.card, padding: 8 }}
-          onLayout={(e) => setGridW(Math.floor(e.nativeEvent.layout.width - 16))}
-        >
-          {gridW > 0 ? (
-          <MonthYearGrid
-            year={gridYear}
-            month={chosenMonth}
-            todayYear={nowYear}
-            todayMonth={businessNow.getMonth()}
-            width={gridW}
-            onYear={(y) => {
-              haptics.tap();
-              setGridYear(y);
-            }}
-            onMonth={(m) => {
-              haptics.tap();
-              onApply(monthPeriod(gridYear, m));
-              onClose();
-            }}
-          />
-          ) : null}
-        </View>
-        <View
-          className="mb-2 overflow-hidden"
-          style={{ backgroundColor: t.fill, borderRadius: t.radius.card }}
-        >
-          {row(`Весь ${gridYear} год`, undefined, wholeYearOn, false, () =>
-            onApply(yearPeriod(gridYear)),
-          )}
-        </View>
       </View>
     </BottomSheet>
   );

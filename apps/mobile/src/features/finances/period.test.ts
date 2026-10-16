@@ -3,12 +3,10 @@ import { describe, test } from "node:test";
 import {
   defaultPeriod,
   makePeriod,
-  monthPeriod,
   periodDates,
   periodTitle,
   presetHint,
   presetRange,
-  yearPeriod,
 } from "./period";
 
 // period.ts — граница ВСЕХ денежных запросов: from/to отсюда уходят в ленты
@@ -134,19 +132,15 @@ describe("квартал — для VAT", () => {
   });
 });
 
-describe("месяц и год быстрым выбором", () => {
-  test("месяц — с первого по последнее число, имя словами", () => {
-    const p = monthPeriod(2024, 10);
-    assert.deepEqual([p.from, p.to], ["2024-11-01", "2024-11-30"]);
-    assert.equal(periodTitle(p), "Ноябрь 2024");
+describe("свой период, совпавший с месяцем или годом, назван словами", () => {
+  test("целый месяц — «Ноябрь 2024»", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-11-01", to: "2024-11-30" }), "Ноябрь 2024");
   });
   test("февраль високосного года", () => {
-    assert.equal(monthPeriod(2024, 1).to, "2024-02-29");
+    assert.equal(periodTitle({ preset: "custom", from: "2024-02-01", to: "2024-02-29" }), "Февраль 2024");
   });
-  test("год — «2024 год»", () => {
-    const p = yearPeriod(2024);
-    assert.deepEqual([p.from, p.to], ["2024-01-01", "2024-12-31"]);
-    assert.equal(periodTitle(p), "2024 год");
+  test("целый год — «2024 год»", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-01-01", to: "2024-12-31" }), "2024 год");
   });
   test("произвольный отрезок остаётся «Свой период»", () => {
     assert.equal(periodTitle({ preset: "custom", from: "2024-11-03", to: "2024-11-20" }), "Свой период");

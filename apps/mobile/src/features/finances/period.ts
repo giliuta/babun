@@ -119,20 +119,6 @@ export function defaultPeriod(base?: Date): Period {
   return makePeriod("month", base);
 }
 
-/** Весь месяц года как свой период — быстрый выбор «год → месяц». */
-export function monthPeriod(year: number, month: number): Period {
-  return {
-    preset: "custom",
-    from: ymd(new Date(year, month, 1)),
-    to: ymd(new Date(year, month + 1, 0)),
-  };
-}
-
-/** Весь год как свой период. */
-export function yearPeriod(year: number): Period {
-  return { preset: "custom", from: ymd(new Date(year, 0, 1)), to: ymd(new Date(year, 11, 31)) };
-}
-
 /** Свой период, совпавший с целым месяцем или годом: его имя словами. */
 function wholeMonthOrYear(p: Period): string | null {
   const a = parseYmd(p.from);
