@@ -21,6 +21,7 @@ import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { useClient } from "@/features/clients/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
@@ -89,9 +90,12 @@ function ClientVisitsScreen() {
   const today = todayYMD();
   // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`): тапнули по
   // €240 — список обязан дать €240.
+  // Работа под инвойсом должна остаток инвойса — тем же правилом, что
+  // «Долг» на карточке и плитка «Долги» в «Финансах».
+  const invoicing = useClientInvoicing();
   const unpaidList = useMemo(
-    () => unpaidVisits(appointments, today),
-    [appointments, today],
+    () => unpaidVisits(appointments, today, invoicing),
+    [appointments, today, invoicing],
   );
   const unpaidIds = useMemo(
     () => new Set(unpaidList.list.map((a) => a.id)),
@@ -228,6 +232,7 @@ function ClientVisitsScreen() {
                     team={a.team_id ? teamsById.get(a.team_id) : undefined}
                     today={today}
                     showMoney={showMoney}
+                    invoicing={invoicing}
                     // Запись чужой (не открытой сейчас) компании страница
                     // записи не прочтёт — она читает активную; такая строка —
                     // показание, а не дверь в пустой экран.

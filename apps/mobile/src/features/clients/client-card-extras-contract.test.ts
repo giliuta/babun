@@ -57,7 +57,8 @@ describe("долг ведёт в «Неоплаченные»", () => {
   test("история читает unpaid=1 и отбирает правилом долга", () => {
     const visits = read("../../../app/(dashboard)/clients/visits.tsx");
     assert.match(visits, /unpaid === "1"/);
-    assert.match(visits, /unpaidVisits\(appointments, today\)/);
+    // Работа под инвойсом — остатком инвойса, как «Долг» карточки.
+    assert.match(visits, /unpaidVisits\(appointments, today, invoicing\)/);
     assert.match(visits, /"Неоплаченные"/);
   });
 });

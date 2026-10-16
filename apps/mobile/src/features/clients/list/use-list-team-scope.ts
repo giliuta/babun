@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { statsByBlocks } from "@/features/clients/card-access";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import {
@@ -97,13 +98,17 @@ export function useListTeamScope({
   // Под чипом команды строка, сортировка и фильтры считают ТОЛЬКО её записи.
   // Полная история нужна там, где решается судьба клиента: можно ли его
   // удалить и что уйдёт в выгрузку, — там `allStatsMap`.
+  // Долг строки — правилом «Финансов»: работа под инвойсом должна остаток
+  // инвойса; инвойс без записи под чипом команды — только своей.
+  const invoicing = useClientInvoicing();
+  const teamInvoicing = useClientInvoicing(teamChoice === ALL_TEAMS ? null : teamChoice);
   const allStatsMap = useMemo(
-    () => buildStatsMap(clients, appointments),
-    [clients, appointments],
+    () => buildStatsMap(clients, appointments, invoicing),
+    [clients, appointments, invoicing],
   );
   const teamStatsMap = useMemo(
-    () => (teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments)),
-    [teamChoice, teamClients, teamAppointments],
+    () => (teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments, teamInvoicing)),
+    [teamChoice, teamClients, teamAppointments, teamInvoicing],
   );
   // Деньги и визиты строки — по правам этого клиента: у сотрудника
   // сводка из видимых записей не должна показывать то, что закрыто в

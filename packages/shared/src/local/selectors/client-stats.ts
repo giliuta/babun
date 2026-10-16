@@ -81,10 +81,27 @@ export function isVisit(a: Pick<Appointment, "status">): boolean {
 export function appointmentDebt(
   a: Appointment,
   today: string,
+  invoicing?: ClientInvoicing,
 ): number {
+  // Работа под живым инвойсом должна ровно остаток своего инвойса — как в
+  // «Финансах», где долгом стоит инвойс, а не запись.
+  const invoiced = invoicing?.byAppointment.get(a.id);
+  if (invoiced !== undefined) return invoiced;
   if (a.status === "cancelled") return 0;
   if (isVisit(a)) return getDebtAmount(a);
   return a.date < today ? getDebtAmount(a) : 0;
+}
+
+/** ИНВОЙСЫ В ДОЛГЕ КЛИЕНТА — тем же правилом, что плитка «Долги» и день
+ *  календаря: работа под живым инвойсом (`invoicedAppointmentIds`) из долга
+ *  записей выпадает, а долгом становится остаток самого инвойса. Без этого
+ *  частичная кредит-нота к оплаченному инвойсу навсегда оставляла у записи
+ *  «долг» на сумму ноты: в «Финансах» €0, на карточке клиента — €100. */
+export interface ClientInvoicing {
+  /** Работа под живым инвойсом → остаток к оплате её инвойса (0 — оплачен). */
+  byAppointment: ReadonlyMap<string, number>;
+  /** Остаток живых инвойсов клиента БЕЗ записи, ключ — client_id. */
+  unlinkedByClient: ReadonlyMap<string, number>;
 }
 
 export function buildStats(
@@ -93,9 +110,14 @@ export function buildStats(
   client: Pick<Client, "id" | "full_name" | "created_at" | "birthday"> &
     Partial<Pick<Client, "locations">>,
   apts: Appointment[],
+  invoicing?: ClientInvoicing,
 ): ClientStats {
+  const invoiceDebt = invoicing?.unlinkedByClient.get(client.id) ?? 0;
   if (apts.length === 0) {
-    return computeNonAptFields(client, { ...EMPTY_STATS });
+    return computeNonAptFields(client, {
+      ...EMPTY_STATS,
+      debt: Math.round(invoiceDebt * 100) / 100,
+    });
   }
   const cid = client.id;
   const cname = normName(client.full_name);
@@ -130,7 +152,7 @@ export function buildStats(
     //
     // ВИЗИТОМ такая запись не считается — визитов у клиента ровно столько,
     // сколько подтверждённых работ; на них живут ритм, «Пропали» и доход.
-    debt += appointmentDebt(a, today);
+    debt += appointmentDebt(a, today, invoicing);
 
     if (isVisit(a)) {
       visits += 1;
@@ -186,7 +208,7 @@ export function buildStats(
     totalSpent: Math.round(totalSpent),
     // Долг — в центах, а не до евро: €0,40 иначе пропадал вместе с клиентом
     // из «Должников», а €12,60 печаталось как «€13».
-    debt: Math.round(debt * 100) / 100,
+    debt: Math.round((debt + invoiceDebt) * 100) / 100,
     expectedRevenue: Math.round(expectedRevenue),
     lastTeamId,
     lastVisitDate,
@@ -242,6 +264,7 @@ function computeNonAptFields(
 export function buildStatsMap(
   clients: Client[],
   apts: Appointment[],
+  invoicing?: ClientInvoicing,
 ): Map<string, ClientStats> {
   // First pass: index appointments.
   const byId = new Map<string, Appointment[]>();
@@ -277,7 +300,7 @@ export function buildStatsMap(
     } else {
       combined = own;
     }
-    out.set(c.id, buildStats(c, combined));
+    out.set(c.id, buildStats(c, combined, invoicing));
   }
   return out;
 }

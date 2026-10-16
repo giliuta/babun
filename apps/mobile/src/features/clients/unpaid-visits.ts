@@ -1,5 +1,5 @@
 import type { Appointment } from "@babun/shared/local/appointments";
-import { appointmentDebt } from "@babun/shared/local/selectors/client-stats";
+import { appointmentDebt, type ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
 
 // «НЕОПЛАЧЕННЫЕ» В ИСТОРИИ ВИЗИТОВ — куда ведёт тап по «Долг €240» в сводке.
 //
@@ -19,11 +19,12 @@ export interface UnpaidVisits {
 export function unpaidVisits(
   appointments: readonly Appointment[],
   today: string,
+  invoicing?: ClientInvoicing,
 ): UnpaidVisits {
   const list: Appointment[] = [];
   let total = 0;
   for (const a of appointments) {
-    const owed = appointmentDebt(a, today);
+    const owed = appointmentDebt(a, today, invoicing);
     if (owed <= 0) continue;
     list.push(a);
     total += owed;

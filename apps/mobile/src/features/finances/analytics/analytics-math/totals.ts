@@ -11,6 +11,7 @@ import {
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
 import type { Service } from "@babun/shared/local/services";
+import type { ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
 import { cents, euros, inScope, ledgerInScope, recordMinutes, type Scope } from "./scope";
 
 export interface ServiceRow {
@@ -130,7 +131,11 @@ export interface WorkTotals {
 // скидкой 10% показывал «Не оплачено €10», хотя плитка «Долги» давала ноль.
 // Полный возврат работу не оплачивает и долга не
 // открывает — у такой записи ноль, как в `getRecognizedRevenue`.
-export function workTotals(records: readonly Appointment[]): WorkTotals {
+export function workTotals(
+  records: readonly Appointment[],
+  /** Работа под живым инвойсом должна остаток инвойса, как плитка «Долги». */
+  invoicing?: ClientInvoicing,
+): WorkTotals {
   let worked = 0;
   let paid = 0;
   let owed = 0;
@@ -138,7 +143,8 @@ export function workTotals(records: readonly Appointment[]): WorkTotals {
   for (const a of records) {
     if (a.payment_status !== "refunded") worked += cents(a.total_amount ?? 0);
     paid += cents(getPaidAmount(a));
-    owed += cents(getDebtAmount(a));
+    const invoiced = invoicing?.byAppointment.get(a.id);
+    owed += cents(invoiced !== undefined ? invoiced : getDebtAmount(a));
     minutes += recordMinutes(a);
   }
   const n = records.length;

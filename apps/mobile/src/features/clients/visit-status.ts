@@ -1,6 +1,6 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount, getPaidAmount } from "@babun/shared/local/appointments";
-import { appointmentDebt } from "@babun/shared/local/selectors/client-stats";
+import { appointmentDebt, type ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 
 // СОСТОЯНИЕ ЗАПИСИ В ИСТОРИИ — СПРАВА: дату, команду и услуги
@@ -38,6 +38,7 @@ export function visitStatus(
   a: Appointment,
   today: string,
   showMoney: boolean,
+  invoicing?: ClientInvoicing,
 ): VisitStatus {
   const total = a.total_amount ?? 0;
   const money = (n: number) => formatEUR(n);
@@ -51,9 +52,12 @@ export function visitStatus(
   if (!showMoney) {
     return ahead ? { kind: "ahead", text: "", label: "впереди" } : { kind: "past", text: "", label: "прошла" };
   }
-  const owed = appointmentDebt(a, today);
+  const owed = appointmentDebt(a, today, invoicing);
   if (owed > 0) return { kind: "debt", text: money(owed), label: `долг ${money(owed)}` };
-  if (total > 0 && getDebtAmount(a) <= 0 && getPaidAmount(a) > 0) {
+  // Под инвойсом «оплачено» решает инвойс: после частичной кредит-ноты у
+  // самой записи недоплата остаётся навсегда.
+  const invoiceSettled = invoicing?.byAppointment.has(a.id) === true;
+  if (total > 0 && (invoiceSettled || (getDebtAmount(a) <= 0 && getPaidAmount(a) > 0))) {
     return { kind: "paid", text: money(total), label: `оплачено ${money(total)}` };
   }
   if (ahead) return { kind: "ahead", text: total > 0 ? money(total) : "", label: total > 0 ? `ожидается ${money(total)}` : "впереди" };
