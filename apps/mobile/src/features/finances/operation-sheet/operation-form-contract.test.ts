@@ -73,3 +73,9 @@ describe("ставка VAT 0 (16.10)", () => {
     assert.match(sheet, /\n\s+grossCents,\n/);
   });
 });
+
+test("оплата долга открывается в команде самого долга", () => {
+  const sheets = read("../home/HomeSheets.tsx");
+  assert.match(sheets, /defaultTeamId=\{debtPayment\?\.teamId \?\? \(scope === NO_TEAM \? null : scope\)\}/);
+  assert.match(read("../DebtSheet.tsx"), /teamId: debt\.team_id,/);
+});
