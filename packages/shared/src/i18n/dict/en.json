@@ -5416,5 +5416,10 @@
  "Кирпичный": "Brick",
  "Теги: {0}": "Tags: {0}",
  "Открывает выбор тегов": "Opens tag selection",
- "Теги клиента": "Client tags"
+ "Теги клиента": "Client tags",
+ "{0} год": "Year {0}",
+ "Предыдущий год": "Previous year",
+ "Следующий год": "Next year",
+ "Вернуться к дням": "Back to days",
+ "Выбрать год и месяц": "Choose year and month"
 }

@@ -5416,5 +5416,10 @@
  "Кирпичный": "Ladrillo",
  "Теги: {0}": "Etiquetas: {0}",
  "Открывает выбор тегов": "Abre la selección de etiquetas",
- "Теги клиента": "Etiquetas del cliente"
+ "Теги клиента": "Etiquetas del cliente",
+ "{0} год": "Año {0}",
+ "Предыдущий год": "Año anterior",
+ "Следующий год": "Año siguiente",
+ "Вернуться к дням": "Volver a los días",
+ "Выбрать год и месяц": "Elegir año y mes"
 }

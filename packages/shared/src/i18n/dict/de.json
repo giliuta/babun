@@ -5416,5 +5416,10 @@
  "Кирпичный": "Ziegel",
  "Теги: {0}": "Tags: {0}",
  "Открывает выбор тегов": "Öffnet die Tag-Auswahl",
- "Теги клиента": "Kunden-Tags"
+ "Теги клиента": "Kunden-Tags",
+ "{0} год": "Jahr {0}",
+ "Предыдущий год": "Vorheriges Jahr",
+ "Следующий год": "Nächstes Jahr",
+ "Вернуться к дням": "Zurück zu den Tagen",
+ "Выбрать год и месяц": "Jahr und Monat wählen"
 }
