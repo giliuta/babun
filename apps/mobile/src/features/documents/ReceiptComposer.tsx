@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import type { AppointmentService } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
@@ -114,9 +115,11 @@ export function ReceiptComposer({
   const client = (clients.data ?? []).find((c) => c.id === draft.clientId) ?? null;
   // Вводная о человеке считается один раз на весь список, а не по клиенту на
   // строку — та же карта, что строит список выбора.
+  // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
+  const invoicing = useClientInvoicing();
   const statsById = useMemo(
-    () => buildStatsMap(clients.data ?? [], appointments.data ?? []),
-    [appointments.data, clients.data],
+    () => buildStatsMap(clients.data ?? [], appointments.data ?? [], invoicing),
+    [appointments.data, clients.data, invoicing],
   );
   const catalog = useMemo(
     () => new Map((services.data ?? []).map((s) => [s.id, s])),

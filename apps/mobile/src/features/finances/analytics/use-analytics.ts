@@ -236,7 +236,7 @@ export function useAnalytics(start: AnalyticsStart) {
   const weekdays = useMemo(() => weekdayLoad(records), [records]);
   // ПРОГНОЗ: записи, которые ещё впереди в периоде, и их сумма работ.
   const upcoming = useMemo(() => upcomingRecords(appointments, scope), [appointments, scope]);
-  const upcomingWork = useMemo(() => workTotals(upcoming), [upcoming]);
+  const upcomingWork = useMemo(() => workTotals(upcoming, invoicing), [upcoming, invoicing]);
   // VAT ЗА ПЕРИОД — тем же расчётом, что страница VAT (`summarizeVat`), по
   // операциям среза: команда и период уже отобраны.
   const vat = useMemo(() => summarizeVat(periodTxs), [periodTxs]);

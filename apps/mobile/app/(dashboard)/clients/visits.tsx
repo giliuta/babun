@@ -131,14 +131,20 @@ function ClientVisitsScreen() {
   const spent = appointments
     .filter((a) => a.status !== "cancelled" && (a.kind ?? "work") === "work")
     .reduce((n, a) => n + Math.max(0, getPaidAmount(a)), 0);
+  // Инвойс без записи — тоже долг клиента (как на карточке), но строки
+  // визита у него нет: он входит в итог словами.
+  const invoiceOnly = invoicing?.unlinkedByClient.get(clientId ?? "") ?? 0;
+  const debtTotal = Math.round((unpaidList.total + invoiceOnly) * 100) / 100;
   const caption = unpaidOnly
     ? unpaidList.list.length > 0
-      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`
-      : "Неоплаченных записей нет."
+      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(debtTotal)}`
+      : invoiceOnly > 0
+        ? `Неоплаченных записей нет · по инвойсам ${formatEUR(invoiceOnly)}`
+        : "Неоплаченных записей нет."
     : done.length > 0
       ? showMoney
         ? `${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
-            unpaidList.total > 0 ? ` · долг ${formatEUR(unpaidList.total)}` : ""
+            debtTotal > 0 ? ` · долг ${formatEUR(debtTotal)}` : ""
           }`
         : `${done.length} ${visitsWord(done.length)}`
       : null;
@@ -216,7 +222,7 @@ function ClientVisitsScreen() {
           {caption ? (
             <RowCaption
               text={caption}
-              tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
+              tone={unpaidOnly || (showMoney && debtTotal > 0) ? "warning" : "quiet"}
             />
           ) : null}
           {/* День — заголовком над своими плашками, как в «Финансах»;
