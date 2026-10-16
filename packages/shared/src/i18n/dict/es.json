@@ -2932,6 +2932,7 @@
  "По долгу уже есть платежи — направление не меняется": "Esta deuda ya tiene pagos — no se puede cambiar el sentido",
  "По долгу уже уплачено {0} — сумма долга не может стать меньше": "Ya se pagaron {0} de esta deuda: el importe no puede ser menor",
  "По доходу выдан чек {0} — сначала оформите кредит-ноту": "Se emitió el recibo {0} para este ingreso: emite primero una nota de crédito",
+ "По доходу выдан чек {0} — сумму, счёт и дату не изменить: сначала оформите кредит-ноту": "Se emitió el recibo {0} por este ingreso: el importe, la cuenta y la fecha no se pueden cambiar; primero emite una nota de crédito",
  "По доходу есть возврат — счёт не сменить: сначала удалите возврат": "El ingreso tiene un reembolso — no se puede cambiar la cuenta: elimina primero el reembolso",
  "По записи выставлен инвойс {0} — примите оплату по нему": "Hay una factura {0} emitida para esta cita: cobra sobre ella",
  "По записи ещё не платили": "Aún no hay pagos de esta cita",

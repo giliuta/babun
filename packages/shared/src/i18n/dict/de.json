@@ -2932,6 +2932,7 @@
  "По долгу уже есть платежи — направление не меняется": "Für diese Schuld gibt es bereits Zahlungen – die Richtung lässt sich nicht mehr ändern",
  "По долгу уже уплачено {0} — сумма долга не может стать меньше": "Auf diese Schuld wurden bereits {0} gezahlt — sie kann nicht kleiner werden",
  "По доходу выдан чек {0} — сначала оформите кредит-ноту": "Zu dieser Einnahme wurde Quittung {0} ausgestellt — stellen Sie zuerst eine Gutschrift aus",
+ "По доходу выдан чек {0} — сумму, счёт и дату не изменить: сначала оформите кредит-ноту": "Für diese Einnahme wurde Beleg {0} ausgestellt — Betrag, Konto und Datum lassen sich nicht ändern: stellen Sie zuerst eine Gutschrift aus",
  "По доходу есть возврат — счёт не сменить: сначала удалите возврат": "Zu dieser Einnahme gibt es eine Erstattung – das Konto lässt sich nicht ändern: löschen Sie zuerst die Erstattung",
  "По записи выставлен инвойс {0} — примите оплату по нему": "Für den Termin ist Rechnung {0} ausgestellt — nehmen Sie die Zahlung darauf an",
  "По записи ещё не платили": "Für diesen Termin wurde noch nichts bezahlt",

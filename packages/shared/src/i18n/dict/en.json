@@ -2932,6 +2932,7 @@
  "По долгу уже есть платежи — направление не меняется": "This debt already has payments — its direction can't be changed",
  "По долгу уже уплачено {0} — сумма долга не может стать меньше": "{0} has already been paid on this debt — the debt can't be smaller",
  "По доходу выдан чек {0} — сначала оформите кредит-ноту": "Receipt {0} was issued for this income — issue a credit note first",
+ "По доходу выдан чек {0} — сумму, счёт и дату не изменить: сначала оформите кредит-ноту": "Receipt {0} has been issued for this income — the amount, account and date can't be changed: issue a credit note first",
  "По доходу есть возврат — счёт не сменить: сначала удалите возврат": "This income has a refund – the account can't be changed: delete the refund first",
  "По записи выставлен инвойс {0} — примите оплату по нему": "Invoice {0} is issued for this appointment — take the payment on it",
  "По записи ещё не платили": "No payments for this appointment yet",
