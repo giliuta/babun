@@ -111,6 +111,8 @@ export interface OperationGateInput {
   noCategories?: boolean;
   /** Человек может завести категорию сам (справочник владельческий). */
   canCreateCategory?: boolean;
+  /** Номер выданного чека, если правка меняет деньги дохода с чеком. */
+  receiptLocked?: string | null;
 }
 
 /** Выбрать нечего и завести нечем: совет «выберите категорию» невыполним,
@@ -147,6 +149,7 @@ export function operationCanSave(
     !g.accountMismatch &&
     !g.dateInFuture &&
     !overpaysDebt(g) &&
+    !g.receiptLocked &&
     !g.belowRefunded &&
     !g.lowersWhileRefundsUnknown &&
     !g.txAccountClosed &&
@@ -181,6 +184,11 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
                 "Введите сумму больше нуля и не больше двух знаков после запятой",
               error: true,
             }
+          : g.receiptLocked
+            ? {
+                text: `По доходу выдан чек ${g.receiptLocked} — сумму, счёт и дату не изменить: сначала оформите кредит-ноту`,
+                error: true,
+              }
           : overpaysDebt(g)
             ? {
                 text: `По долгу осталось ${formatEUR((g.debtRemainderCents ?? 0) / 100)} — больше не принять`,

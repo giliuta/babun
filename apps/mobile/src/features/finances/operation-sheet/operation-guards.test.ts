@@ -170,3 +170,11 @@ describe("оплата долга не больше остатка", () => {
     assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), true);
   });
 });
+
+describe("доход с выданным чеком", () => {
+  test("правка денег гасит кнопку и называет чек", () => {
+    const g = { ...ready, receiptLocked: "REC-2026-0001" };
+    assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), false);
+    assert.match(operationInputReason(g)?.text ?? "", /^По доходу выдан чек REC-2026-0001 — /);
+  });
+});

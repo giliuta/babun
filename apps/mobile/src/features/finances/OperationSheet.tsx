@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReceiptSession } from "./receipt-upload";
+import { useReceiptLock } from "./operation-sheet/use-receipt-lock";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -144,6 +145,7 @@ export function OperationSheet({
   // Фото прикладывает владелец: хранилище чеков владельческое, у сотрудника
   // блока файла нет — требовать от него то, что он приложить не может, нельзя.
   const receiptMissing = asks.receipt && isOwner && !receiptUrl;
+  const receiptLocked = useReceiptLock({ visible, transaction, amountCents, accountId, date });
   const gate: OperationGateInput = {
     online, accountsFailed, txAccountClosed, amount, amountCents, refundedTotal,
     belowRefunded, lowersWhileRefundsUnknown, dateInFuture, accountMismatch,
@@ -155,6 +157,7 @@ export function OperationSheet({
     noCategories: cats.length === 0,
     canCreateCategory: isOwner,
     debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
+    receiptLocked,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
   const isExpense = type === "expense";
