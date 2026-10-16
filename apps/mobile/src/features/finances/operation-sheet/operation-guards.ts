@@ -2,7 +2,7 @@
 // live, and the one reason printed under it. No React here — the sheet feeds
 // plain values and gets plain answers back.
 
-import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR, moneyInputProblem } from "@babun/shared/common/utils/money";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -149,7 +149,9 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
         ? { text: CLOSED_ACCOUNT_REASON, error: false }
         : g.amount.length > 0 && g.amountCents == null
           ? {
-              text: "Введите сумму больше нуля и не больше двух знаков после запятой",
+              text:
+                moneyInputProblem(g.amount) ??
+                "Введите сумму больше нуля и не больше двух знаков после запятой",
               error: true,
             }
           : g.belowRefunded

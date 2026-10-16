@@ -1,5 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import {
+  moneyInputProblem,
   CURRENCIES,
   exactMoneyAmountToCents,
   formatEURExact,
@@ -139,5 +140,20 @@ describe("валюта тенанта — реестр", () => {
     expect(parseMoneyInputToCents("zł 1 200,50")).toBe(120050);
     expect(parseMoneyInputToCents("₴ 99")).toBe(9900);
     expect(parseMoneyInputToCents("R$ 10")).toBe(1000);
+  });
+});
+
+describe("moneyInputProblem — настоящая причина отказа", () => {
+  test("пусто и годно — без причины", () => {
+    expect(moneyInputProblem("")).toBeNull();
+    expect(moneyInputProblem("12,50")).toBeNull();
+    expect(moneyInputProblem("-5", { allowNegative: true })).toBeNull();
+  });
+  test("каждая беда — своими словами", () => {
+    expect(moneyInputProblem("-5")).toBe("Сумма не может быть отрицательной");
+    expect(moneyInputProblem("0,005")).toBe("Не больше двух знаков после запятой");
+    expect(moneyInputProblem("0")).toBe("Сумма должна быть больше нуля");
+    expect(moneyInputProblem("12.5.5")).toBe("Введите сумму цифрами, например 12,50");
+    expect(moneyInputProblem("999999999999")).toMatch(/^Сумма слишком большая: не больше /);
   });
 });

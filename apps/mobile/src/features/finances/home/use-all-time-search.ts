@@ -36,7 +36,7 @@ export function useAllTimeSearch(input: AllTimeSearchInput) {
   // Счётчик считает ПОКАЗАННОЕ. Лента считает записями, а не проводками:
   // «Операции · 19» над одним визитом читалось бы как девятнадцать дел.
   const feedTitle = panelCount(
-    view === "income" ? "Доход" : view === "expense" ? "Расход" : "Записи",
+    view === "income" ? "Доход" : view === "expense" ? "Расход" : feedEntriesWord(),
     blockRows.length,
   );
 
@@ -84,3 +84,14 @@ export function useAllTimeSearch(input: AllTimeSearchInput) {
     allTimeRows,
   };
 }
+
+/** «Записи» ленты — записи журнала финансов, а не визиты клиентов. Слово
+ *  одно, смысла два, а словарь переводит по русскому тексту: «Записи» уходило
+ *  в «Appointments». Свой ключ переводится сборкой, а сравнение с сырым
+ *  ключом плагин не трогает: на русском перевод совпадает с ключом, и экран
+ *  показывает прежнее «Записи». */
+export function feedEntriesWord(): string {
+  const word = "Записи ленты финансов";
+  return word === /* i18n-ignore */ "Записи ленты финансов" ? "Записи" : word;
+}
+

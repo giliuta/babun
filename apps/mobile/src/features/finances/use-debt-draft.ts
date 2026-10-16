@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { debtRemainderCents } from "@babun/shared/local/finance/debt";
-import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { formatEURExact, moneyInputProblem, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { formatHM } from "@/features/appointments/helpers";
 import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
@@ -200,7 +200,10 @@ export function useDebtDraft({
       : !named
         ? { text: "Выберите клиента", error: false }
         : cents == null || cents <= 0
-          ? { text: "Введите сумму долга", error: false }
+          ? // Введённая, но негодная сумма — настоящая причина, а не «введите».
+            moneyInputProblem(amount) != null
+            ? { text: moneyInputProblem(amount) as string, error: true }
+            : { text: "Введите сумму долга", error: false }
           : belowPaid
             ? { text: `Уже уплачено ${formatEURExact(paid)} — долг не меньше`, error: true }
             : null;

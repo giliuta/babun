@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useIsOnline } from "@babun/shared/sync";
+import { moneyInputProblem } from "@babun/shared/common/utils/money";
 import { todayYmd } from "@/lib/paper/format";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { useThemeColors } from "@/theme/colors";
@@ -140,7 +141,12 @@ export function TransferSheet({
     [accounts, businessToday],
   );
 
-  const reason = transferReason(online, from, to, amountNum);
+  // Введённая, но негодная сумма — её настоящая причина, а не общее «больше нуля».
+  const amountProblem = moneyInputProblem(draft.amount);
+  const reason =
+    online && from && to && amountProblem
+      ? amountProblem
+      : transferReason(online, from, to, amountNum);
   const canSend = reason === null && !draft.sending;
   // ПОКА ПЕРЕВОД ЛЕТИТ, ЛИСТ НЕ ЗАКРЫВАЕТСЯ: смахнутый в
   // этот момент лист прятал отказ сервера, и человек думал, что деньги ушли.
