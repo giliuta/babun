@@ -81,13 +81,27 @@ export interface DocumentSources {
  *  при каждом рефетче. */
 export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
   const docs: FinanceDocument[] = [];
-  // Номер кредит-ноты ищется по её инвойсу: своей строки у ноты нет.
-  const noteNumberOf = new Map<string, string>();
-  // Чеки с возвратом: нота к самому чеку или к его инвойсу.
+  // Номера кредит-нот ищутся по их инвойсу: своей строки у ноты нет. ВСЕ
+  // номера, а не последний записанный: у инвойса с двумя частичными нотами
+  // поиск «CN-…-0002» не находил ничего.
+  const noteNumbersOf = new Map<string, string[]>();
+  // Инвойсы, отменённые ЦЕЛИКОМ: возвращено всё, и каждый их чек тоже.
+  const fullyCredited = new Set<string>();
+  // Проводки, с которых деньги вернули (`refund_of_id` возврата).
+  const refundedPayments = new Set<string>();
+  for (const rows of Object.values(sources.payments)) {
+    for (const row of rows) {
+      if (row.type === "refund" && row.refund_of_id) refundedPayments.add(row.refund_of_id);
+    }
+  }
+  // Чеки с нотой к самому чеку.
   const receiptNotes = new Map<string, string>();
   for (const invoice of sources.invoices) {
     if (invoice.kind === "credit_note" && invoice.credit_note_of_id) {
-      noteNumberOf.set(invoice.credit_note_of_id, invoice.number);
+      const numbers = noteNumbersOf.get(invoice.credit_note_of_id) ?? [];
+      numbers.push(invoice.number);
+      noteNumbersOf.set(invoice.credit_note_of_id, numbers);
+      if (!invoice.credit_partial) fullyCredited.add(invoice.credit_note_of_id);
     }
     if (invoice.kind === "credit_note" && invoice.credit_note_of_receipt_id) {
       receiptNotes.set(invoice.credit_note_of_receipt_id, invoice.number);
@@ -118,7 +132,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
     // файл, инвойс становится серым, как отменённый. Нота живёт на странице
     // инвойса; в списке — только он, погасший, и её номер находит его поиском.
     if (invoice.kind === "credit_note") continue;
-    const noteNumber = noteNumberOf.get(invoice.id);
+    const noteNumbers = noteNumbersOf.get(invoice.id) ?? [];
     docs.push({
       id: invoice.id,
       kind: "invoice",
@@ -144,7 +158,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       dead,
       teamId: invoice.brigade_id ?? null,
       search: searchKey(
-        noteNumber ? `${invoice.number} ${noteNumber}` : invoice.number,
+        [invoice.number, ...noteNumbers].join(" "),
         clientName,
         invoice.total,
       ),
@@ -171,9 +185,14 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       // ВОЗВРАТ — СЛОВОМ: погашенный возвратом — «Возвращён», частично —
       // «Частично возвращён»; номер ноты находит чек поиском.
       state: (() => {
+        // ВОЗВРАЩЁН ИМЕННО ЭТОТ ЧЕК: нота к нему самому, отмена всего
+        // инвойса или возврат с его платежа. Любая частичная нота инвойса
+        // («Вернуть» с другого платежа, снятие неоплаченной части) метила
+        // «Частично возвращён» каждый его чек.
         const returned =
           receiptNotes.has(receipt.id)
-          || (!!receipt.invoice_id && noteNumberOf.has(receipt.invoice_id));
+          || (!!receipt.invoice_id && fullyCredited.has(receipt.invoice_id))
+          || (!!receipt.transaction_id && refundedPayments.has(receipt.transaction_id));
         if (receipt.status === "void") return returned ? "Возвращён" : "Аннулирован";
         return returned ? "Частично возвращён" : null;
       })(),

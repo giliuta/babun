@@ -374,3 +374,55 @@ describe("возврат по чеку в «Документах» (04.10)", () 
     assert.equal(filterDocuments(docs, "receipt", "CN-2026-011").length, 1);
   });
 });
+
+describe("частичные ноты инвойса и его чеки (16.10)", () => {
+  const note = (id: string, number: string, partial: boolean) =>
+    invoice({ id, number, kind: "credit_note", credit_note_of_id: "inv", credit_partial: partial, total: -20 } as never);
+
+  test("возвращён только чек того платежа, с которого вернули деньги", () => {
+    const docs = collectDocuments(
+      sources({
+        invoices: [invoice({ id: "inv", number: "INV-2026-001" }), note("n1", "CN-2026-001", true)],
+        payments: {
+          inv: [
+            { id: "p1", invoice_id: "inv", type: "income", amount: 50, refund_of_id: null } as never,
+            { id: "p2", invoice_id: "inv", type: "income", amount: 50, refund_of_id: null } as never,
+            { id: "r1", invoice_id: "inv", type: "refund", amount: -20, refund_of_id: "p2" } as never,
+          ],
+        },
+        receipts: [
+          receipt({ id: "rc1", number: "RC-2026-001", invoice_id: "inv", transaction_id: "p1" }),
+          receipt({ id: "rc2", number: "RC-2026-002", invoice_id: "inv", transaction_id: "p2" }),
+          receipt({ id: "rc3", number: "RC-2026-003", invoice_id: "inv", transaction_id: "p1", status: "void" }),
+        ],
+      }),
+    );
+    assert.equal(docs.find((d) => d.id === "rc1")?.state, null);
+    assert.equal(docs.find((d) => d.id === "rc2")?.state, "Частично возвращён");
+    assert.equal(docs.find((d) => d.id === "rc3")?.state, "Аннулирован");
+  });
+
+  test("полная отмена возвращает каждый чек инвойса", () => {
+    const docs = collectDocuments(
+      sources({
+        invoices: [invoice({ id: "inv", number: "INV-2026-001" }), note("n1", "CN-2026-001", false)],
+        receipts: [receipt({ id: "rc1", number: "RC-2026-001", invoice_id: "inv", transaction_id: "p1" })],
+      }),
+    );
+    assert.equal(docs.find((d) => d.id === "rc1")?.state, "Частично возвращён");
+  });
+
+  test("поиск находит инвойс по номеру любой его ноты", () => {
+    const docs = collectDocuments(
+      sources({
+        invoices: [
+          invoice({ id: "inv", number: "INV-2026-001" }),
+          note("n1", "CN-2026-001", true),
+          note("n2", "CN-2026-002", true),
+        ],
+      }),
+    );
+    assert.equal(filterDocuments(docs, "invoice", "CN-2026-001").length, 1);
+    assert.equal(filterDocuments(docs, "invoice", "CN-2026-002").length, 1);
+  });
+});
