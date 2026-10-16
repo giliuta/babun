@@ -1403,17 +1403,16 @@ function BookForm() {
   // карточкой, «назад» возвращает ровно в неё.
   // «Карточка из записи» как право убрано (владелец 02.10: «запись он
   // всегда может открывать, если он её видит») — дверь открыта всем.
-  // КЛИЕНТ ЗАПИСИ С ОПЛАТОЙ НЕ МЕНЯЕТСЯ (владелец 03.10: «если оплачено за
-  // одним клиентом — потом нельзя менять клиента… поставил Артёма, он оплатил
-  // наличными, а потом я поменял на другого — максимально странно»). Тап по
-  // клиенту не открывает выбор, а говорит почему; снятая оплата клиента не
-  // держит. То же правило у сервера (`protect_paid_appointment_finance`).
+  // КЛИЕНТА ЗАПИСИ С ОПЛАТОЙ НЕ ПОДМЕНЯЮТ — НО ПРАВЯТ. Деньги записаны на
+  // этого клиента, и сервер (`protect_paid_appointment_finance`) не даст
+  // поставить другого. Самого клиента — телефон, имя, объекты — править можно
+  // всегда: тап открывает его карточку, а не выбор, который всё равно
+  // кончился бы отказом. Без оплаты тап, как везде, открывает выбор.
   const moneyHoldsClient =
     !!editing && ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
-  const pickClientOrRefuse = () => {
+  const pickClientOrOpenCard = () => {
     if (moneyHoldsClient) {
-      haptics.warning();
-      toast("Клиента не сменить: по записи есть оплата. Сначала снимите оплату", "info");
+      openClientCard();
       return;
     }
     setClientPickerOpen(true);
@@ -2815,7 +2814,7 @@ function BookForm() {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  onPick={can.editClient ? pickClientOrRefuse : undefined}
+                  onPick={can.editClient ? pickClientOrOpenCard : undefined}
                   onOpenCard={openClientCard}
                   note={
                     clientNoteOn ? (
@@ -3261,7 +3260,7 @@ function BookForm() {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  onPick={can.editClient ? pickClientOrRefuse : undefined}
+                  onPick={can.editClient ? pickClientOrOpenCard : undefined}
                   onOpenCard={openClientCard}
                   onClear={
                     can.editClient
