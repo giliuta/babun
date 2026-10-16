@@ -5030,5 +5030,7 @@
  "Событие может вернуть только его автор": "Only the event's author can restore it",
  "Эта запись уже в календаре": "This appointment is already in the calendar",
  "Получено по записи": "Received for appointment",
- "По заявке остались невозвращённые деньги; сначала верните их": "Money on this visit has not been refunded yet; refund it first"
+ "По заявке остались невозвращённые деньги; сначала верните их": "Money on this visit has not been refunded yet; refund it first",
+ "Сначала выберите клиента": "Choose a client first",
+ "Открывает объекты клиента": "Opens the client's properties"
 }

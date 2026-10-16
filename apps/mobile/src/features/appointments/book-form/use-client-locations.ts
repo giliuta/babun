@@ -37,17 +37,21 @@ export function useClientLocations({
   const selectedLocation =
     clientLocations.find((l) => l.id === locationId) ?? null;
 
-  // ОБЪЕКТ СОБЫТИЯ ВЫБИРАЕТСЯ БЕЗ КЛИЕНТА (в записи сначала клиент, потом объект; в событии объект и
-  // клиент выбираются отдельно).
-  //
+  // ОБЪЕКТ СОБЫТИЯ — КАК У ЗАПИСИ: СНАЧАЛА КЛИЕНТ, ПОТОМ ЕГО ОБЪЕКТ.
   // Объект в базе принадлежит клиенту — он лежит в его `locations`, своей
-  // таблицы у него нет. Поэтому «без клиента» здесь значит не «объект-сирота»,
-  // а «не спрашиваем клиента, чтобы показать объекты»: событие выбирает из
-  // объектов ВСЕХ клиентов, а чей объект — говорит подписью в листе. Клиент
-  // события при этом остаётся своим полем и может быть пустым или другим.
+  // таблицы у него нет. Событие без клиента выбирало из объектов всех
+  // клиентов, и объект вставал в событие ничьим: в записи так нельзя, а в
+  // событии было можно. Теперь выбор — только объекты клиента события.
+  //
+  // Общий пул остаётся для СТАРЫХ событий: объект чужого клиента, выбранный
+  // раньше, не пропадает и подписан, чей он.
   const eventLocationPool = useMemo(
     () => eventLocationRows(clients, client, clientLocations),
     [clients, client, clientLocations],
+  );
+  const eventPickPool = useMemo(
+    () => (client ? eventLocationPool.filter((row) => row.ownerId === client.id) : []),
+    [client, eventLocationPool],
   );
   const eventLocationEntry =
     eventLocationPool.find((row) => row.loc.id === locationId) ?? null;
@@ -69,6 +73,7 @@ export function useClientLocations({
     clientLocations,
     selectedLocation,
     eventLocationPool,
+    eventPickPool,
     eventLocationEntry,
     eventLocationOwner,
     forgetLocation,

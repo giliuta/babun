@@ -11,6 +11,7 @@ import type { CalendarUiState } from "./use-calendar-ui-state";
 import type { QuickEvents } from "./use-quick-events";
 import type { RecordActions } from "./use-record-actions";
 import type { RecordNaming } from "./use-record-naming";
+import { recordComment } from "@/features/calendar/record-title";
 
 type CreateActionMenuDeps =
   Pick<RecordActions, "openEdit" | "openReminderMenu" | "startFreeMove" | "startMove"
@@ -220,7 +221,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
         : items;
 
     setSheetMenu({
-      title: clientName(apt) || apt.comment || "Запись",
+      title: clientName(apt) || recordComment(apt) || "Запись",
       subtitle: `${humanDayTitle(apt.date)}, ${apt.time_start}–${apt.time_end}`,
       items: shown,
     });

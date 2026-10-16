@@ -5030,5 +5030,7 @@
  "Событие может вернуть только его автор": "Nur der Ersteller des Ereignisses kann es wiederherstellen",
  "Эта запись уже в календаре": "Dieser Termin ist bereits im Kalender",
  "Получено по записи": "Erhalten für den Termin",
- "По заявке остались невозвращённые деньги; сначала верните их": "Für diesen Termin wurde noch nicht alles Geld erstattet; erstatten Sie es zuerst"
+ "По заявке остались невозвращённые деньги; сначала верните их": "Für diesen Termin wurde noch nicht alles Geld erstattet; erstatten Sie es zuerst",
+ "Сначала выберите клиента": "Wählen Sie zuerst einen Kunden",
+ "Открывает объекты клиента": "Öffnet die Objekte des Kunden"
 }

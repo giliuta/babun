@@ -63,6 +63,8 @@ export function recordFilled(
     kind?: string | null;
     status?: string | null;
     date?: string | null;
+    time_start?: string | null;
+    time_end?: string | null;
     client_id?: string | null;
     location_id?: string | null;
     address?: string | null;
@@ -77,6 +79,7 @@ export function recordFilled(
     payment?: { cashAmount: number; cardAmount: number } | null;
   },
   todayYmd?: string,
+  nowMinutes?: number | null,
 ): { client: boolean; object: boolean; services: boolean; paid: boolean } {
   return {
     client: !!apt.client_id,
@@ -87,21 +90,41 @@ export function recordFilled(
       (apt.services?.length ?? 0) > 0 ||
       !!apt.custom_total ||
       Number(apt.total_amount ?? 0) > 0,
-    paid: !owesAfterVisit(apt, todayYmd),
+    paid: !owesAfterVisit(apt, todayYmd, nowMinutes),
   };
 }
 
-/** «НЕ ОПЛАЧЕНО» = ДОЛГ ПОСЛЕ ВИЗИТА (у долга свой цвет). Визит состоялся — выполнен или его день прошёл, — а получено
- *  меньше суммы. Будущая запись не оплачена по определению, и красить её
- *  «долгом» значило бы красить весь план. Сумма «получено» — та же, что у
- *  долга в финансах (`getPaidAmount`: аванс + леджер/зеркало веба). */
+/** Минуты от полуночи у «ЧЧ:ММ»; не время — `null`. */
+function hmToMinutes(hm: string | null | undefined): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hm ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+/** «НЕ ОПЛАЧЕНО» = ДОЛГ ПОСЛЕ ВИЗИТА (у долга свой цвет). Визит состоялся —
+ *  выполнен, его день прошёл или сегодня кончилось его время, — а получено
+ *  меньше суммы. Ждать завтрашнего дня нельзя: прошедшая неоплаченная запись
+ *  весь вечер стояла в цвете команды, как будто с ней всё в порядке. Будущая
+ *  запись не оплачена по определению, и красить её «долгом» значило бы
+ *  красить весь план. Конец — как у раскладки и просрочки: не раньше
+ *  15 минут от начала. Сумма «получено» — та же, что у долга в финансах
+ *  (`getPaidAmount`: аванс + леджер/зеркало веба). */
 function owesAfterVisit(
   apt: Parameters<typeof recordFilled>[0],
   todayYmd?: string,
+  nowMinutes?: number | null,
 ): boolean {
+  const start = hmToMinutes(apt.time_start);
+  const end = hmToMinutes(apt.time_end);
+  const endMinutes =
+    start == null ? end : Math.max(end ?? start, start + 15);
   const happened =
     apt.status === "completed" ||
-    (!!todayYmd && !!apt.date && apt.date < todayYmd);
+    (!!todayYmd && !!apt.date && apt.date < todayYmd) ||
+    (!!todayYmd &&
+      apt.date === todayYmd &&
+      nowMinutes != null &&
+      endMinutes != null &&
+      endMinutes <= nowMinutes);
   if (!happened) return false;
   if (apt.payment_status === "refunded" || apt.payment_status === "paid") {
     return false;
@@ -126,8 +149,9 @@ export function recordFilledFor(
   apt: Parameters<typeof recordFilled>[0],
   todayYmd?: string,
   paymentHidden?: boolean,
+  nowMinutes?: number | null,
 ): ReturnType<typeof recordFilled> {
-  const filled = recordFilled(apt, todayYmd);
+  const filled = recordFilled(apt, todayYmd, nowMinutes);
   return paymentHidden ? { ...filled, paid: true } : filled;
 }
 

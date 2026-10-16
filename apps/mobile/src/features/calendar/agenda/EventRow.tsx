@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ThemeColors } from "@/theme/colors";
+import { recordComment } from "@/features/calendar/record-title";
 
 // Событие — свой шаблон (web design-keeper #6): title из comment, знак
 // записи слева, превью заметок — иначе событие выглядело как «битая запись»
@@ -20,7 +21,7 @@ export function EventRow({
   cancelled: boolean;
   t: ThemeColors;
 }) {
-  const title = apt.comment?.trim() || "Событие";
+  const title = recordComment(apt) || "Событие";
   const address = apt.address?.trim();
   const notes = apt.event_notes?.trim();
   return (

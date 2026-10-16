@@ -17,6 +17,8 @@ import {
 } from "@/features/calendar/block-geometry";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
 import { MIN_H } from "@/features/calendar/grid-units";
+import { recordComment } from "@/features/calendar/record-title";
+import { BLOCK_RADIUS } from "@/components/ui/RecordMark";
 
 // ═══ СОБЫТИЯ «ВЕСЬ ДЕНЬ» — ЧИПЫ В ЗАКРЕПЛЁННОЙ ПОЛОСЕ НАД СЕТКОЙ ═══
 //
@@ -110,7 +112,7 @@ export function AllDayRow({
               overflow > 0 && i === shown - 1 ? chipOverflowW(overflow) : 0;
             const pad = chipPad(chipW);
             const textW = chipTextW(chipW, reserve);
-            const name = clientName(a) || a.comment || "Событие";
+            const name = clientName(a) || recordComment(a) || "Событие";
             return (
               <Pressable
                 key={a.id}
@@ -134,7 +136,7 @@ export function AllDayRow({
                   borderWidth: 1,
                   borderColor: cancelled ? CANCELLED_EDGE : c.contour,
                   borderStyle: cancelled ? CANCELLED_BORDER : "solid",
-                  borderRadius: t.radius.card,
+                  borderRadius: BLOCK_RADIUS,
                   borderCurve: "continuous",
                   overflow: "hidden",
                   // Тот же плотный рецепт, что у блока сетки (вариант 7).

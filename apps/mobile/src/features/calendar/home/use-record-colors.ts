@@ -64,6 +64,10 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
     [paletteRaw.unpaid, paletteRaw.noObject],
   );
   const fallbackColor = useFallbackColor(activeTeamId);
+  // Часы цвета «долга» — пятиминутками: прошедшая сегодня запись краснеет
+  // вскоре после конца, а резолвер цвета (зависимость memo всей сетки) не
+  // пересоздаётся каждую минуту.
+  const colorMinutes = Math.floor(nowMinutes / 5) * 5;
   // Подсветка есть только у включённого блока (убрали объект — подсветка уходит;
   // убрали оплату — тоже; запись считается заполненной).
   const bookingBlocks = useBookingBlocks(activeTeamId);
@@ -132,7 +136,7 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
       if (a.kind !== "work") return base;
       return resolveRecordColor({
         override: a.color_override,
-        filled: recordFilledFor(a, todayYmd, paymentHiddenFor(a)),
+        filled: recordFilledFor(a, todayYmd, paymentHiddenFor(a), colorMinutes),
         base,
         palette: situationPalette,
         active: activeSituations,
@@ -149,6 +153,7 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
       activeSituations,
       fallbackColor,
       todayYmd,
+      colorMinutes,
       paymentHiddenFor,
     ],
   );

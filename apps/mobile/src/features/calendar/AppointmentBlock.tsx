@@ -10,6 +10,7 @@ import {
   CANCELLED_BORDER,
 } from "@/features/calendar/status-colors";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
+import { BLOCK_RADIUS } from "@/components/ui/RecordMark";
 import { blockPropsEqual } from "@/features/calendar/grid-memo";
 import { useUnstretchedStyle } from "@/features/calendar/zoom";
 import { pct } from "@/features/calendar/grid-units";
@@ -257,7 +258,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               paddingHorizontal: pad - (bw - 1),
               paddingVertical: 2 - (bw - 1),
               paddingTop: 2 - (bw - 1) + topHandle,
-              borderRadius: t.radius.card,
+              borderRadius: BLOCK_RADIUS,
               borderCurve: "continuous",
               overflow: "hidden",
             },

@@ -5030,5 +5030,7 @@
  "Событие может вернуть только его автор": "Solo el autor del evento puede restaurarlo",
  "Эта запись уже в календаре": "Esta cita ya está en el calendario",
  "Получено по записи": "Cobrado por la cita",
- "По заявке остались невозвращённые деньги; сначала верните их": "Quedan pagos sin devolver en esta cita; devuélvalos primero"
+ "По заявке остались невозвращённые деньги; сначала верните их": "Quedan pagos sin devolver en esta cita; devuélvalos primero",
+ "Сначала выберите клиента": "Primero elija un cliente",
+ "Открывает объекты клиента": "Abre los inmuebles del cliente"
 }
