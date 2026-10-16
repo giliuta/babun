@@ -365,6 +365,17 @@ describe("прибыль по услугам", () => {
   });
 });
 
+describe("прибыль по услугам: материалы как у «Расхода»", () => {
+  test("прошедшая незакрытая запись материалов не списывает", () => {
+    const svc = [{ id: "c", name: "Чистка", materials: [{ name: "Химия", cost: 10 }] } as never];
+    const row = [{ id: "c", name: "Чистка", quantity: 3, records: 1, amount: 150 }];
+    const open = serviceProfit(row, [appt({ id: "1", status: "scheduled", services: [line("c", 3, 50)] as never })], svc);
+    const done = serviceProfit(row, [appt({ id: "1", status: "completed", services: [line("c", 3, 50)] as never })], svc);
+    assert.equal(open[0].materials, 0);
+    assert.ok(done[0].materials > 0);
+  });
+});
+
 describe("прогноз: записи впереди", () => {
   test("будущие и сегодняшние несделанные — впереди; сделанные и отменённые — нет", () => {
     const s = { ...SEP, nowHm: "12:00" };
