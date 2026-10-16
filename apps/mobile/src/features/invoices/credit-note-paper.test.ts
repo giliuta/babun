@@ -99,3 +99,28 @@ describe("кредит-нота на бумаге", () => {
     assert.equal(invoice.reference, null);
   });
 });
+
+describe("полная кредит-нота с позициями инвойса", () => {
+  // Сервер копирует позиции с минусом: услуга −€120, скидка инвойса +€20.
+  const full = buildInvoiceDocument({
+    ...input,
+    invoice: {
+      ...note,
+      lines: [
+        { id: "l1", invoice_id: "cn-1", position: 0, title: "Cleaning", qty: 2, unit_price: -60, total: -120, description: null, unit: null },
+        { id: "l2", invoice_id: "cn-1", position: 1, title: "Discount", qty: 1, unit_price: 20, total: 20, description: null, unit: null },
+      ],
+    } as InvoiceLedgerWithLines,
+  });
+
+  it("таблица печатает позиции ноты, а не пустоту", () => {
+    assert.deepEqual(full.lines.map((line) => line.title), ["Cleaning", "Discount"]);
+    assert.match(full.lines[0]?.total ?? "", /120\.00/);
+  });
+
+  it("минусовые позиции не выдаются за скидку", () => {
+    const labels = full.totals.map((row) => row.label).join(" | ");
+    assert.doesNotMatch(labels, /Discount/);
+    assert.ok(!full.totals.some((row) => /^€?0\.00$/.test(row.value.replace(/[^0-9.€]/g, ""))), labels);
+  });
+});

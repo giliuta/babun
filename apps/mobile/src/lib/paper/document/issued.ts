@@ -140,7 +140,12 @@ export function issuedDocument({
               total: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
             },
           ]
-        : invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
+        : // ПОЛНАЯ НОТА НЕСЁТ ПОЗИЦИИ ИНВОЙСА С МИНУСОМ (04.10): цена каждой —
+          // отрицательная, а скидка инвойса стала строкой с плюсом. Фильтр
+          // «скидка — не услуга» выкидывал все позиции ноты: таблица пустела, а
+          // итоги печатали «Subtotal €0.00 / Discount −€100.00». У ноты строки
+          // печатаются как есть — их сумма и есть её итог.
+          (creditNote ? invoice.lines : invoice.lines.filter((line) => line.unit_price >= 0)).map((line) => ({
             title: line.title,
             description: line.description?.trim() || null,
             qty: formatQty(line.qty, line.unit, dict.locale),
@@ -156,7 +161,7 @@ export function issuedDocument({
       vatPercent: invoice.vat_percent,
       vatMode,
       total: invoice.total,
-      discount: splitDiscount(invoice.lines.map((line) => line.total)),
+      discount: creditNote ? null : splitDiscount(invoice.lines.map((line) => line.total)),
     }),
     // Кредит-ноту не оплачивают: реквизиты для оплаты на ней — приглашение
     // перевести деньги по документу, который их возвращает.
