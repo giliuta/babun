@@ -67,13 +67,13 @@ There **isn't any**. Each reminder is a one-shot row; once `booked` or `dismisse
 - **A7.** Update semantics: `updateReminderStatus(id, status)` is the only mutation other than create/delete (matches today's `markStatus`). No `updateReminder` for the body — the existing UI doesn't edit notes/dates after creation.
 - **A8.** `babun:recurring-changed` DOM event stays. Sidebar already listens; cloud writes dispatch it after a successful round-trip so the badge updates without waiting for `focus`.
 
-## G1 — SQL migration (`20260430_007_recurring_reminders.sql`)
+## G1 — SQL migration (`20260430000007_recurring_reminders.sql`)
 
-Full text in `babun-crm/apps/web/supabase/migrations/20260430_007_recurring_reminders.sql`. Sections:
+Full text in `babun-crm/apps/web/supabase/migrations/20260430000007_recurring_reminders.sql`. Sections:
 
 1. CREATE TABLE `public.recurring_reminders` with the columns above.
 2. Three indexes: `(tenant_id)`, `(client_id) where client_id is not null`, `(tenant_id, status, next_due_date)` for the inbox query.
-3. `set_updated_at` trigger (reuses helper from `20260427_001_init_clients.sql`).
+3. `set_updated_at` trigger (reuses helper from `20260427000001_init_clients.sql`).
 4. `enable row level security` + single all-own policy.
 
 No data migration needed — production count is 0 (feature was localStorage-only before today). Existing tenants who used the inbox locally can lift their queue with the G5 import button.
@@ -229,7 +229,7 @@ residual_reminders = 0
 
 ### Files shipped (commits `6e2bb8a` + close)
 
-- `supabase/migrations/20260430_007_recurring_reminders.sql` (76 lines)
+- `supabase/migrations/20260430000007_recurring_reminders.sql` (76 lines)
 - `packages/shared/src/db/repositories/recurring-reminders.ts` (181 lines, new)
 - `packages/shared/src/db/database.types.ts` — `recurring_reminders` table types
 - `packages/shared/src/local/recurring.ts` — localStorage writers removed; `loadRecurring` + pure helpers retained

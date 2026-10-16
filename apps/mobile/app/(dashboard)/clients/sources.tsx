@@ -23,7 +23,7 @@ import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { teamSources, type ClientSource, sourceDisplayName } from "@/features/clients/acquisition-source";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import {
   useClientSources,
@@ -37,9 +37,8 @@ import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 
-// ИСТОЧНИКИ — ОТКУДА ПРИХОДЯТ КЛИЕНТЫ (владелец 03.10: «сделай просто
-// стандартные источники, такие, какие я могу править; не нужен Instagram —
-// могу его вообще удалить; и добавлять новые»).
+// ИСТОЧНИКИ — ОТКУДА ПРИХОДЯТ КЛИЕНТЫ: стандартные источники, которые
+// можно править, удалять (хоть Instagram) и добавлять новые.
 //
 // Один справочник команды по рецепту «Тегов»: восемь готовых засеяны
 // строками и ничем не отличаются от добавленных. Строка 52pt, тап —
@@ -47,7 +46,7 @@ import { useTeams } from "@/features/reference/queries";
 // «Добавить источник» — кнопкой внизу. Цвета у источника нет: значок — у
 // готового его, у добавленного общий.
 //
-// Право — своё, «Источники» (`clients.settings_sources`, 03.10): у каждой
+// Право — своё, «Источники» (`clients.settings_sources`): у каждой
 // строки шестерёнки своё право.
 
 const ROW_H = 52;
@@ -84,7 +83,7 @@ function ClientSourcesScreen() {
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const list = useMemo(() => teamSources(query.data ?? [], teamId), [query.data, teamId]);
-  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (как у услуг). Только владелец.
   const isOwner = useDataRole().data === "owner";
   const sourceTemplates = useMemo(
     () =>

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { isDayOff, setDayOff, type TeamSchedule } from "./schedule";
 
-// «ВЫХОДНОЙ» В ШТОРКЕ МЕТКИ — ПО ВСЕМУ ГРАФИКУ (повторный аудит 03.10).
+// «ВЫХОДНОЙ» В ШТОРКЕ МЕТКИ — ПО ВСЕМУ ГРАФИКУ.
 // 2026-10-04 — воскресенье, 2026-10-05 — понедельник.
 const base: TeamSchedule = {
   start: "09:00",
@@ -50,5 +50,22 @@ describe("выходной на дату", () => {
   test("выходной на рабочий день — правка с часами дня", () => {
     const off = setDayOff(base, "2026-10-05", true);
     expect(off.date_overrides?.["2026-10-05"]).toEqual({ is_working: false, start: "09:00", end: "18:00", breaks: [] });
+  });
+
+  test("рабочее воскресенье — по часам недели, а не по полям рождения графика", () => {
+    // Так график пишет шторка: часы — в днях недели, `start/end` —
+    // от рождения (00:00–24:00).
+    const week: TeamSchedule = {
+      start: "00:00",
+      end: "24:00",
+      breaks: [],
+      overrides: {
+        mon: { is_working: true, start: "09:00", end: "18:00", breaks: [] },
+        tue: { is_working: true, start: "09:00", end: "18:00", breaks: [] },
+        sun: { is_working: false, start: "00:00", end: "24:00", breaks: [] },
+      },
+    };
+    const next = setDayOff(week, "2026-10-04", false);
+    expect(next.date_overrides?.["2026-10-04"]).toEqual({ is_working: true, start: "09:00", end: "18:00", breaks: [] });
   });
 });

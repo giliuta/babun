@@ -2,7 +2,7 @@ import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import type { CountryCode } from "libphonenumber-js";
 
-import { tryToE164 } from "../phone";
+import { tryToE164 } from "@/lib/phone";
 import type { MappedRow } from "./csv-validate";
 
 export function rowToClient(
@@ -22,12 +22,12 @@ export function rowToClient(
     phone: row.rawPhone || (e164 ?? ""),
     phone_e164: e164,
     email: row.email,
-    // МЕТКА ИЗ ФАЙЛА — ВЫБРАНА ЧЕЛОВЕКОМ (аудит 03.10): без `city_manual`
+    // МЕТКА ИЗ ФАЙЛА — ВЫБРАНА ЧЕЛОВЕКОМ: без `city_manual`
     // первая же запись клиента в день с меткой переписывала её авто-меткой
     // (`label-auto-assign.ts`).
     city: label,
     ...(label ? { city_manual: true } : {}),
-    // АДРЕС — ОБЪЕКТОМ, А НЕ СТАРЫМ ПОЛЕМ (аудит 03.10): карточка показывает
+    // АДРЕС — ОБЪЕКТОМ, А НЕ СТАРЫМ ПОЛЕМ: карточка показывает
     // адрес только объектов (`locations`), и импортированный адрес находился
     // поиском, но глазами его не было, а записи к нему не привязать.
     locations: address

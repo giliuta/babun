@@ -1,13 +1,12 @@
 import { SectionCard } from "@/components/ui/SectionCard";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
+import { useInlineNote } from "@/components/blocks/use-inline-note";
 import type { Master } from "@/features/reference/queries";
 
 import { useMasterProfileWrite } from "./use-profile-write";
 
 // ЗАМЕТКА СОТРУДНИКА — сразу под блоком «Сотрудник», тем же полем, что
-// заметка клиента под «Клиентом» (владелец 23.09 про клиента; 29.09 — тот же
-// порядок у сотрудника). Подсказка называет поле. Пишет владелец.
+// заметка клиента под «Клиентом». Подсказка называет поле. Пишет владелец.
 
 const MAX_LEN = 500;
 

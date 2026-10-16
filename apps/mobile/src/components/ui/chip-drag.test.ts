@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { CHIP_GAP, dropIndex, shiftOf } from "./chip-drag-math";
 
-// ПОРЯДОК КАЛЕНДАРЕЙ — ЗАЖАТЬ И ПЕРЕТАЩИТЬ В ЛЕНТЕ ШЕСТЕРЁНКИ (владелец 11.10).
+// ПОРЯДОК КАЛЕНДАРЕЙ — ЗАЖАТЬ И ПЕРЕТАЩИТЬ В ЛЕНТЕ ШЕСТЕРЁНКИ.
 
 // «Личный» 80, «Y&D» 50, «Команда 2» 100 — чипы разной ширины.
 const boxes = [
@@ -42,7 +43,10 @@ describe("место чипа под пальцем", () => {
 
 test("шестерёнка календаря: лента перетаскивается, отдельной страницы порядка нет", () => {
   const here = dirname(fileURLToPath(import.meta.url));
-  const gear = readFileSync(resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"), "utf8");
+  const gear = readModuleSource(
+    resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
+    resolve(here, "../../features/calendar/settings-screen"),
+  );
   assert.match(gear, /onReorder=\{\(ids\) =>\s*saveCalendarOrder\.mutate\(/);
   assert.doesNotMatch(gear, /calendar\/order/);
   assert.throws(() => readFileSync(resolve(here, "../../../app/(dashboard)/(home)/calendar/order.tsx")));

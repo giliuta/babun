@@ -11,10 +11,10 @@ import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appo
 // режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
 // владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
 // настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { useTenantId } from "@/lib/tenant";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { useClientsScopeOrNull } from "./company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { withClientHistory } from "./member-history";
 import { useMemberClientHistory } from "./use-member-history";
 import { useClient } from "./queries";
@@ -50,7 +50,7 @@ export function useClientAppointments(clientId: string) {
     (all: Appointment[]) => all.filter((a) => a.client_id === clientId),
     [clientId],
   );
-  // «ИСТОРИЯ ЗАПИСЕЙ» (01.10): у сотрудника календарь открывает клиента записи
+  // «ИСТОРИЯ ЗАПИСЕЙ»: у сотрудника календарь открывает клиента записи
   // только около записи, а прошлые визиты клиента приходят дверью сервера
   // по праву «История записей» (`member-history.ts`). Строка клиента — для
   // маски в «его глазами».

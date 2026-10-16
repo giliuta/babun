@@ -51,7 +51,7 @@ ServiceTitan, Square, Fresha, Setmore, Altegio/YCLIENTS, Bumpix.
    - cron `account_deletion_cleanup_retry` каждые 15 минут стучится в невыложенную
      `account-delete-cleanup`.
    - Выкладка — только по слову владельца.
-2. **Входящие приглашения не накатаны:** `20260914240000_invitations_inbox.sql`
+2. **Входящие приглашения не накатаны:** `20260914235900_invitations_inbox.sql`
    (`my_invitations`, `accept_invitation_by_id`, `decline_invitation`, сигнал) ждёт
    слова владельца у 006. До наката страница «Приглашения» честно показывает
    ошибку загрузки, у строки нет подписи.

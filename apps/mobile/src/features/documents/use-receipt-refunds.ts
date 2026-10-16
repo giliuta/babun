@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { useInvoices } from "@/features/invoices/queries";
+import { useInvoices } from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
-// СКОЛЬКО ПО ЧЕКУ ВЕРНУЛИ И СКОЛЬКО ИЗ ЭТОГО ЕЩЁ БЕЗ ДОКУМЕНТА (04.10). Деньги
+// СКОЛЬКО ПО ЧЕКУ ВЕРНУЛИ И СКОЛЬКО ИЗ ЭТОГО ЕЩЁ БЕЗ ДОКУМЕНТА. Деньги
 // возвращают разными дверями (форма возврата, отмена визита, запись,
 // операция), а документ один — кредит-нота к чеку. Чек оплаты инвойса
 // отменяется нотой к инвойсу — здесь не считается.

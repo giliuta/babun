@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/Toast";
-import { useScopeCompany } from "@/features/clients/company-scope";
+import { useScopeCompany } from "@/session/company-scope";
 import {
   isLocationRequestToken,
   locationRequestState,
   type LocationRequest,
 } from "@/features/clients/location-request-link";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» — данные (STORY-077). Чистые правила —
 // в location-request-link.ts, действия с тостами и «Поделиться» — в
@@ -16,10 +17,9 @@ import {
 // бизнеса), выписывается только RPC `location_request_create` — токен
 // рождается на сервере, — а отзыв ссылки = удаление строки.
 //
-// КОМПАНИЯ — КАРТОЧКИ, А НЕ КАЛЕНДАРЯ (03.10): ссылка выписывается клиенту той
-// компании, чья карточка открыта (`useScopeCompany`). Раньше запрос шёл в
-// компанию, открытую в календаре, и при команде партнёра отвечал «Клиент не
-// найден».
+// КОМПАНИЯ — КАРТОЧКИ, А НЕ КАЛЕНДАРЯ: ссылка выписывается клиенту той
+// компании, чья карточка открыта (`useScopeCompany`). Запрос в компанию,
+// открытую в календаре, при команде партнёра отвечал бы «Клиент не найден».
 
 export const locationRequestsKey = (tenantId: string | null, clientId: string) =>
   ["location-requests", tenantId, clientId] as const;
@@ -64,8 +64,8 @@ export function useLocationRequests(clientId: string | null) {
       else if (state === "used" && seenPending.current.delete(r.id)) arrived = true;
     }
     if (!arrived) return;
-    void qc.invalidateQueries({ queryKey: ["clients"] });
-    void qc.invalidateQueries({ queryKey: ["client"] });
+    void qc.invalidateQueries({ queryKey: clientKeys.all() });
+    void qc.invalidateQueries({ queryKey: clientKeys.cardAll() });
     toast("Клиент прислал адрес", "success");
   }, [query.data, qc, toast]);
 

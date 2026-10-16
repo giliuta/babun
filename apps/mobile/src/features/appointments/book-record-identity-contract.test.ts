@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { bookFormSource } from "./book-form/source-for-tests";
 
-// ФОРМА ЗАПИСИ ДЕРЖИТ СВОЮ ЗАПИСЬ (прогон оплаты 04.10).
+// ФОРМА ЗАПИСИ ДЕРЖИТ СВОЮ ЗАПИСЬ.
 //
 // 1. Ссылка на другую запись при открытой форме меняла параметры того же
 //    экрана: дата и время оставались от прежней записи, оплата приходила от
@@ -12,7 +13,8 @@ import path from "node:path";
 //    чистку по €30, прайс поднят до €50 — лист обещал «Применить · 1 · €50»,
 //    а форма честно оставляла €30.
 
-const book = readFileSync(path.join(__dirname, "../../../app/book/index.tsx"), "utf8");
+// The booking form is the route plus `book-form/` (route first).
+const book = bookFormSource();
 const picker = readFileSync(path.join(__dirname, "BookingPickers.tsx"), "utf8");
 
 describe("форма записи и её запись", () => {

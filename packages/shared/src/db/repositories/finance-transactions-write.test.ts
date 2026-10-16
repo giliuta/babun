@@ -41,7 +41,7 @@ function noRowWriteSupabase() {
 
 function rpcSupabase(
   result: { error: { message: string } | null },
-  calls?: Array<Record<string, unknown>>,
+  calls?: Record<string, unknown>[],
   data: unknown = null,
 ) {
   return {
@@ -54,7 +54,7 @@ function rpcSupabase(
 
 describe("удаление денежной строки подтверждается сервером", () => {
   it("удаляет операцию в «Удалённые операции» серверной функцией", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await deleteTransaction(rpcSupabase({ error: null }, calls, ROW_ID), ROW_ID);
 
     expect(calls).toEqual([{ name: "delete_operation", p_id: ROW_ID }]);
@@ -78,7 +78,7 @@ describe("удаление денежной строки подтверждае�
 
 describe("отмена денег через серверные RPC", () => {
   it("отменяет оплату записи по её id", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await undoAppointmentPayment(rpcSupabase({ error: null }, calls), APPOINTMENT_ID);
 
     expect(calls).toEqual([
@@ -87,7 +87,7 @@ describe("отмена денег через серверные RPC", () => {
   });
 
   it("сбрасывает все чеки записи по её id", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await resetAppointmentPayment(rpcSupabase({ error: null }, calls), APPOINTMENT_ID);
 
     expect(calls).toEqual([
@@ -96,7 +96,7 @@ describe("отмена денег через серверные RPC", () => {
   });
 
   it("передаёт предоплату суммой и способом оплаты", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await setAppointmentPrepayment(
       rpcSupabase({ error: null }, calls),
       APPOINTMENT_ID,
@@ -115,7 +115,7 @@ describe("отмена денег через серверные RPC", () => {
   });
 
   it("отменяет перевод по группе, а не по отдельной ноге", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await deleteTransfer(rpcSupabase({ error: null }, calls), "group-1");
 
     expect(calls).toEqual([

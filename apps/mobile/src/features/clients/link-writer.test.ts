@@ -14,7 +14,7 @@ import {
   memberScope,
   type ClientsScope,
   type CompanyAccess,
-} from "./clients-company";
+} from "@/session/clients-company";
 
 // СТОРОЖА ПИСАТЕЛЯ СВЯЗЕЙ (STORY-086).
 //
@@ -75,8 +75,8 @@ type WriterCore = Pick<typeof import("./use-link-writer"), (typeof WRITER_CORE)[
 const DRAFT_CORE = ["draftCanSave", "draftPhoneTyped", "draftHasInput"] as const;
 type DraftCore = Pick<typeof import("./useClientDraft"), (typeof DRAFT_CORE)[number]>;
 
-const writer = await loadCore<WriterCore>("use-link-writer.ts");
-const draft = await loadCore<DraftCore>("useClientDraft.ts");
+const writer = await loadCore<WriterCore>("use-link-writer/core.ts");
+const draft = await loadCore<DraftCore>("useClientDraft/core.ts");
 
 const NATALIA = "natalia-0000-0000";
 const MARIA = "maria-0000-0000";
@@ -372,7 +372,7 @@ describe("блок людей есть целиком или его нет", () 
     assert.equal(member({}).links, true);
   });
 
-  // С 30.09 людей решает блок «Люди» карточки (`blocks` строки): охват и
+  // Людей решает блок «Люди» карточки (`blocks` строки): охват и
   // телефон больше не прячут весь блок — у людей номера гасит маска сервера.
   test("набор урезан или телефоны скрыты — блок решает строка клиента", () => {
     assert.equal(member({ scope: "own" }).links, true);

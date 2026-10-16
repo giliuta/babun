@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View, Platform } from "react-native";
 import { Check } from "lucide-react-native";
 import type { CountryCode } from "libphonenumber-js";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
 import { useClients, useCreateClient } from "@/features/clients/queries";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { phoneKey } from "@/features/clients/merge-clients";
-import { formatPhoneAsYouType, tryToE164 } from "@/features/clients/phone";
+import { formatPhoneAsYouType, tryToE164 } from "@/lib/phone";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -19,9 +19,9 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Здесь список контактов с номерами: уже заведённые отмечены и выключены
 // (сверка по последним 8 цифрам — тот же ключ, что у слияния дублей),
-// остальные выбираются галочками. Лист открывается БЕЗ ЕДИНОЙ ГАЛКИ
-// (06.10, выпуск в магазины): контакты — чужие данные, и в CRM уходят только
-// те, кого человек отметил сам, а не вся книга одним «Добавить 135».
+// остальные выбираются галочками. Лист открывается БЕЗ ЕДИНОЙ ГАЛКИ:
+// контакты — чужие данные, и в CRM уходят только те, кого человек отметил
+// сам, а не вся книга одним «Добавить 135».
 
 // expo-contacts может отсутствовать в старом дев-билде — тот же охранный
 // require, что в useClientDraft.
@@ -53,8 +53,8 @@ export function ContactsImportSheet({
 }: {
   visible: boolean;
   onClose: () => void;
-  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт,
-   *  владелец 30.09); нет — сервер ставит первую доступную. */
+  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт);
+   *  нет — сервер ставит первую доступную. */
   teamId?: string | null;
 }) {
   const t = useThemeColors();
@@ -269,7 +269,9 @@ export function ContactsImportSheet({
           }}
         >
           {CONTACTS_AVAILABLE
-            ? "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
+            ? Platform.OS === "android"
+              ? "Разрешите доступ к контактам в настройках телефона. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
+              : "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
             : "Адресная книга появится после следующей сборки приложения."}
         </Text>
       ) : (

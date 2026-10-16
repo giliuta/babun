@@ -1,12 +1,11 @@
-// «ПОМОЩЬ» — КОНТАКТЫ ПОДДЕРЖКИ И ЧАСТЫЕ ВОПРОСЫ (Кабинет, 03.10).
+// «ПОМОЩЬ» — КОНТАКТЫ ПОДДЕРЖКИ И ЧАСТЫЕ ВОПРОСЫ (Кабинет).
 //
-// Владелец 03.10: «помощь, связь с поддержкой — да, надо». Файл чистый: ни React,
+// Файл чистый: ни React,
 // ни RN — ссылки и список вопросов проверяются тестом, а экран только рисует.
 //
-// КОНТАКТЫ — ТОЛЬКО НАЗВАННЫЕ ВЛАДЕЛЬЦЕМ. Почту поддержки он назвал 04.10
-// («babun.app@gmail.com — почта от приложения, специально создал»); с 04.10
-// наружу смотрит адрес домена support@babun.app — Cloudflare Email Routing
-// пересылает его в тот же ящик (проверено: письмо Google «Forwarded»). Номер и ник
+// КОНТАКТЫ — ТОЛЬКО НАЗВАННЫЕ ВЛАДЕЛЬЦЕМ. Наружу смотрит адрес домена
+// support@babun.app — Cloudflare Email Routing пересылает его в ящик
+// приложения. Номер и ник
 // выдумывать нельзя: строка-дверь в чужой номер — худший вид вранья (закон
 // `SettingsRow.onPress`). Пустой канал — строки нет вовсе, без заглушек и без
 // «скоро»; заполнил — строка появилась сама. Та же почта стоит в документах
@@ -60,15 +59,15 @@ export function telegramLink(username: string): string {
 
 /** Тело письма: версия и устройство уже стоят, ниже — пустая строка под вопрос.
  *  Версию говорит экран — здесь нет ни нативных модулей, ни констант сборки. */
-export function supportMailBody(appVersion: string): string {
-  return `Версия приложения: ${appVersion}\nУстройство: iPhone\n\n`;
+export function supportMailBody(appVersion: string, device = "iPhone"): string {
+  return `Версия приложения: ${appVersion}\nУстройство: ${device}\n\n`;
 }
 
 /** `mailto:` с темой и заготовкой письма. Адрес в ссылке — как есть, тема и
  *  тело — через `encodeURIComponent` (кириллица, переводы строк). */
-export function emailLink(email: string, appVersion: string): string {
+export function emailLink(email: string, appVersion: string, device?: string): string {
   const subject = encodeURIComponent("Вопрос по Babun");
-  const body = encodeURIComponent(supportMailBody(appVersion));
+  const body = encodeURIComponent(supportMailBody(appVersion, device));
   return `mailto:${email.trim()}?subject=${subject}&body=${body}`;
 }
 
@@ -96,14 +95,14 @@ export function supportRows(contacts: SupportContacts): SupportRow[] {
 }
 
 /** Ссылка строки «Связаться». Версия нужна только письму. */
-export function supportLink(row: SupportRow, appVersion: string): string {
+export function supportLink(row: SupportRow, appVersion: string, device?: string): string {
   switch (row.channel) {
     case "whatsapp":
       return whatsappLink(row.value);
     case "telegram":
       return telegramLink(row.value);
     case "email":
-      return emailLink(row.value, appVersion);
+      return emailLink(row.value, appVersion, device);
   }
 }
 
@@ -186,7 +185,7 @@ export const HELP_FAQ: readonly HelpFaqItem[] = [
 ];
 
 /** Вопросы, которые говорят об оплате: в приложении из магазина их нет
- *  (владелец 04.10, `lib/pay-here.ts` — ни цены-предложения, ни «где
+ *  (`lib/pay-here.ts` — ни цены-предложения, ни «где
  *  платить»). На сайте — все. */
 const PAYMENT_FAQ_IDS: ReadonlySet<string> = new Set(["tariff"]);
 
@@ -202,7 +201,7 @@ export function helpFaq(payHere: boolean): readonly HelpFaqItem[] {
   );
 }
 
-/** Документы — строки «Помощи» и адреса сайта без входа (04.10). */
+/** Документы — строки «Помощи» и адреса сайта без входа. */
 export const LEGAL_LINKS = [
   { href: "/privacy", title: "Политика конфиденциальности" },
   { href: "/terms", title: "Условия использования" },

@@ -6,7 +6,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import {
   isMessagingReady,
   MESSAGING_UNAVAILABLE_MESSAGE,
-} from "./readiness";
+} from "@/lib/messaging-readiness";
 
 export function MessagingFeatureBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();

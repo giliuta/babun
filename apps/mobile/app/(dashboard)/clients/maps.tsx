@@ -11,12 +11,12 @@ import {
   useMapServicesOrder,
   useReorderMapServices,
   useToggleMapService,
-} from "@/lib/map-services";
+} from "@/features/clients/map-services";
 
 // «Карты для маршрута» — что предлагать по кнопке «Маршрут» и в каком
 // порядке (первая в списке — первая в выборе).
 
-// Строка шестерёнки — за своим правом команды (владелец 01.10).
+// Строка шестерёнки — за своим правом команды.
 export default function ClientMapsScreenRoute() {
   return (
     <ClientSettingsRoute row="maps">
@@ -26,8 +26,8 @@ export default function ClientMapsScreenRoute() {
 }
 
 function ClientMapsScreen() {
-  // Набор КОМАНДЫ из адреса (у каждой команды свои настройки клиентов,
-  // владелец 30.09); без команды — набор компании.
+  // Набор КОМАНДЫ из адреса (у каждой команды свои настройки клиентов);
+  // без команды — набор компании.
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamId = team || null;
   const { data: ownTeams = [] } = useTeams();

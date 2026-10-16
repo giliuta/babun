@@ -3,16 +3,16 @@ import { Stack } from "expo-router";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { useThemeColors } from "@/theme/colors";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Screen } from "@/components/ui/Screen";
+import { OverTabs, Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/session/tenant";
+import { accessGate } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
 
-// ДВЕРЬ (03.10): владельцу — как было (граница роли); партнёру — если хоть в
+// ДВЕРЬ: владельцу — граница роли; партнёру — если хоть в
 // одной команде у него «Документы: Видит». Какие инвойсы он видит, режет
 // сервер (`invoices_select_documents`); что на странице можно сделать —
 // решает сама страница (`[id].tsx`), кому выставлять — `new.tsx`.
@@ -23,12 +23,16 @@ export default function InvoicesLayout() {
   const teams = useTeams().data ?? [];
   const stack = (
     <DocumentsFeatureGate>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: t.canvas },
-        }}
-      />
+      {/* Над табами: подвалы инвойсов — над навигацией Android, низ берёт
+          сам `Screen`. */}
+      <OverTabs value>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: t.canvas },
+          }}
+        />
+      </OverTabs>
     </DocumentsFeatureGate>
   );
   if (role === "master") {
@@ -61,7 +65,7 @@ export default function InvoicesLayout() {
 
 /** «Инвойсы и чеки» выключены у компании (STORY-088): все двери к ним уже
  *  спрятаны, а прямая ссылка на инвойс говорит словами, где это включается,
- *  — без кнопки внутри (владелец 15.09: пустые состояния — только слова). */
+ *  — без кнопки внутри: пустые состояния — только слова. */
 function DocumentsFeatureGate({ children }: { children: ReactNode }) {
   const documentsOn = useFeatureOn("documents");
   if (documentsOn) return <>{children}</>;

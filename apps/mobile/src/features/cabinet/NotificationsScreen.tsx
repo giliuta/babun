@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, ScrollView, View, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Bell,
@@ -27,7 +27,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { haptics } from "@/lib/haptics";
 import {
   cancelManualAppointmentReminder,
@@ -49,12 +49,12 @@ import {
   recordsLabel,
   sameRecordRule,
   type TeamNotifyPrefs,
-} from "./notification-prefs";
+} from "@/lib/notification-prefs";
 import {
   readTeamNotifyPrefs,
   useSaveTeamNotifyPrefs,
   useTeamNotifyPrefs,
-} from "./notification-prefs-store";
+} from "@/lib/notification-prefs-store";
 import {
   permissionRow,
   reminderCanCancel,
@@ -64,7 +64,7 @@ import {
   type ReminderSource,
 } from "./device-reminders";
 
-// СТРАНИЦА «УВЕДОМЛЕНИЯ» (Кабинет, 2026-09-15). Что в списке и почему строка
+// СТРАНИЦА «УВЕДОМЛЕНИЯ» (Кабинет). Что в списке и почему строка
 // одна на источник — в шапке `device-reminders.ts`.
 //
 // ВЕРХНЯЯ СТРОКА — разрешение этого iPhone. Пока вопрос не задан, она задаёт его
@@ -75,8 +75,8 @@ import {
 // СТРОКА НАПОМИНАНИЯ — дверь в его источник. Ручное напоминание записи ещё и
 // отменяется (лист выбора); событие и клиент открываются сразу.
 //
-// НАСТРОЙКИ — НА КАЖДУЮ КОМАНДУ (владелец 03.10: «когда добавляется новая
-// команда, мы настраиваем уведомления чётко на эту команду»): лента команд, у
+// НАСТРОЙКИ — НА КАЖДУЮ КОМАНДУ (уведомления настраиваются отдельно на каждую
+// команду): лента команд, у
 // выбранной — напоминания, что происходит в команде и бюджет. Правила — в
 // `notification-prefs.ts`.
 
@@ -99,7 +99,7 @@ export function NotificationsScreen() {
   const permissionQuery = useDevicePermission();
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
-  const permissionView = permission ? permissionRow(permission) : null;
+  const permissionView = permission ? permissionRow(permission, Platform.OS === "android") : null;
   const [picker, setPicker] = useState<"records" | "clients" | null>(null);
   const { data: teams = [] } = useTeams();
   const isOwner = useDataRole().data === "owner";
@@ -207,7 +207,7 @@ export function NotificationsScreen() {
           <SettingsRow
             tile={SETTINGS_TILE.orange}
             icon={Bell}
-            title="Уведомления на iPhone"
+            title={Platform.OS === "android" ? "Уведомления на телефоне" : "Уведомления на iPhone"}
             sub={permissionView?.sub}
             subColor={
               permission && remindersSilenced(permission, count)
@@ -222,7 +222,7 @@ export function NotificationsScreen() {
           />
         </SectionCard>
 
-        {/* НАСТРОЙКИ — У КАЖДОЙ КОМАНДЫ (владелец 03.10). Одна команда —
+        {/* НАСТРОЙКИ — У КАЖДОЙ КОМАНДЫ. Одна команда —
             ленты нет. */}
         {teams.length > 1 ? (
           <View style={{ marginTop: 12 }}>

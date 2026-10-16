@@ -12,27 +12,19 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { GUTTER } from "@/components/ui/tokens";
-import { eventTypeIconPresets } from "@/features/calendar/event-type-icons";
-import { durationLabel } from "@/features/services/format";
+import { eventTypeIconPresets } from "@/features/reference/event-type-icons";
+import { durationLabel } from "@/lib/service-format";
 import { useThemeColors } from "@/theme/colors";
 import { EventTypeSheet } from "./EventTypeSheet";
 import { useEventTypesEditor } from "./use-event-types-editor";
 import { useLocalSearchParams } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
-import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
-import { useDataRole } from "@/features/settings/tenant";
+import { useTeamSettingLevel } from "@/session/team-setting-level";
+import { useDataRole } from "@/session/tenant";
 import { usePersonalEventTypes } from "@/features/settings/local-settings";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 
-// ТИПЫ СОБЫТИЙ — СПРАВОЧНИК ПО ОБЩЕМУ КАНОНУ (владелец 2026-09-08: «в
-// настройках событий надо сделать то же самое, как сделано в услугах или как
-// в метках; архитектуру мы сохраняем, при этом свайп вправо — удалить, влево
-// — скрыть»).
-//
-// До этого экран жил в старой вёрстке — тот же долг, что был у типов объектов:
-// плоский список, красная корзина в каждой строке, «слайд-модалка» вместо
-// листа, и ЗАВЕДЕНИЕ БЕЗ ПРАВКИ: заведённый тип нельзя было ни переименовать,
-// ни перекрасить, ни переставить. Теперь ровно то же, что у меток и услуг:
+// ТИПЫ СОБЫТИЙ — СПРАВОЧНИК ПО ОБЩЕМУ КАНОНУ, как у меток и услуг:
 //   • строка — своя карточка с ручкой перетаскивания, порядок задаёт человек;
 //   • тап по строке — правка листом снизу, все поля типа сразу;
 //   • смахнуть влево (правая кромка) — «Удалить», с подтверждением;
@@ -69,12 +61,13 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
     dragging,
     setDragging,
   } = useEventTypesEditor(teamId);
-  // Типы — часть «Записей» (владелец 30.09): «Только видит» — список без
+  // Типы — часть «Записей»: «Только видит» — список без
   // правки, ни кнопки, ни свайпов, ни ручек.
   const readOnly = useTeamSettingLevel("calendar.booking_form", teamId) !== "write";
-  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (как у услуг). Только владелец.
   const isOwner = useDataRole().data === "owner";
-  const allTypes = usePersonalEventTypes().data ?? [];
+  const eventTypesData = usePersonalEventTypes().data;
+  const allTypes = useMemo(() => eventTypesData ?? [], [eventTypesData]);
   const typeTemplates = useMemo(
     () =>
       isOwner
@@ -210,7 +203,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
         </ScrollView>
       )}
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА (LOCKED 2026-08-27): типы
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: типы
           заводят пачкой, и после первого не должно приходиться доскролливать
           список ради второго. Тот же приём, что у меток и услуг. */}
       {!readOnly && !typesQuery.isLoading && !typesQuery.isError && types.length > 0 ? (
@@ -235,8 +228,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
 }
 
 /** Вид типа: цвет и значок — те же, что стоят в форме события. КВАДРАТ, а не
- *  кружок (владелец 2026-09-10: «выбор цвета квадратика, не круг… везде одно и
- *  то же»): это тот же `AppearanceTile`, что у тега, метки, услуги, категории и
+ *  кружок: это тот же `AppearanceTile`, что у тега, метки, услуги, категории и
  *  типа объекта. Свой набор значков у типа события остался — старые слаги
  *  живут картой совместимости, — поэтому набор передаётся плитке. */
 export function TypeMark({ color, icon }: { color: string; icon: string }) {

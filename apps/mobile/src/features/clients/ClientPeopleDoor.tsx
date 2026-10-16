@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { usePathname, useRouter, type Href } from "expo-router";
 import type {
@@ -6,15 +6,13 @@ import type {
   ClientMembership,
   Location,
 } from "@babun/shared/local/clients";
-import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import { clientCardHref } from "@/features/clients/clients-company";
+import { clientCardHref } from "@/session/clients-company";
 import {
   useClientsCapabilities,
   useClientsScopeOrNull,
-} from "@/features/clients/company-scope";
-import { MemberOfLine } from "@/features/clients/MemberOfLine";
+} from "@/session/company-scope";
 import {
   ClientLinkRows,
   type ClientLinkItem,
@@ -31,6 +29,18 @@ import {
   draftLinkParams,
   type DraftLinkParams,
 } from "@/features/clients/useClientDraft";
+import { newClientDraftHref } from "@/features/clients/people-door/draft-href";
+import { MemberOfRows } from "@/features/clients/people-door/MemberOfRows";
+import {
+  residentsLineOf,
+  type ClientPeople,
+  type ResidentProps,
+} from "@/features/clients/people-door/people-types";
+
+// The draft href, the result shapes and the «чей он» rows live in
+// `people-door/`; the draft href and the shapes are re-exported here.
+export { newClientDraftHref } from "@/features/clients/people-door/draft-href";
+export type { ClientPeople, ResidentProps } from "@/features/clients/people-door/people-types";
 
 // ЛЮДИ КАРТОЧКИ И ДВЕРЬ СВЯЗИ СТРАНИЦЫ КЛИЕНТА (STORY-086).
 //
@@ -59,54 +69,8 @@ function linkPlaceId(item: ClientLinkItem): string | null {
   return parseLinkKey(item.key)?.locationId ?? null;
 }
 
-/** Черновик нового клиента — ТОЙ ЖЕ дорогой, которой открыта карточка.
- *  Одна на обе двери черновика со связью: «Создать клиента» в шторке людей и
- *  «Разделить клиента» в «⋯» (`use-split-client.ts`) — разойдись они, одна из
- *  них положила бы вторую копию табов поверх записи. */
-export function newClientDraftHref(
-  pathname: string,
-  scope: { tenantId: string; isActive: boolean } | null,
-  params: DraftLinkParams & { split?: string },
-): Href {
-  return pathname === "/client"
-    ? { pathname: "/client", params: { id: "new", ...params } }
-    : scope && !scope.isActive
-      ? {
-          pathname: "/clients/[id]",
-          params: { id: "new", tenant: scope.tenantId, ...params },
-        }
-      : { pathname: "/clients/[id]", params: { id: "new", ...params } };
-}
-
-/** Пропы жильцов для `ClientProfileBlocks`: под объектом на странице —
- *  показание, в листе объекта — строки с ролью и единственная дверь. */
-export interface ResidentProps {
-  residentsLine?: (loc: Location) => string | undefined;
-  residentsAt?: (loc: Location) => readonly ClientLinkItem[];
-  onAddResident?: (loc: Location) => void;
-  onOpenResident: (item: ClientLinkItem) => void;
-  onResidentRole?: (item: ClientLinkItem, role: string) => void;
-  onRemoveResident?: (item: ClientLinkItem) => void;
-}
-
 /** Сколько людей показывает карточка; остальные — за дверью «Все люди». */
 export const PEOPLE_ON_CARD = 3;
-
-export interface ClientPeople {
-  /** Строки «чей он» под именем. */
-  memberOfRows: ReactNode;
-  /** Люди карточки в блоке «Клиент». */
-  peopleRows: ReactNode;
-  /** Сколько людей у карточки всего и сколько не поместилось: по ним
-   *  страница рисует дверь «Все люди · N» (владелец 22.09). */
-  peopleTotal: number;
-  peopleHidden: number;
-  /** Пункт «Человек» в листе «Добавить»; нет — пункта нет. */
-  onAddPerson?: () => void;
-  residents: ResidentProps;
-  /** Шторка выбора человека — ставится в конец экрана, вне прокрутки. */
-  door: ReactNode;
-}
 
 export function useClientPeople({
   id,
@@ -146,7 +110,7 @@ export function useClientPeople({
   const pathname = usePathname();
   const scope = useClientsScopeOrNull();
   const baseCaps = useClientsCapabilities();
-  // Права блока «Люди» (30.09) подменяют прежние `links`/`edit` для этого
+  // Права блока «Люди» подменяют прежние `links`/`edit` для этого
   // клиента; без них — как было.
   const caps = access
     ? { ...baseCaps, links: access.show, edit: access.edit }
@@ -158,8 +122,7 @@ export function useClientPeople({
   const members = useClientMembers(isDraft || !caps.links ? null : id);
   const linkWriter = useLinkWriter();
   const toast = useToast();
-  // Строка, которую только что завели: курсор сразу в её роль (владелец
-  // 2026-09-21 — «не надо делать лишние этапы»).
+  // Строка, которую только что завели: курсор сразу в её роль (без лишних этапов).
   const [roleFocusKey, setRoleFocusKey] = useState<string | null>(null);
   // Вопрос двери держится ДО КОНЦА анимации ухода шторки, поэтому «что
   // спрашиваем» и «видно ли» — два разных состояния: сбрось вопрос вместе с
@@ -187,17 +150,9 @@ export function useClientPeople({
     (loc: Location) => members.data.filter((item) => linkPlaceId(item) === loc.id),
     [members.data],
   );
-  // ПОКАЗАНИЕ ПОД ОБЪЕКТОМ — «Мария Спиру · жилец, Андреас · жилец». Имя и
-  // роль через «·», люди через запятую: та же анатомия, что у строки связи,
-  // только без места — место здесь и есть сама строка объекта.
+  // Показание под объектом — `residentsLineOf` (people-door/people-types.ts).
   const residentsLine = useCallback(
-    (loc: Location) => {
-      const rows = residentsAt(loc);
-      if (rows.length === 0) return undefined;
-      return rows
-        .map((r) => [r.name.trim(), r.role.trim()].filter(Boolean).join(" · "))
-        .join(", ");
-    },
+    (loc: Location) => residentsLineOf(residentsAt(loc)),
     [residentsAt],
   );
 
@@ -285,54 +240,30 @@ export function useClientPeople({
    *  черновике связь одна на карточку-группу — снимается по ней. */
   const removeDraftLink = (groupId: string) => {
     if (!c) return;
-    // Без вопроса, как у строки человека и у объекта (владелец 22.09:
-    // «всё можно вот так вот убирать» — свайпом).
+    // Без вопроса, как у строки человека и у объекта: всё убирается свайпом.
     onDraftLinks((c.memberships ?? []).filter((m) => m.group_id !== groupId));
   };
 
   // ЧЕЙ ОН САМ — строки сразу под именем. В черновике шеврона нет: карточки,
   // на которую он указывает, отсюда ещё не открыть; зато связь можно снять.
   const memberOfRows =
-    memberOf.unnamed ? (
-      // Связи есть, назвать нечем — говорим словами, тише обычной строки, и
-      // без шеврона: вести пока некуда.
-      <MemberOfLine
-        line={memberOf.unnamed === "failed" ? "Связи не загрузились" : "Связи загружаются…"}
+    memberOf.unnamed || memberOf.data.length > 0 ? (
+      <MemberOfRows
+        memberOf={memberOf}
+        isDraft={isDraft}
+        removeDraftLink={removeDraftLink}
+        openGroup={(groupId) => router.push(cardHref(groupId))}
       />
-    ) :     memberOf.data.length > 0 ? (
-      <>
-        {memberOf.data.map((row) =>
-          isDraft ? (
-            <SwipeRow
-              key={row.key}
-              label="Убрать"
-              color={t.danger}
-              onAction={() => removeDraftLink(row.groupId)}
-              accessibilityLabel={`Убрать связь ${row.line}`}
-            >
-              <MemberOfLine line={row.line} />
-            </SwipeRow>
-          ) : (
-            <MemberOfLine
-              key={row.key}
-              line={row.line}
-              onOpen={() => router.push(cardHref(row.groupId))}
-            />
-          ),
-        )}
-      </>
     ) : null;
 
-  // ЛЮДИ КАРТОЧКИ И ИХ ДВЕРЬ — В ПЕРВОМ БЛОКЕ, ПОД ДВЕРЬЮ КОНТАКТОВ (владелец
-  // 2026-09-21: «первый блок — клиент, туда входят люди, связи, компании…
-  // всё в один блок»). Место перечня внутри блока держит сам блок контактов:
+  // ЛЮДИ КАРТОЧКИ И ИХ ДВЕРЬ — В ПЕРВОМ БЛОКЕ, ПОД ДВЕРЬЮ КОНТАКТОВ: в блок
+  // «Клиент» входят люди, связи, компании. Место перечня внутри блока держит сам блок контактов:
   // дверь «Добавить» с волоском разводит две правые кромки свайпа —
   // «Удалить» у номера и «Убрать» у человека.
   const allMembers = members.data ?? [];
   const shownMembers = limit ? allMembers.slice(0, limit) : allMembers;
-  // УБРАЛИ СВАЙПОМ — БЕЗ ВОПРОСА, НО С «ОТМЕНИТЬ» (владелец 22.09: «всё
-  // можно вот так вот убирать»; аудит 23.09: промах пальцем на ходу не должен
-  // стоить связи). Подсказка держится пять секунд, как у архива.
+  // УБРАЛИ СВАЙПОМ — БЕЗ ВОПРОСА, НО С «ОТМЕНИТЬ» (промах пальцем на ходу не
+  // должен стоить связи). Подсказка держится пять секунд, как у архива.
   const removeLink = (item: ClientLinkItem) => {
     void linkWriter.detach(item).then((ok) => {
       if (!ok) return;
@@ -363,10 +294,9 @@ export function useClientPeople({
         </Text>
       </View>
     ) : (
-      // ОДНОЙ СТРОКОЙ И БЕЗ СВОЕЙ ДВЕРИ (владелец 22.09 по макету: «не очень
-      // нравится», «аватар не нужен»). Четыре жильца высокими строками с
-      // аватарами съедали экран, а вторая дверь «Добавить человека» спорила с
-      // «Добавить» под номерами. Теперь человек — строка той же высоты, что
+      // ОДНОЙ СТРОКОЙ И БЕЗ СВОЕЙ ДВЕРИ, без аватара. Четыре жильца высокими
+      // строками с аватарами съедали бы экран, а вторая дверь «Добавить
+      // человека» спорила бы с «Добавить» под номерами. Поэтому человек — строка той же высоты, что
       // номер, а добавляют его из общей двери блока (пункт «Человек»).
       <ClientLinkRows
         items={shownMembers}
@@ -384,9 +314,8 @@ export function useClientPeople({
     )
   ) : null;
 
-  // «ЧЕЛОВЕК» ЕСТЬ И В НОВОМ КЛИЕНТЕ (владелец 22.09: «как добавить человека…
-  // я не понимаю» — он был на черновике, а пункт жил только у сохранённой
-  // карточки). В черновике пункт сперва создаёт клиента (гейт тот же, что у
+  // «ЧЕЛОВЕК» ЕСТЬ И В НОВОМ КЛИЕНТЕ: пункт нужен и на черновике, а не только
+  // у сохранённой карточки. В черновике пункт сперва создаёт клиента (гейт тот же, что у
   // футера), и на карточке сразу поднимается «Кто это».
   const onAddPerson =
     showLinks && caps.edit && !members.isError

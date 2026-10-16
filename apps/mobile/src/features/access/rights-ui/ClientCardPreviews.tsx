@@ -18,21 +18,20 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
+import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import { CLIENT_CARD_PREVIEW_KEYS } from "./preview-keys";
 import { SAMPLE_LOCATION } from "./preview-sample";
 
-// ВИД БЛОКОВ КАРТОЧКИ КЛИЕНТА В ШТОРКЕ ПРАВА (владелец 30.09: «страница
-// клиентов по правам — полностью»). Те же куски, что на карточке и в записи
+// ВИД БЛОКОВ КАРТОЧКИ КЛИЕНТА В ШТОРКЕ ПРАВА. Те же куски, что на карточке и в записи
 // (`InlineNoteField`, `ObjectRow`, плитки метки и тега, файлы), с примерными
-// данными. «Меняет» блока работает само по себе (02.10): у базы партнёра
+// данными. «Меняет» блока работает само по себе: у базы партнёра
 // только «Видит», а блок с «Меняет» правится — так и рисуем.
 
 const noop = () => {};
@@ -60,7 +59,7 @@ export function ClientCardPreview({
   const write = level === "write";
   const on = write ? noop : undefined;
   const state = levelState(level);
-  // Сумма справа — цветом, как в «Истории» и «Файлах» (03.10).
+  // Сумма справа — цветом, как в «Истории» и «Файлах».
   const amount = (text: string, color: string) => (
     <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
       {text}
@@ -68,7 +67,7 @@ export function ClientCardPreview({
   );
 
   switch (blockKey) {
-    // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
+    // Блоки «Клиент», «История», «SMS» — как на странице клиента.
     case "clients.client":
       return (
         <PreviewFrame
@@ -86,9 +85,9 @@ export function ClientCardPreview({
         </PreviewFrame>
       );
     case "clients.history":
-      // «Своя команда» и «Все команды» (03.10) — обе ступени только смотрят:
+      // «Своя команда» и «Все команды» — обе ступени только смотрят:
       // подпись называет охват, а у «Всех команд» в истории стоит и запись
-      // другой команды (аудит 03.10: карандаш «Видит и меняет» лгал).
+      // другой команды (карандаш «Видит и меняет» лгал бы).
       return (
         <PreviewFrame
           state={level === "off" ? "hidden" : "read"}
@@ -96,7 +95,7 @@ export function ClientCardPreview({
             level === "write" ? "Записи всех команд — с суммами" : level === "read" ? "Только записи его команд — с суммами" : undefined
           }
         >
-          {/* Как на карточке (03.10): записи под днём — плашками. */}
+          {/* Как на карточке: записи под днём — плашками. */}
           <SectionCard title="История">
             <VisitDayHeader date="2026-09-12" />
             <View style={{ paddingHorizontal: 2, paddingBottom: 6, gap: 2 }}>
@@ -125,9 +124,9 @@ export function ClientCardPreview({
         </PreviewFrame>
       );
     case "clients.sms":
-      // Как блок на карточке (03.10): «Присылать SMS» и «Имя для SMS» —
+      // Как блок на карточке: «Присылать SMS» и «Имя для SMS» —
       // плашками, ниже история. Отправки в блоке нет (она у трубки клиента):
-      // «Меняет» правит только тумблер и имя (аудит 03.10).
+      // «Меняет» правит только тумблер и имя.
       return (
         <PreviewFrame state={state}>
           <SectionCard title="SMS">
@@ -202,7 +201,7 @@ export function ClientCardPreview({
           </SectionCard>
         </PreviewFrame>
       );
-    // «Метка» и «Тег» — два права (03.10): у каждого своя плитка.
+    // «Метка» и «Тег» — два права: у каждого своя плитка.
     case "clients.labels":
       return (
         <PreviewFrame state={state}>
@@ -236,7 +235,7 @@ export function ClientCardPreview({
     case "clients.personal":
       return (
         <PreviewFrame state={state}>
-          {/* Как на карточке (03.10): «День рождения | Источник» плитками. */}
+          {/* Как на карточке: «День рождения | Источник» плитками. */}
           <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
             <IdentityCard
               icon={Cake}
@@ -260,7 +259,7 @@ export function ClientCardPreview({
     case "clients.files":
       return (
         <PreviewFrame state={state}>
-          {/* Как на карточке (03.10): последний файл под днём — плашкой. */}
+          {/* Как на карточке: последний файл под днём — плашкой. */}
           <SectionCard title="Файлы">
             <VisitDayHeader date="2026-09-20" />
             <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
@@ -272,7 +271,7 @@ export function ClientCardPreview({
     case "clients.requisites":
       return (
         <PreviewFrame state={state}>
-          {/* Как на карточке (03.10): основной набор — плашкой. */}
+          {/* Как на карточке: основной набор — плашкой. */}
           <SectionCard title="Реквизиты">
             <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 6 }}>
               <SelectRow

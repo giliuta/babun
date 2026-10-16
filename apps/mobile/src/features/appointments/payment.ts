@@ -58,7 +58,7 @@ export function paymentMethodForAccountKind(kind: string): PayMethod {
 /**
  * Патч «остаток `amount` получен способом `method`».
  *
- * НОВЫХ ВЫЗОВОВ ЗДЕСЬ БЫТЬ НЕ ДОЛЖНО (2026-09-12). Деньги в продукте пишет
+ * НОВЫХ ВЫЗОВОВ ЗДЕСЬ БЫТЬ НЕ ДОЛЖНО. Деньги в продукте пишет
  * RPC `record_appointment_payment` (`useRecordPayment`): она одна берёт замок
  * леджера, идемпотентна по `request_id`, кладёт сумму на ВЫБРАННЫЙ счёт и сама
  * закрывает визит. Патч строки всё это обходил, а с приходом сторожа
@@ -95,7 +95,7 @@ export function buildDebtPaidPatch(
   // Способ синтетики: нал/карта раздельно из payment-объекта, пока их
   // хватает на дефицит; одинокая колонка paid_amount способа не знает →
   // «нал» (искажает лишь разбивку по способам у легаси-строк, не суммы).
-  // paid_amount при статусе 'unpaid' — эхо бэкфилла 20260517_001 (аванс,
+  // paid_amount при статусе 'unpaid' — эхо бэкфилла 20260517000001 (аванс,
   // он живёт в prepaid_amount) — НЕ сеем; та же ветка, что в getPaidAmount.
   const existing = apt?.payments ?? [];
   const ledgerSum = existing.reduce((sum, p) => sum + p.amount, 0);

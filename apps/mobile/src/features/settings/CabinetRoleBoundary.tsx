@@ -5,16 +5,16 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "./tenant";
-import { useMyMemberships } from "./my-memberships";
-import { usePartnersAccess } from "@/features/access/master-page/use-partner-manager";
-import { cabinetScreenRole, canAccessCabinetPath } from "./role-policy";
+import { useCurrentRole } from "@/session/tenant";
+import { useMyMemberships } from "@/session/my-memberships";
+import { usePartnersAccess } from "@/session/use-partner-manager";
+import { cabinetScreenRole, canAccessCabinetPath } from "@/session/role-policy";
 
 // РОЛЬ РЕШАЕТ ПО КОМПАНИИ ЭКРАНА, А НЕ ПО ОТКРЫТОЙ В КАЛЕНДАРЕ.
 //
 // Аналитику клиентов открывают из вкладки «Клиенты», а вкладка — общая
 // страница: в «Команде 1» её шапка про СВОЮ компанию и передаёт её в
-// `?tenant=` (STORY-082). Владелец своей компании упирался бы здесь в
+// `?tenant=`. Владелец своей компании упирался бы здесь в
 // «Недостаточно прав» только потому, что в календаре открыта чужая.
 // Компанию берём не на слово: роль в ней читается из своих членств
 // (`tenant_members`), и чужой идентификатор в ссылке ничего не открывает.
@@ -26,7 +26,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
   const { tenant } = useLocalSearchParams<{ tenant?: string }>();
   const screenTenantId = tenant && tenant !== activeTenantId ? tenant : null;
   const memberships = useMyMemberships();
-  // Директор (04.10): право «Партнёры» открывает страницы партнёров.
+  // Директор: право «Партнёры» открывает страницы партнёров.
   const partners = usePartnersAccess();
 
   // Пока членства в пути, чужую компанию не судим: иначе на миг мелькает

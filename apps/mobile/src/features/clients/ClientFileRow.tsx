@@ -4,14 +4,13 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { SelectRow } from "@/components/ui/select-rows";
 import { docTitle, isVideoPath } from "@/features/appointments/appointment-files";
 import { formatBytes } from "@/features/clients/card-attachments";
-import { fileTime } from "@/features/clients/client-files";
+import { fileTime } from "@/lib/client-files";
 import type { ClientFileItem } from "@/features/clients/use-client-files";
 import { KIND_LABEL } from "@/features/clients/visit-photos";
 import { useThemeColors } from "@/theme/colors";
 
-// ФАЙЛ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ЗАПИСЬ В «ИСТОРИИ» (владелец 03.10:
-// «файлы — как история, по датам… полноценные блоки, красивые, чтобы сразу
-// открывать»). Это наш `SelectRow` на белом, как `VisitRow`:
+// ФАЙЛ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ЗАПИСЬ В «ИСТОРИИ»: файлы идут по
+// датам полноценными блоками, которые сразу открываются. Это наш `SelectRow` на белом, как `VisitRow`:
 //   · фото — плиткой с самим снимком (фото узнают глазами);
 //   · документ — значком файла, имя — названием, подпись — время и размер;
 //   · инвойс и чек — значком документа, номер — названием;
@@ -35,7 +34,7 @@ export function ClientFileRow({
   /** Миниатюра вложения-снимка (подписанная ссылка); у фото с выезда своя. */
   thumb?: string;
   /** В самой записи снимок — просто «Фото» или «Видео»: «с выезда» там и так
-   *  ясно (блок «Файлы» записи, 03.10). */
+   *  ясно (блок «Файлы» записи). */
   inRecord?: boolean;
   onPress: () => void;
   /** Удержание — меню своего файла («Удалить»). */

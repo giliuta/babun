@@ -2,7 +2,7 @@ import { Stack, usePathname } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 import { LockedFinances } from "@/features/finances/LockedFinances";
 import { financesGate } from "@/features/finances/finances-gate";
 import { anyFinanceSetting } from "@/features/finances/settings-levels";
@@ -10,7 +10,7 @@ import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-setti
 import { useTeams } from "@/features/reference/queries";
 import { useBudgetWatch } from "@/features/finances/use-category-budget";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 
 // Раздел «Финансы» — ОДНА вкладка со стеком внутри, как «Клиенты».
 //
@@ -25,29 +25,27 @@ import { useCurrentRole } from "@/features/settings/tenant";
 // экранам стека отношения не имеет. Одна граница на каталог закрывает и те,
 // что появятся здесь завтра.
 //
-// БЕЗ ДОСТУПА К ФИНАНСАМ — СЕРАЯ СТРАНИЦА, А НЕ ГРАНИЦА (владелец 15.09: «если
-// я перехожу в финансы — не „раздел недоступен“; всё серое, всё по нулям, но
-// переключаться можно»). Она встаёт вместо ВСЕГО стека, поэтому и диплинк
+// БЕЗ ДОСТУПА К ФИНАНСАМ — СЕРАЯ СТРАНИЦА, А НЕ ГРАНИЦА: всё серое, всё по нулям, но
+// переключаться можно. Она встаёт вместо ВСЕГО стека, поэтому и диплинк
 // `/finances/vat` у такого человека приходит на неё, а не на ставки. Спиннер
 // роли, «нет связи» и уход из компании по-прежнему решает граница
 // (`financesGate` → `boundary`).
 //
-// ОТКРЫВАЕТ УРОВЕНЬ, А НЕ РОЛЬ (этап 2, владелец 15.09: «чтоб всё сразу
-// менялось в живом времени»). Сотрудник с «Доходами и расходами» получает
+// ОТКРЫВАЕТ УРОВЕНЬ, А НЕ РОЛЬ (права меняются в живом времени). Сотрудник с «Доходами и расходами» получает
 // финансы без роли владельца, а смена его прав приходит сигналом и
 // перерисовывает ворота сразу. Граница роли остаётся только владельцу — у
 // сотрудника её роль закрыла бы то, что открыл уровень.
-// ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (владелец 2026-09-24:
-// «открываю финансы, нажимаю „назад“ — перекидывает на календарь»). Экран
+// ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (иначе «назад» из
+// вкладки перекидывает на предыдущую). Экран
 // вкладки, открытый снаружи — из календаря, из формы, дверью листа, по
 // ссылке, — ложился в стек вкладки ОДИН, без её корня под собой, и «назад»
 // уходил из вкладки на предыдущую. `initialRouteName` кладёт корень вниз
 // при любом входе в стек; сторож — `tab-stack-roots.test.ts`.
 export const unstable_settings = { initialRouteName: "index" };
 
-/** Шестерёнка «Финансов» и её подстраницы. С 03.10 у каждой строки своё
+/** Шестерёнка «Финансов» и её подстраницы. У каждой строки своё
  *  право (`settings-levels.ts`), а подстраницу закрывает дверь её строки
- *  (`FinanceSettingsRoute`) — прежний список «только владельцу» снят. */
+ *  (`FinanceSettingsRoute`), а не список «только владельцу». */
 const SETTINGS_PATHS = [
   "/finances/settings",
   "/finances/categories",

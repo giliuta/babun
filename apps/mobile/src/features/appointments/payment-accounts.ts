@@ -13,7 +13,7 @@ import { sortPaymentAccounts } from "./payment-accounts-order";
 // (см. queryFn ниже).
 
 // Значок и цвет — те же, что человек выбрал счёту в финансах: проекция
-// `list_payment_accounts_safe` отдаёт их с 2026-08-15, и плитки блока «Оплата»
+// `list_payment_accounts_safe` отдаёт их, и плитки блока «Оплата»
 // рисуют счёт тем же `accountIcon`, что списки счетов, — узнавание пальцем.
 export interface PaymentAccountOption {
   id: string;
@@ -56,9 +56,8 @@ export function useTeamPaymentAccounts(teamId: string | null | undefined) {
     ...paymentAccountsQuery(tenantId, teamId),
     select: sortPaymentAccounts,
     enabled: !!tenantId && !!teamId,
-    // НЕ ЗАГРУЗИЛОСЬ — ПРОБУЕМ СНОВА, ПОКА ЭКРАН ОТКРЫТ (владелец 2026-09-24:
-    // «оплата у клиента не записывается»). Обрыв связи на открытии записи
-    // оставлял запрос в ошибке на все пять минут свежести: плиток не было, и
+    // НЕ ЗАГРУЗИЛОСЬ — ПРОБУЕМ СНОВА, ПОКА ЭКРАН ОТКРЫТ. Обрыв связи на открытии записи
+    // оставил бы запрос в ошибке на все пять минут свежести: плиток не было, и
     // тапать было не во что, пока запись не откроют заново.
     refetchInterval: (query) => (query.state.status === "error" ? 5_000 : false),
   });

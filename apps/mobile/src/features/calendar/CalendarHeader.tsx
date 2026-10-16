@@ -25,7 +25,7 @@ export function CalendarHeader({
   /** Hide the today button when the view is already on today. */
   isOnToday: boolean;
   onModeChange: (m: CalMode) => void;
-  /** Шестерёнка есть ВСЕГДА (владелец 20.09): проп обязателен, чтобы закон
+  /** Шестерёнка есть ВСЕГДА: проп обязателен, чтобы закон
    *  держал тип, а не память вызывающего. */
   onGear: () => void;
   onTitlePress: () => void;

@@ -1,1 +1,1 @@
-export { ObjectTypesScreen as default } from "@/features/reference/screens/ObjectTypesScreen";
+export { ObjectTypesScreen as default } from "@/features/clients/ObjectTypesScreen";

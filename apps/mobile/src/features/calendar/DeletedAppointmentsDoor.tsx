@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { useDeletedAppointments } from "./deleted-appointments";
 import { deletedAppointmentsDoorLine } from "./deleted-appointments-lines";

@@ -4,7 +4,7 @@ import { MemoryKVStorage, getStorage, setStorage } from "@babun/shared/storage";
 
 import { createEnabledPrefsStore as createEnabledPrefs } from "./enabled-prefs-core";
 
-// НАБОР У КОМАНДЫ (владелец 30.09): команда без своих настроек живёт набором
+// НАБОР У КОМАНДЫ: команда без своих настроек живёт набором
 // компании, своя запись команды — только её.
 const TENANT = "11365a87-bef9-4f6c-a030-b15083fe646b";
 const prefs = createEnabledPrefs<"a" | "b" | "c">({

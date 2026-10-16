@@ -6,13 +6,12 @@ import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { balanceWarning, useSmsAccount } from "./sms-account";
 import { euro } from "./sms-words";
-import { accountHref } from "@/features/cabinet/CabinetAccountRoute";
+import { accountHref } from "@/session/CabinetAccountRoute";
 
-// СТРОКА «SMS» В КАБИНЕТЕ (STORY-089; владелец 29.09: «баланс и пополнение —
-// это всё будет Кабинет SMS»). Деньги компании — не настройка раздела, как и
+// СТРОКА «SMS» В КАБИНЕТЕ (баланс и пополнение). Деньги компании — не настройка раздела, как и
 // «Архив», поэтому живут в Кабинете; шаблоны команд — за шестерёнкой
 // календаря. Справа — баланс. `tenantId` — строка блока аккаунта, который
-// пригласил (04.10): его баланс и его страница.
+// пригласил: его баланс и его страница.
 export function SmsCabinetRow({ tenantId }: { tenantId?: string } = {}) {
   const t = useThemeColors();
   const router = useRouter();

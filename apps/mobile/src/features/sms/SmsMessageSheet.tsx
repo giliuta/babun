@@ -12,11 +12,11 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { notify } from "@/lib/notify";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import { useThemeColors } from "@/theme/colors";
 import { smsErrorText, useSendSmsViaService } from "./sms-account";
 import { bucketOf } from "./sms-history-view";
@@ -25,9 +25,8 @@ import { when } from "./SmsHistoryRow";
 import { costWords, statusWords, triggerWords } from "./sms-words";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 
-// СООБЩЕНИЕ ЦЕЛИКОМ (STORY-089). Тап по строке истории — в записи, у клиента,
-// на странице истории. Лист собран нашим языком (владелец 03.10: «сделать
-// дизайн этой шторки в нашем стиле»), как лист шаблона и «Новый объект»:
+// СООБЩЕНИЕ ЦЕЛИКОМ. Тап по строке истории — в записи, у клиента,
+// на странице истории. Лист собран нашим языком, как лист шаблона и «Новый объект»:
 // блоки с шапкой на прохладном фоне, без пузыря-чата.
 //   • шапка листа — шаблон, по которому ушло (нет — повод), под ним — кому;
 //   • «ТЕКСТ» — сообщение, как его прочёл клиент;
@@ -89,7 +88,7 @@ export function SmsMessageSheet({
 
   const resend = () => {
     onClose();
-    // ТА ЖЕ SMS — ТЕМ ЖЕ ПУТЁМ (аудит 03.10): без записи сервер ищет
+    // ТА ЖЕ SMS — ТЕМ ЖЕ ПУТЁМ: без записи сервер ищет
     // команду в аргументах и отвечал «SMS в этом календаре выключены» на
     // каждый повтор из карточки и истории; без номера повтор уходил на
     // основной номер клиента, а не на тот, куда слали.
@@ -124,7 +123,7 @@ export function SmsMessageSheet({
     <BottomSheet
       visible={!!item}
       onClose={onClose}
-      // Шаблон, по которому ушло (владелец 03.10: «название шаблона»); нет —
+      // Шаблон, по которому ушло; нет —
       // повод. Под ним — кому, если сервер назвал клиента.
       title={m.templateName ?? triggerWords(m.trigger)}
       subtitle={m.clientName ?? undefined}

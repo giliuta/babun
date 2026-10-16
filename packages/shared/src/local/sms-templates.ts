@@ -13,8 +13,6 @@
 //   [Компания]          — tenant brand name
 //   [СсылкаНаОтмену]    — short URL to the public cancel page
 
-import { generateId } from "./masters";
-
 export type TemplateKind =
   | "new_appointment"
   | "reminder"
@@ -32,16 +30,6 @@ export interface SmsTemplate {
   enabled: boolean;
 }
 
-export const KIND_LABELS: Record<TemplateKind, string> = {
-  new_appointment: "Новая запись",
-  reminder: "Напоминание о записи",
-  after_24h_short: "После записи (в течение 24 ч.)",
-  after_24h_long: "После записи (после 24 ч.)",
-  cancellation: "После отмены записи",
-  waitlist: "Для листа ожидания",
-  debt: "Напоминание о долге",
-};
-
 export const AVAILABLE_TOKENS = [
   { token: "[Имя]", label: "Имя клиента" },
   { token: "[День]", label: "День недели" },
@@ -53,7 +41,7 @@ export const AVAILABLE_TOKENS = [
   { token: "[Цена]", label: "Цена" },
   { token: "[Сумма]", label: "Сумма долга" },
   { token: "[Компания]", label: "Компания" },
-  // Ссылка «Подтвердить / Отменить» (STORY-089, 29.09): короткий адрес
+  // Ссылка «Подтвердить / Отменить» (STORY-089): короткий адрес
   // babun.app/r/…, клиент отвечает на странице записи — кипрские номера
   // ответных SMS не принимают. Есть только у SMS записи.
   { token: "[Ссылка]", label: "Подтвердить / отменить" },
@@ -81,20 +69,6 @@ const TOKEN_ALIASES: Record<string, string> = {
   СсылкаНаОтмену: "CancelUrl",
   Ссылка: "Link",
 };
-
-// Дефолтного текста у шаблонов нет и быть не может: раньше здесь лежал сид
-// с подписью «AirFix» — текст одного клиента, — и он утекал каждому новому
-// тенанту при регистрации. Babun продаётся многим компаниям, поэтому шаблон
-// заводит сам тенант — этой функцией, с пустым телом.
-export function createBlankTemplate(kind: TemplateKind = "new_appointment"): SmsTemplate {
-  return {
-    id: generateId("tpl"),
-    kind,
-    name: KIND_LABELS[kind],
-    body: "",
-    enabled: true,
-  };
-}
 
 /** Каноническое (английское) имя токена: «Имя» → «Name», «Name» → «Name».
  *  Незнакомый токен возвращается как есть. */

@@ -51,7 +51,7 @@ describe("«История записей» сотрудника (01.10)", () =>
     assert.equal(masked.comment, "");
     assert.equal(masked.address, "");
     assert.equal(masked.city, null);
-    // Деньги идут вместе с «Историей» (03.10): отдельного права нет.
+    // Деньги идут вместе с «Историей»: отдельного права нет.
     const open = maskHistoryRow(row("a"), withBlocks({ "clients.history": "read", "clients.objects": "read" }));
     assert.equal(open.total_amount, 120);
     assert.equal(open.paid_amount, 120);

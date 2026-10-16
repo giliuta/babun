@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
-// ДОКУМЕНТЫ БЕЗ СВЯЗИ ПАДАЮТ ЧЕСТНО (проверка системы 03.10).
+// ДОКУМЕНТЫ БЕЗ СВЯЗИ ПАДАЮТ ЧЕСТНО.
 //
 // По умолчанию react-query паркует запись без сети в «паузу» — без ошибки и
 // без конца: «Выставить», «Отменить», «Оплата по инвойсу» и «Выписать чек»
@@ -15,7 +15,7 @@ const read = (relative: string) => readFileSync(resolve(here, relative), "utf8")
 // Деньги и документы онлайн-only на запись: каждая их мутация обязана нести
 // `NEVER_PAUSE`, как операции и счета (`finances/accounts.ts`).
 
-const FILES = ["./queries.ts", "../documents/receipts-queries.ts"];
+const FILES = ["../finances/invoices-queries.ts", "../finances/receipts-queries.ts"];
 
 describe("инвойсы и чеки — запись без сети не встаёт на паузу", () => {
   for (const file of FILES) {

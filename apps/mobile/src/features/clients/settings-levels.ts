@@ -1,8 +1,8 @@
-import type { MemberAccessMap } from "../access/access-map";
-import { accessGate } from "../access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate } from "@/session/my-access";
 
-// «НАСТРОЙКИ КЛИЕНТОВ» ПО ПРАВАМ (владелец 01.10: «в настройках он может
-// редактировать или не может редактировать… поблочно, как форма записи»).
+// «НАСТРОЙКИ КЛИЕНТОВ» ПО ПРАВАМ: в настройках человек может редактировать
+// или не может — поблочно, как форма записи.
 //
 // Шестерёнка вкладки — одна страница для всех. Владелец своей компании правит
 // всё; партнёру строки открываются по команде, ровно как «Настройки команды»
@@ -12,15 +12,15 @@ import { accessGate } from "../access/my-access";
 //
 // Лист без React: правило читают страница, её подстраницы и тест.
 
-/** Строки шестерёнки клиентов, у которых есть своё право, — в её порядке
- *  (03.10): «Клиент» · «Объекты» · «Справочники». */
+/** Строки шестерёнки клиентов, у которых есть своё право, — в её порядке:
+ *  «Клиент» · «Объекты» · «Справочники». */
 export const CLIENT_SETTING_BLOCKS = {
   card: "clients.settings_card",
   ways: "clients.settings_ways",
   objects: "clients.settings_objects",
   maps: "clients.settings_maps",
   tags: "clients.settings_tags",
-  // «Источники» (03.10) — своё право, как у каждой строки шестерёнки.
+  // «Источники» — своё право, как у каждой строки шестерёнки.
   sources: "clients.settings_sources",
 } as const;
 
@@ -37,7 +37,7 @@ export interface ClientSettingsInput {
   /** Источник вкладки — СВОЯ компания: хозяйство целиком. */
   own: boolean;
   /** Источник — компания, где человек партнёр. Открыта ли она в календаре,
-   *  не важно: экран читает и пишет её привязанным клиентом (01.10). */
+   *  не важно: экран читает и пишет её привязанным клиентом. */
   member: boolean;
   role: "owner" | "dispatcher" | "master" | null | undefined;
   map: MemberAccessMap | undefined;

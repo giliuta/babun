@@ -16,7 +16,7 @@ export function localBookingCarry(
   const off: CompanyFeatureKey[] = [];
   for (const block of blocks) {
     if (block.pinned || localEnabled.includes(block.id)) continue;
-    // «Файлы» до 06.09 не знал ни один сохранённый список — их отсутствие
+    // «Файлы» не знал ни один старый сохранённый список — их отсутствие
     // значит «не знали», а не «выключили».
     if (block.id === "files") continue;
     const feature = featureOfBookingBlock(block.id);

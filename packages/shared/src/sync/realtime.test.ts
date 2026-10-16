@@ -72,7 +72,7 @@ function supabaseStub() {
       removed.push(ch);
     },
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   return { supabase: stub as any, channels, removed };
 }
 

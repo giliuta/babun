@@ -1,13 +1,12 @@
 import { AlertCircle, CheckCheck, Clock, Send } from "lucide-react-native";
 import { SelectRow } from "@/components/ui/select-rows";
-import { fileTime } from "@/features/clients/client-files";
+import { fileTime } from "@/lib/client-files";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 import { when } from "./SmsHistoryRow";
 import type { SmsHistoryItem } from "./sms-model";
 import { isFailure, statusWords, triggerWords } from "./sms-words";
 
-// SMS КЛИЕНТУ — ПЛАШКОЙ, КАК ЗАПИСЬ В «ИСТОРИИ» И ФАЙЛ (владелец 03.10:
-// «постараться улучшить блок SMS, чтобы было более красиво»). Наш
+// SMS КЛИЕНТУ — ПЛАШКОЙ, КАК ЗАПИСЬ В «ИСТОРИИ» И ФАЙЛ. Наш
 // `SelectRow` на белом: плитка — итог сообщения цветом и значком
 // (доставлено — зелёным, ушло — синим, ждёт своего часа — янтарём, не
 // дошло — красным), название — шаблон, подпись — время и номер. День —

@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { ListPlus } from "lucide-react-native";
 import { PayRow, ServicesRow } from "@/features/appointments/VatLooks";
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
@@ -8,30 +7,29 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { parseMoneyInput } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { ColumnHeader, ServiceLine } from "./total-sheet/ServiceLine";
 
-// ДЕНЬГИ ЗАПИСИ ОДНИМ ЛИСТОМ (владелец 2026-09-04: «когда я открываю „Итого“,
-// открывается снизу вверх шторка, где прописаны каждая услуга, количество их,
-// и там уже можно редактировать и нажимать „Применить“; там же можно делать
-// скидки, выбирать в евро или в процентах»).
+// ДЕНЬГИ ЗАПИСИ ОДНИМ ЛИСТОМ: «Итого» открывает снизу вверх шторку, где
+// прописаны каждая услуга, их количество, правка с «Применить» и скидки (в евро
+// или в процентах).
 //
-// До этого «Итого» было полем в строке: сумма правилась прямо в списке, а
-// скидки в форме не было вовсе — её ставила только программа лояльности, и
-// снять её было нечем. Считать деньги в узкой строке между услугами и
-// предоплатой неудобно: не видно, из чего сумма сложилась.
+// «Итого» полем в строке не годится: сумма правилась бы прямо в списке, скидки
+// в форме не было бы вовсе, а считать деньги в узкой строке между услугами и
+// предоплатой неудобно — не видно, из чего сумма сложилась.
 //
 // ЛИСТ ОТВЕЧАЕТ НА ОДИН ВОПРОС — «ИЗ ЧЕГО ЭТИ ДЕНЬГИ»: услуги с количеством и
 // ценой, скидка, и итог. Всё остальное (предоплата, способ оплаты) живёт своей
 // секцией на странице: это уже НЕ про цену работы, а про полученные деньги.
 //
-// ИТОГ НЕ ПРАВЯТ РУКОЙ (владелец 2026-09-04: «сумму „итого“ изменить нельзя —
-// от этого может испортиться сам инвойс; меняется услуга: чистка 135 €, я
-// ставлю 130 €, и тогда меняется итого»). Итог — следствие строк, а не
+// ИТОГ НЕ ПРАВЯТ РУКОЙ: от этого может испортиться сам инвойс; меняется
+// услуга (чистка 135 € → 130 €), и тогда меняется итого. Итог — следствие строк, а не
 // отдельное число: счёт, где сумма не сходится со строками, не объяснить ни
 // клиенту, ни себе. Поэтому правится ЦЕНА УСЛУГИ в этой записи, а «Итого»
 // печатается.
+//
+// Таблица строк — в `total-sheet/`.
 
 const SIDE = 20;
 
@@ -62,14 +60,13 @@ export function TotalSheet({
   onQtyChange: (lineId: string, qty: number) => void;
   /** Цена ОДНОЙ штуки В ЭТОМ ДОКУМЕНТЕ. Прайс не трогается: это снимок строки. */
   onPriceChange: (lineId: string, price: number) => void;
-  /** Значок «добавить строку» справа в шапке — своя строка документа (владелец
-   *  2026-09-22: «открываю „Итого“, сверху справа „Добавить“, выбираю и
-   *  количество, и всё; при закрытии она сразу в услугах с названием»). Есть
+  /** Значок «добавить строку» справа в шапке — своя строка документа (выбранная строка сразу попадает в услуги
+   *  с названием). Есть
    *  только у инвойса. */
   onAddLine?: () => void;
   /** Имя своей строки (`editableName`) правится прямо в таблице. */
   onNameChange?: (lineId: string, name: string) => void;
-  /** Убрать свою строку — свайпом «Удалить» (владелец 2026-09-22). У строк
+  /** Убрать свою строку — свайпом «Удалить». У строк
    *  прайса свой путь: количество в ноль или снятие в выборе услуг. */
   onRemoveLine?: (lineId: string) => void;
   /** СКИДКА ЕСТЬ НЕ У ВСЯКОГО ДОКУМЕНТА. У записи и чека она своя строка, у
@@ -89,12 +86,10 @@ export function TotalSheet({
   onResetTotal?: () => void;
   /** НАЛОГ — РЕШЕНИЕ ВЫЗЫВАЮЩЕГО, А НЕ ЭТОЙ ШТОРКИ.
    *
-   *  Владелец 2026-09-20, увидев чек: «НДС почему-то добавляется, или он
-   *  включён — так не должно быть». И правда: шторка держала режим налога
-   *  внутри себя и включала его сама по настройке компании, а документ потом
-   *  печатал то, чего человек не выбирал.
+   *  Если шторка держит режим налога внутри себя и включает его сама по
+   *  настройке компании, документ печатает то, чего человек не выбирал.
    *
-   *  Теперь режим приходит СНАРУЖИ и туда же возвращается. `undefined` —
+   *  Поэтому режим приходит СНАРУЖИ и туда же возвращается. `undefined` —
    *  у документа налога нет вовсе (так зовёт запись): строка итога тогда
    *  печатает одну сумму, без ставки и клавиши. */
   vat?: {
@@ -132,7 +127,7 @@ export function TotalSheet({
             hitSlop={10}
             style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           >
-            {/* ЗНАЧОК, А НЕ СЛОВО (владелец 22.09: «можно просто значок»).
+            {/* ЗНАЧОК, А НЕ СЛОВО.
                 «Список с плюсом» — добавить строку в перечень; общий «плюс
                 создания» продукт запрещает (ui-policy). */}
             <ListPlus color={t.accent} size={24} strokeWidth={2} />
@@ -151,11 +146,9 @@ export function TotalSheet({
     >
       <View style={{ paddingHorizontal: SIDE, paddingBottom: 10, gap: 8 }}>
         {lines.length > 0 ? (
-          /* ОДНА КАРТОЧКА НА ВЕСЬ СПИСОК, СТРОКИ — ВОЛОСКОМ (владелец
-             2026-09-08: «это не одна услуга будет, а там будет чистка, потом
-             заправка и так далее — куча услуг, чтоб каждую можно было
-             редактировать»). Карточка на каждую услугу читалась как пять
-             отдельных предметов: пять подложек, пять зазоров, пять радиусов.
+          /* ОДНА КАРТОЧКА НА ВЕСЬ СПИСОК, СТРОКИ — ВОЛОСКОМ (чистка, заправка и так далее —
+             куча услуг, каждую можно редактировать). Карточка на каждую
+             услугу читалась бы как пять отдельных предметов: пять подложек, пять зазоров, пять радиусов.
              Работы одной записи — один список, и колонки в нём обязаны стоять
              друг под другом. */
           <View
@@ -194,9 +187,7 @@ export function TotalSheet({
                 />
               )
             ))}
-            {/* СУММА РАБОТ И СКИДКА — последняя строка перечня (владелец 20.09:
-                «скидку закинуть туда, где надпись „Услуги“, и справа будет
-                точная цена»). Справа — цена работ после скидки. */}
+            {/* СУММА РАБОТ И СКИДКА — последняя строка перечня. Справа — цена работ после скидки. */}
             {discount ? (
               <ServicesRow
                 discountValue={discount.value}
@@ -236,10 +227,9 @@ export function TotalSheet({
             /* «ПО УСЛУГАМ» ОСТАЁТСЯ ТОЛЬКО ДЛЯ ЗАПИСЕЙ СО СТАРОЙ РУЧНОЙ
                СУММОЙ: вписать новую больше нельзя, а вернуть посчитанную —
                можно, иначе такая запись навсегда осталась бы со своим
-               числом, не сходящимся со строками. Клавиша ЖИВАЯ: вместе с
-               прежней разметкой итога она на полдня уехала под
-               `display: "none"` — единственный выход из ручной суммы
-               пропал с экрана молча (аудит кода 2026-09-20). */
+               числом, не сходящимся со строками. Клавиша ЖИВАЯ: под
+               `display: "none"` она молча убрала бы с экрана единственный
+               выход из ручной суммы. */
             customTotal && onResetTotal ? (
               <Pressable
                 onPress={() => {
@@ -261,313 +251,5 @@ export function TotalSheet({
 
       </View>
     </BottomSheet>
-  );
-}
-
-/** Ширины колонок — ОДНИ на шапку и на строки: иначе подпись и число
- *  разъезжаются на первом же длинном имени. */
-// Цена и сумма шире (владелец 2026-09-22: «подравняй столбики, чтобы лучше
-// редактировать»): в 52/58 четырёхзначная сумма упиралась в край поля.
-const COL_QTY = 78;
-const COL_PRICE = 66;
-const COL_SUM = 74;
-const COL_GAP = 8;
-
-/** ШАПКА КОЛОНОК — ВМЕСТО ПОДПИСЕЙ В КАЖДОЙ СТРОКЕ (владелец 2026-09-08:
- *  «названия — красивый блок, потом количество — тоже красивый блок, потом
- *  цена за единицу и общая цена»). Слова «за шт» и «всего» повторялись в
- *  каждой строке и съедали ту самую ширину, которой не хватало именам. Здесь
- *  они сказаны один раз сверху, и список становится таблицей. */
-function ColumnHeader() {
-  const t = useThemeColors();
-  const cap = {
-    fontSize: 11,
-    fontWeight: "700" as const,
-    letterSpacing: 0.6,
-    textTransform: "uppercase" as const,
-    color: t.faint,
-  };
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: COL_GAP,
-        paddingHorizontal: 14,
-        paddingTop: 8,
-        paddingBottom: 4,
-      }}
-    >
-      <Text style={[cap, { flex: 1 }]}>Услуга</Text>
-      <Text style={[cap, { width: COL_QTY, textAlign: "center" }]}>Кол-во</Text>
-      {/* Без знака валюты: «Сумма, €» переносилось на вторую строку и рвало
-          шапку, а лист и так весь про деньги одной валюты. */}
-      <Text style={[cap, { width: COL_PRICE, textAlign: "right" }]}>Цена</Text>
-      <Text style={[cap, { width: COL_SUM, textAlign: "right" }]}>Сумма</Text>
-    </View>
-  );
-}
-
-function ServiceLine({
-  line,
-  separated,
-  onQtyChange,
-  onPriceChange,
-  onNameChange,
-}: {
-  line: ServicesBlockLine;
-  /** Не первая строка списка — волосок сверху. */
-  separated?: boolean;
-  onQtyChange: (lineId: string, qty: number) => void;
-  onPriceChange: (lineId: string, price: number) => void;
-  onNameChange?: (lineId: string, name: string) => void;
-}) {
-  const name = line.name;
-  const nameEditable = line.editableName !== undefined && !!onNameChange;
-  const t = useThemeColors();
-  // ЧЕРНОВИКИ — СВОИ У КАЖДОГО ПОЛЯ. Пока набирают «13», строка не должна
-  // превращаться в «€13» и терять то, что человек ещё не дописал; число уходит
-  // в запись на каждый символ, а показывает поле набранное.
-  const [unitDraft, setUnitDraft] = useState<string | null>(null);
-  const [totalDraft, setTotalDraft] = useState<string | null>(null);
-  const unitShown = unitDraft ?? String(Number(line.pricePerUnit.toFixed(2)));
-  const totalShown = totalDraft ?? String(Number(line.total.toFixed(2)));
-
-  // ОДНА СТРОКА НА УСЛУГУ, ЧЕТЫРЕ КОЛОНКИ. Было две строки: во второй стояли
-  // цветная точка услуги и её длительность — и то и другое здесь лишнее
-  // (владелец 2026-09-08: «цвет услуги не нужен»; «полтора часа — на хуя его
-  // второй раз дублировать, оно не меняется»). Длительность живёт в строке
-  // услуги на самой странице записи и от правки цены не меняется, цвет тут
-  // ничего не различает — услуг в списке немного, и каждая названа словом.
-  //
-  // Имя переносится на вторую строку, а не обрезается: «Заправка фреоном» в
-  // 130pt не влезает, а услуга без имени — не услуга.
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: COL_GAP,
-        minHeight: 46,
-        paddingHorizontal: 14,
-        paddingVertical: 4,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-      }}
-    >
-      {nameEditable ? (
-        <TextInput
-          keyboardAppearance="light"
-          value={line.editableName}
-          onChangeText={(next) => onNameChange?.(line.id, next)}
-          placeholder="Название"
-          placeholderTextColor={t.placeholder}
-          // Новая строка — курсор сразу в имени.
-          autoFocus={!line.editableName}
-          accessibilityLabel="Название своей услуги"
-          maxFontSizeMultiplier={1.2}
-          style={{
-            flex: 1,
-            height: 34,
-            paddingHorizontal: 8,
-            borderRadius: t.radius.input,
-            backgroundColor: t.fill,
-            fontSize: 15,
-            fontWeight: "600",
-            color: t.ink,
-          }}
-        />
-      ) : (
-        <Text
-          numberOfLines={2}
-          style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-        >
-          {name}
-        </Text>
-      )}
-      <QtyStepper
-        name={name}
-        qty={line.qty}
-        onChange={(next) => onQtyChange(line.id, next)}
-      />
-      {/* ЦЕНА ЗА ОДНУ И СУММА СТРОКИ — ПРАВЯТСЯ ОБЕ (владелец 2026-09-07:
-          «в итого редактировать могу либо по количеству за штуку, либо общую
-          сумму»). Снимок строки хранит цену за штуку, итог = цена × количество
-          в копейках; набранная сумма пересчитывает цену за одну. Прайс
-          каталога не трогается. */}
-      <MoneyCell
-        width={COL_PRICE}
-        value={unitShown}
-        accessibilityLabel={`Цена за одну: ${name}`}
-        onChange={(next) => {
-          setUnitDraft(next);
-          setTotalDraft(null);
-          onPriceChange(line.id, parseMoneyInput(next));
-        }}
-        onBlur={() => setUnitDraft(null)}
-      />
-      <MoneyCell
-        width={COL_SUM}
-        value={totalShown}
-        strong
-        accessibilityLabel={`Сумма строки: ${name}`}
-        onChange={(next) => {
-          setTotalDraft(next);
-          setUnitDraft(null);
-          const total = parseMoneyInput(next);
-          const qty = Math.max(1, line.qty);
-          onPriceChange(line.id, Math.round((total / qty) * 100) / 100);
-        }}
-        onBlur={() => setTotalDraft(null)}
-      />
-    </View>
-  );
-}
-
-/** Денежное поле колонки. Знака валюты в ячейке нет — он сказан в шапке
- *  колонки один раз; подложка говорит, что число правится. */
-function MoneyCell({
-  value,
-  width,
-  strong,
-  accessibilityLabel,
-  onChange,
-  onBlur,
-}: {
-  value: string;
-  width: number;
-  /** Сумма работы: крупнее и чернилами — её читают, остальное крутят. */
-  strong?: boolean;
-  accessibilityLabel: string;
-  onChange: (next: string) => void;
-  onBlur: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <TextInput
-      keyboardAppearance="light"
-      value={value}
-      onChangeText={onChange}
-      onBlur={onBlur}
-      selectTextOnFocus
-      keyboardType="decimal-pad"
-      placeholder="0"
-      placeholderTextColor={t.placeholder}
-      accessibilityLabel={accessibilityLabel}
-      maxFontSizeMultiplier={1.2}
-      style={{
-        width,
-        height: 34,
-        paddingHorizontal: 8,
-        borderRadius: t.radius.input,
-        backgroundColor: t.fill,
-        textAlign: "right",
-        fontSize: strong ? 16 : 15,
-        fontWeight: "700",
-        color: t.ink,
-        fontVariant: ["tabular-nums"],
-      }}
-    />
-  );
-}
-
-/** Количество — ОДНОЙ ПИЛЮЛЕЙ «− 3 +», а не тремя предметами через всю
- *  строку. Три отдельных кружка, разъехавшихся по ширине карточки, читались
- *  как три разные кнопки; здесь это один орган с числом посередине.
- *
- *  «−» на единице УБИРАЕТ услугу из записи — тот же закон, что в списке услуг
- *  на странице записи (ноль = вычеркнули), поэтому знак не гаснет. */
-function QtyStepper({
-  name,
-  qty,
-  onChange,
-}: {
-  name: string;
-  qty: number;
-  onChange: (next: number) => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: COL_QTY,
-        height: 34,
-        borderRadius: t.radius.input,
-        backgroundColor: t.fill,
-      }}
-    >
-      <StepButton
-        icon="minus"
-        label={qty <= 1 ? `Убрать: ${name}` : `Убавить: ${name}`}
-        onPress={() => onChange(qty - 1)}
-      />
-      <Text
-        maxFontSizeMultiplier={1.2}
-        style={{
-          fontSize: 15,
-          fontWeight: "700",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {qty}
-      </Text>
-      <StepButton
-        icon="plus"
-        label={`Добавить: ${name}`}
-        onPress={() => onChange(qty + 1)}
-      />
-    </View>
-  );
-}
-
-// Круг 30pt с зоной касания 44pt: в листе, где считают деньги, промах по
-// «минусу» стоит дороже, чем лишние пиксели.
-//
-// ЗНАКИ — ТЕКСТОМ, А НЕ ИКОНКАМИ. Продуктовая политика запрещает `Plus` из
-// lucide во всём приложении (`ui-policy-contract`): плюс-иконка означала
-// «создать» и уводила от `AddRow`. Здесь это не создание, а арифметика — и
-// набирается она теми же знаками, что человек видит на клавиатуре.
-function StepButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: "minus" | "plus";
-  label: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={() => {
-        haptics.tap();
-        onPress();
-      }}
-      hitSlop={7}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      // Внутри пилюли `QtyStepper`: подложку и радиус даёт она, кнопке
-      // остаётся зона касания. Своя заливка рисовала бы круг в круге.
-      // Внутри пилюли `QtyStepper`: подложку и радиус даёт она, кнопке
-      // остаётся зона касания. Своя заливка рисовала бы круг в круге.
-      style={({ pressed }) => ({
-        width: 28,
-        height: 34,
-        alignItems: "center",
-        justifyContent: "center",
-        opacity: pressed ? 0.5 : 1,
-      })}
-    >
-      <Text
-        maxFontSizeMultiplier={1}
-        style={{ fontSize: 18, fontWeight: "600", color: t.ink, lineHeight: 22 }}
-      >
-        {icon === "minus" ? "−" : "+"}
-      </Text>
-    </Pressable>
   );
 }

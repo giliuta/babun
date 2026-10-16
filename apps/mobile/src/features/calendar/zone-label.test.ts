@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { ZONE_GROUPS } from "@babun/shared/local/timezones";
 import { zoneGroupIndexOf, zoneToApply } from "./zone-label";
 
-// «ПРИМЕНИТЬ» БЕЗ ВЫБОРА НЕ ПЕРЕПИСЫВАЕТ ПОЯС (аудит шестерёнки 03.10).
+// «ПРИМЕНИТЬ» БЕЗ ВЫБОРА НЕ ПЕРЕПИСЫВАЕТ ПОЯС.
 describe("зона, которую пишет лист часового пояса", () => {
   const cyprus = "Asia/Nicosia";
   const own = zoneGroupIndexOf(cyprus);

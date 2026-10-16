@@ -39,6 +39,7 @@ import type {
   Discount,
   Payment,
 } from "../../local/appointments";
+import { toJson } from "../json";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["appointments"]["Row"];
@@ -99,13 +100,13 @@ export function rowToAppointment(r: Row): Appointment {
     // Счёт, выбранный при приёме денег. Без него сервер угадывает счёт по
     // способу оплаты — и промахивается, когда счёта такого вида у команды нет.
     payment_account_id: r.payment_account_id ?? null,
-    // НДС записи: выбор «Итого» (режим + ставка, 22.09); старые 'on'/'off'
+    // НДС записи: выбор «Итого» (режим + ставка); старые 'on'/'off'
     // пишет дверь `set_appointment_vat_mode`.
     vat_mode: (r.vat_mode ?? null) as Appointment["vat_mode"],
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
-    // Колонка новее сгенерированных типов (миграция 20260930235800); пишет
-    // её только сервер, в запись на сервер она не уходит.
-    material_lines: (r as { material_lines?: unknown }).material_lines ?? null,
+    // Пишет только сервер (миграция 20260930235800); в запись на сервер
+    // поле не уходит.
+    material_lines: r.material_lines ?? null,
     paid_amount:
       r.paid_amount === null || r.paid_amount === undefined
         ? undefined
@@ -135,29 +136,16 @@ export function rowToAppointment(r: Row): Appointment {
     status: r.status as AppointmentStatus,
     created_at: r.created_at,
     updated_at: r.updated_at,
-    // v665 — event_* fields. Live on the DB as of the
-    // add_event_fields_to_appointments migration; before that they
-    // were localStorage-only and silently dropped on cross-device
-    // sync. Older Supabase deployments without the columns fall
-    // through to undefined via the indexed cast (same pattern as
-    // calendar_settings.work_*_hour).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_all_day: (r as any).event_all_day ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_notes: (r as any).event_notes ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_url: (r as any).event_url ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_push_enabled: (r as any).event_push_enabled ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_push_offsets: Array.isArray((r as any).event_push_offsets)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? (r as any).event_push_offsets
+    // Personal-calendar event fields.
+    event_all_day: r.event_all_day ?? undefined,
+    event_notes: r.event_notes ?? undefined,
+    event_url: r.event_url ?? undefined,
+    event_push_enabled: r.event_push_enabled ?? undefined,
+    event_push_offsets: Array.isArray(r.event_push_offsets)
+      ? asArray<number>(r.event_push_offsets)
       : undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_push_at: (r as any).event_push_at ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    event_repeat: (r as any).event_repeat ?? undefined,
+    event_push_at: r.event_push_at ?? undefined,
+    event_repeat: (r.event_repeat ?? undefined) as Appointment["event_repeat"],
   };
 }
 
@@ -211,36 +199,29 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     color_override: a.color_override,
     city: a.city ?? null,
     reminder_enabled: a.reminder_enabled,
-    reminder_offsets: (a.reminder_offsets ?? []) as unknown as Json,
+    reminder_offsets: toJson(a.reminder_offsets ?? []),
     reminder_template: a.reminder_template,
-    service_ids: (a.service_ids ?? []) as unknown as Json,
-    services: (a.services ?? []) as unknown as Json,
+    service_ids: toJson(a.service_ids ?? []),
+    services: toJson(a.services ?? []),
     service_price_overrides:
-      (a.service_price_overrides ?? {}) as unknown as Json,
-    expenses: (a.expenses ?? []) as unknown as Json,
-    payments: (a.payments ?? []) as unknown as Json,
-    payment: a.payment as unknown as Json | null,
+      toJson(a.service_price_overrides ?? {}),
+    expenses: toJson(a.expenses ?? []),
+    payments: toJson(a.payments ?? []),
+    payment: toJson(a.payment),
     // STORY-049 — photos column gone from schema; ignore here.
-    global_discount: a.global_discount as unknown as Json | null,
+    global_discount: toJson(a.global_discount),
     total_duration: a.total_duration,
     created_at: a.created_at || undefined,
     // updated_at handled by the DB trigger.
-    // v665 — event_* fields. Indexed cast so older Supabase deploys
-    // without the columns get a graceful 42703 retry below (added).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_all_day !== undefined ? { event_all_day: a.event_all_day } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_notes !== undefined ? { event_notes: a.event_notes } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_url !== undefined ? { event_url: a.event_url } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_push_enabled !== undefined ? { event_push_enabled: a.event_push_enabled } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_push_offsets !== undefined ? { event_push_offsets: a.event_push_offsets as unknown as Json } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_push_at !== undefined ? { event_push_at: a.event_push_at } as any : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(a.event_repeat !== undefined ? { event_repeat: a.event_repeat as unknown as Json } as any : {}),
+    // Personal-calendar event fields: sent only when set, so the column
+    // defaults apply to work records.
+    ...(a.event_all_day !== undefined ? { event_all_day: a.event_all_day } : {}),
+    ...(a.event_notes !== undefined ? { event_notes: a.event_notes } : {}),
+    ...(a.event_url !== undefined ? { event_url: a.event_url } : {}),
+    ...(a.event_push_enabled !== undefined ? { event_push_enabled: a.event_push_enabled } : {}),
+    ...(a.event_push_offsets !== undefined ? { event_push_offsets: toJson(a.event_push_offsets) } : {}),
+    ...(a.event_push_at !== undefined ? { event_push_at: a.event_push_at } : {}),
+    ...(a.event_repeat !== undefined ? { event_repeat: toJson(a.event_repeat) } : {}),
   };
 }
 
@@ -297,83 +278,69 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
 
   // Nested — REPLACED ATOMICALLY (see header).
   if (patch.reminder_offsets !== undefined)
-    out.reminder_offsets = patch.reminder_offsets as unknown as Json;
+    out.reminder_offsets = toJson(patch.reminder_offsets);
   if (patch.service_ids !== undefined)
-    out.service_ids = patch.service_ids as unknown as Json;
+    out.service_ids = toJson(patch.service_ids);
   if (patch.services !== undefined)
-    out.services = patch.services as unknown as Json;
+    out.services = toJson(patch.services);
   if (patch.service_price_overrides !== undefined)
-    out.service_price_overrides = patch.service_price_overrides as unknown as Json;
+    out.service_price_overrides = toJson(patch.service_price_overrides);
   if (patch.expenses !== undefined)
-    out.expenses = patch.expenses as unknown as Json;
+    out.expenses = toJson(patch.expenses);
   if (patch.payments !== undefined)
-    out.payments = patch.payments as unknown as Json;
+    out.payments = toJson(patch.payments);
   if (patch.payment !== undefined)
-    out.payment = patch.payment as unknown as Json | null;
+    out.payment = toJson(patch.payment);
   // STORY-049 — patch.photos is intentionally ignored; the column
   // doesn't exist anymore. PhotoBlock writes via the dedicated repo.
   if (patch.global_discount !== undefined)
-    out.global_discount = patch.global_discount as unknown as Json | null;
-  // v665 — event_* fields. Indexed cast so older Supabase deploys
-  // without the columns gracefully skip via the 42703 retry below.
-  if (patch.event_all_day !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_all_day = patch.event_all_day;
-  if (patch.event_notes !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_notes = patch.event_notes;
-  if (patch.event_url !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_url = patch.event_url;
+    out.global_discount = toJson(patch.global_discount);
+  // Personal-calendar event fields.
+  if (patch.event_all_day !== undefined) out.event_all_day = patch.event_all_day;
+  if (patch.event_notes !== undefined) out.event_notes = patch.event_notes;
+  if (patch.event_url !== undefined) out.event_url = patch.event_url;
   if (patch.event_push_enabled !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_push_enabled = patch.event_push_enabled;
+    out.event_push_enabled = patch.event_push_enabled;
   if (patch.event_push_offsets !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_push_offsets = patch.event_push_offsets;
-  if (patch.event_push_at !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_push_at = patch.event_push_at;
+    out.event_push_offsets = toJson(patch.event_push_offsets);
+  if (patch.event_push_at !== undefined) out.event_push_at = patch.event_push_at;
   if (patch.event_repeat !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (out as any).event_repeat = patch.event_repeat;
+    out.event_repeat = toJson(patch.event_repeat);
   return out;
-}
-
-/** v665 — strip event_* columns from a payload when the DB returns
- *  42703 (column does not exist). Keeps older Supabase deploys
- *  compatible; the localStorage path still carries the data, so a
- *  user can edit on the same device, just not cross-sync. */
-function stripEventFields<T extends Record<string, unknown>>(payload: T): T {
-  const out: Record<string, unknown> = { ...payload };
-  for (const key of [
-    "event_all_day",
-    "event_notes",
-    "event_url",
-    "event_push_enabled",
-    "event_push_offsets",
-    "event_push_at",
-    "event_repeat",
-  ] as const) {
-    delete out[key];
-  }
-  return out as T;
 }
 
 // ─── Public API ────────────────────────────────────────────────
 
-/** Fetch every appointment for the tenant. STORY-049 — the photos
- *  column was dropped, so the result no longer carries blob data. */
+// PostgREST caps every response at `max_rows` (Supabase default 1000) and
+// says nothing about the rows it dropped. This list feeds the authoritative
+// cache resync (`cacheReplaceTenant`), which DELETES every cached row missing
+// from the snapshot — so a capped read would silently erase the tenant's
+// appointments past the cap from the device calendar. Same paging as
+// clients (`listClientRows`). The page must not exceed the server cap: a
+// short page is read as the last one.
+const APPOINTMENT_PAGE_SIZE = 1000;
+
+/** Fetch every appointment for the tenant, page by page (stable order by
+ *  primary key, so no row is skipped or repeated across pages). STORY-049 —
+ *  the photos column was dropped, so the result carries no blob data. */
 export async function listAppointments(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<Appointment[]> {
-  const { data: rows, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`listAppointments: ${error.message}`);
-  return (rows ?? []).map((r) => rowToAppointment(r));
+  const rows: Row[] = [];
+  for (let offset = 0; ; offset += APPOINTMENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("id", { ascending: true })
+      .range(offset, offset + APPOINTMENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listAppointments: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < APPOINTMENT_PAGE_SIZE) break;
+  }
+  return rows.map((r) => rowToAppointment(r));
 }
 
 /** Single appointment by id. Photos NOT included — caller fetches
@@ -400,39 +367,17 @@ export async function createAppointment(
   tenantId: string,
 ): Promise<Appointment> {
   const ins = appointmentToInsert(input, tenantId);
-  const first = await supabase
+  const { data, error } = await supabase
     .from("appointments")
     .insert(ins)
     .select("*")
     .single();
-  // v665 — graceful fallback for older Supabase deploys missing the
-  // event_* columns. Strip them and retry once; localStorage still
-  // carries the data so the user's edits aren't lost.
-  if (first.error && isMissingEventColumn(first.error)) {
-    const retry = await supabase
-      .from("appointments")
-      .insert(stripEventFields(ins) as typeof ins)
-      .select("*")
-      .single();
-    if (retry.error) throw new Error(`createAppointment: ${retry.error.message}`);
-    return rowToAppointment(retry.data);
-  }
-  if (first.error) throw new Error(`createAppointment: ${first.error.message}`);
-  return rowToAppointment(first.data);
-}
-
-/** Match the Supabase error shape that indicates a missing column
- *  in the appointments table. Used by the graceful-fallback retry. */
-function isMissingEventColumn(error: { code?: string; message?: string }): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const code = (error as any).code;
-  const msg = String(error.message ?? "").toLowerCase();
-  if (code === "42703") return true;
-  return /event_(all_day|notes|url|push_enabled|push_offsets|push_at|repeat)/i.test(msg);
+  if (error) throw new Error(`createAppointment: ${error.message}`);
+  return rowToAppointment(data);
 }
 
 /** Запись изменилась на сервере после того, как телефон её видел, а правка
- *  трогает статус или деньги — её не применили (аудит 03.10). `fresh` —
+ *  трогает статус или деньги — её не применили. `fresh` —
  *  строка сервера, чтобы экран сразу показал правду. */
 export class StaleAppointmentError extends Error {
   constructor(readonly fresh: Appointment | null) {
@@ -444,8 +389,8 @@ export class StaleAppointmentError extends Error {
 }
 
 /** Записи на сервере больше нет — её удалили на другом устройстве, пока
- *  этот телефон её показывал (повторный аудит 03.10): правка находит ноль
- *  строк. Раньше это было общее «Не удалось…», а запись оставалась на
+ *  этот телефон её показывал : правка находит ноль
+ *  строк. Это не общее «Не удалось…» — иначе запись оставалась бы на
  *  экране. */
 export class GoneAppointmentError extends Error {
   constructor() {
@@ -493,18 +438,6 @@ export async function updateAppointment(
     .eq("tenant_id", tenantId)
     .select("*")
     .single();
-  if (error && isMissingEventColumn(error)) {
-    // v665 — graceful fallback (see createAppointment).
-    const retry = await supabase
-      .from("appointments")
-      .update(stripEventFields(upd) as typeof upd)
-      .eq("id", id)
-      .eq("tenant_id", tenantId)
-      .select("*")
-      .single();
-    if (retry.error) throw new Error(`updateAppointment: ${retry.error.message}`);
-    return rowToAppointment(retry.data);
-  }
   if (error && (error as { code?: string }).code === "PGRST116") {
     throw new GoneAppointmentError();
   }

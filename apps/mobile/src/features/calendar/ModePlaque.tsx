@@ -2,13 +2,15 @@ import { Pressable, Text, View } from "react-native";
 import { X } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
+import { useAndroidBack } from "@/lib/android-back";
 
 /**
  * ПЛАШКА РЕЖИМА над сеткой — «Записать: Иван» и «Перенести: Иван». Пока она
  * висит, свободное время подсвечено зелёным, а тап по кубику делает дело
  * режима (форма записи / переезд записи). Крестик выходит из режима, оставляя
  * календарь там же, где стоите. Одна плашка на оба режима: зелень одна, и
- * человек должен узнавать её с полувзгляда.
+ * человек должен узнавать её с полувзгляда. Системное «Назад» Android — тот
+ * же крестик (`useAndroidBack`).
  */
 export function ModePlaque({
   title,
@@ -22,6 +24,7 @@ export function ModePlaque({
   onExit: () => void;
 }) {
   const t = useThemeColors();
+  useAndroidBack(true, onExit);
   return (
     <View
       style={{

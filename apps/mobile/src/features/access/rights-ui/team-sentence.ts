@@ -1,9 +1,9 @@
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { visibleLevel, type MasterDraft } from "../master-page/master-draft";
 import { offeredBlocks } from "../master-page/rights-copy";
 
-// ИТОГ ПРАВ КОМАНДЫ (владелец 29.09: «чтобы новый пользователь предоставил
-// права сотруднику и не переживал»). Строки прав читать долго; итог говорит
+// ИТОГ ПРАВ КОМАНДЫ (чтобы новый пользователь предоставил права сотруднику и
+// не переживал). Строки прав читать долго; итог говорит
 // главное человеческими словами: что он видит в записях, что с клиентами,
 // что с деньгами и может ли что-то удалить.
 //
@@ -86,7 +86,7 @@ function teamFacts(read: LevelRead): TeamFacts {
 
   const money: string[] = [];
   if (is("record.payment", "write")) money.push("принимает оплату");
-  // Доход и расход дня под календарём (04.10) — право календаря.
+  // Доход и расход дня под календарём — право календаря.
   if (is("calendar.day_money", "read")) money.push("видит доход и расход дня");
   if (is("calendar.day_money", "write")) money.push("вносит доход и расход дня");
   // Доходы и расходы — два права с этапа 2.
@@ -106,8 +106,8 @@ function teamFacts(read: LevelRead): TeamFacts {
     acts,
     edits: RECORD_EDITS.some((key) => is(key, "write")),
     clients: read("clients"),
-    // «Без ограничения» с 02.10 хранится как `own` («all» — прежнее имя):
-    // проверка одного «all» всегда говорила «своих» (аудит 03.10).
+    // «Без ограничения» хранится как `own` («all» — прежнее имя): проверка
+    // одного «all» всегда говорила бы «своих».
     clientsAll: read("clients.scope") === "own" || read("clients.scope") === "all",
     money,
     risky:
@@ -125,8 +125,8 @@ export function teamSentence(read: LevelRead): string {
   const f = teamFacts(read);
   const out: string[] = [];
 
-  // «Записи клиентов: Скрыты» — записей команды у него нет вовсе (01.10:
-  // строка говорила «только смотрит записи» при закрытых записях).
+  // «Записи клиентов: Скрыты» — записей команды у него нет вовсе (строка не
+  // должна говорить «только смотрит записи» при закрытых записях).
   if (read("calendar.records") === "off") {
     out.push("Записей команды не видит.");
     out.push(f.money.length > 0 ? `${cap(joinRu(f.money))}.` : "Деньги закрыты.");

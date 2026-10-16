@@ -7,7 +7,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 import { invitationErrorMessage } from "@/features/settings/invitation-flow";
@@ -15,13 +15,13 @@ import {
   usePendingInvitations,
   useRevokeInvitation,
 } from "@/features/settings/team-access";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
 import { shareInvitation, waitSheetExit } from "../InviteMemberSheet";
-import { useAccessBlocks } from "../queries";
+import { useAccessBlocks } from "@/session/access-queries";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
@@ -42,8 +42,8 @@ import { useDraftTeamAccess } from "./draft-team-access";
 import { areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { waitSubtitle } from "../invitation-wait";
 
-// ПРИГЛАШЕНИЕ БЕЗ ОТВЕТА — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: всё, что
-// заполнено до «Пригласить», можно поправить, пока человек не ответил).
+// ПРИГЛАШЕНИЕ БЕЗ ОТВЕТА — ТА ЖЕ КАРТОЧКА МАСТЕРА (всё, что заполнено до
+// «Пригласить», можно поправить, пока человек не ответил).
 // Правка ложится сразу (`update_invitation`): имя, телефон и должность — по
 // уходу из поля, цвет и календари — выбором. Почта только показывается: это
 // адрес, на который выписано приглашение. Токен при правке не меняется —
@@ -106,7 +106,7 @@ export function MasterInviteCard({
         : null,
     [row, teams],
   );
-  // Лента команд и «Доступ» — как у сотрудника (01.10). Хук — до раннего
+  // Лента команд и «Доступ» — как у сотрудника. Хук — до раннего
   // выхода: пока приглашение едет, читает пустую заготовку.
   const access = useDraftTeamAccess({
     blocks,
@@ -249,7 +249,7 @@ export function MasterInviteCard({
         editable
         cardFieldsEditable={cardFields}
         emailEditable={false}
-        // Партнёр — по почте (01.10): имя и телефон придут из его профиля.
+        // Партнёр — по почте: имя и телефон придут из его профиля.
         // Приглашение по старой карточке без аккаунта показывает её имя.
         emailOnly={!row.master_id}
         emailState="plain"
@@ -276,7 +276,7 @@ export function MasterInviteCard({
         // такого раздела нет вовсе.
         liveAreas={companyAreasOf(blocks)}
         areaLevels={areaLevelsOf(blocks, draft)}
-        // Как у сотрудника (01.10): команды лентой, права выбранной —
+        // Как у сотрудника: команды лентой, права выбранной —
         // «Доступом» разделами.
         teamChips={access.teamChips}
         teamRights={access.teamRights}

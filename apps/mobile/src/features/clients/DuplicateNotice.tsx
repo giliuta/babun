@@ -2,15 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Text, View } from "react-native";
 import { Users } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { phoneKey } from "@/features/clients/merge-clients";
 import { GUTTER } from "@/components/ui/tokens";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 // «ПОХОЖЕ, ЭТО ОДИН ЧЕЛОВЕК».
 //
@@ -20,8 +20,7 @@ import { formatPhoneForDisplay } from "@/features/clients/phone";
 // была ТОЛЬКО при создании — на живых карточках никто никогда не смотрел.
 //
 // ПЛАШКА ТОЛЬКО ГОВОРИТ. Кнопка «Объединить» отсюда убрана: слияние
-// необратимо, а внутри содержимого страницы кнопок не бывает (владелец
-// 2026-09-15). Действие живёт в «⋯» карточки, к остальным необратимым, —
+// необратимо, а внутри содержимого страницы кнопок не бывает. Действие живёт в «⋯» карточки, к остальным необратимым, —
 // пункт «Объединить с дублем» (`use-merge-duplicate.ts`). Кого сливать, он
 // узнаёт ЭТИМ ЖЕ поиском (`useDuplicateOf`): ключ один, запрос один, и плашка
 // с пунктом не могут назвать дублем разные карточки.

@@ -4,18 +4,16 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useCompanies } from "@/features/companies/queries";
 import { requisitesDoorLine } from "@/features/finances/team-settings-lines";
-import { useNextInvoiceNumber } from "@/features/invoices/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useAccountScope } from "./account-scope";
-import { accountHref } from "./CabinetAccountRoute";
+import { useNextInvoiceNumber } from "@/features/finances/invoices-queries";
+import { useCurrentRole } from "@/session/tenant";
+import { useAccountScope } from "@/session/account-scope";
+import { accountHref } from "@/session/CabinetAccountRoute";
 
-// «РЕКВИЗИТЫ» — СТРОКА-ДВЕРЬ КАБИНЕТА (владелец 2026-10-03: «запихни
-// реквизиты компании в кабинет: это единый блок на все компании, а команды
-// уже выписывают»). Наборы реквизитов — одни на весь аккаунт, любая команда
+// «РЕКВИЗИТЫ» — СТРОКА-ДВЕРЬ КАБИНЕТА. Наборы реквизитов — одни на весь аккаунт, любая команда
 // выставляет документ от любого из них; поэтому им место рядом с тарифом и
 // партнёрами, а не в шестерёнке одной команды. Подпись — живое состояние:
 // сколько рабочих наборов и номер следующего инвойса основного. `tenantId` —
-// строка блока аккаунта, который пригласил (04.10): его наборы, без номера.
+// строка блока аккаунта, который пригласил: его наборы, без номера.
 export function CabinetRequisitesRow({ tenantId }: { tenantId?: string } = {}) {
   const router = useRouter();
   const scope = useAccountScope();

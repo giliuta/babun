@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState, type Ref } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 import { FieldRow } from "@/components/ui/card-rows";
 import { iconPreset } from "@/components/ui/icon-set";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { MapPicker } from "@/features/clients/MapPicker";
 import {
-  formatCoords,
   googleMapsSearchUrl,
   type Coords,
 } from "@/features/clients/location-request-form";
@@ -18,13 +16,8 @@ import {
   AddressDetailsFields,
   AddressDetailsToggle,
 } from "@/features/clients/AddressPartsFields";
-import {
-  composeAddress,
-  composeDetails,
-  hasAddressPlace,
-} from "@/features/clients/object-address";
+import { composeDetails } from "@/features/clients/object-address";
 import { geocodeAddress } from "@/features/clients/geocode";
-import { isLikelyUrl, parseAddress } from "@babun/shared/common/utils/map-links";
 import {
   objectTypeKey,
   objectTypeVocabulary,
@@ -33,20 +26,20 @@ import {
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { ObjectMapPanel } from "@/features/clients/object-fields/ObjectMapPanel";
+import { coordsOf, objectGeoQuery } from "@/features/clients/object-fields/object-geo";
 
-// ТЕЛО ФОРМЫ ОБЪЕКТА — ОДНО НА СОЗДАНИЕ И НА ПРАВКУ (владелец 2026-09-10:
-// «если я показываю в одном месте, значит то же самое будет показывать в
-// другом месте, мне не надо разные дизайны»).
+// The map panel and the pure map helpers live in `object-fields/`.
+export { coordsOf } from "@/features/clients/object-fields/object-geo";
+
+// ТЕЛО ФОРМЫ ОБЪЕКТА — ОДНО НА СОЗДАНИЕ И НА ПРАВКУ: что показано в одном
+// месте, показано так же в другом, разных дизайнов нет.
 //
-// До этого объект имели ДВЕ формы: `ObjectSheet` (добавить) и
-// `ObjectEditSheet` (править). Они и разошлись, как расходится всякая копия:
-// добавление переехало на `SectionCard`, получило блок «Тип объекта» своей
-// карточкой, карту и «Попросить адрес у клиента», — а правка осталась на
-// `RowGroup` с типом строкой внутри группы и вообще без карты. Один и тот же
-// объект выглядел двумя разными продуктами в зависимости от того, заводят его
-// или чинят.
+// Две формы (`ObjectSheet` — добавить, `ObjectEditSheet` — править) неизбежно
+// разошлись бы, как расходится всякая копия: один и тот же объект выглядел бы
+// двумя разными продуктами в зависимости от того, заводят его или чинят.
 //
-// Теперь блоки живут здесь, а листы — тонкие двери со своим способом записи:
+// Поэтому блоки живут здесь, а листы — тонкие двери со своим способом записи:
 //   СОЗДАНИЕ пишет черновик и уезжает в базу одной кнопкой;
 //   ПРАВКА пишет объект сразу, на уходе с каждого поля (`onCommit`).
 // Разный способ записи — законная разница; разный вид — нет.
@@ -74,13 +67,12 @@ export interface ObjectFieldsValue {
 /** Словарь типов объекта для строки выбора — ОДИН расчёт на оба листа.
  *  Порядок заморожен: тап по чипу меняет метку объекта, то есть частоты, по
  *  которым словарь строится, и без заморозки чип уезжает из-под пальца через
- *  базу (владелец 2026-07-27: «нажимаю офис — перекладывает на виллу»). */
+ *  базу («нажимаю офис — перекладывает на виллу»). */
 export function useObjectTypeOptions(
-  /** Команда клиента — её «Типы объектов» (у каждой команды свои, 30.09). */
+  /** Команда клиента — её «Типы объектов» (у каждой команды свои). */
   teamId: string | null = null,
 ): string[] {
-  // ТОЛЬКО СПРАВОЧНИК КОМАНДЫ (владелец 03.10: «каждый сам создаёт свой
-  // тип»): ни стандартного набора, ни типов, подсмотренных на объектах.
+  // ТОЛЬКО СПРАВОЧНИК КОМАНДЫ (каждый сам создаёт свой тип): ни стандартного набора, ни типов, подсмотренных на объектах.
   const { data: labelPresets = [] } = useLocationLabels(teamId);
   return useMemo(
     () => objectTypeVocabulary(labelPresets.map((preset) => preset.name)),
@@ -113,22 +105,22 @@ export function ObjectFields({
   onCommit?: () => void;
   /** Поле адреса — лист нового объекта ставит в него курсор сам. */
   addressRef?: Ref<TextInput>;
-  /** Команда клиента — вид типа из её справочника (30.09). */
+  /** Команда клиента — вид типа из её справочника. */
   teamId?: string | null;
 }) {
   const t = useThemeColors();
-  // Без выноса (30.09): у сотрудника чужой компании адрес и заметку объекта
+  // Без выноса: у сотрудника чужой компании адрес и заметку объекта
   // не скопировать.
   const caps = useClientsCapabilities();
   /** Раскрыта ли карта под адресом. */
   const [mapOpen, setMapOpen] = useState(false);
   /** Поднят ли список типов объекта. */
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
-  // ВИД ТИПА — ИЗ СПРАВОЧНИКА, А НЕ ПРИДУМАННЫЙ ЗДЕСЬ. С 2026-09-10 у типа
-  // объекта есть свои цвет и значок (`location_labels.color/icon`), и кабинет
-  // рисует «Дом» синим домиком. Час назад их ещё не было, и строки шторки
-  // красились `getAvatarColor(name)` — случайным цветом по имени: тот же тип
-  // выглядел в кабинете одним, а в выборе другим. Ищем по КЛЮЧУ имени: типы
+  // ВИД ТИПА — ИЗ СПРАВОЧНИКА, А НЕ ПРИДУМАННЫЙ ЗДЕСЬ. У типа объекта есть
+  // свои цвет и значок (`location_labels.color/icon`), и кабинет рисует «Дом»
+  // синим домиком. Покрасив строки шторки случайным цветом по имени
+  // (`getAvatarColor(name)`), мы показали бы тот же тип в кабинете одним, а в
+  // выборе другим. Ищем по КЛЮЧУ имени: типы
   // приходят из фактических данных и расходятся с справочником регистром и
   // пробелами. Нет записи (тип живёт только в данных) — общий значок сущности
   // и акцент: пустой цвет в справочнике значит «не красить», а не «покрасить
@@ -142,18 +134,11 @@ export function ObjectFields({
   /** Куда переехать карте: адрес словами, найденный геокодером. */
   const [found, setFound] = useState<Coords | null>(null);
 
-  // АДРЕС СЛОВАМИ ВЕДЁТ КАРТУ (владелец 2026-09-10: «когда я вписываю точный
-  // адрес, хочу, чтобы он отображался на этой мини-карте — убедиться, что это
-  // точный адрес»). Ищем только пока карта раскрыта и не чаще раза в 800 мс
+  // АДРЕС СЛОВАМИ ВЕДЁТ КАРТУ: вписанный точный адрес отображается на
+  // мини-карте, чтобы убедиться в нём. Ищем только пока карта раскрыта и не чаще раза в 800 мс
   // после последней буквы: служба чужая и бесплатная. Ссылку не геокодируем —
   // у неё координаты уже внутри.
-  const geoQuery = mapOpen
-    ? hasAddressPlace(value.parts)
-      ? composeAddress(value.parts, { forRoute: true })
-      : isLikelyUrl(value.target.trim())
-        ? ""
-        : value.target.trim()
-    : "";
+  const geoQuery = mapOpen ? objectGeoQuery(value) : "";
   useEffect(() => {
     if (!geoQuery) return;
     const abort = new AbortController();
@@ -172,26 +157,18 @@ export function ObjectFields({
 
   return (
     <>
-      {/* ТИП ОБЪЕКТА — ТА ЖЕ АРХИТЕКТУРА, ЧТО КАТЕГОРИЯ И ТИП СОБЫТИЯ
-          (владелец 2026-09-10: «переделываем вот этот вот в архитектуру, то же
-          самое, как выглядит тип события или же категория в финансах: нажал
-          „добавить тип объекта“ — снизу поднимается список; и эти строчки,
-          которые сейчас справа в блоке, переносим в саму шторку»).
+      {/* ТИП ОБЪЕКТА — ТА ЖЕ АРХИТЕКТУРА, ЧТО КАТЕГОРИЯ И ТИП СОБЫТИЯ: нажал
+          «добавить тип объекта» — снизу поднимается список.
 
-          ЧТО УБРАНО. Здесь стояла ЛЕНТА ЧИПОВ `ChoiceRow`: все типы разом,
-          выбор одним касанием, а дверь в справочник — ползунками в шапке
-          блока. Это был третий диалект выбора в продукте — после того как
-          категория и тип события уже свелись к «блок + шторка». Лента ещё и
-          росла: типы заводит сам бизнес, и с десятком их приходилось листать
-          вбок, не видя, что за краем.
+          НЕ ЛЕНТА ЧИПОВ `ChoiceRow`: это был бы третий диалект выбора в
+          продукте при том, что категория и тип события сведены к «блок +
+          шторка». Лента ещё и растёт: типы заводит сам бизнес, и с десятком
+          их приходилось бы листать вбок, не видя, что за краем.
 
-          ПОЛЗУНКИ ПЕРЕЕХАЛИ В ШАПКУ ШТОРКИ — там же, где они у типа события.
-          В шапке блока они держались потому, что лента не оставляла им места
-          внутри; ленты нет — причина исчезла. */}
+          ПОЛЗУНКИ — В ШАПКЕ ШТОРКИ, там же, где они у типа события. */}
       <ReferenceBlock
-        // ФОРМА В ШТОРКЕ — плотно (владелец 03.10: «тип объекта выпадает из
-        // размера»). Вид выбранного — тот же, что у категории (закон 15.09
-        // «как в шторке… и так во всех»); тише только воздух.
+        // ФОРМА В ШТОРКЕ — плотно, чтобы тип объекта не выпадал из размера.
+        // Вид выбранного — тот же, что у категории; тише только воздух.
         dense
         title="Тип объекта"
         emptyIcon={Tag}
@@ -219,13 +196,12 @@ export function ObjectFields({
         title="Адрес"
         action={[
           {
-            // ТОЧКА НА КАРТЕ — СВОЙ ЛИСТ, А НЕ УХОД В GOOGLE MAPS (владелец
-            // 2026-09-10). Вернуть выбранную точку из чужого приложения
+            // ТОЧКА НА КАРТЕ — СВОЙ ЛИСТ, А НЕ УХОД В GOOGLE MAPS. Вернуть выбранную точку из чужого приложения
             // нельзя: ни у Google, ни у Apple нет режима «выбери и вернись» —
             // их URL-схемы односторонние. Поэтому карта своя.
             label: "Выбрать точку на карте",
             icon: MapPinned,
-            // Синим, как кнопка маршрута у объекта (владелец 03.10).
+            // Синим, как кнопка маршрута у объекта.
             accent: true,
             onPress: () => setMapOpen((v) => !v),
           },
@@ -265,52 +241,21 @@ export function ObjectFields({
             на каждое движение — «Готово» только сворачивает блок.
 
             КУДА ЗАПИСЫВАЕТСЯ: точка уходит в пин, а главная строка остаётся
-            свободной для человеческого адреса. Раньше в поле «Адрес»
-            тянулась голая ссылка Google Maps — ровно на это ругался разбор
-            ссылок 2026-07-26. */}
+            свободной для человеческого адреса. Иначе в поле «Адрес» тянулась
+            бы голая ссылка Google Maps — ровно на это ругается разбор
+            ссылок. */}
         {mapOpen ? (
-          <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
-            <MapPicker
-              value={pinCoords ?? coordsOf(value.target)}
-              follow={found}
-              // Точка НЕ коммитится в том же кадре: в режиме правки значение
-              // ещё не доехало до состояния, и запись ушла бы с прежним пином.
-              // Её запишет следующая точка коммита — уход с поля, «Применить»
-              // или закрытие листа, как и у полей «Точного адреса».
-              onChange={(coords) => onChange({ pin: googleMapsSearchUrl(coords) })}
-            />
-            {pinCoords ? (
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  marginTop: 8,
-                  fontSize: 13,
-                  color: t.sub,
-                  textAlign: "center",
-                }}
-              >
-                {`Точка отмечена · ${formatCoords(pinCoords)}`}
-              </Text>
-            ) : null}
-            <Pressable
-              onPress={() => {
-                haptics.tap();
-                setMapOpen(false);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Свернуть карту"
-              style={({ pressed }) => ({
-                minHeight: 40,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: pressed ? 0.5 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "600", color: t.accent }}>
-                Готово
-              </Text>
-            </Pressable>
-          </View>
+          <ObjectMapPanel
+            value={pinCoords ?? coordsOf(value.target)}
+            pinCoords={pinCoords}
+            follow={found}
+            // Точка НЕ коммитится в том же кадре: в режиме правки значение
+            // ещё не доехало до состояния, и запись ушла бы с прежним пином.
+            // Её запишет следующая точка коммита — уход с поля, «Применить»
+            // или закрытие листа, как и у полей «Точного адреса».
+            onPick={(coords) => onChange({ pin: googleMapsSearchUrl(coords) })}
+            onDone={() => setMapOpen(false)}
+          />
         ) : null}
 
         {/* ТОЧНЫЙ АДРЕС — маленькой синей строкой: это уточнение адреса, а не
@@ -333,9 +278,8 @@ export function ObjectFields({
         ) : null}
       </SectionCard>
 
-      {/* ЗАМЕТКА — ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07: «мне нравились старые
-          заметки»). Тот же вид, что у заметок на странице записи; поле открыто
-          сразу, без кнопки «добавить» (владелец 2026-09-04). */}
+      {/* ЗАМЕТКА — ПОЛЕМ-ПОДЛОЖКОЙ. Тот же вид, что у заметок на странице
+          записи; поле открыто сразу, без кнопки «добавить». */}
       <SectionCard dense title="Заметка">
         <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 2 }}>
           <TextInput
@@ -345,18 +289,16 @@ export function ObjectFields({
             contextMenuHidden={!caps.export}
             multiline
             accessibilityLabel="Заметка объекта"
-            // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ (владелец
-            // 2026-09-10: «тут должно быть „заметка", а внизу — „заметка
-            // объекта"»). Пример «как войти, код, кто встречает…» читался как
-            // уже введённый текст. В записи это поле давно подписано так же —
-            // лист объекта был единственным местом с примером.
+            // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ. Пример «как
+            // войти, код, кто встречает…» читался бы как уже введённый текст.
+            // В записи это поле подписано так же.
             placeholder="Заметка объекта"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
             keyboardAppearance="light"
             maxFontSizeMultiplier={1.2}
             style={{
-              // РАСТЁТ ПОД ТЕКСТ, А НЕ СКРОЛЛИТСЯ В СЕБЕ (аудит 2026-09-09):
+              // РАСТЁТ ПОД ТЕКСТ, А НЕ СКРОЛЛИТСЯ В СЕБЕ:
               // при `maxHeight` длинная заметка про вход пряталась во
               // внутреннюю прокрутку, и на листе оказывалось два скролла один
               // в другом.
@@ -387,8 +329,7 @@ export function ObjectFields({
           label: name,
           icon: iconPreset(presetByKey.get(objectTypeKey(name))?.icon) ?? Tag,
           color: presetByKey.get(objectTypeKey(name))?.color ?? t.accent,
-          // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП (владелец 2026-09-10: «можно создать
-          // объект без типа объекта»). Тот же жест, что у типа события, и
+          // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП: объект можно создать без типа. Тот же жест, что у типа события, и
           // тот случай, ради которого канон его и держит: снимаем там, где
           // значение можно не иметь.
           onPress: () => {
@@ -404,12 +345,4 @@ export function ObjectFields({
       />
     </>
   );
-}
-
-/** Координаты из строки-ссылки, если они в ней есть: с них открывается карта,
- *  когда точку ставят повторно. */
-export function coordsOf(value: string): Coords | null {
-  const raw = value.trim();
-  if (!raw) return null;
-  return parseAddress(raw).coords ?? null;
 }

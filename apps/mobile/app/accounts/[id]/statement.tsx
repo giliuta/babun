@@ -20,20 +20,19 @@ import {
   periodDates,
   periodTitle,
   type Period,
-} from "@/features/finances/period";
-import { todayYmd } from "@/features/invoices/format";
+} from "@/lib/period";
+import { todayYmd } from "@/lib/paper/format";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { StatementPaper } from "@/features/finances/statement/StatementPaper";
 import { shareStatementPdf } from "@/features/finances/statement/statement-pdf";
 import { useStatementDocument } from "@/features/finances/statement/use-statement";
 
-// ВЫПИСКА СЧЁТА — СНАЧАЛА ЛИСТ, ПОТОМ ФАЙЛ (владелец 03.10: «когда выписка
-// делается, то сначала создаётся превью файла, а потом уже можно только
-// передавать это»). Открывается строкой «Выписка» в листе счёта; «назад»
+// ВЫПИСКА СЧЁТА — СНАЧАЛА ЛИСТ, ПОТОМ ФАЙЛ: сначала создаётся превью, а
+// потом его можно только передавать. Открывается строкой «Выписка» в листе счёта; «назад»
 // возвращает в тот же лист. На экране — та же бумага, что уйдёт PDF-файлом;
 // действие страницы одно — «Поделиться PDF» в футере.
 //
-// ЗА ПЕРИОД (владелец 03.10: «выписка за период — прям хорошо»): под шапкой
+// ЗА ПЕРИОД: под шапкой
 // тот же ряд периода, что на «Финансах» — имя открывает готовые периоды
 // (месяц, квартал — VAT на Кипре сдаётся поквартально, год), даты — свои.
 // Сверху списка готовых — «Всё время». Открывается на текущем месяце, как

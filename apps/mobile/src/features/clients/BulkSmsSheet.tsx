@@ -11,7 +11,7 @@
 //     operator never silently loses the personalisation.
 //
 // Text comes from the SMS templates of every team the operator sees
-// (useTeamTemplates(null), same text once — STORY-089 29.09); a
+// (useTeamTemplates(null), same text once — STORY-089); a
 // blank «Свой текст» option lets them type ad-hoc. Recipients without a
 // dialable phone are counted out up front (parity with the web sheet).
 
@@ -32,12 +32,13 @@ import type { Client } from "@babun/shared/local/clients";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { useThemeColors } from "@/theme/colors";
 import { Chip } from "@/components/ui/Chip";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import {
   smsErrorText,
   uniqueByBody,
@@ -76,7 +77,7 @@ export function BulkSmsSheet({
   // Sequential cursor — index of the recipient whose composer opens next.
   const [seqIdx, setSeqIdx] = useState<number | null>(null);
 
-  // ЧЕРЕЗ СЕРВИС (STORY-089, 30.09): рассылка с баланса компании, от одной
+  // ЧЕРЕЗ СЕРВИС (STORY-089): рассылка с баланса компании, от одной
   // выбранной команды — её имя отправителя стоит подписью. Только владельцу
   // (так решает и база) и только когда у какой-то команды есть имя.
   const toast = useToast();
@@ -116,7 +117,7 @@ export function BulkSmsSheet({
   };
 
   // Платное и необратимое — только после вопроса. Сумма — только в вебе:
-  // в iOS-приложении о цене молчим (правило App Store, владелец 24.09).
+  // в iOS-приложении о цене молчим (правило App Store).
   const sendViaService = () => {
     if (!fromTeam || !body.trim() || withPhone.length === 0) return;
     const items = withPhone.map((c) => ({ clientId: c.id, body: bulkBodyFor(body, c) }));
@@ -206,188 +207,197 @@ export function BulkSmsSheet({
         onPress={close}
         accessible={false}
       />
-      <View
-        className="absolute bottom-0 left-0 right-0 max-h-[86%] rounded-t-[10px] p-5"
-        style={{
-          backgroundColor: t.surface,
-          paddingBottom: Math.max(32, insets.bottom + 12),
-        }}
+      {/* ПОДЪЁМ НАД КЛАВИАТУРОЙ. Окно Modal edge-to-edge: Android не
+          сжимает его под клавиатуру, и поле текста рассылки вместе с кнопками
+          отправки уходило под неё — печатали вслепую. Рамка пропускает тапы
+          к затемнению (`box-none`), панель лежит внутри неё внизу. */}
+      <KeyboardLift
+        pointerEvents="box-none"
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "flex-end" }}
       >
-        <View className="mb-1 flex-row items-center">
-          <Text className="flex-1 text-lg font-bold" style={{ color: t.ink }}>
-            SMS-рассылка
-          </Text>
-          <Pressable
-            onPress={close}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Закрыть"
-          >
-            <X color={t.body} size={ICON.md} />
-          </Pressable>
-        </View>
-        <Text className="mb-3 text-xs" style={{ color: t.sub }}>
-          {withPhone.length}{" "}
-          {countWordRu(withPhone.length, "получатель", "получателя", "получателей")}
-          {noPhone > 0 ? ` · ${noPhone} без телефона пропущены` : ""}
-        </Text>
-
-        {inSequence ? (
-          // ── Sequential progress ──────────────────────────────────────
-          <View>
-            <Text className="text-sm" style={{ color: t.sub }}>
-              Отправка по одному — «Сообщения» открылись для клиента:
+        <View
+          className="max-h-[86%] rounded-t-[10px] p-5"
+          style={{
+            backgroundColor: t.surface,
+            paddingBottom: Math.max(32, insets.bottom + 12),
+          }}
+        >
+          <View className="mb-1 flex-row items-center">
+            <Text className="flex-1 text-lg font-bold" style={{ color: t.ink }}>
+              SMS-рассылка
             </Text>
-            <Text className="mt-1 text-xl font-bold" style={{ color: t.ink }}>
-              {seqPlan[seqIdx]?.client.full_name || "Клиент"}
-            </Text>
-            <Text className="mt-1 text-xs" style={{ color: t.faint }}>
-              {(seqIdx ?? 0) + 1} из {seqPlan.length}. Отправьте сообщение в
-              «Сообщениях», вернитесь и нажмите «Дальше».
-            </Text>
-            <View className="mt-4">
-              <Button
-                label={
-                  seqIdx! + 1 >= seqPlan.length
-                    ? "Готово"
-                    : `Дальше — ${seqPlan[seqIdx! + 1]?.client.full_name || "следующий"}`
-                }
-                onPress={advanceSeq}
-              />
-              <Pressable
-                onPress={close}
-                accessibilityRole="button"
-                accessibilityLabel="Остановить рассылку"
-                className="mt-1 min-h-11 items-center justify-center py-2 active:opacity-60"
-              >
-                <Text className="text-sm" style={{ color: t.sub }}>
-                  Остановить рассылку
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={close}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
+            >
+              <X color={t.body} size={ICON.md} />
+            </Pressable>
           </View>
-        ) : (
-          // ── Compose ───────────────────────────────────────────────────
-          <ScrollView keyboardShouldPersistTaps="handled">
-            {canService ? (
-              <View className="mb-3">
-                <SegmentedControl
-                  options={[
-                    { value: "phone", label: "С телефона" },
-                    { value: "service", label: "Через сервис" },
-                  ]}
-                  value={mode}
-                  onChange={setMode}
-                />
-              </View>
-            ) : null}
-            {viaService && senderTeams.length > 1 ? (
-              <View className="mb-3">
-                <Text className="mb-1.5 text-xs font-semibold" style={{ color: t.faint }}>
-                  ОТ КОМАНДЫ
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {senderTeams.map((id) => (
-                    <Chip
-                      key={id}
-                      label={`${teams.find((x) => x.id === id)?.name ?? "Команда"} · ${senders[id]}`}
-                      selected={fromTeam === id}
-                      radio
-                      onPress={() => setPickedTeam(id)}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            {usableTemplates.length > 0 ? (
-              <View className="mb-3">
-                <Text className="mb-1.5 text-xs font-semibold" style={{ color: t.faint }}>
-                  ШАБЛОН
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {usableTemplates.map((tpl) => {
-                    const active = body === tpl.body;
-                    return (
-                      <Pressable
-                        key={tpl.id}
-                        onPress={() => setBody(tpl.body)}
-                        className="flex-row items-center gap-1 rounded-full px-3 py-1.5 active:opacity-70"
-                        style={{
-                          backgroundColor: active ? t.accent : t.fill,
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Шаблон ${tpl.name}`}
-                        accessibilityState={{ selected: active }}
-                      >
-                        {active ? <Check color="#fff" size={13} strokeWidth={3} /> : null}
-                        <Text
-                          className="text-[13px] font-medium"
-                          style={{ color: active ? "#fff" : t.body }}
-                          numberOfLines={1}
-                        >
-                          {tpl.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
+          <Text className="mb-3 text-xs" style={{ color: t.sub }}>
+            {withPhone.length}{" "}
+            {countWordRu(withPhone.length, "получатель", "получателя", "получателей")}
+            {noPhone > 0 ? ` · ${noPhone} без телефона пропущены` : ""}
+          </Text>
 
-          <TextInput
-            value={body}
-            accessibilityLabel="Текст SMS"
-              onChangeText={(next) => setBody(acceptSmsInput(next, body))}
-              placeholder="Текст сообщения… можно вставить [Имя]"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              multiline
-              maxLength={500}
-              className="min-h-[92px] rounded-[10px] px-3 py-2.5 text-base"
-              style={{ backgroundColor: t.fill, color: t.ink, textAlignVertical: "top" }}
-            />
-            {viaService ? (
+          {inSequence ? (
+            // ── Sequential progress ──────────────────────────────────────
+            <View>
+              <Text className="text-sm" style={{ color: t.sub }}>
+                Отправка по одному — «Сообщения» открылись для клиента:
+              </Text>
+              <Text className="mt-1 text-xl font-bold" style={{ color: t.ink }}>
+                {seqPlan[seqIdx]?.client.full_name || "Клиент"}
+              </Text>
+              <Text className="mt-1 text-xs" style={{ color: t.faint }}>
+                {(seqIdx ?? 0) + 1} из {seqPlan.length}. Отправьте сообщение в
+                «Сообщениях», вернитесь и нажмите «Дальше».
+              </Text>
               <View className="mt-4">
                 <Button
-                  label={`Отправить · ${withPhone.length}`}
-                  onPress={sendViaService}
-                  disabled={!body.trim() || withPhone.length === 0 || !fromTeam || bulk.isPending}
-                  loading={bulk.isPending}
+                  label={
+                    seqIdx! + 1 >= seqPlan.length
+                      ? "Готово"
+                      : `Дальше — ${seqPlan[seqIdx! + 1]?.client.full_name || "следующий"}`
+                  }
+                  onPress={advanceSeq}
                 />
+                <Pressable
+                  onPress={close}
+                  accessibilityRole="button"
+                  accessibilityLabel="Остановить рассылку"
+                  className="mt-1 min-h-11 items-center justify-center py-2 active:opacity-60"
+                >
+                  <Text className="text-sm" style={{ color: t.sub }}>
+                    Остановить рассылку
+                  </Text>
+                </Pressable>
               </View>
-            ) : (
-            <>
-            <Text className="mt-2 text-[11px] leading-snug" style={{ color: t.faint }}>
-              Откроется системное приложение «Сообщения» с текстом — отправку
-              подтверждаете там. «Каждому по имени» подставит [Имя] и откроет
-              переписки по очереди; «Всем сразу» — одно окно на все номера.
-            </Text>
-
-            <View className="mt-4 gap-2">
-              <Button
-                label={`Каждому по имени · ${seqPlan.length}`}
-                onPress={startSequential}
-                disabled={!body.trim() || seqPlan.length === 0}
-              />
-              <Button
-                label={`Всем сразу · ${withPhone.length}`}
-                variant="secondary"
-                onPress={sendBlast}
-                disabled={!body.trim() || withPhone.length === 0 || hasName}
-              />
-              {hasName ? (
-                <Text className="text-[11px]" style={{ color: t.faint }}>
-                  «Всем сразу» недоступно с токеном [Имя] — имя у всех было бы
-                  разным. Используйте «Каждому по имени» или уберите [Имя].
-                </Text>
-              ) : null}
             </View>
-            </>
-            )}
-          </ScrollView>
-        )}
-      </View>
+          ) : (
+            // ── Compose ───────────────────────────────────────────────────
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {canService ? (
+                <View className="mb-3">
+                  <SegmentedControl
+                    options={[
+                      { value: "phone", label: "С телефона" },
+                      { value: "service", label: "Через сервис" },
+                    ]}
+                    value={mode}
+                    onChange={setMode}
+                  />
+                </View>
+              ) : null}
+              {viaService && senderTeams.length > 1 ? (
+                <View className="mb-3">
+                  <Text className="mb-1.5 text-xs font-semibold" style={{ color: t.faint }}>
+                    ОТ КОМАНДЫ
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {senderTeams.map((id) => (
+                      <Chip
+                        key={id}
+                        label={`${teams.find((x) => x.id === id)?.name ?? "Команда"} · ${senders[id]}`}
+                        selected={fromTeam === id}
+                        radio
+                        onPress={() => setPickedTeam(id)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+              {usableTemplates.length > 0 ? (
+                <View className="mb-3">
+                  <Text className="mb-1.5 text-xs font-semibold" style={{ color: t.faint }}>
+                    ШАБЛОН
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {usableTemplates.map((tpl) => {
+                      const active = body === tpl.body;
+                      return (
+                        <Pressable
+                          key={tpl.id}
+                          onPress={() => setBody(tpl.body)}
+                          className="flex-row items-center gap-1 rounded-full px-3 py-1.5 active:opacity-70"
+                          style={{
+                            backgroundColor: active ? t.accent : t.fill,
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Шаблон ${tpl.name}`}
+                          accessibilityState={{ selected: active }}
+                        >
+                          {active ? <Check color="#fff" size={13} strokeWidth={3} /> : null}
+                          <Text
+                            className="text-[13px] font-medium"
+                            style={{ color: active ? "#fff" : t.body }}
+                            numberOfLines={1}
+                          >
+                            {tpl.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+            <TextInput
+              value={body}
+              accessibilityLabel="Текст SMS"
+                onChangeText={(next) => setBody(acceptSmsInput(next, body))}
+                placeholder="Текст сообщения… можно вставить [Имя]"
+                placeholderTextColor={t.placeholder}
+                selectionColor={t.accent}
+                keyboardAppearance="light"
+                multiline
+                maxLength={500}
+                className="min-h-[92px] rounded-[10px] px-3 py-2.5 text-base"
+                style={{ backgroundColor: t.fill, color: t.ink, textAlignVertical: "top" }}
+              />
+              {viaService ? (
+                <View className="mt-4">
+                  <Button
+                    label={`Отправить · ${withPhone.length}`}
+                    onPress={sendViaService}
+                    disabled={!body.trim() || withPhone.length === 0 || !fromTeam || bulk.isPending}
+                    loading={bulk.isPending}
+                  />
+                </View>
+              ) : (
+              <>
+              <Text className="mt-2 text-[11px] leading-snug" style={{ color: t.faint }}>
+                Откроется системное приложение «Сообщения» с текстом — отправку
+                подтверждаете там. «Каждому по имени» подставит [Имя] и откроет
+                переписки по очереди; «Всем сразу» — одно окно на все номера.
+              </Text>
+
+              <View className="mt-4 gap-2">
+                <Button
+                  label={`Каждому по имени · ${seqPlan.length}`}
+                  onPress={startSequential}
+                  disabled={!body.trim() || seqPlan.length === 0}
+                />
+                <Button
+                  label={`Всем сразу · ${withPhone.length}`}
+                  variant="secondary"
+                  onPress={sendBlast}
+                  disabled={!body.trim() || withPhone.length === 0 || hasName}
+                />
+                {hasName ? (
+                  <Text className="text-[11px]" style={{ color: t.faint }}>
+                    «Всем сразу» недоступно с токеном [Имя] — имя у всех было бы
+                    разным. Используйте «Каждому по имени» или уберите [Имя].
+                  </Text>
+                ) : null}
+              </View>
+              </>
+              )}
+            </ScrollView>
+          )}
+        </View>
+      </KeyboardLift>
     </Modal>
   );
 }

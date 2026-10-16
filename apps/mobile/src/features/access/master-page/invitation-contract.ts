@@ -1,4 +1,4 @@
-import type { AccessChange } from "../access-map";
+import type { AccessChange } from "@/session/access-map";
 import {
   invitationErrorMessage,
   normalizeInvitationEmail,

@@ -1,59 +1,29 @@
-export type PriceTierValue = {
-  min_qty: number;
-  price_per_unit: number;
-};
+import { looseNumber, parseCostDrafts, parseDurationTiers, parsePriceTiers } from "./economics/parse";
+import type {
+  CostTierValue,
+  DurationTierValue,
+  PriceTierValue,
+  ServiceEconomicsDraft,
+  ServiceEconomicsErrors,
+  ServiceEconomicsValue,
+  ServiceTierDraft,
+  ServiceTierErrors,
+} from "./economics/types";
 
-export type DurationTierValue = {
-  min_qty: number;
-  duration_minutes: number;
-};
+// Service economics: tier draft <-> stored values. Shapes and stored-JSON
+// readers live in `./economics/`.
 
-export interface ServiceTierDraft {
-  id: string;
-  minQuantity: string;
-  rowPrice: string;
-  /** Расход за одну на этом количестве. Пустым не бывает: очищенный
-   *  схлопывается в «0» — расход не доходит до клиента, он живёт только в
-   *  прибыли, поэтому здесь пусто МОЖНО читать как ноль (у цены нельзя). */
-  rowCost: string;
-  totalDuration: string;
-}
-
-export interface ServiceEconomicsDraft {
-  tiers: ServiceTierDraft[];
-}
-
-export interface ServiceTierErrors {
-  minQuantity?: string;
-  rowPrice?: string;
-  rowCost?: string;
-  totalDuration?: string;
-  row?: string;
-}
-
-export interface ServiceEconomicsErrors {
-  tiers: Record<string, ServiceTierErrors>;
-}
-
-export type CostTierValue = {
-  min_qty: number;
-  cost_per_unit: number;
-};
-
-export interface ServiceEconomicsValue {
-  price_tiers: PriceTierValue[] | null;
-  duration_tiers: DurationTierValue[] | null;
-  /** Пустая лестница расхода уезжает пустым массивом, а не `null`: колонка
-   *  `not null default '[]'`, и снятое пишем явно — патч частичный. */
-  cost_tiers: CostTierValue[];
-  /** ЗЕРКАЛО ОПТА ОБНУЛЯЕТСЯ ЯВНО, А НЕ «ПЕРЕСТАЁТ ПИСАТЬСЯ» (2026-08-21).
-   *  Обновление услуги шлёт ЧАСТИЧНЫЙ патч, а `rowPrice` падает в
-   *  легаси-ветку ровно тогда, когда `price_tiers` пуст: без явного нуля
-   *  убранная цена от количества воскресала из этих двух колонок и считала
-   *  деньги в записи. Читатель легаси остаётся — уходит только писатель. */
-  bulk_threshold: number;
-  bulk_price: number;
-}
+export type {
+  CostTierValue,
+  DurationTierValue,
+  PriceTierValue,
+  ServiceEconomicsDraft,
+  ServiceEconomicsErrors,
+  ServiceEconomicsValue,
+  ServiceTierDraft,
+  ServiceTierErrors,
+} from "./economics/types";
+export { parseDurationTiers, parsePriceTiers } from "./economics/parse";
 
 interface ServiceEconomicsSource {
   cost_tiers?: unknown;
@@ -61,89 +31,6 @@ interface ServiceEconomicsSource {
   duration_tiers?: unknown;
   bulk_threshold?: unknown;
   bulk_price?: unknown;
-}
-
-type LooseRecord = Record<string, unknown>;
-
-function asLooseArray(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw !== "string") return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function asRecord(value: unknown): LooseRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as LooseRecord)
-    : null;
-}
-
-function looseNumber(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = Number(value.trim().replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function tierMinimum(record: LooseRecord): number | null {
-  const value = looseNumber(
-    record.min_qty ??
-      record.min_quantity ??
-      record.minimum_quantity ??
-      record.threshold,
-  );
-  return value !== null && Number.isSafeInteger(value) && value >= 2 ? value : null;
-}
-
-/** Accepts current DB JSON and known legacy aliases. Invalid rows are ignored. */
-export function parsePriceTiers(raw: unknown): PriceTierValue[] {
-  const byMinimum = new Map<number, PriceTierValue>();
-  for (const item of asLooseArray(raw)) {
-    const record = asRecord(item);
-    if (!record) continue;
-    const minQuantity = tierMinimum(record);
-    const price = looseNumber(
-      record.price_per_unit ?? record.unit_price ?? record.price,
-    );
-    if (minQuantity === null || price === null || price < 0) continue;
-    byMinimum.set(minQuantity, {
-      min_qty: minQuantity,
-      price_per_unit: price,
-    });
-  }
-  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
-}
-
-/** Accepts current DB JSON and known legacy aliases. Invalid rows are ignored. */
-export function parseDurationTiers(raw: unknown): DurationTierValue[] {
-  const byMinimum = new Map<number, DurationTierValue>();
-  for (const item of asLooseArray(raw)) {
-    const record = asRecord(item);
-    if (!record) continue;
-    const minQuantity = tierMinimum(record);
-    const duration = looseNumber(
-      record.duration_minutes ??
-        record.total_duration_minutes ??
-        record.total_duration,
-    );
-    if (
-      minQuantity === null ||
-      duration === null ||
-      !Number.isSafeInteger(duration) ||
-      duration < 0
-    ) {
-      continue;
-    }
-    byMinimum.set(minQuantity, {
-      min_qty: minQuantity,
-      duration_minutes: duration,
-    });
-  }
-  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
 }
 
 export function economicsDraftFromService(
@@ -188,12 +75,11 @@ export function economicsDraftFromService(
         priceByMinimum.get(minimum)?.price_per_unit,
         minimum,
       ),
-      // РАСХОД — ЗА ОДНУ, КАК В БАЗЕ И НА ЭКРАНЕ (аудит шестерёнки 03.10).
-      // Черновик хранил его «за всю строку» (×min здесь, ÷min при сохранении),
-      // а лист услуги (`ServiceSheet`: showCost/storeCost) понимает поле «за
-      // одну»: ступень «от 3 · €10» показывалась как 30, набранные 12
-      // сохранялись как 4, новая ступень от базы 5 — как 2,5. Деньги в
-      // прибыли записи (`costPerUnit × qty`) ехали мимо.
+      // РАСХОД — ЗА ОДНУ, КАК В БАЗЕ И НА ЭКРАНЕ. Хранение «за всю строку»
+      // (×min здесь, ÷min при сохранении) разошлось бы с листом услуги
+      // (`ServiceSheet`: showCost/storeCost), который понимает поле «за одну»:
+      // ступень «от 3 · €10» показывалась бы как 30, набранные 12 сохранялись
+      // бы как 4, а деньги в прибыли записи (`costPerUnit × qty`) ехали мимо.
       rowCost: String(round2(costByMinimum.get(minimum)?.cost_per_unit ?? 0)),
       totalDuration:
         durationByMinimum.get(minimum) === undefined
@@ -215,55 +101,28 @@ export function nextDuration(existing: ServiceTierDraft[], baseDuration: number)
   return Math.max(0, last + step);
 }
 
-/** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
- *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от
- *  количества почти всегда НИЖЕ базовой, поэтому подставленная база — это не
- *  подсказка, а лишняя работа: её надо стереть и напечатать своё. Количество и
- *  время подставляются, потому что там угадывать нечего: следующее свободное
- *  число и та же работа, взятая столько раз. */
-function parseCostDrafts(raw: unknown): CostTierValue[] {
-  const byMinimum = new Map<number, CostTierValue>();
-  for (const item of asLooseArray(raw)) {
-    const record = asRecord(item);
-    if (!record) continue;
-    const minimum = tierMinimum(record);
-    const cost = looseNumber(record.cost_per_unit ?? record.cost);
-    if (minimum === null || cost === null || cost < 0) continue;
-    byMinimum.set(minimum, { min_qty: minimum, cost_per_unit: cost });
-  }
-  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
-}
-
-
-
-
-/** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
- *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от
- *  количества почти всегда НИЖЕ базовой, поэтому подставленная база — это не
- *  подсказка, а лишняя работа: её надо стереть и напечатать своё. Количество,
- *  расход и время подставляются, потому что там угадывать нечего: следующее
- *  свободное число, тот же расход на штуку и продолжение уже заведённого ряда. */
+/** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ. Цена от количества почти всегда НИЖЕ
+ *  базовой, поэтому подставленная база — это не подсказка, а лишняя работа: её
+ *  надо стереть и напечатать своё. Количество, расход и время подставляются,
+ *  потому что там угадывать нечего: следующее свободное число, тот же расход
+ *  на штуку и продолжение уже заведённого ряда. */
 export function createTierDraft(
   existing: ServiceTierDraft[],
   baseDuration: number,
   /** Расход ПЕРВОЙ строки (количество 1, значит он же — за единицу). */
   baseCost = "0",
 ): ServiceTierDraft {
-  // КОЛИЧЕСТВО — СЛЕДУЮЩЕЕ СВОБОДНОЕ ЧИСЛО, и это снова законно.
+  // КОЛИЧЕСТВО — СЛЕДУЮЩЕЕ СВОБОДНОЕ ЧИСЛО. Единица измерения живёт в НАЗВАНИИ
+  // услуги («Обмотка 1 м», «Чистка 10 м²»), и количество значит ровно одно —
+  // СКОЛЬКО РАЗ взяли услугу. Для счёта «два после одного» не выдумка, а
+  // очевидное следующее.
   //
-  // Утром 27 августа поле оставляли пустым: подстановка «2» после «1» давала
-  // на квадратных метрах бессмыслицу — «от 2 м²», никто не делит уборку по
-  // два квадрата. Вечером того же дня единица измерения из услуги ушла
-  // вовсе (она переехала в НАЗВАНИЕ: «Обмотка 1 м», «Чистка 10 м²»), и
-  // количество стало значить ровно одно — СКОЛЬКО РАЗ взяли услугу. Для
-  // счёта «два после одного» не выдумка, а очевидное следующее.
-  //
-  // ВРЕМЯ ПРОДОЛЖАЕТ ШАГ, КОТОРЫЙ ЗАДАЛ ЧЕЛОВЕК (владелец 11.10: «если я
-  // ставлю на 30 мин больше, логично, что следующая будет на 30 мин больше;
-  // если две подряд время одинаковое — следующая такая же»). Ряд — первая
-  // строка (количество 1) и все ступени; шаг — разница двух последних.
-  // Пока строка одна, шага нет — берём её время как есть, а не умножаем:
-  // «2 ч», которых человек не вводил, продукт за него не называет.
+  // ВРЕМЯ ПРОДОЛЖАЕТ ШАГ, КОТОРЫЙ ЗАДАЛ ЧЕЛОВЕК: если следующая ступень на 30
+  // мин больше предыдущей, то и следующая будет на 30 мин больше; если две
+  // подряд одинаковы — следующая такая же. Ряд — первая строка (количество 1)
+  // и все ступени; шаг — разница двух последних. Пока строка одна, шага нет —
+  // берём её время как есть, а не умножаем: «2 ч», которых человек не вводил,
+  // продукт за него не называет.
   const used = new Set(
     existing
       .map((tier) => looseNumber(tier.minQuantity))
@@ -281,9 +140,8 @@ export function createTierDraft(
   };
 }
 
-/** ЧЕЛОВЕК ПИШЕТ СУММУ ЗА ВСЮ СТРОКУ, БАЗА ХРАНИТ ЗА ОДНУ (владелец 2026-08-21:
- *  «давай делать не за шт, а общая цена… например клининговая компания, у них
- *  3 комнаты стоит 100 — это им надо вписать 33.33, неудобно»).
+/** ЧЕЛОВЕК ПИШЕТ СУММУ ЗА ВСЮ СТРОКУ, БАЗА ХРАНИТ ЗА ОДНУ (клининговой
+ *  компании «3 комнаты стоит 100» неудобно вписывать как 33.33).
  *
  *  Переводим ровно на двух границах — при чтении из базы и при записи в неё, —
  *  а сам черновик живёт в тех числах, которые человек набрал. Поэтому:
@@ -314,8 +172,8 @@ function unitFromRowTotal(total: number, minimum: number): number {
   return minimum > 0 ? total / minimum : total;
 }
 
-/** ЛИНЗА «ЗА ВСЁ ↔ ЗА ОДНУ» (владелец 2026-08-24: «нажимаю на блок цена —
- *  открывается менюшка, там можно выбрать цена за всё или цена за количество»).
+/** ЛИНЗА «ЗА ВСЁ ↔ ЗА ОДНУ» (в блоке «Цена» выбирают цену за всё или за
+ *  количество).
  *
  *  ЧЕРНОВИК ВСЕГДА ХРАНИТ СУММУ ЗА ВСЮ СТРОКУ — в обоих режимах, без
  *  исключений. Режим меняет только два момента: каким числом строка
@@ -394,7 +252,7 @@ export function validateServiceEconomics(
     }
     // Пустая цена ступени — «как выше»: ступень без цены в прайс не уходит,
     // и на этом количестве действует предыдущая цена (ступень только меняет
-    // время). «Бесплатно» — это пустая БАЗОВАЯ цена (владелец 2026-08-29).
+    // время). «Бесплатно» — это пустая БАЗОВАЯ цена.
     // Требовать хоть что-то одно всё же надо: строка без цены И без времени
     // не добавляет к услуге ничего и лишь занимает место в таблице.
     if (tier.rowPrice.trim() === "" && tier.totalDuration.trim() === "") {

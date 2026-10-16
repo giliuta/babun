@@ -1,0 +1,91 @@
+-- ════════════════════════════════════════════════════════════════════
+-- 20260624000004 — Reference-data FK hardening   ⚠️  REVIEW BEFORE APPLY
+--
+-- This migration is DELIBERATELY a no-op (everything below is commented
+-- out). Do NOT run it blind. It documents how/when to add referential
+-- integrity from the existing text-id columns to the new reference
+-- tables created in 20260624000001.
+--
+-- TWO BLOCKERS that must be resolved first:
+--
+-- 1) COMPOSITE PK. The new tables use PRIMARY KEY (tenant_id, id) because
+--    app ids are unique only per tenant. A foreign key must therefore be
+--    composite too: FOREIGN KEY (tenant_id, <col>) REFERENCES
+--    public.<table>(tenant_id, id). A plain single-column FK on e.g.
+--    appointments.team_id CANNOT target a composite PK and will error.
+--    Every referencing table already carries tenant_id, so the composite
+--    FK is expressible — but confirm the pairing per table.
+--
+-- 2) ORPHAN / MIXED-ID-FAMILY DATA. The referencing columns are
+--    historically unconstrained text and very likely contain orphans:
+--      • seed/MOCK appointments + finance rows created before sync;
+--      • accounts.brigade_id / finance_transactions.team_id may hold
+--        EITHER calendar Team ids (generateId("team")) OR the separate
+--        finance Brigade ids ("br_yd","br_dk","br_george") depending on
+--        code path — a data audit is required to pick the canonical
+--        family before any team FK can be VALIDATEd;
+--      • master_id snapshots may intentionally outlive a deleted master.
+--    Use ADD CONSTRAINT ... NOT VALID (skips the historical-row scan so
+--    the DDL doesn't block), then VALIDATE CONSTRAINT only after orphans
+--    are reconciled.
+--
+-- 3) NOT-NULL columns (accounts.brigade_id, team_schedules.team_id) cannot
+--    use ON DELETE SET NULL — they need data cleanup before ANY FK.
+--
+-- NOTHING references services.id / cities.id / equipment.id / masters.id
+-- via a hard column today (service_ids/services are jsonb snapshots;
+-- city columns store the NAME not the id; equipment is not yet wired;
+-- appointments.event_type_id does not yet exist as a DB column) — so
+-- there is nothing to harden for those until those columns/links land.
+--
+-- ── Example shapes (KEEP COMMENTED until reconciled) ─────────────────
+--
+-- -- appointments.team_id → teams (composite, nullable, deferred):
+-- -- alter table public.appointments
+-- --   add constraint appointments_team_fk
+-- --   foreign key (tenant_id, team_id) references public.teams(tenant_id, id)
+-- --   on delete set null not valid;
+-- -- -- after orphan cleanup:
+-- -- alter table public.appointments validate constraint appointments_team_fk;
+--
+-- -- appointments.master_id → masters (composite, nullable, deferred):
+-- -- alter table public.appointments
+-- --   add constraint appointments_master_fk
+-- --   foreign key (tenant_id, master_id) references public.masters(tenant_id, id)
+-- --   on delete set null not valid;
+--
+-- -- finance_transactions.master_id → masters:
+-- -- alter table public.finance_transactions
+-- --   add constraint finance_tx_master_fk
+-- --   foreign key (tenant_id, master_id) references public.masters(tenant_id, id)
+-- --   on delete set null not valid;
+--
+-- -- equipment.assigned_team_id → teams (once teams data is backfilled):
+-- -- alter table public.equipment
+-- --   add constraint equipment_team_fk
+-- --   foreign key (tenant_id, assigned_team_id) references public.teams(tenant_id, id)
+-- --   on delete set null not valid;
+--
+-- -- masters.team_id → teams (once both tables are backfilled):
+-- -- alter table public.masters
+-- --   add constraint masters_team_fk
+-- --   foreign key (tenant_id, team_id) references public.teams(tenant_id, id)
+-- --   on delete set null not valid;
+--
+-- -- services.category_id → service_categories (once orphans cleaned):
+-- -- alter table public.services
+-- --   add constraint services_category_fk
+-- --   foreign key (tenant_id, category_id) references public.service_categories(tenant_id, id)
+-- --   on delete set null not valid;
+--
+-- -- FUTURE: when appointments.event_type_id (text, nullable) is added,
+-- --         and personal_event_types is per-tenant (drop author scope) OR
+-- --         seeded server-side, then:
+-- -- alter table public.appointments
+-- --   add constraint appointments_event_type_fk
+-- --   foreign key (tenant_id, event_type_id)
+-- --   references public.personal_event_types(tenant_id, id)
+-- --   on delete set null not valid;
+--
+-- (No DDL is executed by this file.)
+select 1;

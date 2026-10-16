@@ -18,7 +18,6 @@
 // Поэтому лишний счёт остаётся видимым в списке с честной ошибкой — его
 // отменяет человек кредит-нотой (`cancel_invoice`), а не молчаливый DELETE.
 
-import type { Database } from "../database.types";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import {
   invoiceLineTotal,
@@ -26,8 +25,6 @@ import {
   type InvoiceLineDraft,
 } from "../../local/finance/invoice-ledger";
 import { centsToMoney, moneyToCents } from "../../local/finance/vat";
-
-type LineInsert = Database["public"]["Tables"]["invoice_lines"]["Insert"];
 
 export function validateInvoiceDraft(draft: {
   issued_on: string;
@@ -107,25 +104,6 @@ export function validateInvoiceDraft(draft: {
       ...(line.discount ? { discount: true } : {}),
     };
   });
-}
-
-export function invoiceLineRows(
-  invoiceId: string,
-  lines: InvoiceLineDraft[],
-): LineInsert[] {
-  return lines.map((line, position) => ({
-    invoice_id: invoiceId,
-    position,
-    title: line.title,
-    description: line.description ?? null,
-    qty: line.qty,
-    unit: line.unit ?? null,
-    unit_price: line.unit_price,
-    // ТОТ ЖЕ СЧЁТ, ЧТО У ЭКРАНА И У СЕРВЕРА: `qty * unit_price` в double на
-    // дробном количестве промахивается мимо `round(qty * unit_price, 2)` на
-    // numeric ровно на цент (1,5 × 2,01).
-    total: invoiceLineTotal(line.qty, line.unit_price),
-  }));
 }
 
 export const MAX_INVOICE_MONEY = 9_999_999_999.99;

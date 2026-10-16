@@ -3,12 +3,8 @@ import { ScrollView } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import type { Client } from "@babun/shared/local/clients";
-import {
-  invoiceLineTotal,
-  type InvoiceVatMode,
-} from "@babun/shared/local/finance/invoice-ledger";
+import type { InvoiceVatMode } from "@babun/shared/local/finance/invoice-ledger";
 import { isServiceAllowedForTeam } from "@/features/appointments/booking-selection";
-import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
@@ -16,7 +12,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
-import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
+import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import type { Service } from "@/features/services/queries";
 import { useClientFunctionOn } from "@/features/clients/client-functions";
@@ -25,24 +21,19 @@ import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
 import { InvoiceClientRequisitesBlock } from "./InvoiceClientRequisitesBlock";
-import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
-import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
+import type { InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
+import type { EditableInvoiceLine } from "@/lib/paper/format";
+import { invoiceBlockLines, serviceSelection } from "./invoice-blocks/block-lines";
+import { InvoiceTotalSheet } from "./invoice-blocks/InvoiceTotalSheet";
 
 // ИНВОЙС — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ И ЧЕК.
 //
-// Владелец 2026-09-20, дословно: «твоя задача по сути перенести туда блок
-// услуг, перенести туда блок клиента, перенести туда время и сделать блок
-// реквизиты… также выбор счёта, куда должны зачисляться деньги, также выбор
-// даты, за какой промежуток времени должны оплатить… после того я нажимаю
-// выставить инвойс — сначала делается превью этого инвойса, и потом я нажимаю
-// сохранить».
-//
-// До этого форма счёта была АНКЕТОЙ: «Получатель» строкой-значением, «Даты»,
-// «Позиции», отдельный блок «Налог» с сегментом и полем ставки, «Комментарий».
-// Те же вопросы, но своим диалектом — у записи и чека на них отвечают блоками.
-// Здесь своей разметки нет вовсе: клиент — `ClientBlock`, позиции вместе с
-// «Итого» — `ServicesBlock`, деньги — `TotalSheet`, счёт — плитки
-// `PaymentTile`, реквизиты — та же строка и тот же лист, что в чеке.
+// Форма счёта не анкета («Получатель» строкой-значением, отдельный блок «Налог»
+// с сегментом и полем ставки): у записи и чека на те же вопросы отвечают блоками,
+// и свой диалект пришлось бы вести отдельно. Здесь своей разметки нет вовсе:
+// клиент — `ClientBlock`, позиции вместе с «Итого» — `ServicesBlock`, деньги —
+// `TotalSheet`, реквизиты — та же строка и тот же лист, что в чеке. Перед
+// выставлением — превью бумаги, потом «Сохранить».
 //
 // ЧЕГО У ИНВОЙСА НЕТ. Скидки (сервер не знает такого поля у счёта) и команды в
 // блоках: команду документ наследует от заявки или чипа и не спрашивает.
@@ -105,7 +96,7 @@ export function InvoiceBlocks({
   onDueOnChange: (ymd: string | null) => void;
   companyId: string | null;
   onCompanyChange: (id: string | null) => void;
-  /** Блок «Реквизиты» — владельцу (03.10). Партнёр выставляет от реквизитов
+  /** Блок «Реквизиты» — владельцу. Партнёр выставляет от реквизитов
    *  своей команды: выбрать или править набор он не может, сервер берёт
    *  юрлицо команды сам. */
   showRequisites?: boolean;
@@ -122,9 +113,7 @@ export function InvoiceBlocks({
   services: Service[];
   onLineChange: (line: EditableInvoiceLine) => void;
   onAddLine: (service: Service | null) => void;
-  /** Своя (разовая) услуга — строка вне прайса (владелец 2026-09-22). */
-  /** Своя услуга — пустая строка, её заводит «＋ Добавить» в «Итого»
-   *  (владелец 2026-09-22). */
+  /** Своя услуга — пустая строка, её заводит «＋ Добавить» в «Итого». */
   onAddCustomLine: () => void;
   onRemoveLine: (line: EditableInvoiceLine) => void;
   vatMode: InvoiceVatMode;
@@ -151,9 +140,8 @@ export function InvoiceBlocks({
   const objectsOn = useFeatureOn("objects");
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
 
-  // КЛИЕНТ, СОЗДАННЫЙ РАДИ ИНВОЙСА, ВСТАЁТ В ИНВОЙС (владелец 22.09: «создаю
-  // нового клиента — он должен сразу выбираться, а остаётся старый»). Тот же
-  // ящик, что у записи и чека (`pending-client.ts`): карточка кладёт id при
+  // КЛИЕНТ, СОЗДАННЫЙ РАДИ ИНВОЙСА, ВСТАЁТ В ИНВОЙС сразу, а не остаётся прежний.
+  // Тот же ящик, что у записи и чека (`pending-client.ts`): карточка кладёт id при
   // «Готово», форма забирает его, получив фокус.
   useFocusEffect(
     useCallback(() => {
@@ -165,20 +153,18 @@ export function InvoiceBlocks({
   );
 
   const client = clients.find((c) => c.id === clientId) ?? null;
-  // Реквизиты клиента — функция его КОМАНДЫ (30.09).
+  // Реквизиты клиента — функция его КОМАНДЫ.
   const requisitesOn = useClientFunctionOn("client_requisites", client?.team_id);
-  // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
-  // блок на всё»): сводка визитов и денег под именем, «…» в карточку. Та же
-  // карта сводок кормит и шторку. Заметки клиента в инвойсе нет (владелец
-  // 2026-09-22: «в клиенте есть заметка, но в целом она не нужна»).
+  // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ: сводка визитов и денег под именем, «…» в
+  // карточку. Та же карта сводок кормит и шторку. Заметки клиента в инвойсе нет —
+  // она здесь не нужна.
   const appointments = useAppointments();
   const statsById = useMemo(
     () => buildStatsMap(clients, appointments.data ?? []),
     [clients, appointments.data],
   );
   const clientStats = client ? statsById.get(client.id) : undefined;
-  // ПРАЙС — КОМАНДЫ, А НЕ ВСЕЙ КОМПАНИИ (владелец 2026-09-21: «услуги,
-  // которые предоставлены, они будут подтягиваться уже с команды»). Правило
+  // ПРАЙС — КОМАНДЫ, А НЕ ВСЕЙ КОМПАНИИ: услуги подтягиваются с команды. Правило
   // одно на продукт — то же, что в записи: `isServiceAllowedForTeam`. Без
   // команды каталог ПУСТ, а не «весь»: чужой прайс в счёте — приглашение
   // выставить работу, которой эта команда не делает.
@@ -186,15 +172,7 @@ export function InvoiceBlocks({
     () => services.filter((service) => isServiceAllowedForTeam(service, teamId)),
     [services, teamId],
   );
-  // ВЫБОР УСЛУГ — ТОТ ЖЕ, ЧТО В ЗАПИСИ (владелец 2026-09-22: «удали этот
-  // блок услуг и добавь тот, который мы постоянно используем… не могу выбрать
-  // количество»). Выбор знает услугу по id: строка инвойса помнит, из какой
-  // она услуги (`serviceId`), и количество правится степпером прямо в списке.
-  const serviceLines = lines.filter((line) => line.serviceId);
-  const selectedServiceIds = serviceLines.map((line) => line.serviceId as string);
-  const quantities = Object.fromEntries(
-    serviceLines.map((line) => [line.serviceId as string, parseDecimal(line.qty) ?? 1]),
-  );
+  const { selectedServiceIds, quantities } = serviceSelection(lines);
   const toggleService = (id: string) => {
     const existing = lines.find((line) => line.serviceId === id);
     if (existing) {
@@ -214,48 +192,13 @@ export function InvoiceBlocks({
     else onLineChange({ ...line, qty: String(qty) });
   };
 
-  // ПЕРЕВОД «ПОЗИЦИЯ СЧЁТА → СТРОКА БЛОКА» — ОДИН НА ЭКРАН: его читают и блок
-  // «Позиции», и шторка «Итого». Числа позиции лежат СТРОКАМИ, пока их правят
-  // руками (иначе каретка прыгает в конец), и разбираются здесь — в одном
-  // месте, теми же функциями, которыми их разберёт отправка на сервер.
-  const blockLines = useMemo(
-    () =>
-      lines.map((line) => {
-        const qty = parseDecimal(line.qty) ?? 0;
-        const price = parseMoneyAmount(line.unitPrice) ?? 0;
-        return {
-          id: line.id,
-          name: line.title.trim() || "Услуга",
-          // Вторая строка у позиции — что входит в работу, а не длительность:
-          // у счёта нет минут.
-          subtitle: line.description?.trim() || null,
-          qty,
-          unit: line.unit ?? null,
-          pricePerUnit: price,
-          // ОДИН СЧЁТ НА ВЕСЬ ПРОДУКТ (`invoiceLineTotal`): своё
-          // `round(qty * price * 100) / 100` в double печатало в карточке
-          // позиции €3,01 там, где бумага, PDF и сервер считают €3,02.
-          total: invoiceLineTotal(qty, price),
-          // Своя строка: имя правится в «Итого».
-          ...(line.serviceId ? {} : { editableName: line.title }),
-        };
-      }),
-    [lines],
-  );
+  // One translation «invoice line → block line» per screen (`invoiceBlockLines`).
+  const blockLines = useMemo(() => invoiceBlockLines(lines), [lines]);
   /** Сумма строк КАК ЕЁ НАБРАЛ ЧЕЛОВЕК — вход для канона налога. */
   const linesSum = useMemo(
     () => blockLines.reduce((sum, line) => sum + line.total, 0),
     [blockLines],
   );
-
-  /** Правка числа возвращается в позицию СТРОКОЙ — той же, какую набрал бы
-   *  человек: у позиции числа хранятся текстом, и превращать их в `1.0000001`
-   *  на обратном пути нельзя. */
-  const writeNumber = (id: string, field: "qty" | "unitPrice", value: number) => {
-    const line = lines.find((item) => item.id === id);
-    if (!line) return;
-    onLineChange({ ...line, [field]: String(Number(value.toFixed(field === "qty" ? 3 : 2))) });
-  };
 
   return (
     <>
@@ -285,9 +228,8 @@ export function InvoiceBlocks({
         />
 
         {/* КЛИЕНТ — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И ЧЕКЕ. Клиентом может быть и
-            компания: владелец 2026-09-20 про Ольгу и её фирму — «инвойс
-            выставляется на клиента, клиент может быть компанией», и отдельного
-            блока для компании быть не должно. */}
+            компания: инвойс выставляется на клиента, клиент может быть компанией,
+            и отдельного блока для компании быть не должно. */}
         <ClientBlock
           client={client}
           stats={clientStats}
@@ -300,8 +242,8 @@ export function InvoiceBlocks({
           }
         />
 
-        {/* ОБЪЕКТ — ПОД КЛИЕНТОМ, КАК В ЗАПИСИ (владелец 2026-09-22: «под
-            каждый объект свой инвойс»); его точный адрес — адрес на бумаге. */}
+        {/* ОБЪЕКТ — ПОД КЛИЕНТОМ, КАК В ЗАПИСИ: под каждый объект свой инвойс;
+            его точный адрес — адрес на бумаге. */}
         {objectsOn ? (
           <InvoiceObjectBlock
             client={client}
@@ -310,9 +252,8 @@ export function InvoiceBlocks({
           />
         ) : null}
 
-        {/* РЕКВИЗИТЫ КЛИЕНТА — ПОСЛЕ ОБЪЕКТА, блоком как «Объект» (владелец
-            22.09: «клиент, потом объект, потом реквизиты клиента; есть —
-            выбираем, нет — добавляем»). */}
+        {/* РЕКВИЗИТЫ КЛИЕНТА — ПОСЛЕ ОБЪЕКТА, блоком как «Объект»: клиент, потом
+            объект, потом реквизиты клиента; есть — выбираем, нет — добавляем. */}
         {requisitesOn ? (
           <InvoiceClientRequisitesBlock
             client={client}
@@ -322,10 +263,10 @@ export function InvoiceBlocks({
         ) : null}
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
-            шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»).
+            шапкой.
             Услуги прайса — строками выбора (тап открывает прайс). Своя
-            услуга заводится «＋ Добавить» в шапке «Итого» и правится там же
-            (владелец 2026-09-22). «Итого» открывает деньги. */}
+            услуга заводится «＋ Добавить» в шапке «Итого» и правится там же.
+            «Итого» открывает деньги. */}
         <ServicesBlock
           title="Услуги"
           lines={blockLines}
@@ -336,9 +277,7 @@ export function InvoiceBlocks({
           onOpenTotal={() => setSheet("total")}
         />
 
-        {/* СЧЁТА В ИНВОЙСЕ НЕТ (владелец 2026-10-04: «зачем в инвойсе выставляем,
-            на какой счёт примем оплату, а потом при принятии оплаты снова
-            выбираем счёт»). На бумагу он не попадал; счёт выбирают один раз —
+        {/* СЧЁТА В ИНВОЙСЕ НЕТ: на бумагу он не попадает, а счёт выбирают один раз —
             когда деньги пришли, в «Принять оплату». */}
         {/* ПРИМЕЧАНИЕ — ОДНА ПОДПИСЬ, А НЕ ДВЕ: шапка блока и подсказка поля
             называли одно и то же дважды («Комментарий» + «Примечание для
@@ -371,7 +310,7 @@ export function InvoiceBlocks({
           onClientChange(picked.id);
           setSheet(null);
         }}
-        // Повторный тап по выбранному клиенту снимает его (владелец 22.09).
+        // Повторный тап по выбранному клиенту снимает его.
         onDeselect={() => {
           onClientChange(null);
           setSheet(null);
@@ -392,57 +331,20 @@ export function InvoiceBlocks({
         onQtyChange={setServiceQty}
       />
 
-
-      {/* ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА: скидка (с
-          22.09 — строкой счёта с флагом, миграция 20260922030000) и налог.
-          Налог приходит сюда и возвращается обратно — шторка его не
-          включает сама. */}
-      <TotalSheet
+      <InvoiceTotalSheet
         visible={sheet === "total"}
-        // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (владелец 2026-09-22: «стираем
-        // имя услуги — и она удаляется»): в услугах остаются только названные.
-        onClose={() => {
-          for (const line of lines) {
-            if (!line.serviceId && !line.title.trim()) onRemoveLine(line);
-          }
-          setSheet(null);
-        }}
-        onAddLine={onAddCustomLine}
-        onRemoveLine={(id) => {
-          const line = lines.find((item) => item.id === id);
-          if (line) onRemoveLine(line);
-        }}
-        onNameChange={(id, title) => {
-          const line = lines.find((item) => item.id === id);
-          if (line) onLineChange({ ...line, title });
-        }}
-        lines={blockLines}
-        onQtyChange={(id, qty) => writeNumber(id, "qty", qty)}
-        onPriceChange={(id, price) => writeNumber(id, "unitPrice", price)}
-        // СЫРАЯ СУММА СТРОК, А НЕ НЕТТО. `applyTxVat` внутри шторки
-        // трактует вход как «то, что человек набрал руками»: при «налог
-        // сверху» это нетто, при «налог в цене» — уже брутто. Нетто из
-        // `calculateInvoiceTotals` в режиме «в цене» уже очищено от налога, и
-        // шторка снимала его ВТОРОЙ раз: счёт на €119 показывал «К оплате
-        // €99,99». Чек передаёт сюда ровно так же — сырую сумму.
-        // После скидки: так шторка считает свою строку скидки (сумма строк −
-        // это число) и налог — с суммы после скидки, как запись и сервер.
-        total={Math.max(0, linesSum - discount.amount)}
-        discount={{
-          kind: discount.kind,
-          value: discount.value,
-          onKindChange: discount.onKindChange,
-          onValueChange: discount.onValueChange,
-        }}
-        vat={{
-          // «off» у счёта и «none» у операции — одно и то же слово на двух
-          // диалектах; канон считает налог по `TxVatMode`.
-          mode: vatMode === "off" ? "none" : vatMode,
-          rate: vatRate,
-          onModeChange: (next: TxVatMode) =>
-            onVatModeChange(next === "none" ? "off" : next),
-          onRateChange: onVatRateChange,
-        }}
+        onClose={() => setSheet(null)}
+        lines={lines}
+        blockLines={blockLines}
+        linesSum={linesSum}
+        onAddCustomLine={onAddCustomLine}
+        onRemoveLine={onRemoveLine}
+        onLineChange={onLineChange}
+        discount={discount}
+        vatMode={vatMode}
+        vatRate={vatRate}
+        onVatModeChange={onVatModeChange}
+        onVatRateChange={onVatRateChange}
       />
     </>
   );

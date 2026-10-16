@@ -1,9 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildInvoiceDocument } from "./document";
+import { buildInvoiceDocument } from "@/lib/paper/document";
 
-// СКИДКА — НЕ УСЛУГА (владелец 2026-09-22: «дискаунт вынести, а не как
-// услугу»): в таблице её нет, в итогах она строкой под «Subtotal».
+// СКИДКА — НЕ УСЛУГА: в таблице её нет, в итогах она строкой под «Subtotal».
 describe("скидка на бумаге", () => {
   const doc = buildInvoiceDocument({
     language: "en",

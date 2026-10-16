@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { openTariffPortal, useTariff } from "@/features/tariffs/use-tariff";
 import { loadErrorWords } from "@/lib/connection-words";
 import { notify } from "@/lib/notify";
@@ -18,10 +18,10 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 
 import { groupByMonth, paymentSub, paymentValue, type TariffPayment } from "./tariff-payments";
-import { useAccountGate, useAccountName, useAccountScope } from "./account-scope";
+import { useAccountGate, useAccountName, useAccountScope } from "@/session/account-scope";
 import { useTariffPayments } from "./use-tariff-payments";
 
-// «ОПЛАТЫ ТАРИФА» (Кабинет, владелец 03.10: «оплаты тарифа — да, надо»).
+// «ОПЛАТЫ ТАРИФА» (Кабинет).
 // История списаний за подписку: события Stripe из `billing_events`, по
 // месяцам. Строка — тариф, срок, сумма; не прошедшая оплата красная и
 // подписана «не прошла». Тап по строке открывает чек Stripe (нет чека — pdf
@@ -31,10 +31,10 @@ import { useTariffPayments } from "./use-tariff-payments";
 // стоит и при пустой истории: подписка могла оформиться раньше, чем вебхук
 // начал записывать события, и тогда управлять ей всё равно нужно.
 //
-// Видит владелец аккаунта и партнёр с правом «Оплаты тарифа» (04.10, из
+// Видит владелец аккаунта и партнёр с правом «Оплаты тарифа» (из
 // блока аккаунта, который пригласил: шапка называет аккаунт); остальным —
 // слова. Управлять подпиской — только владелец, и только на сайте: в
-// приложении из магазина двери в Stripe нет (владелец 04.10, `pay-here.ts`).
+// приложении из магазина двери в Stripe нет (`pay-here.ts`).
 
 // Вшитый отступ разделителя нейтральной строки: поле 16 + глиф 20 + зазор 12.
 const NEUTRAL_ROW_INSET = 48;
@@ -59,13 +59,13 @@ export function TariffPaymentsScreen() {
   const pull = usePullRefresh(payments.refetch);
   const opening = useRef(false);
   const months = useMemo(() => groupByMonth(payments.data ?? []), [payments.data]);
-  // ВЫДАН НАВСЕГДА И НИ ОДНОЙ ОПЛАТЫ — ПОДПИСКИ В STRIPE НЕТ (проверка 03.10):
-  // строка вела в портал, которого у аккаунта не существует, и отвечала
+  // ВЫДАН НАВСЕГДА И НИ ОДНОЙ ОПЛАТЫ — ПОДПИСКИ В STRIPE НЕТ:
+  // строка вела бы в портал, которого у аккаунта не существует, и отвечала
   // «Подписка не открылась». Страница «Тариф» по той же причине прячет
   // кнопки. Была история — подписка была, дверь остаётся.
   // Дверь в Stripe — только к подписке, которая есть: оплаченной или с
   // оплатами в истории. На пробном и без тарифа строка вела в «Подписки ещё
-  // нет — сначала оплатите тариф» (аудит Кабинета 03.10); у «навсегда»
+  // нет — сначала оплатите тариф»; у «навсегда»
   // подписки нет вовсе.
   const tariffState = useTariff().state;
   const hasSubscription = tariffState.paid && !tariffState.forever;

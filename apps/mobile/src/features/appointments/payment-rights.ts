@@ -1,6 +1,6 @@
-import { accessGate, moneyKey } from "@/features/access/my-access";
-import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
-import type { UserRole } from "@/features/settings/role-policy";
+import { accessGate, moneyKey } from "@/session/my-access";
+import type { AccessLevel, MemberAccessMap } from "@/session/access-map";
+import type { UserRole } from "@/session/role-policy";
 
 // ПРАВА БЛОКА «ОПЛАТА» — В ОДНОМ МЕСТЕ, ЧИСТОЙ ФУНКЦИЕЙ.
 //
@@ -23,7 +23,7 @@ export interface PaymentRights {
   seeHistory: boolean;
   /** Принять оплату и снять её. */
   takeMoney: boolean;
-  /** «Документы» в команде записи (04.10): `write` — выписать инвойс и чек,
+  /** «Документы» в команде записи: `write` — выписать инвойс и чек,
    *  `read` — только открыть уже выписанные, `none` — значков нет. */
   documents: "write" | "read" | "none";
 }

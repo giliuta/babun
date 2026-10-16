@@ -4,11 +4,11 @@ import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА (срез 2а, 29.09). Сторож миграции проверяет
+// ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА. Сторож миграции проверяет
 // каталог один раз на накате; этот тест — каждый раз, когда кто-то перепишет
 // политику или функцию в обход. Условия сравниваются ЦЕЛИКОМ (пробелы
 // схлопнуты, комментарии сняты): поиск меток через includes пропускал «or
-// true» и «write» вместо «read» (урок сторожа 15.09).
+// true» и «write» вместо «read».
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATION = "20260929235000_finance_income_expense_levels.sql";
@@ -291,8 +291,8 @@ describe("срез 2а: ступень «Правит всё» и функции
     assert.equal(count(debtBranch, "tx.account_id = any(public.access_accounts_for('finance.debts', 'write'))"), 1);
     assert.doesNotMatch(debtBranch, /finance\.income/);
     const manualBranch = body.slice(manual, body.indexOf("end if;", manual));
-    // Автор старых доходов пуст: `=` дало бы NULL и пропустило чек мимо права
-    // (поймано прогоном 29.09), поэтому только `is not distinct from`.
+    // Автор старых доходов пуст: `=` дало бы NULL и пропустило чек мимо права,
+    // поэтому только `is not distinct from`.
     assert.ok(
       manualBranch.includes(
         norm(`(tx.team_id = any(public.access_calendars('finance.income', 'full'))

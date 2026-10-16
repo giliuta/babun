@@ -1,16 +1,16 @@
 import { Fragment, useMemo, useState } from "react";
 import { ScrollView } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { useInClientsTab } from "@/features/clients/reference-href";
+import { useInClientsTab } from "@/lib/reference-href";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SelectList } from "@/components/ui/select-rows";
-import { fileDay, groupFilesByDay } from "@/features/clients/client-files";
+import { fileDay, groupFilesByDay } from "@/lib/client-files";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { useClientsScopeOrNull } from "@/session/company-scope";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import { useClient } from "@/features/clients/queries";
 import { useCardAccess } from "@/features/clients/use-card-access";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
@@ -20,11 +20,10 @@ import { SmsMessageSheet } from "@/features/sms/SmsMessageSheet";
 import { SmsPlaque } from "@/features/sms/SmsPlaque";
 import { loadErrorWords } from "@/lib/connection-words";
 
-// ВСЕ SMS КЛИЕНТУ — СВОЯ СТРАНИЦА, КАК «ИСТОРИЯ» И «ФАЙЛЫ» (владелец 03.10:
-// «блок SMS — постараться улучшить, чтобы было более красиво»). На карточке
+// ВСЕ SMS КЛИЕНТУ — СВОЯ СТРАНИЦА, КАК «ИСТОРИЯ» И «ФАЙЛЫ». На карточке
 // — мини-история из трёх последних и «Ещё N» при большем; здесь — все, днями, свежие
 // сверху. Тап — сообщение целиком. Кнопки «Отправить» нет и здесь: SMS
-// уходит только с трубки клиента (владелец 03.10).
+// уходит только с трубки клиента.
 //
 // Открыта по праву «SMS» этого клиента (`card-access.ts`), как блок.
 

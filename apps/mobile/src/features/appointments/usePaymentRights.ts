@@ -1,7 +1,7 @@
-import { useMirror } from "@/features/access/mirror/mirror-state";
-import { useMyAccess } from "@/features/access/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useMyCalendars } from "@/features/settings/workspaces";
+import { useMirror } from "@/session/mirror-state";
+import { useMyAccess } from "@/session/access-queries";
+import { useCurrentRole } from "@/session/tenant";
+import { useMyCalendars } from "@/session/workspaces";
 import { paymentRights, type PaymentRights } from "./payment-rights";
 
 // Хуки живут отдельно от правила: `payment-rights.ts` обязан оставаться

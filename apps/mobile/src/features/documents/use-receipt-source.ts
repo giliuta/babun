@@ -3,18 +3,18 @@ import { newCustomServiceId, type AppointmentService } from "@babun/shared/local
 import { lineTotal } from "@babun/shared/local/finance/appointment-calc";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { useInvoice } from "@/features/invoices/queries";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { useInvoice } from "@/features/finances/invoices-queries";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { ReceiptDraftState } from "./ReceiptComposer";
-import { paymentReceiptLines } from "./receipt-for-payment";
+import { paymentReceiptLines } from "@/features/finances/receipt-for-payment";
 import {
   useReceipt,
   useReceiptAppointment,
   useReceiptTransaction,
-} from "./receipts-queries";
+} from "@/features/finances/receipts-queries";
 
-// ОТКУДА ЧЕК БЕРЁТ СЕБЯ (владелец 2026-10-03/04): с нуля; на принятую оплату
+// ОТКУДА ЧЕК БЕРЁТ СЕБЯ: с нуля; на принятую оплату
 // (`transactionId` — значок чека в записи, «Выписать чек» инвойса); правка
 // выписанного (`receiptId` — «Изменить» в листе чека, тот же номер). В двух
 // последних случаях деньги уже в журнале: клиент, счёт и сумма — от оплаты.
@@ -32,7 +32,7 @@ export function useReceiptSource(
   /** Чек по инвойсу подписан реквизитами инвойса — их не выбирают. */
   invoiceCompanyId: string | null;
   /** Язык бумаги — язык инвойса оплаты (чек обязан говорить тем же языком,
-   *  что выйдет: предпросмотр был русским, выписанный — английским, 04.10). */
+   *  что выйдет: предпросмотр обязан совпасть с выписанным). */
   language: InvoiceLanguage;
   ready: boolean;
 } {
@@ -86,8 +86,7 @@ export function useReceiptSource(
     });
   }, [mode, ready, tx, editing, invoiceRow, invoiceNumber, invoiceCompanyId, appointment.data, change]);
 
-  // Бумага — на языке инвойса; чек без инвойса — по-английски (владелец
-  // 04.10: «делай пока что всё на английском»).
+  // Бумага — на языке инвойса; чек без инвойса — по-английски.
   const rowLanguage = invoiceRow?.language;
   const language: InvoiceLanguage = isUiLocale(rowLanguage) ? rowLanguage : "en";
   return { mode, tx, editing, invoiceNumber, invoiceCompanyId, language, ready };

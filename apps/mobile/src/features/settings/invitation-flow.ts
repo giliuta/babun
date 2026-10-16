@@ -1,4 +1,4 @@
-import type { UserRole } from "./role-policy";
+import type { UserRole } from "@/session/role-policy";
 
 export type InvitableRole = Extract<UserRole, "dispatcher" | "master">;
 export type InvitationState = "active" | "expired" | "accepted";
@@ -28,6 +28,15 @@ export function isInvitableRole(value: unknown): value is InvitableRole {
 export function invitationPath(token: string): `/invite/${string}` {
   if (!isInvitationToken(token)) throw new Error("Некорректная ссылка");
   return `/invite/${token}`;
+}
+
+/** Ссылка приглашения, которую ОТПРАВЛЯЮТ — `https://`, а не `babun://`.
+ *  Схему приложения WhatsApp, Telegram и почта на Android не делают
+ *  ссылкой — приглашённый получал некликабельный текст. Сайт отдаёт тот же
+ *  маршрут, а телефон с Babun открывает его в приложении (universal link /
+ *  App Links в `app.config.js`). */
+export function invitationShareUrl(token: string): string {
+  return `https://babun.app${invitationPath(token)}`;
 }
 
 export function invitationErrorMessage(message: string): string {
@@ -147,22 +156,22 @@ export function invitationShareText(args: {
   const company = args.tenantName?.trim()
     ? ` в «${args.tenantName.trim()}»`
     : " в Babun CRM";
-  // Роль не называем (владелец 15.09: «роль уберём, она в целом нам не нужна»).
-  return `Вас пригласили${company}. Откройте ссылку на iPhone:\n${args.url}`;
+  // Роль в тексте не называем.
+  return `Вас пригласили${company}. Откройте ссылку на телефоне:\n${args.url}`;
 }
 
 /** Сервер ответил, что приглашения по этой ссылке больше нет: не найдено,
  *  ссылка испорчена или приглашение уже принято. Это ответ, а не обрыв связи —
  *  «Повторить» его не изменит, и запомненную ссылку пора забыть. Иначе
  *  отозванное приглашение открывало бы свой экран при каждом входе
- *  (владелец 15.09: «вечная хуета открывается»). «Выписано на другой email» —
+ *  (вечная ссылка). «Выписано на другой email» —
  *  не сюда: под нужным аккаунтом то же приглашение примут. */
 export class InvitationGoneError extends Error {}
 
 /** Приглашение выписано на другой email. Отдельный класс, а не поиск слов:
  *  приём бросает уже переведённую фразу, и поиск английского «does not
  *  match» в ней не находил ничего — кнопка «Войти под другим аккаунтом»
- *  не появлялась ни на одном языке (аудит Кабинета 03.10). */
+ *  не появлялась бы ни на одном языке. */
 export class InvitationWrongAccountError extends Error {}
 
 export function isGoneInvitationMessage(message: string): boolean {

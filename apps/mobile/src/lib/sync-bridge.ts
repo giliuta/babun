@@ -38,6 +38,7 @@ import {
   subscribeClaimSettled,
 } from "@/lib/claim-resync-plan";
 import { isKnownChange, ownWindowEndsAt, takeMissedChange } from "@/lib/own-writes";
+import { clientKeys } from "@/lib/client-query-keys";
 
 /** Строки записей во всех списках кэша — версия каждой (`updated_at`). */
 function* cachedAppointmentRows(
@@ -72,13 +73,13 @@ function invalidate(qc: QueryClient, table: CachedTable): void {
   // marks matching queries stale and refetches the ACTIVE tenant's row via RLS,
   // so there is no cross-tenant read and no cost when no card is open.
   if (table === "clients") {
-    void qc.invalidateQueries({ queryKey: ["client"] });
+    void qc.invalidateQueries({ queryKey: clientKeys.cardAll() });
   }
 }
 
 /** Событие проглочено окном своей правки — когда окно закроется, сверить
  *  проглоченное с кэшем: чужая правка новее кэша — перечитать список
- *  (аудит параллельных правок 03.10, `own-writes.ts`). Окно продлилось
+ *  (`own-writes.ts`). Окно продлилось
  *  (снова своя правка) — сверка ждёт его нового конца. */
 function checkAfterOwnWindow(qc: QueryClient, id: string, isLive: () => boolean): void {
   const ends = ownWindowEndsAt(id);
@@ -182,14 +183,3 @@ export function startSyncBridge(
   return controller.dispose;
 }
 
-/** Temporarily stop old-tenant realtime/revalidate callbacks while local
- * stores and the JWT are being switched. On failure call the returned resume
- * function; on success SessionProvider changes tenantId and the React effect
- * mounts a fresh bridge itself. */
-export function pauseSyncBridgeForTenantSwitch(): () => void {
-  const previous = activeBridge;
-  previous?.pause();
-  return () => {
-    if (previous && activeBridge === previous) previous.resume();
-  };
-}

@@ -21,7 +21,7 @@ export const WORK_FIELD_BLOCK: Readonly<Record<string, string>> = {
   time_start: "calendar.move",
   time_end: "calendar.move",
   total_duration: "calendar.move",
-  // Заметка записи — своё право с 30.09 (раньше шла со статусом).
+  // Заметка записи — своё право (не идёт со статусом).
   comment: "record.note",
   cancel_reason: "calendar.cancel",
   client_id: "record.client",
@@ -69,12 +69,12 @@ export const WORK_CREATE_FIELDS: ReadonlySet<string> = new Set([
   "master_id",
 ]);
 
-/** Поле своего события → блок (та же функция сервера, ветка события, 30.09).
+/** Поле своего события → блок (та же функция сервера, ветка события).
  *  Время, статус, «весь день», напоминания и повтор идут вместе с самим
  *  событием («События: Меняет»); метка, клиент, объект, тип и заметка — по
- *  блокам события. Клиента и объекта здесь не было: партнёр, которому их
+ *  блокам события. Клиент и объект нужны здесь: иначе партнёр, которому их
  *  открыли, создавал событие без них, а правка отвечала «Это поле меняет
- *  только владелец» (аудит формы записи 03.10). */
+ *  только владелец». */
 export const EVENT_FIELD_BLOCK: Readonly<Record<string, string>> = {
   date: "calendar.events",
   time_start: "calendar.events",
@@ -106,7 +106,7 @@ export const EVENT_FIELDS: ReadonlySet<string> = new Set(Object.keys(EVENT_FIELD
 const isEvent = (kind: Appointment["kind"] | undefined) => kind === "event" || kind === "personal";
 
 /** Блок статуса: отмена и возврат из отмены — «Отменять». Иного статуса
- *  больше нет (владелец 03.10: «статус удаляй полностью») — `null`: его не
+ *  нет — `null`: его не
  *  меняет никто, визит закрывает оплата. */
 export function statusBlock(next: string, previous: string | undefined): string | null {
   return next === "cancelled" || previous === "cancelled" ? "calendar.cancel" : null;
@@ -135,7 +135,7 @@ export function memberPatch(
 ): { body: Record<string, unknown>; foreign: string[] } {
   const body: Record<string, unknown> = {};
   const foreign: string[] = [];
-  // ДЛИТЕЛЬНОСТЬ БЕЗ ПЕРЕНОСА — НЕ ПЕРЕНОС (аудит формы записи 03.10).
+  // ДЛИТЕЛЬНОСТЬ БЕЗ ПЕРЕНОСА — НЕ ПЕРЕНОС.
   // `total_duration` считается из услуг: партнёр поменял количество — она
   // сдвинулась, хотя дата и часы на месте. Сервер ведёт это поле правом
   // «Переносить», и правка суммы с «Сумма: Меняет» отвергалась целиком.
@@ -187,7 +187,7 @@ export function memberCreateRow(a: Appointment): Record<string, unknown> {
 
 /** Запись с этим номером УЖЕ вставлена: прошлый «Создать» дошёл до сервера,
  *  а ответ оборвался. Номер — наш, один на жизнь формы, поэтому это та же
- *  запись, и повтор — успех, а не вторая запись (аудит формы записи 03.10).
+ *  запись, и повтор — успех, а не вторая запись.
  *  Путь владельца отдаёт ошибку обёрткой `Error` без кода — узнаём по тексту. */
 export function isOwnRecordAlreadyCreated(
   error: { code?: string | null; message?: string | null } | null,
@@ -210,7 +210,7 @@ export function memberWriteRefusal(
   }
   if (/access:field:/.test(message)) return "Это поле меняет только владелец";
   if (/access:client/.test(message)) return "Этот клиент вам недоступен";
-  // Запись не уходит из своей команды (владелец 30.09).
+  // Запись не уходит из своей команды.
   if (/access:team_move/.test(message)) return "Запись остаётся в своей команде";
   if (/not found or not in your calendars/.test(message)) {
     return "Запись больше не в ваших календарях";

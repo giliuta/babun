@@ -2,17 +2,16 @@ import { Stack } from "expo-router";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { useThemeColors } from "@/theme/colors";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Screen } from "@/components/ui/Screen";
+import { OverTabs, Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useDocumentLevel } from "@/features/documents/document-rights";
+import { useCurrentRole } from "@/session/tenant";
+import { useDocumentLevel } from "@/session/document-rights";
 
 // Хаб документов — сиблинг табов (как /invoices и /accounts): «назад»
 // всегда возвращает позвавшему.
 //
-// ПАРТНЁР С «ДОКУМЕНТЫ: ВИДИТ» ОТКРЫВАЕТ ЧЕК (владелец 04.10: «если видит —
-// может их видеть, нажимать посмотреть, но отправлять не может»), как уже
+// ПАРТНЁР С «ДОКУМЕНТЫ: ВИДИТ» ОТКРЫВАЕТ ЧЕК (видит и смотрит, но отправлять не может), как уже
 // открывает инвойс (`invoices/_layout.tsx`). Что на странице можно сделать,
 // решает она сама (`ReceiptPage`); какие чеки видны, режет сервер.
 export default function DocumentsLayout() {
@@ -20,12 +19,16 @@ export default function DocumentsLayout() {
   const role = useCurrentRole().data;
   const level = useDocumentLevel();
   const stack = (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: t.canvas },
-      }}
-    />
+    // Над табами: подвалы документов («Выставить», «Оформить возврат») —
+    // над навигацией Android, низ берёт сам `Screen`.
+    <OverTabs value>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: t.canvas },
+        }}
+      />
+    </OverTabs>
   );
   if (role === "master") {
     return (

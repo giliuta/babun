@@ -6,15 +6,15 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { useClients } from "@/features/clients/queries";
-import { formatInvoiceMoney } from "@/features/invoices/format";
-import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
-import { useReceipts } from "@/features/documents/receipts-queries";
+import { formatInvoiceMoney } from "@/lib/paper/format";
+import { useInvoicePayments, useInvoices } from "@/features/finances/invoices-queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
 
 // «Документы клиента» — бывшая дверь карточки клиента («Счета и чеки» в
-// снятой 22.09 «Документации»; теперь бумаги клиента стоят плашками в его
+// снятой «Документации»; теперь бумаги клиента стоят плашками в его
 // блоке «Файлы») к его
 // бумагам: инвойсам и чекам. Бумаги ВСЕЙ компании живут не здесь, а в панели
-// «Документы» на «Финансах» (канон 2026-08-12: только Инвойсы|Чеки) — этот
+// «Документы» на «Финансах» (канон: только Инвойсы|Чеки) — этот
 // экран остаётся до переезда карточки клиента на неё. Без clientId он
 // показывает те же строки по всем бумагам — на случай прямого адреса.
 export default function DocumentsScreen() {
@@ -37,8 +37,8 @@ export default function DocumentsScreen() {
     invoicesData !== undefined && invoicePaymentsData !== undefined;
 
   // Сколько денег ждут инвойсы клиента — один проход по ним. Просрочка тут
-  // не считается и не красится: неоплаченный документ — не тревога (решение
-  // владельца 2026-08-15, как в панели «Документы» на «Финансах»).
+  // не считается и не красится: неоплаченный документ — не тревога
+  // (как в панели «Документы» на «Финансах»).
   const outstanding = useMemo(() => {
     const invoices = invoicesData ?? [];
     const invoicePayments = invoicePaymentsData ?? {};
@@ -69,7 +69,7 @@ export default function DocumentsScreen() {
                   : "Все оплачены"
             }
             onPress={() =>
-              // Инвойсы живут в «Финансах» → «Документы» (владелец 22.09);
+              // Инвойсы живут в «Финансах» → «Документы»;
               // отдельный список `/invoices` снесён как вторая дверь.
               router.push(
                 clientId
@@ -79,7 +79,7 @@ export default function DocumentsScreen() {
             }
           />
           {/* Чеки выписываются сами при каждом приёме денег (триггер
-              issue_receipt_for_income). Строка живая с 2026-08-09. */}
+              issue_receipt_for_income). */}
           <NavRow
             label="Чеки"
             value={
@@ -98,7 +98,7 @@ export default function DocumentsScreen() {
               )
             }
           />
-          {/* Строки «Договоры · Скоро» нет (06.10, выпуск в магазины):
+          {/* Строки «Договоры · Скоро» нет:
               задимленный тизер читается проверкой App Store как недоделанная
               функция. Договоры появятся строкой, когда будут на самом деле. */}
         </RowGroup>

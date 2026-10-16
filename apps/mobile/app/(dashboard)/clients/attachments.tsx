@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useInClientsTab } from "@/features/clients/reference-href";
+import { useInClientsTab } from "@/lib/reference-href";
 import type { PhotoKind } from "@babun/shared/db/repositories/appointment-photos";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -13,7 +13,7 @@ import { SelectList } from "@/components/ui/select-rows";
 import { useToast } from "@/components/ui/Toast";
 import { getSignedUrl, useDeleteAttachment, type ClientAttachment } from "@/features/clients/card-attachments";
 import { useClient } from "@/features/clients/queries";
-import { groupFilesByDay } from "@/features/clients/client-files";
+import { groupFilesByDay } from "@/lib/client-files";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useClientFileUpload, useClientFiles, type ClientFileItem } from "@/features/clients/use-client-files";
@@ -26,9 +26,8 @@ import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
 
-// ФАЙЛЫ КЛИЕНТА — ОДНОЙ ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ» (владелец 03.10:
-// «файлы — как история, по датам… файлы, чеки, инвойсы — полноценные блоки,
-// красивые, чтобы можно было сразу открывать»).
+// ФАЙЛЫ КЛИЕНТА — ОДНОЙ ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ»: по датам,
+// файлы, чеки и инвойсы — полноценные блоки, которые сразу открываются.
 //
 // Дверь сюда — последний файл в блоке «Файлы» на карточке. Здесь всё: фото
 // со снимком в плитке, документы, фото с выездов, инвойсы и чеки — день
@@ -58,7 +57,7 @@ function ClientAttachmentsScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const id = clientId ?? "";
   const { data: client } = useClient(id);
-  // С 30.09 страница открыта и сотруднику — по праву «Файлы» этого клиента;
+  // Страница открыта и сотруднику — по праву «Файлы» этого клиента;
   // инвойсы и чеки — по праву «Долг и деньги» (`card-access.ts`).
   const access = useCardAccess(client, false);
   const canChange = access.files.edit;
@@ -105,7 +104,7 @@ function ClientAttachmentsScreen() {
         router.push(`/invoices/${entry.item.id}` as Href);
         return;
       case "receipt":
-        // Чек — своей страницей, как инвойс (владелец 04.10).
+        // Чек — своей страницей, как инвойс.
         router.push(`/documents/receipt/${entry.item.id}` as Href);
         return;
     }
@@ -136,7 +135,7 @@ function ClientAttachmentsScreen() {
           action={{ label: "Повторить", onPress: () => void files.refetch() }}
         />
       ) : days.length === 0 && !upload.busy ? (
-        // ПУСТО — ОДНИМ СЛОВОМ (закон 15.09): «Добавить файл» — внизу.
+        // ПУСТО — ОДНИМ СЛОВОМ (пустые состояния — слова без кнопок): «Добавить файл» — внизу.
         <EmptyState fill title="Файлов нет" />
       ) : (
         <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}>

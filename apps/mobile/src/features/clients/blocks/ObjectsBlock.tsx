@@ -1,16 +1,12 @@
 import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
-import { House, MapPin, MoreHorizontal, Star, Tag, UserRound } from "lucide-react-native";
+import { View } from "react-native";
+import { MapPin } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Card } from "@/components/ui/Card";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { NavRow } from "@/components/ui/card-rows";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { useInlineNote } from "@/features/appointments/use-inline-note";
-import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
 import { useLocationRequestActions } from "@/features/clients/location-request-actions";
 import {
@@ -18,23 +14,23 @@ import {
   type LocationRequest,
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { addressLines, objectTarget, routeAddress } from "@/features/clients/object-address";
-import { formatShortDateRu } from "@/features/clients/format";
-import { ICON } from "@/components/ui/tokens";
+import { objectTarget } from "@/features/clients/object-address";
 import { useThemeColors } from "@/theme/colors";
 import { useCopyValue } from "@/lib/copy-value";
-import { AppearanceTile } from "@/components/ui/AppearanceSheet";
-import { PICKER_RADIUS } from "@/components/ui/picker-grid";
-import { useLocationLabels } from "@/features/settings/local-settings";
-import { findObjectType } from "@/features/clients/object-types";
-import { moreLabel } from "@/features/clients/more-label";
+import { moreLabel } from "@/lib/more-label";
+import { ObjectNote } from "./objects-block/ObjectNote";
+import { ObjectRow } from "./objects-block/ObjectRow";
+
+// The row and the per-object note live in `objects-block/`; `ObjectRow` is
+// re-exported here for the booking form, invoices and documents.
+export { ObjectRow } from "./objects-block/ObjectRow";
 
 // ОБЪЕКТЫ на карточке клиента.
 //
-// Владелец 2026-07-27: «первая строчка — не пишешь „тип объекта", а просто:
-// я выбрал дом — значит Дом; потом чёткая адресная ссылка и чётко заметка.
-// Всё кратенько в три строчки. И небольшая кнопка навигации: нажимаю —
-// вылазит снизу шторка, и оно определяет Google, Waze, Яндекс».
+// Первая строчка — не «тип объекта», а сам выбранный тип (выбрал дом —
+// значит Дом); потом чёткая адресная ссылка и заметка. Всё кратенько в три
+// строчки, плюс небольшая кнопка навигации: снизу выезжает шторка с выбором
+// Google, Waze, Яндекс.
 //
 // Поэтому строка объекта — не «ярлык · значение», а КАРТОЧКА АДРЕСА в три
 // строки: что это → куда ехать → когда снова и как войти. Тип идёт сам по
@@ -42,9 +38,8 @@ import { moreLabel } from "@/features/clients/more-label";
 // сроком обслуживания и заметкой через «·» — четвёртый этаж поднимал строку
 // до ~86pt и ломал ритм списка.
 //
-// Тап по строке ОТКРЫВАЕТ ЛИСТ ПРАВКИ, а не страницу (владелец 2026-08-06:
-// «отдельная страница объекта вообще не открывается… если нажимаешь —
-// вылазит менюшка по поводу редактирования»). Шеврона поэтому нет: он обещал
+// Тап по строке ОТКРЫВАЕТ ЛИСТ ПРАВКИ, а не страницу (отдельной страницы
+// объекта нет). Шеврона поэтому нет: он обещал
 // бы этаж навигации, которого больше не существует.
 //
 // Удаление — СМАХНУТЬ ВЛЕВО (тот же жест, что у номеров в Контактах). Кнопки
@@ -52,71 +47,6 @@ import { moreLabel } from "@/features/clients/more-label";
 // кнопкой маршрута — именно так палец однажды делал не то, во что целился.
 
 const EMPTY_REQUESTS: LocationRequest[] = [];
-
-/** МИНИ-ЗАМЕТКА ОБЪЕКТА — ТА ЖЕ ПЛАШКА, ЧТО У ЗАМЕТКИ ЗАПИСИ (владелец
- *  22.09: «в записи мы выбираем объект, и там снизу сразу заметка; сделай
- *  такую же у клиента — под каждым объектом своя»). Своим компонентом, а не
- *  в цикле: у каждой плашки свой черновик и своя запись по уходу с поля. */
-function ObjectNote({
-  loc,
-  ownerKey,
-  onSave,
-}: {
-  loc: Location;
-  ownerKey: string;
-  onSave: (id: string, next: string) => void;
-}) {
-  const note = useInlineNote<string>(
-    loc.note ?? "",
-    loc.id,
-    (next, id) => onSave(id, next),
-    ownerKey,
-  );
-  // Без выноса (30.09): у сотрудника чужой компании меню «Скопировать» нет.
-  const caps = useClientsCapabilities();
-  return (
-    <InlineNoteField
-      note={note}
-      placeholder="Заметка объекта"
-      accessibilityLabel={`Заметка объекта ${loc.label || loc.address || ""}`.trim()}
-      maxLength={500}
-      noCopy={!caps.export}
-    />
-  );
-}
-
-/** Плитка объекта — того же размера, что плитка записи в «Истории»
- *  (`SelectRow`, 28): рядом на карточке они не должны различаться
- *  (владелец 03.10: «значки отличаются прям»). */
-const OBJECT_TILE = 28;
-
-/** ПЛИТКА ТИПА ОБЪЕКТА — ТА ЖЕ, ЧТО У ТИПА В ЛИСТЕ ОБЪЕКТА (владелец 03.10:
- *  «иконка и цвет от типа объекта переходят сюда полноценно»). Правило
- *  блока «Тип объекта» (`ObjectFields`): цвет типа, а без него акцент;
- *  значок типа, а без него ярлык. Тип не выбран — светлый домик. */
-function ObjectTypeTile({ typed, color, icon }: { typed: boolean; color?: string | null; icon?: string | null }) {
-  const t = useThemeColors();
-  if (typed) {
-    return <AppearanceTile color={color ?? t.accent} icon={icon ?? null} fallback={Tag} size={OBJECT_TILE} />;
-  }
-  return (
-    <View
-      style={{
-        // Та же геометрия, что у `AppearanceTile` (владелец 03.10: домик
-        // «отличается размером — не очень аккуратно»): радиус и глиф 56 %.
-        width: OBJECT_TILE,
-        height: OBJECT_TILE,
-        borderRadius: PICKER_RADIUS,
-        borderCurve: "continuous",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: `${t.accent}14`,
-      }}
-    >
-      <House color={t.accent} size={Math.round(OBJECT_TILE * 0.56)} strokeWidth={2} />
-    </View>
-  );
-}
 
 export default function ObjectsBlock({
   client,
@@ -134,9 +64,8 @@ export default function ObjectsBlock({
   only,
 }: {
   client: Client;
-  /** КАРТОЧКА — ОДИН ОБЪЕКТ (владелец 03.10: «видно только последний —
-   *  обслуженный или добавленный; нажимаю — открывается страница со всеми»).
-   *  Показывается только он, с заметкой; тап по нему — страница объектов
+  /** КАРТОЧКА — ОДИН ОБЪЕКТ: последний, обслуженный или добавленный; тап —
+   *  страница со всеми. Показывается только он, с заметкой; тап по нему — страница объектов
    *  (`onOpenAll`), без свайпа. Объектов нет — дверь «Добавить объект». */
   only?: string | null;
   /** На своей странице шапки у блока нет: название уже в заголовке экрана. */
@@ -177,7 +106,7 @@ export default function ObjectsBlock({
    *  вспоминают. */
   lastVisitFor?: (loc: Location) => string | undefined;
   /** Долгое нажатие копирует адрес. Нет — не копирует: клиент чужой
-   *  компании не выносится из приложения (владелец 30.09). */
+   *  компании не выносится из приложения. */
   canCopy?: boolean;
 }) {
   const t = useThemeColors();
@@ -211,10 +140,9 @@ export default function ObjectsBlock({
   // пустая карточка с одной шапкой.
   if (ordered.length === 0 && shownRequests.length === 0 && !onAdd) return null;
 
-  // СВОЯ СТРАНИЦА — КАЖДЫЙ ОБЪЕКТ ОТДЕЛЬНОЙ КАРТОЧКОЙ (владелец 03.10:
-  // «компактно и раздели их между собой»; выбран вариант 1): слева плитка
-  // вида типа объекта, справа маршрут, под строкой — заметка, которую правят
-  // прямо здесь («мне нужны заметки, чтобы быстро редактировать»).
+  // СВОЯ СТРАНИЦА — КАЖДЫЙ ОБЪЕКТ ОТДЕЛЬНОЙ КАРТОЧКОЙ (компактно, объекты
+  // разделены между собой): слева плитка вида типа объекта, справа маршрут,
+  // под строкой — заметка, которую правят прямо здесь.
   if (bare) {
     return (
       <View style={{ gap: 10, paddingTop: 4 }}>
@@ -232,7 +160,7 @@ export default function ObjectsBlock({
               onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
             />
           );
-          // Заметка правится прямо здесь, в серой плашке (вариант 1, 03.10).
+          // Заметка правится прямо здесь, в серой плашке.
           const note = onNote ? <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} /> : null;
           return (
             <Card key={loc.id} style={{ marginHorizontal: 16 }}>
@@ -273,7 +201,7 @@ export default function ObjectsBlock({
     );
   }
 
-  // «Ещё N» — объектов сверх показанного основного (03.10).
+  // «Ещё N» — объектов сверх показанного основного.
   const more = single && onOpenAll ? moreLabel(ordered.length) : null;
   return (
     <SectionCard
@@ -301,8 +229,8 @@ export default function ObjectsBlock({
               // его пересылают бригаде или вставляют в навигатор.
               onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
             />
-            {/* ЗАМЕТКА ПРИШИТА К ОБЪЕКТУ (владелец 03.10: «везде, где ставится
-                этот блок, там сразу и заметка объекта») — и на карточке. */}
+            {/* ЗАМЕТКА ПРИШИТА К ОБЪЕКТУ: везде, где ставится этот блок, там
+                сразу и заметка объекта — и на карточке. */}
             {onNote ? (
               <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} />
             ) : null}
@@ -325,10 +253,10 @@ export default function ObjectsBlock({
         );
       })}
       {/* Пустого состояния нет: при нуле объектов группа — одна эта строка.
-          Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не
+          Добавление открывается ЛИСТОМ снизу, а не
           страницей: три поля не стоят экрана поверх экрана, и объектов подряд
           заводят несколько. */}
-      {/* ОСТАЛЬНЫЕ — НА СВОЕЙ СТРАНИЦЕ (владелец 22.09): двенадцать объектов
+      {/* ОСТАЛЬНЫЕ — НА СВОЕЙ СТРАНИЦЕ: двенадцать объектов
           в карточке пришлось бы пролистывать до файлов. */}
       {rest > 0 && onOpenAll ? (
         <NavRow
@@ -346,258 +274,12 @@ export default function ObjectsBlock({
           onPress={() => void requestActions.menu(request)}
         />
       ))}
-      {/* ТА ЖЕ ДВЕРЬ, ЧТО В ЗАПИСИ (сведено 2026-09-10). Здесь стоял `AddRow`:
-          без кружка со значком и с волоском сверху. Владелец 2026-09-09,
-          поймав это на записи: «почему тут изменилась архитектура, если она
-          должна быть другой — как у нас принято». Один вопрос — одна дверь. */}
+      {/* ТА ЖЕ ДВЕРЬ, ЧТО В ЗАПИСИ. `AddRow` — без кружка со значком и с
+          волоском сверху — выглядел бы здесь другой архитектурой. Один
+          вопрос — одна дверь. */}
       {onAdd && !(single && ordered.length > 0) ? (
         <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} />
       ) : null}
     </SectionCard>
-  );
-}
-
-// СТРОКА ОБЪЕКТА ОТКРЫТА НАРУЖУ (2026-08-31). Форма записи показывала объекты
-// клиента ЧИПАМИ — одно слово в пилюле, без адреса, без срока ТО, без заметки.
-// Владелец: «блок объекта должен быть такой же, как в клиентах». Не похожий —
-// ТОТ ЖЕ: скопированная карточка адреса разошлась бы с оригиналом на первой же
-// правке, как разошлись две формы записи.
-export function ObjectRow({
-  loc,
-  separated,
-  onMore,
-  showNote = true,
-  residents,
-  lastVisit,
-  onPress,
-  onLongPress,
-  longPressLabel,
-  pressHint,
-  primary = false,
-  teamId = null,
-}: {
-  loc: Location;
-  separated?: boolean;
-  /** Что делает тап — для VoiceOver, когда это не правка (карточка клиента:
-   *  тап по объекту открывает страницу всех). */
-  pressHint?: string;
-  /** Звёздочка у адреса — это основной объект, его подставит запись
-   *  (владелец 03.10). Ставят только там, где объектов несколько: у
-   *  единственного звезда ничего не различает. */
-  primary?: boolean;
-  /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
-   *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
-   *  2026-09-04 — «эти стрелочки убираем, ставим красивую иконку, при тапе на
-   *  неё открывается редактирование объекта». На карточке клиента правку
-   *  открывает сам тап, и кружка там нет. */
-  onMore?: () => void;
-  /** Заметка третьей строкой. Запись выключает: у неё заметка объекта стоит
-   *  своей плашкой под строкой, и третья строка дублировала бы её. */
-  showNote?: boolean;
-  /** Жильцы объекта одной строкой — «Мария Спиру · жилец, Андреас · жилец».
-   *  Четвёртый этаж строки, со значком человека: без него перечень имён
-   *  читался бы продолжением заметки. */
-  residents?: string;
-  /** Последний визит на объект, YYYY-MM-DD. Печатается «был 12 авг» в той же
-   *  третьей строке, что заметка, — не четвёртым этажом. */
-  lastVisit?: string;
-  /** Нет — строка только читается (STORY-084: в записи объект человеку не
-   *  меняется). Маршрут при этом остаётся: это дорога, а не правка. */
-  onPress?: () => void;
-  /** Долгое нажатие по строке — на карточке клиента копирует адрес; в записи
-   *  и инвойсе — правка объекта (владелец 03.10: «три точки убираем…
-   *  редактирование — задержать»). */
-  onLongPress?: () => void;
-  /** Что делает удержание — словами для VoiceOver («Правка объекта»): тогда
-   *  подсказка называет оба жеста и есть действие удержания. Нет — как было. */
-  longPressLabel?: string;
-  /** Команда клиента — её «Карты для маршрута» (у каждой команды свои). */
-  teamId?: string | null;
-}) {
-  const t = useThemeColors();
-  const target = objectTarget(loc);
-  // ТИП ОБЪЕКТА — ТОЛЬКО ЗНАЧКОМ (владелец 03.10: «слово не пишем — тип
-  // обозначает иконка: цвет и значок из „Типов объектов“; типа нет — домик»).
-  const { data: labelPresets = [] } = useLocationLabels(teamId);
-  // Тип — только из справочника команды (владелец 03.10: типы каждый
-  // заводит сам). Метка удалённого типа объект не красит: он без типа.
-  const type = findObjectType(labelPresets, loc.label);
-  const typed = !!type;
-  // Адрес двумя строками: улица и дом — чёрным, уточнение — мелко серым.
-  const lines = addressLines(loc);
-  // ТИП СЛОВОМ — ПЕРВЫМ ВО ВТОРОЙ СТРОКЕ (владелец 03.10, вторым заходом:
-  // «тип объекта всё-таки надо где-то писать словами — полезная функция»).
-  // Плитка слева говорит цветом и значком, слово — «Офис · подъезд 4 ·
-  // эт. 3»; своей строки ему не дали — строка объекта не растёт.
-  const typeWord = type ? type.name : "";
-  const note = showNote ? (loc.note ?? "").trim() : "";
-  const people = (residents ?? "").trim();
-  // «БЫЛ 12 АВГ» ДЕЛИТ ТРЕТЬЮ СТРОКУ С ЗАМЕТКОЙ через «·» — формат тот же,
-  // что «был 30 мая» в сводке. Дата ПЕРВОЙ: строка одна и режется хвостом,
-  // короткая дата должна уцелеть, а длинная заметка — обрезаться.
-  const visited = lastVisit ? `был ${formatShortDateRu(lastVisit)}` : "";
-  const thirdLine = [visited, note].filter(Boolean).join(" · ");
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingLeft: 16,
-        paddingRight: 12,
-        paddingVertical: 10,
-        minHeight: 60,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-      }}
-    >
-      <Pressable
-        onPress={onPress}
-        onLongPress={onLongPress}
-        disabled={!onPress && !onLongPress}
-        accessible
-        accessibilityRole={onPress ? "button" : "text"}
-        accessibilityLabel={[
-          type?.name || "Объект",
-          primary ? "основной" : "",
-          target,
-          visited,
-          note,
-          // Перечень имён без слова «жильцы» VoiceOver прочитал бы как
-          // продолжение заметки: значок он не озвучивает.
-          people ? `Жильцы: ${people}` : "",
-        ]
-          .filter(Boolean)
-          .join(", ")}
-        accessibilityHint={
-          longPressLabel && onPress
-            ? `Открывает выбор объекта; удерживайте — ${longPressLabel.toLowerCase()}`
-            : !onPress
-              ? undefined
-              : pressHint
-                ? pressHint
-                : onMore
-                ? "Открывает выбор объекта"
-                : "Открывает правку объекта"
-        }
-        accessibilityActions={
-          longPressLabel && onLongPress ? [{ name: "longpress", label: longPressLabel }] : undefined
-        }
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "longpress") onLongPress?.();
-        }}
-        style={({ pressed }) => ({
-          flex: 1,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          opacity: pressed && onPress ? 0.6 : 1,
-        })}
-      >
-        <View style={{ marginRight: 4 }}>
-          <ObjectTypeTile typed={typed} color={type?.color} icon={type?.icon} />
-        </View>
-        <View style={{ flex: 1 }}>
-          {/* АДРЕС — ГЛАВНАЯ СТРОКА (владелец 03.10): едут по адресу, тип
-              объекта говорит плитка слева. Улица и дом — чёрным, точный адрес
-              (комплекс, подъезд, этаж, квартира, город) — под ним мелко серым. */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{
-                flexShrink: 1,
-                fontSize: 15,
-                fontWeight: lines.main ? "500" : "400",
-                color: lines.main ? t.ink : t.faint,
-              }}
-            >
-              {lines.main || "адрес не указан"}
-            </Text>
-            {primary ? (
-              <Star
-                color={t.accent}
-                fill={t.accent}
-                size={12}
-                strokeWidth={2}
-              />
-            ) : null}
-          </View>
-          {typeWord || lines.detail ? (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{ fontSize: 13, color: t.sub }}
-            >
-              {typeWord ? (
-                <Text style={{ fontWeight: "600", color: t.body }}>{typeWord}</Text>
-              ) : null}
-              {typeWord && lines.detail ? " · " : ""}
-              {lines.detail}
-            </Text>
-          ) : null}
-          {/* ТРЕТЬЯ СТРОКА — «был 12 авг · код домофона». Срок обслуживания
-              делил её через «·», пока у объекта был интервал; сам интервал
-              снесён 2026-09-04 (владелец: «сделаем лучше в напоминаниях»).
-              Нет заметки — строка из одной даты; нет обоих — строки нет. */}
-          {thirdLine ? (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{ fontSize: 13, color: t.sub }}
-            >
-              {thirdLine}
-            </Text>
-          ) : null}
-          {people ? (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-            >
-              <UserRound color={t.faint} size={12} strokeWidth={2.2} />
-              <Text
-                maxFontSizeMultiplier={1.2}
-                numberOfLines={1}
-                style={{ flexShrink: 1, fontSize: 13, color: t.sub }}
-              >
-                {people}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
-
-      {/* Маршрут — отдельное действие над адресом этой строки; шторка выбора
-          карты приезжает снизу (chooseOption → канонический лист). */}
-      <ObjectRouteButton
-        mapUrl={loc.mapUrl}
-        // Объект с частями едет по геокодируемой части адреса: подъезд, этаж и
-        // квартира карте только мешают.
-        address={routeAddress(loc)}
-        label={loc.label}
-        teamId={teamId}
-      />
-
-      {/* Правка объекта — кружок в хвосте, СНАРУЖИ нажимаемой области строки
-          (иначе VoiceOver склеит их в один элемент). */}
-      {onMore ? (
-        <Pressable
-          onPress={onMore}
-          accessibilityRole="button"
-          accessibilityLabel={`Правка объекта ${loc.label || "Объект"}`}
-          style={({ pressed }) => ({
-            width: 32,
-            height: 32,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 999,
-            backgroundColor: t.rowFill,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <MoreHorizontal color={t.body} size={ICON.sm} />
-        </Pressable>
-      ) : null}
-    </View>
   );
 }

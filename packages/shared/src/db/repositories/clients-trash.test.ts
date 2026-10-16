@@ -23,7 +23,7 @@ const CLIENT_ID = "22222222-2222-4222-8222-222222222222";
 interface Recorded {
   update: Record<string, unknown> | null;
   deleted: boolean;
-  filters: Array<[string, unknown]>;
+  filters: [string, unknown][];
 }
 
 function clientsSupabase(row: { id: string } | null) {

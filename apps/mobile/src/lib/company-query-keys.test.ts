@@ -3,9 +3,9 @@ import { describe, test } from "node:test";
 
 import * as keys from "./company-query-keys";
 
-// УСЛОВИЕ СЕССИИ 005 ПРИ ПЕРЕДАЧЕ ФАЙЛОВ: «ключи экспортируй, но не меняй
-// значений — если при переносе хоть один поменяет форму, тёплый кэш молча
-// станет холодным. Нужен тест, сверяющий ключи строкой, а не глазами».
+// Ключи экспортируются, но значения их неизменны: если хоть один поменяет
+// форму, тёплый кэш молча станет холодным. Поэтому ключи сверяются строкой,
+// а не глазами.
 //
 // Справа — буквально те массивы, которые стояли в хуках ДО переноса
 // (calendar/queries.ts, clients/queries.ts, reference/queries.ts,
@@ -53,7 +53,7 @@ describe("ключи запросов компании не изменили ф�
   });
 });
 
-// ВТОРАЯ ВОЛНА ПЕРЕЕЗДА (прогрев, 2026-09-13): ключи денег, инвойсов и
+// ВТОРАЯ ВОЛНА ПЕРЕЕЗДА (прогрев): ключи денег, инвойсов и
 // мастеров. Справа — буквально массивы из finances/queries.ts,
 // finances/accounts.ts, invoices/queries.ts, reference/queries.ts до переноса.
 describe("ключи денег и мастеров не изменили форму при переносе", () => {
@@ -82,7 +82,7 @@ describe("ключи денег и мастеров не изменили фор
     same(keys.accountRowsQueryKey(T, true), ["accounts", T, "rows", "all"]);
     same(keys.accountBalancesQueryKey(T), ["accounts", T, "balances"]);
   });
-  // ТРЕТЬЯ ВОЛНА (2026-09-15): долги. Справа — буквально массивы из
+  // ТРЕТЬЯ ВОЛНА: долги. Справа — буквально массивы из
   // finances/debts-queries.ts до переноса: `["debts", tenantId, from, to,
   // teamId ?? null]` и `["debts", tenantId, "paid-totals"]`.
   test("долги: срез периода и суммы платежей", () => {
@@ -98,7 +98,7 @@ describe("ключи денег и мастеров не изменили фор
   });
 });
 
-// УСЛОВИЕ СЕССИИ 004 (2026-09-13): по деньгам сбросы идут ПРЕФИКСОМ —
+// ПРАВИЛО: по деньгам сбросы идут ПРЕФИКСОМ —
 // `["transactions"]`, `["accounts"]`, `["invoices"]`, `["payment-accounts"]`,
 // `["finance-categories"]`, `["masters"]` (payment-mutations.ts,
 // invoices/queries.ts, finances/queries.ts, finances/accounts.ts,

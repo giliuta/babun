@@ -11,6 +11,8 @@ import {
   sameShallow,
   sameWorkBand,
 } from "./grid-memo";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (path: string): string => readFileSync(resolve(here, path), "utf8");
@@ -105,12 +107,16 @@ describe("сравнение пропсов сетки", () => {
 });
 
 describe("сетка календаря мемоизирована и кормится стабильными пропсами", () => {
-  const dayView = code(read("./DayView.tsx"));
-  // Блок записи вынесен в свой файл 24.09 — сторож смотрит туда.
-  const blockFile = code(read("./AppointmentBlock.tsx"));
+  // The day grid is `DayView.tsx` plus its parts in `day-view/`.
+  const dayView = code(readModuleSource(resolve(here, "DayView.tsx"), resolve(here, "day-view")));
+  // Блок записи вынесен в свой файл — сторож смотрит туда.
+  const blockFile = code(
+    readModuleSource(resolve(here, "AppointmentBlock.tsx"), resolve(here, "appointment-block")),
+  );
   const weekView = code(read("./WeekView.tsx"));
   const hook = code(read("./use-latest-handler.ts"));
-  const screen = code(read("../../../app/(dashboard)/(home)/index.tsx"));
+  // The calendar screen is the route file plus `features/calendar/home/`.
+  const screen = code(calendarScreenSource());
 
   test("колонка, блок, День и Неделя обёрнуты в memo", () => {
     assert.match(blockFile, /export const AppointmentBlock = memo\(function AppointmentBlock\(/);

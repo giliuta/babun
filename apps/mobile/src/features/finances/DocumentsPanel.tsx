@@ -5,7 +5,6 @@ import {
   View,
   type RefreshControlProps,
 } from "react-native";
-import { money } from "@babun/shared/common/utils/money";
 import {
   calculateInvoiceSettlement,
   type InvoiceLedger,
@@ -16,7 +15,6 @@ import type { Client } from "@babun/shared/local/clients";
 import {
   Banknote,
   ExternalLink,
-  Receipt as ReceiptIcon,
   ReceiptText,
   Share2,
   Trash2,
@@ -24,29 +22,29 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
-import { useReceiptMenu } from "@/features/documents/receipt-menu";
-import { useDocumentWriter } from "@/features/documents/document-rights";
-import { invoiceDeleteBlock } from "@/features/invoices/invoice-delete";
-import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
-import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
+import { ActionMenuSheet, type ActionMenu } from "@/components/blocks/ActionMenuSheet";
+import { useReceiptMenu } from "@/features/finances/receipt-menu";
+import { useDocumentWriter } from "@/session/document-rights";
+import { invoiceDeleteBlock } from "@/features/finances/invoice-delete";
+import { useInvoiceMenu } from "@/features/finances/invoice-menu";
+import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
 import type { AccountWithBalance } from "./accounts";
 import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
-import type { Period } from "./period";
+import type { Period } from "@/lib/period";
 import { usePeriodDocuments } from "./use-period-documents";
 import {
   filterDocuments,
   type DocumentFilter,
   type FinanceDocument,
 } from "./documents";
+import { DocumentRow } from "./documents-panel/DocumentRow";
 
-// ДОКУМЕНТЫ РАСКРЫВАЮТСЯ ЗДЕСЬ, А НЕ УВОДЯТ (владелец 2026-08-11: «нажимаю
-// документы — и внизу все документы сразу, чётко по порядку, по датам»).
-// Раньше, чтобы увидеть инвойс, нужно было три экрана: «Финансы» →
+// ДОКУМЕНТЫ РАСКРЫВАЮТСЯ ЗДЕСЬ, А НЕ УВОДЯТ: внизу все документы сразу, чётко по
+// порядку, по датам. Иначе, чтобы увидеть инвойс, нужно три экрана: «Финансы» →
 // «Документы» → «Инвойсы».
 //
 // Срез тот же, что у денег: выбранная команда и выбранный период — иначе под
@@ -92,7 +90,7 @@ export function DocumentsPanel({
    *  главная кнопка внизу («Выставить инвойс» / «Принять оплату»), а она вне
    *  панели. */
   /** Может ли человек выставить документ. Нет — пустая панель не обещает
-   *  кнопку, которой у него нет (владелец 20.09: плашка «Документы» остаётся
+   *  кнопку, которой у него нет (плашка «Документы» остаётся
    *  и без доступа, но внутри просто ничего не показывается). */
   canIssue?: boolean;
   /** Что человеку видно — тот же отбор, что у плитки «Документы»
@@ -160,11 +158,11 @@ export function DocumentsPanel({
           грузятся: он не фильтр списка, а выбор вида документа — от него
           зависит кнопка внизу экрана. Спрятать его значит спрятать и её. */}
       <SegmentedControl
-        // Число в каждой вкладке (аудит 2026-09-29): плитка «Документы» —
+        // Число в каждой вкладке: плитка «Документы» —
         // сумма вкладок, и без чисел «16» над одним инвойсом читалось ошибкой.
         // Кредит-нота стоит строкой под своим инвойсом, но документом периода
         // не считается — как у плитки: отменённый инвойс с кредит-нотой давал
-        // плитку «1» и вкладку «Инвойсы 2» (аудит финансов 03.10).
+        // плитку «1» и вкладку «Инвойсы 2».
         options={SEGMENTS.map((segment) => ({
           ...segment,
           label: `${segment.label} ${documents.filter((d) => d.kind === segment.value && !d.creditNote).length}`,
@@ -202,8 +200,8 @@ export function DocumentsPanel({
 
   const searching = query.trim().length > 0;
 
-  // ДЕЙСТВИЯ С ДОКУМЕНТОМ — ТЕ ЖЕ, ЧТО «⋯» НА ЕГО СТРАНИЦЕ (владелец 04.10:
-  // «долгое нажатие на чек или инвойс — шторка-менюшка»). Смахнуть вправо —
+  // ДЕЙСТВИЯ С ДОКУМЕНТОМ — ТЕ ЖЕ, ЧТО «⋯» НА ЕГО СТРАНИЦЕ:
+  // долгое нажатие на чек или инвойс — шторка-менюшка. Смахнуть вправо —
   // «Удалить» (только последний в серии без денег: номер вернётся); у прочих
   // правой кромки нет.
   const invoiceById = new Map(invoices.map((item) => [item.id, item]));
@@ -219,8 +217,8 @@ export function DocumentsPanel({
     if (!invoice || invoiceDeleteBlock(invoice, invoices, false) !== null) return null;
     return invoiceMenu.actionsFor(invoice, menuContext(invoice)).find((a) => a.key === "delete") ?? null;
   };
-  // ПОЛНЫЙ СПИСОК, КАК У ЗАПИСИ В КАЛЕНДАРЕ (владелец 04.10: «зажимаю —
-  // вылезает список: поделиться, принять оплату, удалить, кредит-нота…»).
+  // ПОЛНЫЙ СПИСОК, КАК У ЗАПИСИ В КАЛЕНДАРЕ: по удержанию вылезает список —
+  // поделиться, принять оплату, удалить, кредит-нота…
   // «Поделиться», «Принять оплату» и «Выписать чек» открывают страницу
   // документа с этим действием — там вся их логика.
   const openMenu = (doc: FinanceDocument) => {
@@ -273,12 +271,11 @@ export function DocumentsPanel({
         refreshControl={refreshControl}
         keyExtractor={(doc) => `${doc.kind}-${doc.id}`}
         contentContainerStyle={{ paddingBottom: 96, flexGrow: 1 }}
-        // ДЕНЬ — ЗАГОЛОВОК, А НЕ ХВОСТ СТРОКИ (владелец 2026-08-15: «дата как в
-        // расходах и доходах»). Ровно та же шапка, что у ленты операций: дата
+        // ДЕНЬ — ЗАГОЛОВОК, А НЕ ХВОСТ СТРОКИ (дата как в
+        // расходах и доходах). Ровно та же шапка, что у ленты операций: дата
         // прописью, капсом, на цвете холста. Итога дня здесь нет намеренно —
         // инвойс и чек по одним деньгам сложились бы в двойную сумму.
-        // День — подписью над плашками, как в «Истории» и «Файлах» клиента
-        // (владелец 03.10, вариант 2).
+        // День — подписью над плашками, как в «Истории» и «Файлах» клиента.
         // Прилипает при прокрутке — фон холста закрывает строки под ней.
         renderSectionHeader={({ section }) => (
           <View
@@ -301,8 +298,7 @@ export function DocumentsPanel({
             <DocumentRow
               document={item}
               onPress={() => {
-                // Инвойс и чек — каждый своей страницей (владелец 04.10: «чек —
-                // в такой же архитектуре»).
+                // Инвойс и чек — каждый своей страницей, чек в такой же архитектуре.
                 onOpen(item.kind === "invoice" ? `/invoices/${item.id}` : `/documents/receipt/${item.id}`);
               }}
               onLongPress={() => openMenu(item)}
@@ -337,7 +333,7 @@ export function DocumentsPanel({
                   ? "Инвойсов за период нет"
                   : "Чеков за период нет"
             }
-            // ПУСТО — ОДНОЙ СТРОКОЙ (закон 15.09, владелец 03.10): кнопка
+            // ПУСТО — ОДНОЙ СТРОКОЙ: кнопка
             // внизу и так говорит, как выставить документ.
             subtitle={
               searching
@@ -348,73 +344,5 @@ export function DocumentsPanel({
         }
       />
     </>
-  );
-}
-
-/** ДОКУМЕНТ — ПЛАШКОЙ, КАК ФАЙЛ КЛИЕНТА (владелец 03.10, вариант 2): слева
- *  плитка инвойса или чека, номер — названием, кому выдан — подписью;
- *  справа сумма и состояние словом. Погашенный документ гаснет, но стоит:
- *  номер занят, и проверяющий должен видеть почему. */
-function DocumentRow({
-  document,
-  onPress,
-  onLongPress,
-}: {
-  document: FinanceDocument;
-  onPress: () => void;
-  /** Удержание — шторка действий документа (как «⋯» его страницы). */
-  onLongPress?: () => void;
-}) {
-  const t = useThemeColors();
-  const invoice = document.kind === "invoice";
-  return (
-    <View style={{ opacity: document.dead ? 0.55 : 1 }}>
-      <SelectRow
-        icon={invoice ? ReceiptIcon : ReceiptText}
-        // Чек — деньги уже пришли (зелёный, как на карточке клиента);
-        // инвойс — документ к оплате (акцент).
-        color={invoice ? t.accent : t.success}
-        plain
-        title={document.title}
-        // Даты здесь нет: её называет заголовок дня над плашкой.
-        subtitle={document.clientName || undefined}
-        accessibilityLabel={[
-          document.title,
-          document.clientName,
-          money(document.amount, document.currency),
-          document.state,
-        ]
-          .filter(Boolean)
-          .join(", ")}
-        onPress={onPress}
-        onLongPress={onLongPress}
-        trailing={
-          <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              style={{
-                fontSize: 15,
-                fontWeight: "700",
-                color: t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {money(document.amount, document.currency)}
-            </Text>
-            {/* СОСТОЯНИЕ ГОВОРИТ СЛОВОМ, А НЕ ЦВЕТОМ (владелец 2026-08-15:
-                «неоплаченный документ — ничего страшного»). */}
-            {document.state ? (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{ fontSize: 13, color: t.caption }}
-              >
-                {document.state}
-              </Text>
-            ) : null}
-          </View>
-        }
-      />
-    </View>
   );
 }

@@ -1,12 +1,43 @@
-import type { NotificationContentInput } from "expo-notifications";
-import { getStorage } from "@babun/shared/storage";
 import {
-  PERSISTED_BABUN_NOTIFICATION_BUDGET,
   notificationOwnerDisposition,
   platformNotificationBudget,
   selectNotificationBudget,
   unmanagedLegacyNotificationIds,
 } from "@/lib/notification-budget";
+
+import { appendIdentifier, managedNativeNotification } from "./notifications/managed";
+import { enqueueScheduler } from "./notifications/queue";
+import {
+  cleanContentData,
+  desiredDraftCount,
+  normalizeDraft,
+  readRegistry,
+  retainedRegistry,
+  writeRegistry,
+} from "./notifications/registry";
+import type {
+  BabunNotificationDraft,
+  BabunNotificationOwnerDrafts,
+  BabunNotificationOwnerResult,
+  BabunNotificationScheduleStatus,
+  ManagedNativeNotification,
+  ReconcileResult,
+  StoredNotification,
+} from "./notifications/types";
+
+// The registry, its snapshot and the shapes live in `./notifications/`; the
+// native module and everything that calls it stays in this file.
+export {
+  babunNotificationRegistrySnapshot,
+  subscribeBabunNotificationRegistry,
+  type ScheduledBabunNotification,
+} from "./notifications/registry";
+export type {
+  BabunNotificationDraft,
+  BabunNotificationOwnerDrafts,
+  BabunNotificationOwnerResult,
+  BabunNotificationScheduleStatus,
+} from "./notifications/types";
 
 // One guarded entry point for the native notifications module. Keeping the
 // require here lets older development builds open the app even when they were
@@ -45,212 +76,6 @@ export function getNotificationsModule(): typeof import("expo-notifications") | 
   return Notifications;
 }
 
-export interface BabunNotificationDraft {
-  logicalId: string;
-  fireAt: Date;
-  content: NotificationContentInput;
-}
-
-export interface BabunNotificationOwnerDrafts {
-  ownerKey: string;
-  drafts: readonly BabunNotificationDraft[];
-}
-
-export type BabunNotificationScheduleStatus =
-  | "scheduled"
-  | "deferred"
-  | "capacity"
-  | "denied"
-  | "unavailable";
-
-export interface BabunNotificationOwnerResult {
-  status: BabunNotificationScheduleStatus;
-  identifiers: string[];
-  deferredCount: number;
-}
-
-type StoredNotification = {
-  logicalId: string;
-  ownerKey: string;
-  fireAt: number;
-  revision: string;
-  content: NotificationContentInput;
-};
-
-type ManagedNativeNotification = {
-  identifier: string;
-  logicalId: string;
-  ownerKey: string;
-  fireAt: number;
-  revision: string;
-};
-
-type ReconcileResult = {
-  status: BabunNotificationScheduleStatus;
-  identifiersByOwner: Map<string, string[]>;
-  deferredCount: number;
-};
-
-const NOTIFICATION_REGISTRY_KEY = "babun:notifications:logical.v1";
-const INTERNAL_DATA_KEYS = new Set([
-  "babunManaged",
-  "babunLogicalId",
-  "babunOwnerKey",
-  "babunFireAt",
-  "babunRevision",
-]);
-
-let schedulerQueue: Promise<void> = Promise.resolve();
-
-function enqueueScheduler<T>(task: () => Promise<T>): Promise<T> {
-  const run = schedulerQueue.then(task, task);
-  schedulerQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
-
-function cleanContentData(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter(
-      ([key]) => !INTERNAL_DATA_KEYS.has(key),
-    ),
-  );
-}
-
-function revisionFor(content: NotificationContentInput): string {
-  return JSON.stringify({
-    title: content.title ?? null,
-    subtitle: content.subtitle ?? null,
-    body: content.body ?? null,
-    sound: content.sound ?? null,
-    data: cleanContentData(content.data),
-  });
-}
-
-function normalizeDraft(
-  ownerKey: string,
-  draft: BabunNotificationDraft,
-): StoredNotification | null {
-  const logicalId = draft.logicalId.trim();
-  const fireAt = draft.fireAt.getTime();
-  if (!ownerKey || !logicalId || !Number.isFinite(fireAt)) return null;
-  const content = {
-    ...draft.content,
-    data: cleanContentData(draft.content.data),
-  };
-  return {
-    logicalId,
-    ownerKey,
-    fireAt,
-    revision: revisionFor(content),
-    content,
-  };
-}
-
-function desiredDraftCount(
-  ownerKey: string,
-  drafts: readonly BabunNotificationDraft[],
-  now = Date.now(),
-): number {
-  const logicalIds = new Set<string>();
-  for (const draft of drafts) {
-    const normalized = normalizeDraft(ownerKey, draft);
-    if (normalized && normalized.fireAt > now) {
-      logicalIds.add(normalized.logicalId);
-    }
-  }
-  return logicalIds.size;
-}
-
-function isStoredNotification(value: unknown): value is StoredNotification {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const item = value as Partial<StoredNotification>;
-  return (
-    typeof item.logicalId === "string" &&
-    item.logicalId.length > 0 &&
-    typeof item.ownerKey === "string" &&
-    item.ownerKey.length > 0 &&
-    typeof item.fireAt === "number" &&
-    Number.isFinite(item.fireAt) &&
-    typeof item.revision === "string" &&
-    !!item.content &&
-    typeof item.content === "object" &&
-    !Array.isArray(item.content)
-  );
-}
-
-// СНИМОК РЕЕСТРА ДЛЯ КАБИНЕТА («Уведомления», 2026-09-15). Одна ссылка до
-// следующей записи: `useSyncExternalStore` сравнивает снимки по ссылке, и без
-// кэша перерисовывал бы экран на каждом рендере. Реестр пишет только
-// `writeRegistry` — сброс снимка и оповещение живут в ней.
-export interface ScheduledBabunNotification {
-  logicalId: string;
-  ownerKey: string;
-  fireAt: number;
-  title: string | null;
-  subtitle: string | null;
-  body: string | null;
-  data: Record<string, unknown>;
-}
-
-let registrySnapshot: readonly ScheduledBabunNotification[] | null = null;
-const registryListeners = new Set<() => void>();
-
-export function subscribeBabunNotificationRegistry(
-  listener: () => void,
-): () => void {
-  registryListeners.add(listener);
-  return () => {
-    registryListeners.delete(listener);
-  };
-}
-
-export function babunNotificationRegistrySnapshot(): readonly ScheduledBabunNotification[] {
-  if (!registrySnapshot) {
-    registrySnapshot = readRegistry().map((item) => ({
-      logicalId: item.logicalId,
-      ownerKey: item.ownerKey,
-      fireAt: item.fireAt,
-      title: typeof item.content.title === "string" ? item.content.title : null,
-      subtitle:
-        typeof item.content.subtitle === "string" ? item.content.subtitle : null,
-      body: typeof item.content.body === "string" ? item.content.body : null,
-      data: cleanContentData(item.content.data),
-    }));
-  }
-  return registrySnapshot;
-}
-
-function readRegistry(): StoredNotification[] {
-  const raw = getStorage().get<unknown>(NOTIFICATION_REGISTRY_KEY);
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(isStoredNotification);
-}
-
-function writeRegistry(items: readonly StoredNotification[]): void {
-  if (items.length === 0) {
-    getStorage().remove(NOTIFICATION_REGISTRY_KEY);
-  } else {
-    getStorage().set(NOTIFICATION_REGISTRY_KEY, items);
-  }
-  registrySnapshot = null;
-  for (const listener of registryListeners) listener();
-}
-
-function retainedRegistry(
-  candidates: readonly StoredNotification[],
-  now = Date.now(),
-): StoredNotification[] {
-  return selectNotificationBudget(
-    candidates,
-    PERSISTED_BABUN_NOTIFICATION_BUDGET,
-    now,
-  );
-}
-
 function nativeRegistry(
   candidates: readonly StoredNotification[],
   now = Date.now(),
@@ -260,48 +85,6 @@ function nativeRegistry(
     platformNotificationBudget(nativePlatform),
     now,
   );
-}
-
-function managedNativeNotification(
-  request: import("expo-notifications").NotificationRequest,
-): ManagedNativeNotification | null {
-  const data = request.content.data;
-  if (!data || data.babunManaged !== true) return null;
-  const logicalId =
-    typeof data.babunLogicalId === "string"
-      ? data.babunLogicalId.trim()
-      : "";
-  const ownerKey =
-    typeof data.babunOwnerKey === "string" ? data.babunOwnerKey.trim() : "";
-  const revision =
-    typeof data.babunRevision === "string" ? data.babunRevision : "";
-  const fireAt =
-    typeof data.babunFireAt === "number"
-      ? data.babunFireAt
-      : Number(data.babunFireAt);
-  if (
-    !logicalId ||
-    !ownerKey ||
-    !revision ||
-    !Number.isFinite(fireAt)
-  ) {
-    return null;
-  }
-  return {
-    identifier: request.identifier,
-    logicalId,
-    ownerKey,
-    fireAt,
-    revision,
-  };
-}
-
-function appendIdentifier(
-  target: Map<string, string[]>,
-  ownerKey: string,
-  identifier: string,
-): void {
-  target.set(ownerKey, [...(target.get(ownerKey) ?? []), identifier]);
 }
 
 async function reconcileNativeLocked(

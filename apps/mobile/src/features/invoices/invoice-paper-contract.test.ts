@@ -7,8 +7,7 @@ import { fileURLToPath } from "node:url";
 // СОСТАВ ИНВОЙСА ЖИВЁТ В МОДЕЛИ, А НЕ В ДВУХ ВЁРСТКАХ.
 //
 // Тот же сторож, что у чека (`documents/receipt-paper-contract.test.ts`), и
-// поставлен он по следам аудита бумаги 2026-09-21, который нашёл ровно то, от
-// чего этот тест и сторожит: PDF печатал продавца ДВАЖДЫ, пустую позицию —
+// стережёт он то, что уже ломалось: PDF печатал продавца ДВАЖДЫ, пустую позицию —
 // строкой с ценой и без названия, пустой список позиций — немой шапкой
 // таблицы, а подпись «В назначении платежа укажите …» была зашита по-русски в
 // обоих рендерах сразу. Экран и PDF расходились ровно там, где данные
@@ -21,8 +20,8 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const paperSource = readFileSync(resolve(here, "InvoicePaper.tsx"), "utf8");
-const pdfSource = readFileSync(resolve(here, "pdf.ts"), "utf8");
-const dictionarySource = readFileSync(resolve(here, "dictionary.ts"), "utf8");
+const pdfSource = readFileSync(resolve(here, "../../lib/paper/pdf.ts"), "utf8");
+const dictionarySource = readFileSync(resolve(here, "../../lib/paper/dictionary.ts"), "utf8");
 
 function stripComments(source: string): string {
   return source
@@ -32,8 +31,8 @@ function stripComments(source: string): string {
 }
 
 const paperCode = stripComments(paperSource);
-// ПОРЯДОК СЧИТАЕТСЯ ПО ТЕЛУ, А НЕ ПО ВСЕМУ ФАЙЛУ: в <head> печатаемого HTML с
-// 2026-09-21 живёт <title>Инвойс INV-…</title> — имя файла для браузера, и
+// ПОРЯДОК СЧИТАЕТСЯ ПО ТЕЛУ, А НЕ ПО ВСЕМУ ФАЙЛУ: в <head> печатаемого HTML
+// живёт <title>Инвойс INV-…</title> — имя файла для браузера, и
 // слово оттуда стоит раньше всего остального.
 const pdfCode = stripComments(pdfSource).replace(/<head>[\s\S]*?<\/head>/, "");
 // ПОРЯДОК — ПО САМОМУ ШАБЛОНУ, А НЕ ПО ФАЙЛУ. Строки позиций собираются в
@@ -59,7 +58,7 @@ describe("бумага инвойса и PDF печатают одну моде�
   // ПОРЯДОК БЛОКОВ — ОДИН НА ДВА РЕНДЕРА. Сам список короткий нарочно:
   // сторожим скелет документа, а не каждую мелочь, иначе тест станет копией
   // вёрстки и будет краснеть на любой перестановке отступа.
-  // Порядок бумаги AirFix #103 (22.09): номер и даты в шапке, затем стороны,
+  // Порядок бумаги AirFix #103: номер и даты в шапке, затем стороны,
   // позиции, итоги и внизу реквизиты для оплаты.
   const backbone = [
     "issuedShort",

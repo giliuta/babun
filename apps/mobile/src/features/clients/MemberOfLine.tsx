@@ -2,8 +2,7 @@ import { Pressable, Text } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
-// ЧЕЙ ЭТО ЧЕЛОВЕК — СТРОКОЙ ПОД ИМЕНЕМ (STORY-086; владелец 2026-09-21:
-// «сделать всё единой страницей»). Как должность и компания под именем в
+// ЧЕЙ ЭТО ЧЕЛОВЕК — СТРОКОЙ ПОД ИМЕНЕМ (STORY-086). Как должность и компания под именем в
 // Контактах iPhone: «жена · Павел Иванов», «жилец · Наталья · Вилла 5».
 //
 // Отдельного блока «Входит в» нет. Он читался наоборот: строка «Павел
@@ -47,7 +46,7 @@ export function MemberOfLine({
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        // 32 + слоп 6/6 = 44: частый тап «жена → Павел» (аудит 22.09 мерил 37).
+        // 32 + слоп 6/6 = 44: частый тап «жена → Павел».
         minHeight: 32,
         paddingHorizontal: 16,
         paddingBottom: 4,

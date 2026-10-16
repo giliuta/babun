@@ -6,17 +6,17 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useMirror } from "@/features/access/mirror/mirror-state";
-import { useMyMemberships } from "@/features/settings/my-memberships";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useSwitchWorkspace } from "@/features/settings/workspaces";
+import { useMirror } from "@/session/mirror-state";
+import { useMyMemberships } from "@/session/my-memberships";
+import { useCurrentRole } from "@/session/tenant";
+import { useSwitchWorkspace } from "@/session/workspaces";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useTenantId } from "@/lib/tenant";
 import { notify } from "@/lib/notify";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 
-import { AccountScopeProvider } from "./account-scope";
+import { AccountScopeProvider } from "@/session/account-scope";
 import { ArchiveRow } from "./ArchiveRow";
 import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { DataExportRow } from "./DataExportRow";
@@ -24,11 +24,12 @@ import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
 
 // «КОМАНДЫ» — СВОЙ АККАУНТ ЧЕЛОВЕКА, КАКОЙ БЫ АККАУНТ НИ БЫЛ ОТКРЫТ НА ТЕЛЕФОНЕ
-// (владелец 04.10: «да» — свой раздел всегда на месте). Раньше раздел стоял по
-// роли в ОТКРЫТОМ аккаунте: партнёр, открывший календарь пригласившего,
-// терял в Кабинете свой тариф, SMS и партнёров, пока не тапнул свою команду.
+// (свой раздел всегда на месте). Если бы раздел
+// стоял по роли в ОТКРЫТОМ аккаунте, партнёр, открывший календарь
+// пригласившего, терял бы в Кабинете свой тариф, SMS и партнёров, пока не
+// тапнул свою команду.
 //
-// Открыт свой аккаунт — всё как было. Открыт чужой:
+// Открыт свой аккаунт — всё как обычно. Открыт чужой:
 //   • тариф, оплаты тарифа, SMS, реквизиты и история изменений — за СВОЙ
 //     аккаунт (`?tenant=`), ровно как блок пригласившего (`InvitedAccounts`);
 //   • «Партнёры», «Выгрузка данных» и «Архив» сначала
@@ -58,13 +59,12 @@ export function OwnAccountSection() {
       <>
         <SectionEyebrow>Команды</SectionEyebrow>
         <SectionCard>
-          {/* ТАРИФ — ПЕРВЫМ (владелец 01.10: «выбор тарифа — в кабинете»).
-              Страницы тариф не закрывает (владелец 02.10: «всё открывается,
-              блокируются только кнопки»): «Партнёры» открыты всегда, серая
+          {/* ТАРИФ — ПЕРВЫМ. Страницы тариф не закрывает (всё открывается,
+              блокируются только кнопки): «Партнёры» открыты всегда, серая
               там только «Пригласить партнёра». */}
           <TariffRow />
           <Divider inset={48} />
-          {/* ОПЛАТЫ ТАРИФА (владелец 03.10) — платежи за подписку и чеки.
+          {/* ОПЛАТЫ ТАРИФА — платежи за подписку и чеки.
               Только на сайте: страница ведёт к счетам Stripe с оплатой, а в
               приложении из магазина покупок нет (`pay-here.ts`). */}
           {CAN_PAY_HERE ? (
@@ -73,9 +73,7 @@ export function OwnAccountSection() {
               <Divider inset={48} />
             </>
           ) : null}
-          {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ (владелец 29.09: «страницу
-              мастера перенесём в кабинет… и полноценно на каждую команду, что
-              он может делать»). */}
+          {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ, права по каждой команде. */}
           <SettingsRow
             tile={SETTINGS_TILE.indigo}
             icon={Users}
@@ -84,18 +82,16 @@ export function OwnAccountSection() {
             onPress={() => router.push("/cabinet/people" as Href)}
           />
           <Divider inset={48} />
-          {/* РЕКВИЗИТЫ (владелец 03.10: «единый блок на все компании —
-              запихни в кабинет»), прежде — шестерёнка «Финансов». */}
+          {/* РЕКВИЗИТЫ — единый блок на весь аккаунт. */}
           <CabinetRequisitesRow />
           <Divider inset={48} />
-          {/* ИСТОРИЯ ИЗМЕНЕНИЙ (владелец 03.10): кто что менял во всех
+          {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
               календарях — он сам и каждый партнёр. */}
           <HistoryRow />
           <Divider inset={48} />
           <SmsCabinetRow />
           <Divider inset={48} />
-          {/* ВЫГРУЗКА ДАННЫХ (владелец 03.10: «только из своих личных
-              команд») — клиенты, записи и финансы своего аккаунта. */}
+          {/* ВЫГРУЗКА ДАННЫХ (только из своих личных команд) — клиенты, записи и финансы своего аккаунта. */}
           <DataExportRow />
           <Divider inset={48} />
           {/* АРХИВ — в архив календарь уводит владелец, и только он может

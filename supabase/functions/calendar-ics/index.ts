@@ -1,44 +1,27 @@
-// Webcal / iCalendar feed — Edge Function port of
-// apps/web/src/app/api/calendar/[user_id]/route.ts (Brief 2 #26).
+// Webcal / iCalendar feed — «Календарь в телефоне».
 //
-// GET /functions/v1/calendar-ics/<user_id>.ics
+// GET /functions/v1/calendar-ics/<token>.ics
 //
-// Unauthenticated BY DESIGN — the URL itself is the secret (the
-// Calendly / Bumpix pattern). `verify_jwt = false` in config.toml, so
-// Apple Calendar / Google / Outlook can subscribe without a header.
+// Без входа ПО ЗАМЫСЛУ: Календарь iPhone, Google и Outlook подписываются по
+// адресу и заголовков не шлют (`verify_jwt = false` в config.toml). Секрет —
+// сам адрес, поэтому в нём ОТЗЫВНОЙ случайный токен (192 бита,
+// `calendar_feed_tokens`), а не user_id (13.10, нашли сессии 007 и 025).
+// Раньше ключом был user_id: неотзываемый, и мастер видел UUID владельца в
+// `created_by` каждой записи — подставлял его в адрес и забирал рабочий
+// календарь компании без входа.
 //
-// ⚠️ ЧТО ЗДЕСЬ ЕЩЁ НЕ ЗАКРЫТО (2026-08-26, решение за владельцем).
-//   1. Ключ ленты = user_id, он неотзываемый и предсказуемой формы. Правильно —
-//      таблица calendar_feed_tokens по образцу master_rating_tokens
-//      (20260517_004) плюс строки «Подписаться» / «Отозвать ссылку» в Кабинете.
-//      Смена ключа ломает все уже оформленные подписки, поэтому нужен
-//      переходный период, а без экрана токен выпускать нечем.
-//   2. Роль подписчика не резолвится: мастер получает ленту всего тенанта, а не
-//      своих записей. Резолвить роль надо не здесь, а в SECURITY DEFINER RPC
-//      (calendar_feed_rows), иначе появится второй источник правды по ролям.
-//      Пока роли нет, лента отдаёт только kind='work' — см. фильтр ниже.
+// КТО ЧТО ВИДИТ — НЕ ЗДЕСЬ. Строки отдаёт `calendar_feed_events(token)`
+// (миграция 20261013130000): живое членство, отзыв, роль и скрытые блоки
+// решает база теми же функциями, что у приложения. Эта функция только
+// превращает строки в iCalendar. Личные события в ленту не попадают.
 //
-// ⚠️ EXTERNAL CALLERS. Calendars that already subscribed point at
-// https://babun.app/api/calendar/<id>.ics. Deleting the Next route
-// silently kills those feeds — no error surfaces to the user, the
-// calendar just stops updating. The old URL must 301 here (or keep
-// serving) until every subscriber has moved.
-//
-// PORTING NOTES vs the Next route:
-//   * `@babun/shared` is NOT importable in Edge Functions (Deno, no
-//     workspace resolution), so the appointment read is inlined. Only
-//     the seven columns the feed renders are selected.
-//   * The date window is filtered in SQL instead of fetching the whole
-//     tenant and filtering in JS. Same result set, bounded payload —
-//     the Next version pulled every appointment ever for the tenant.
-//   * Output bytes are otherwise identical: same PRODID, same field
-//     order, same CRLF joining, same escaping, same floating-time
-//     stamps (no Z) so consumers interpret in their own zone.
+// Старые адреса babun.app/api/calendar/<user_id>.ics умерли вместе с вебом
+// (25.08) — подписчиков на них нет.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { serviceClient } from "../_shared/service-client.ts";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** 24 случайных байта hex — форма токена из `calendar_feed_tokens`. */
+const TOKEN_RE = /^[0-9a-f]{48}$/;
 
 interface AptRow {
   id: string;
@@ -50,39 +33,9 @@ interface AptRow {
   comment: string | null;
 }
 
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const legacyServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  let serviceKey: string | undefined;
-  if (secretKeysJson) {
-    try {
-      const candidates = Object.values(
-        JSON.parse(secretKeysJson) as Record<string, unknown>,
-      ).filter(
-        (v): v is string => typeof v === "string" && v.length > 20,
-      );
-      serviceKey =
-        candidates.find((v) => v.startsWith("sb_secret_")) ?? candidates[0];
-    } catch {
-      // fall through to the legacy service-role JWT
-    }
-  }
-  if (!serviceKey) serviceKey = legacyServiceKey || undefined;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 function notFound(): Response {
   return new Response("Not Found", { status: 404 });
-}
-
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
 }
 
 /** "YYYYMMDDTHHmmss" — floating local time, no Z, per the Next route. */
@@ -113,23 +66,20 @@ function escapeIcs(s: string): string {
     .replace(/\r?\n/g, "\\n");
 }
 
-// Заголовок события в ленте. Ветки под личное (kind 'event' / 'personal') здесь
-// НЕТ намеренно: выборка ниже жёстко фильтрует kind='work', до этой функции
-// личное не доезжает вовсе — ветка была недостижимой и врала о поведении ленты.
-// Вернуть её надо будет вместе с резолвом роли подписчика (пункт 2 в шапке):
-// тогда меняются оба места сразу — и фильтр запроса, и заголовок.
+// Заголовок события в ленте: заметка записи или «Запись». Заметку, скрытую от
+// подписчика правом «Заметка», база уже отдала пустой.
 function summarize(apt: AptRow): string {
   return apt.comment || "Запись";
 }
 
-function buildIcs(apts: AptRow[], userId: string): string {
+function buildIcs(apts: AptRow[]): string {
   const lines: string[] = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
   lines.push("PRODID:-//Babun CRM//Calendar//EN");
   lines.push("CALSCALE:GREGORIAN");
   lines.push("METHOD:PUBLISH");
-  lines.push(`X-WR-CALNAME:Babun (${userId.slice(0, 8)})`);
+  lines.push("X-WR-CALNAME:Babun");
   lines.push("X-WR-TIMEZONE:Europe/Nicosia");
 
   for (const apt of apts) {
@@ -156,12 +106,12 @@ Deno.serve(async (req: Request) => {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  // Path shape: /functions/v1/calendar-ics/<user_id>.ics — take the last
+  // Path shape: /functions/v1/calendar-ics/<token>.ics — take the last
   // non-empty segment and strip the .ics suffix Apple/Google append.
   const segments = new URL(req.url).pathname.split("/").filter(Boolean);
   const last = segments[segments.length - 1] ?? "";
-  const id = last.replace(/\.ics$/i, "");
-  if (!UUID_RE.test(id)) return notFound();
+  const token = last.replace(/\.ics$/i, "").toLowerCase();
+  if (!TOKEN_RE.test(token)) return notFound();
 
   const sb = serviceClient();
   if (!sb) {
@@ -169,71 +119,31 @@ Deno.serve(async (req: Request) => {
     return new Response("Service Unavailable", { status: 503 });
   }
 
-  // Which tenant does this user belong to? service-role bypasses RLS by
-  // design — this URL is the user's own subscription secret.
-  //
-  // Порядок «самое старое членство» повторяет фолбэк внутри
-  // public.current_tenant_id() (20260430_008_team_roles.sql — ссылаемся по
-  // имени функции, номера строк там уже уезжали), чтобы лента и политики
-  // выбирали один и тот же тенант. maybeSingle() здесь была багом: у человека
-  // в двух тенантах она возвращает ошибку, и подписка молча получала 503.
-  const { data: members, error: memberErr } = await sb
-    .from("tenant_members")
-    .select("tenant_id, role, master_id")
-    .eq("user_id", id)
-    .order("joined_at", { ascending: true })
-    .order("tenant_id", { ascending: true })
-    .limit(1);
-  if (memberErr) return new Response("Service Unavailable", { status: 503 });
-  const member = members?.[0];
-  if (!member?.tenant_id) return notFound();
+  // Пустой ответ и «нет такого токена» неразличимы снаружи намеренно: на
+  // отозванный, чужой и выдуманный адрес — одинаковый 404, перебором ничего
+  // не узнать. Живой токен без записей — пустой календарь (200).
+  const { data: known, error: tokenErr } = await sb
+    .from("calendar_feed_tokens")
+    .select("token")
+    .eq("token", token)
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (tokenErr) return new Response("Service Unavailable", { status: 503 });
+  if (!known) return notFound();
 
-  // Window: 30 days back … 180 days ahead (same bounds as the Next route).
-  const now = new Date();
-  const back = new Date(now);
-  back.setDate(back.getDate() - 30);
-  const ahead = new Date(now);
-  ahead.setDate(ahead.getDate() + 180);
+  const { data: rows, error: rowsErr } = await sb.rpc("calendar_feed_events", {
+    p_token: token,
+  });
+  if (rowsErr) return new Response("Service Unavailable", { status: 503 });
 
-  // ОБЪЁМ ЛЕНТЫ РЕШАЕТ РОЛЬ, А НЕ ЗНАНИЕ АДРЕСА. До этого лента отдавала ВЕСЬ
-  // рабочий календарь компании любому, кто знает UUID пользователя, — а он
-  // приходит мастеру в каждой записи полем `created_by`
-  // (list_master_appointments_safe, 20260720210010). То есть «адрес — это
-  // секрет» держалось на значении, которое продукт сам же и раздаёт: мастер
-  // подставлял UUID владельца и забирал расписание фирмы без единой
-  // авторизации. Мастер получает СВОЮ работу, ровно как в приложении;
-  // владелец и диспетчер — календарь компании.
-  const masterOnly = member.role === "master";
-  if (masterOnly && !member.master_id) return notFound();
-
-  let feed = sb
-    .from("appointments")
-    // `kind` не выбираем: он нужен только как фильтр ниже, в тело ленты не идёт.
-    .select("id, date, time_start, time_end, status, address, comment")
-    .eq("tenant_id", member.tenant_id)
-    // ЛИЧНОЕ НЕ ОТДАЁМ. kind in ('event','personal') — это приватные события
-    // конкретного человека, ради которых написана 20260508_001_personal_event_rls.
-    // Лента ходит под service_role, RLS её не сдерживает — значит рабочий
-    // фильтр здесь единственная защита личной жизни, и роль (выше) режет
-    // объём уже внутри рабочего.
-    .eq("kind", "work")
-    .neq("status", "cancelled")
-    .gte("date", ymd(back))
-    .lte("date", ymd(ahead))
-    .order("date", { ascending: true });
-
-  if (masterOnly) feed = feed.eq("master_id", member.master_id);
-
-  const { data: rows, error: aptErr } = await feed;
-  if (aptErr) return new Response("Service Unavailable", { status: 503 });
-
-  const body = buildIcs((rows ?? []) as AptRow[], id);
+  const body = buildIcs((rows ?? []) as AptRow[]);
   return new Response(req.method === "HEAD" ? null : body, {
     status: 200,
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Cache-Control": "public, max-age=600",
-      "Content-Disposition": `inline; filename=babun-${id}.ics`,
+      // Лента личная: общие кэши её держать не должны.
+      "Cache-Control": "private, max-age=600",
+      "Content-Disposition": "inline; filename=babun.ics",
     },
   });
 });

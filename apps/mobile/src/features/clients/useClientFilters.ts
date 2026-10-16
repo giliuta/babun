@@ -4,20 +4,15 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/client-search";
 import { clientMemberOf, clientsById } from "@babun/shared/local/selectors/client-links";
-import { nameInComment } from "@babun/shared/local/selectors/client-stats";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
   clientPropertyTypes,
-  propertyTypeLabel,
   matchesSegment,
   sortClients,
-  periodLabel,
   todayYMD,
-  SEGMENT_OPTIONS,
   type ActiveToken,
   type ClientsFilter,
   type FacetOption,
-  type SegmentKey,
   type SortKey,
 } from "./filter";
 import {
@@ -25,6 +20,22 @@ import {
   sourceFilterOptions,
   type ClientSource,
 } from "./acquisition-source";
+import {
+  buildClientAppointmentIndex,
+  type ClientAppointmentIndex,
+} from "./useClientFilters/appointment-index";
+import { countFacets, type FacetCounts } from "./useClientFilters/facet-counts";
+import {
+  cityFacetOptions,
+  propertyFacetOptions,
+  propertyKey,
+  type CityLike,
+  type TeamLike,
+} from "./useClientFilters/options";
+import { activeFilterTokens } from "./useClientFilters/tokens";
+
+export { buildClientAppointmentIndex };
+export type { ClientAppointmentIndex, FacetCounts };
 
 const NO_SOURCES: ClientSource[] = [];
 
@@ -35,33 +46,9 @@ const NO_SOURCES: ClientSource[] = [];
 // отсортированному списку. Фильтр сохраняет порядок → результат
 // идентичен вебу, но клавиатурный ввод в поиске НЕ перегоняет
 // O(n log n) localeCompare-компаратор (фикс Волны 1 — не откатывать).
-
-/** Контекстные счётчики рядов попапов (веб-парити facetCounts):
- *  «сколько клиентов даст этот тап» — все ДРУГИЕ фасеты + период +
- *  поиск применены, собственный фасет исключён. */
-export interface FacetCounts {
-  segment: Record<SegmentKey, number>;
-  city: Record<string, number>;
-  tag: Record<string, number>;
-  team: Record<string, number>;
-  source: Record<string, number>;
-  property: Record<string, number>;
-  /** «Виновник нуля»: сколько клиентов осталось бы, сними мы РОВНО одно
-   *  условие. Ключи: search · period · segment · city · tag · team ·
-   *  source · property. Считается тем же проходом, что и счётчики. */
-  withoutOne: Record<string, number>;
-}
-
-const EMPTY_WITHOUT_ONE: Record<string, number> = {
-  search: 0,
-  period: 0,
-  segment: 0,
-  city: 0,
-  tag: 0,
-  team: 0,
-  source: 0,
-  property: 0,
-};
+//
+// Pure parts live in `./useClientFilters/`: the appointment index, facet
+// option builders, facet counters and summary-bar tokens.
 
 export interface ClientFilterResult {
   /** Итоговый отсортированный+отфильтрованный список. */
@@ -75,101 +62,13 @@ export interface ClientFilterResult {
   tagOptions: FacetOption[];
   /** Типы объектов, которые РЕАЛЬНО есть в данных (порядок по частоте). */
   propertyOptions: FacetOption[];
-  /** Источники: готовые, свои команд, «Неизвестно» (03.10). */
+  /** Источники: готовые, свои команд, «Неизвестно». */
   sourceOptions: FacetOption[];
   facetCounts: FacetCounts;
   /** Строки Источник/Тип объекта появляются, когда данные есть хоть у
    *  одного клиента — пустой справочник не даёт мёртвую строку. */
   hasSourceData: boolean;
   hasPropertyData: boolean;
-}
-
-/** Свободная нормализация имени — зеркалит seed-fallback buildStatsMap. */
-function normName(s: string): string {
-  return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/** Ключ типа объекта — тот же, по которому варианты схлопываются в фасет. */
-function propertyKey(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-export interface ClientAppointmentIndex {
-  /** clientId → множество team_id по записям клиента. */
-  clientTeams: Map<string, Set<string>>;
-  /** clientId → список дат записей (YYYY-MM-DD). */
-  clientApptDates: Map<string, string[]>;
-}
-
-/** Один проход по записям — два индекса по клиенту. Включая fallback по
- *  имени в comment для seed-записей с client_id:null (как buildStatsMap). */
-export function buildClientAppointmentIndex(
-  clients: Client[],
-  appointments: Appointment[],
-): ClientAppointmentIndex {
-  const byId = new Map<string, Appointment[]>();
-  const orphanByName = new Map<string, Appointment[]>();
-  for (const a of appointments) {
-    // A cancelled visit is not part of the relationship history. Counting
-    // it here made clients appear under a team/period even when their only
-    // record in that facet had been cancelled.
-    if (a.status === "cancelled") continue;
-    if (a.client_id) {
-      const arr = byId.get(a.client_id);
-      if (arr) arr.push(a);
-      else byId.set(a.client_id, [a]);
-    } else {
-      const key = normName(a.comment);
-      if (key) {
-        const arr = orphanByName.get(key);
-        if (arr) arr.push(a);
-        else orphanByName.set(key, [a]);
-      }
-    }
-  }
-
-  const clientTeams = new Map<string, Set<string>>();
-  const clientApptDates = new Map<string, string[]>();
-  for (const c of clients) {
-    const own = byId.get(c.id) ?? [];
-    let combined: Appointment[];
-    if (orphanByName.size > 0) {
-      const cname = normName(c.full_name);
-      const orphans: Appointment[] = [];
-      for (const [name, arr] of orphanByName) {
-        // Границы слова — как в buildStatsMap (короткое имя не ловит
-        // подстроку: «Ан» не матчит «диван»).
-        if (nameInComment(name, cname)) orphans.push(...arr);
-      }
-      combined = orphans.length === 0 ? own : own.concat(orphans);
-    } else {
-      combined = own;
-    }
-    const teamSet = new Set<string>();
-    const dates: string[] = [];
-    for (const a of combined) {
-      if (a.team_id) teamSet.add(a.team_id);
-      if (a.date) dates.push(a.date);
-    }
-    clientTeams.set(c.id, teamSet);
-    clientApptDates.set(c.id, dates);
-  }
-  return { clientTeams, clientApptDates };
-}
-
-/** Минимальная структурная форма команды — хук читает только id/name/
- *  color, так что подходят и shared Team, и Supabase-row из useTeams(). */
-interface TeamLike {
-  id: string;
-  name: string;
-  color: string | null;
-}
-
-/** Минимальная форма метки библиотеки (cities) — имя+цвет, порядок массива
- *  = порядок библиотеки (useCities уже отдаёт по position). */
-interface CityLike {
-  name: string;
-  color: string | null;
 }
 
 export function useClientFilters(
@@ -208,7 +107,7 @@ export function useClientFilters(
   );
 
   // ── Опции фасетов ────────────────────────────────────────────────
-  // Вся библиотека сразу (решение владельца 2026-07-22): фасеты
+  // Вся библиотека сразу: фасеты
   // показывают полный справочник, а не только использованные значения —
   // фильтр по пустому значению честно даёт 0 в футере.
   const teamOptions = useMemo<FacetOption[]>(() => {
@@ -220,84 +119,15 @@ export function useClientFilters(
     }));
   }, [teams]);
 
-  const cityOptions = useMemo<FacetOption[]>(() => {
-    // ВСЯ библиотека меток Кабинета (порядок position, цвет метки) +
-    // legacy-хвост: свободные значения client.city, не совпавшие с
-    // библиотекой trim/case-insensitive, — по алфавиту с avatar-цветом.
-    // «Прочее»-корзины нет: каждое значение — отдельный удаляемый токен.
-    const used = new Map<string, string>(); // norm → как написано у клиента
-    for (const c of clients) {
-      const city = (c.city ?? "").trim();
-      if (!city) continue;
-      const norm = city.toLowerCase();
-      if (!used.has(norm)) used.set(norm, city);
-    }
-    const options: FacetOption[] = [];
-    // ОДНО ИМЯ — ОДИН ВАРИАНТ. С 2026-08-29 метка принадлежит команде, и у
-    // каждой своя строка в справочнике: без схлопывания фильтр предлагал бы
-    // «Лимассол» столько раз, сколько в компании календарей. У КЛИЕНТА
-    // команды нет — его метка это просто имя, поэтому здесь имя и есть
-    // единица выбора.
-    const seenName = new Set<string>();
-    for (const lib of cities) {
-      const name = lib.name.trim();
-      if (!name) continue;
-      if (seenName.has(name.toLowerCase())) continue;
-      seenName.add(name.toLowerCase());
-      used.delete(name.toLowerCase());
-      options.push({
-        value: name,
-        label: name,
-        color: lib.color ?? getAvatarColor(name),
-      });
-    }
-    const legacy = [...used.values()].sort((a, b) => a.localeCompare(b, "ru"));
-    for (const city of legacy) {
-      options.push({
-        value: city,
-        label: city,
-        color: getAvatarColor(city),
-        legacy: true,
-      });
-    }
-    return options;
-  }, [clients, cities]);
+  const cityOptions = useMemo<FacetOption[]>(
+    () => cityFacetOptions(clients, cities),
+    [clients, cities],
+  );
 
-  const propertyOptions = useMemo<FacetOption[]>(() => {
-    // ИЗ ФАКТОВ, а не из зашитого перечисления. Строка выбора на объекте
-    // пишет в `loc.label` живые слова бизнеса («Дом», «Склад», «Бокс»), а
-    // фасет предлагал шесть значений старого enum'а (house/apartment/…) —
-    // выбрать можно было только то, чего в данных нет, и фильтр честно
-    // отдавал пустой список (аудит 2026-07-27).
-    //
-    // Порядок: по частоте, при равенстве по алфавиту — как во всех фасетах,
-    // где словарь принадлежит бизнесу, а не нам. Legacy-значения enum'а
-    // переводятся в человеческую подпись и живут наравне.
-    const uses = new Map<string, { value: string; count: number }>();
-    for (const c of clients) {
-      for (const value of clientPropertyTypes(c)) {
-        const key = value.trim().toLowerCase();
-        if (!key) continue;
-        const prev = uses.get(key);
-        if (prev) prev.count += 1;
-        else uses.set(key, { value, count: 1 });
-      }
-    }
-    return [...uses.values()]
-      .sort(
-        (a, b) =>
-          b.count - a.count ||
-          propertyTypeLabel(a.value).localeCompare(
-            propertyTypeLabel(b.value),
-            "ru",
-          ),
-      )
-      .map(({ value }) => ({
-        value,
-        label: propertyTypeLabel(value),
-        color: "",
-      }));
-  }, [clients]);
+  const propertyOptions = useMemo<FacetOption[]>(
+    () => propertyFacetOptions(clients),
+    [clients],
+  );
   const propertyValueByKey = useMemo(
     () => new Map(propertyOptions.map((o) => [propertyKey(o.value), o.value])),
     [propertyOptions],
@@ -320,7 +150,7 @@ export function useClientFilters(
     const q = search.trim();
     // Жильцов управляющей находят по её имени: к полям клиента добавляются
     // имя каждой карточки, в которую он входит, его роль и место.
-    // …и имя его тега (повторный аудит 03.10): «VIP» в поиске не находил
+    // …и имя его тега: «VIP» в поиске не находил
     // никого, хотя тег стоит плиткой на карточке и чипом в фильтре.
     const tagName = new Map(tags.map((tag) => [tag.id, tag.name]));
     const linkWords = (c: Client): string[] => [
@@ -342,7 +172,7 @@ export function useClientFilters(
     // OR по выбранным статусам («список на обзвон»: любой из выбранных) —
     // единая семантика с Метка/Теги/Команда. AND давал ловушку: второй
     // статус сужал в ноль, а счётчиков, объяснявших это, на контролах
-    // больше нет (решение владельца 2026-07-22).
+    // нет.
     return (c: Client): boolean => {
       if (segments.length === 0) return true;
       const s = statsMap.get(c.id);
@@ -403,7 +233,7 @@ export function useClientFilters(
   }, [sources, customSources]);
 
   // Тип объекта сравнивается без регистра — как и схлопывается в варианты
-  // (проверка 03.10): «Дом» у одного клиента и «дом» у другого — один
+  // «Дом» у одного клиента и «дом» у другого — один
   // вариант, и выбор «Дом» обязан находить обоих, а не только первого.
   const passesProperty = useMemo(() => {
     const sel = (propertyTypes as string[]).map(propertyKey);
@@ -451,7 +281,7 @@ export function useClientFilters(
         passesProperty(c),
     );
     // С поиском найденные по имени — выше найденных по метке, адресу или
-    // заметке; внутри ступени — выбранная сортировка (повторный аудит 03.10).
+    // заметке; внутри ступени — выбранная сортировка.
     return rankClientMatches(hits, search);
   }, [
     search,
@@ -471,182 +301,73 @@ export function useClientFilters(
   // предикаты (свой исключён — иначе счётчики схлопывались бы к уже
   // выбранному). Один проход по клиентам; пока попап открыт, чужие
   // фасеты меняться не могут — числа стабильны.
-  const facetCounts = useMemo<FacetCounts>(() => {
-    const segment = {} as Record<SegmentKey, number>;
-    for (const o of SEGMENT_OPTIONS) segment[o.key] = 0;
-    const city: Record<string, number> = {};
-    const tag: Record<string, number> = {};
-    const team: Record<string, number> = {};
-    const source: Record<string, number> = {};
-    const property: Record<string, number> = {};
-    // Лист закрыт — числа не видны, полный проход не нужен (иначе он бы
-    // гонялся на каждую клавишу поиска у тенанта на тысячи карточек).
-    if (!withFacetCounts)
-      return {
-        segment,
-        city,
-        tag,
-        team,
-        source,
-        property,
-        withoutOne: EMPTY_WITHOUT_ONE,
-      };
-    // client.city может отличаться регистром от канона опции.
-    const cityValueByNorm = new Map(
-      cityOptions.map((o) => [o.value.trim().toLowerCase(), o.value]),
-    );
-    // «Кто виноват в нуле»: сколько осталось бы, сними мы ровно одно
-    // условие (leave-one-out). Считается тем же проходом — отдельный
-    // проход по клиентам ради подсказки был бы расточительством.
-    const withoutOne: Record<string, number> = {
-      search: 0,
-      period: 0,
-      segment: 0,
-      city: 0,
-      tag: 0,
-      team: 0,
-      source: 0,
-      property: 0,
-    };
-    const today = todayYMD();
-    for (const c of clients) {
-      const sr = passesSearch(c);
-      const pe = passesPeriod(c);
-      const seg = passesSegment(c);
-      const tm = passesTeam(c);
-      const ct = passesCity(c);
-      const tg = passesTag(c);
-      const so = passesSource(c);
-      const pr = passesProperty(c);
-
-      // Сколько прошло бы без каждого отдельного условия.
-      if (pe && seg && tm && ct && tg && so && pr) withoutOne.search += 1;
-      if (sr && seg && tm && ct && tg && so && pr) withoutOne.period += 1;
-      if (sr && pe && tm && ct && tg && so && pr) withoutOne.segment += 1;
-      if (sr && pe && seg && tm && tg && so && pr) withoutOne.city += 1;
-      if (sr && pe && seg && tm && ct && so && pr) withoutOne.tag += 1;
-      if (sr && pe && seg && ct && tg && so && pr) withoutOne.team += 1;
-      if (sr && pe && seg && tm && ct && tg && pr) withoutOne.source += 1;
-      if (sr && pe && seg && tm && ct && tg && so) withoutOne.property += 1;
-
-      // Счётчики рядов: собственный фасет исключён, остальные применены.
-      if (!sr || !pe) continue;
-      if (tm && ct && tg && so && pr) {
-        const s = statsMap.get(c.id);
-        for (const o of SEGMENT_OPTIONS) {
-          if (matchesSegment(c, o.key, s, today)) segment[o.key] += 1;
-        }
-      }
-      if (seg && tm && tg && so && pr) {
-        const norm = (c.city ?? "").trim().toLowerCase();
-        const val = norm ? cityValueByNorm.get(norm) : undefined;
-        if (val) city[val] = (city[val] ?? 0) + 1;
-      }
-      if (seg && tm && ct && so && pr) {
-        for (const id of c.tag_ids) tag[id] = (tag[id] ?? 0) + 1;
-      }
-      if (seg && ct && tg && so && pr) {
-        const set = index.clientTeams.get(c.id);
-        if (set) for (const id of set) team[id] = (team[id] ?? 0) + 1;
-      }
-      if (seg && tm && ct && tg && pr) {
-        const key = sourceBucket(c.acquisition_source, customSources, c.team_id);
-        source[key] = (source[key] ?? 0) + 1;
-      }
-      if (seg && tm && ct && tg && so) {
-        const own = new Set([...clientPropertyTypes(c)].map(propertyKey));
-        for (const key of own) {
-          const value = propertyValueByKey.get(key);
-          if (value) property[value] = (property[value] ?? 0) + 1;
-        }
-      }
-    }
-    return { segment, city, tag, team, source, property, withoutOne };
-  }, [
-    withFacetCounts,
-    clients,
-    cityOptions,
-    statsMap,
-    index,
-    passesSearch,
-    passesPeriod,
-    passesSegment,
-    passesTeam,
-    passesCity,
-    passesTag,
-    passesSource,
-    passesProperty,
-    customSources,
-    propertyValueByKey,
-  ]);
+  const facetCounts = useMemo<FacetCounts>(
+    () =>
+      countFacets({
+        withFacetCounts,
+        clients,
+        cityOptions,
+        statsMap,
+        index,
+        passesSearch,
+        passesPeriod,
+        passesSegment,
+        passesTeam,
+        passesCity,
+        passesTag,
+        passesSource,
+        passesProperty,
+        customSources,
+        propertyValueByKey,
+      }),
+    [
+      withFacetCounts,
+      clients,
+      cityOptions,
+      statsMap,
+      index,
+      passesSearch,
+      passesPeriod,
+      passesSegment,
+      passesTeam,
+      passesCity,
+      passesTag,
+      passesSource,
+      passesProperty,
+      customSources,
+      propertyValueByKey,
+    ],
+  );
 
   // ── Токены summary-бара ──────────────────────────────────────────
-  const activeTokens = useMemo<ActiveToken[]>(() => {
-    const tokens: ActiveToken[] = [];
-    for (const seg of segments) {
-      const o = SEGMENT_OPTIONS.find((x) => x.key === seg);
-      if (o)
-        tokens.push({ key: "segment", val: seg, label: o.label, color: "" });
-    }
-    const teamLabel = new Map(teamOptions.map((o) => [o.value, o]));
-    for (const id of selectedTeams) {
-      const o = teamLabel.get(id);
-      if (o)
-        tokens.push({ key: "team", val: id, label: o.label, color: o.color });
-    }
-    const cityColor = new Map(cityOptions.map((o) => [o.value, o.color]));
-    for (const city of selectedCities) {
-      tokens.push({
-        key: "city",
-        val: city,
-        label: city,
-        // Цвет метки из библиотеки (как в календаре); legacy — avatar-цвет.
-        color: cityColor.get(city) ?? getAvatarColor(city),
-      });
-    }
-    const tagLabel = new Map(tagOptions.map((o) => [o.value, o]));
-    for (const id of activeTags) {
-      const o = tagLabel.get(id);
-      if (o)
-        tokens.push({ key: "tag", val: id, label: o.label, color: o.color });
-    }
-    if (period) {
-      tokens.push({
-        key: "period",
-        val: period.preset,
-        label: periodLabel(period),
-        color: "",
-      });
-    }
-    for (const src of sources) {
-      const o = sourceOptions.find((x) => x.value === src);
-      if (o)
-        tokens.push({ key: "source", val: src, label: o.label, color: "" });
-    }
-    for (const p of propertyTypes) {
-      // Метка бизнеса печатается как есть; раньше токен молча исчезал, если
-      // значения не было в зашитом перечислении.
-      tokens.push({
-        key: "property",
-        val: p,
-        label: propertyTypeLabel(p),
-        color: "",
-      });
-    }
-    return tokens;
-  }, [
-    segments,
-    selectedTeams,
-    selectedCities,
-    activeTags,
-    period,
-    sources,
-    propertyTypes,
-    teamOptions,
-    cityOptions,
-    tagOptions,
-    sourceOptions,
-  ]);
+  const activeTokens = useMemo<ActiveToken[]>(
+    () =>
+      activeFilterTokens(
+        {
+          segments,
+          selectedTeams,
+          selectedCities,
+          activeTags,
+          period,
+          sources,
+          propertyTypes,
+        },
+        { teamOptions, cityOptions, tagOptions, sourceOptions },
+      ),
+    [
+      segments,
+      selectedTeams,
+      selectedCities,
+      activeTags,
+      period,
+      sources,
+      propertyTypes,
+      teamOptions,
+      cityOptions,
+      tagOptions,
+      sourceOptions,
+    ],
+  );
 
   // Бейдж считает ровно то, что можно снять токеном: значение по мёртвому
   // id (удалённый тег/команда) токена не даёт и в счёт не идёт — иначе

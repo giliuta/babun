@@ -8,7 +8,7 @@ import {
   type LinkGroup,
 } from "@babun/shared/local/selectors/client-links";
 import type { ClientLinkItem } from "./blocks/ClientLinksBlock";
-import { capabilitiesOf } from "./clients-company";
+import { capabilitiesOf } from "@/session/clients-company";
 import {
   memberClientJsonToClient,
   useClient,
@@ -49,10 +49,9 @@ type RpcWithClientMembers = {
 /** ФУНКЦИИ НА СЕРВЕРЕ ЕЩЁ НЕТ — связи не включены, а не «сломались».
  *
  *  До наката миграции связей `list_client_members` не существует: PostgREST
- *  отвечает `PGRST202` («функция не найдена»), сам Postgres — `42883`. Раньше
- *  это читалось ошибкой, и КАЖДАЯ карточка клиента показывала строку «Люди
- *  карточки сейчас не загрузились» — на экране владельца, у всех клиентов
- *  разом (22.09). Отсутствующая функция — это не сбой сети, а выключенная
+ *  отвечает `PGRST202` («функция не найдена»), сам Postgres — `42883`. Если
+ *  читать это ошибкой, КАЖДАЯ карточка клиента покажет строку «Люди
+ *  карточки сейчас не загрузились» — у всех клиентов разом. Отсутствующая функция — это не сбой сети, а выключенная
  *  возможность: блока нет, как у сотрудника без права. После наката ответ
  *  становится обычным, и блок включается сам, без выпуска приложения. */
 export class LinksNotOnServer extends Error {}
@@ -109,7 +108,7 @@ function linkItemsOf(
         telegramUsername: member.telegram_username || null,
         role: entry.role,
         // Правка связи пишет memberships ЭТОГО человека — по его праву.
-        // «Меняет» блока «Люди» — своим правом, без «Меняет» у базы (02.10).
+        // «Меняет» блока «Люди» — своим правом, без «Меняет» у базы.
         editable: !member.blocks || clientBlockLevel(member, "clients.people") === "write",
       });
     }

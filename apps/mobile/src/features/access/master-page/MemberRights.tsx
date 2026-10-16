@@ -2,9 +2,9 @@ import { useState } from "react";
 
 import { useTeams } from "@/features/reference/queries";
 
-import { levelOf as mapLevelOf, type AccessRefusal } from "../access-map";
-import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "../queries";
-import { usePartnerManager } from "./use-partner-manager";
+import { levelOf as mapLevelOf, type AccessRefusal } from "@/session/access-map";
+import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "@/session/access-queries";
+import { usePartnerManager } from "@/session/use-partner-manager";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import { previewAreaOf } from "./rights-focus";
 import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
@@ -27,13 +27,13 @@ export function MemberRights({
   userId: string;
   teamId: string | null;
   area?: string;
-  /** Права одного календаря или компании (STORY-087). */
+  /** Права одного календаря или компании. */
   focus?: RightsFocus;
   onBack: () => void;
 }) {
   const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
-  // Директор (04.10): себя и директоров не правит, «его глазами» — у владельца.
+  // Директор: себя и директоров не правит, «его глазами» — у владельца.
   const manager = usePartnerManager(userId, accessQuery.data);
   const membersQuery = useCompanyMembers();
   const preview = usePreview();
@@ -88,8 +88,7 @@ export function MemberRights({
       {...focusViewProps(focus, teams)}
       onSelectTeam={setActive}
       levelOf={(block, pickTeam) => mapLevelOf(block, map, pickTeam ?? "")}
-      // Неживой блок правится как остальные (владелец 15.09, миграция
-      // 20260915110000): уровень хранится сейчас и заработает, когда блок
+      // Неживой блок правится как остальные (миграция 20260915110000): уровень хранится сейчас и заработает, когда блок
       // оживёт, — как на приглашении, иначе выданное там не снять после
       // приёма.
       busyKey={writer.busyKey}

@@ -1,200 +1,52 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
-import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
-import {
-  useCreateClient,
-  useUpdateClientById,
-} from "@/features/clients/queries";
+import { useCreateClient, useUpdateClientById } from "@/features/clients/queries";
 import { splitSourceStep, type SplitRef } from "@/features/clients/split-client";
 import { notify } from "@/lib/notify";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
-import { clientCardHref } from "@/features/clients/clients-company";
+import { useClientsScopeOrNull } from "@/session/company-scope";
+import { clientCardHref } from "@/session/clients-company";
 import {
   countryDialCode,
   formatPhoneAsYouType,
   isDialOnly,
   tryToE164,
-} from "@/features/clients/phone";
-import { useDefaultCountry } from "@/features/clients/default-country";
+} from "@/lib/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { splitNameAndPhone } from "@/features/clients/name-phone-paste";
 import { supabase } from "@/lib/supabase";
-import { useTeams } from "@/features/reference/queries";
-import { liveTeamChoice, teamForNewClient } from "@/features/clients/team-scope";
-import { useClientsTeam } from "@/features/clients/team-pref";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
+import { friendlyCreateError, isPhoneTakenError } from "@/features/clients/client-create-errors";
+import { clientMembersQueryKey } from "@/features/clients/use-link-writer";
+import { clientKeys } from "@/lib/client-query-keys";
 import {
-  friendlyCreateError,
-  isPhoneTakenError,
-} from "@/features/clients/client-create-errors";
-import {
-  clientMembersQueryKey,
-  type LinkTarget,
-} from "@/features/clients/use-link-writer";
+  draftCanSave,
+  draftHasInput,
+  draftPhoneTyped,
+  type DraftOpen,
+} from "@/features/clients/useClientDraft/core";
+import { useDraftDuplicate } from "@/features/clients/useClientDraft/duplicate";
+import type { ClientDraftOptions } from "@/features/clients/useClientDraft/options";
+import { useNewClientTeam } from "@/features/clients/useClientDraft/team";
 
-// ─── ЧИСТОЕ ЯДРО: НАЧАЛО ───────────────────────────────────────────────
-//
-// Гейт черновика — решение владельца, а не деталь вёрстки, поэтому он вынесен
-// чистой функцией между метками: сторож `link-writer.test.ts` вырезает эту
-// секцию и проверяет её вызовом (сам хук тянет `expo-router`, в bun его не
-// поднять). В ядро не ввозится ни одного значения — только типы.
-
-/** Что знает гейт о черновике в эту секунду. */
-/** Что открыть на карточке сразу после создания из черновика: «Кто это»,
- *  лист «Добавить файл» или форму записи (владелец 22.09: «при создании —
- *  те же самые блоки, что у созданного»). */
-export type DraftOpen = "person" | "files" | "book";
-
-export interface DraftGate {
-  active: boolean;
-  nameFilled: boolean;
-  /** Разобранный номер; `null` — номера нет или он не разобран. */
-  e164: string | null;
-  /** В поле номера набрано что-то сверх кода страны. */
-  phoneTyped: boolean;
-  /** Черновик несёт связь (жилец, человек карточки). */
-  linked: boolean;
-  duplicate: boolean;
-  saving: boolean;
-}
-
-/** МОЖНО ЛИ СОЗДАТЬ КЛИЕНТА.
- *
- *  ТЕЛЕФОН НЕОБЯЗАТЕЛЕН (владелец 12.10: «чтоб можно было написать имя и уже
- *  сохранять клиента; номер добавлять необязательно»). До 12.10 действовал
- *  закон 2026-07-25 «телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН» с исключением для жильцов
- *  со связью. УНИКАЛЬНОСТЬ остаётся: набранный номер проверяется на дубль.
- *
- *  Начатый, но не разобранный номер — не «номера нет», а ошибка набора: его
- *  дописывают или стирают, иначе в базу уехал бы обрывок цифр без ключа.
- *
- *  ДУБЛИ У БЕЗНОМЕРНЫХ НЕ ИЩУТСЯ — это принятая цена: дедуп держится на
- *  `phone_e164`, а по имени его не построить (тёзок сколько угодно, закон
- *  владельца 2026-07-26). Двух Иванов-жильцов без номеров база различит только
- *  по связи. */
-export function draftCanSave(gate: DraftGate): boolean {
-  if (!gate.active || !gate.nameFilled || gate.duplicate || gate.saving) return false;
-  if (gate.e164 !== null) return true;
-  return !gate.phoneTyped;
-}
-
-/** Набрано ли в поле номера что-то сверх кода страны: поле рождается с ним
- *  (`+357 `), и сам код номером не считается. */
-export function draftPhoneTyped(text: string, dial: string): boolean {
-  const typed = text.trim();
-  return typed !== "" && typed !== dial.trim();
-}
-
-/** ЕСТЬ ЛИ В ЧЕРНОВИКЕ НАБРАННОЕ — то, что «Назад» не вправе выбросить молча.
- *  Код страны в поле номера набранным не считается (аудит 03.10): поле с
- *  22.09 рождается пустым, а сравнение «номер ≠ код» на пустом поле было
- *  истинным всегда — пустое «Создать клиента» спрашивало «Удалить
- *  черновик?», и свайп назад был выключен. */
-export function draftHasInput(draft: Client, dial: string): boolean {
-  return Boolean(
-    draft.full_name.trim() ||
-      draftPhoneTyped(draft.phone, dial) ||
-      draft.email.trim() ||
-      draft.city.trim() ||
-      draft.birthday ||
-      draft.whatsapp_phone.trim() ||
-      draft.telegram_username.trim() ||
-      draft.instagram_username.trim() ||
-      // Строка «Телефон 2», где номер стёрт до кода, набранным не считается —
-      // как и само поле номера выше (повторный аудит 03.10).
-      draft.phones.some((p) => draftPhoneTyped(p.number ?? "", dial)) ||
-      draft.legal_name?.trim() ||
-      draft.vat_number?.trim() ||
-      draft.reg_number?.trim() ||
-      draft.billing_address?.trim() ||
-      draft.locations.length ||
-      draft.notes.length ||
-      draft.tag_ids.length ||
-      // Связь, приехавшая с дверью, — тоже набранное: без этой строки
-      // черновик жильца уходил по «Назад» молча, и человек пропадал вместе
-      // с тем, что его заводили именно в эту виллу.
-      draft.memberships?.length ||
-      draft.acquisition_source !== "unknown" ||
-      draft.blacklisted
-  );
-}
-
-/** Параметры маршрута черновика, открытого дверью связи (сценарий г-б). */
-export type DraftLinkParams = {
-  name?: string;
-  phone?: string;
-  linkGroup?: string;
-  linkRole?: string;
-  linkPlace?: string;
-};
-
-/** СВЯЗЬ ЕДЕТ В ЧЕРНОВИК АДРЕСОМ, И СОБИРАЕТ ЕГО ТОТ ЖЕ ФАЙЛ, ЧТО РАЗБИРАЕТ.
- *
- *  Дверь «Создать клиента» в шторке людей открывает страницу черновика
- *  маршрутом: память между экранами не переживает ни перезапуск, ни второй
- *  черновик. Пустые значения в адрес не кладутся — `?phone=` читался бы
- *  набранным номером. */
-export function draftLinkParams(
-  groupId: string,
-  link: { role: string; locationId?: string | null },
-  prefill: { name?: string; phone?: string },
-): DraftLinkParams {
-  const params: DraftLinkParams = { linkGroup: groupId };
-  const role = link.role.trim();
-  if (role) params.linkRole = role;
-  if (link.locationId) params.linkPlace = link.locationId;
-  const name = prefill.name?.trim();
-  if (name) params.name = name;
-  const phone = prefill.phone?.trim();
-  if (phone) params.phone = phone;
-  return params;
-}
-
-/** Обратный ход: адрес → связь черновика. Нет карточки-группы — связи нет
- *  (роль и место без неё ни к чему не привязаны). */
-export function draftLinkFromParams(params: DraftLinkParams): LinkTarget | null {
-  const groupId = params.linkGroup?.trim();
-  if (!groupId) return null;
-  return {
-    groupId,
-    role: params.linkRole?.trim() ?? "",
-    locationId: params.linkPlace?.trim() || null,
-  };
-}
-
-// ─── ЧИСТОЕ ЯДРО: КОНЕЦ ────────────────────────────────────────────────
-
-export interface ClientDraftOptions {
-  /** Черновик открыт ПОВЕРХ записи (`/book/client`): после «Готово» клиент
-   *  отдаётся записи и экран уходит «назад», а не на карточку созданного. */
-  /** Отдать созданного клиента тому, кто позвал, и уйти «назад», а не на его
-   *  карточку. Так ведёт себя карточка, открытая ПОВЕРХ звавшего — из записи
-   *  или из шторки долга (см. `app/(shared)`). */
-  forBooking?: boolean;
-  /** Что уже набрали в поиске клиента — имя или телефон. Перепечатывать
-   *  их ещё раз в карточке незачем. */
-  name?: string;
-  phone?: string;
-  /** Связь, с которой черновик ПРИЕХАЛ: дверь «Добавить жильца» / «Добавить
-   *  человека» уже знает, чей он, кем и где (STORY-086, сценарий г-б). Она
-   *  живёт в `draft.memberships` и уезжает ВМЕСТЕ с клиентом одной записью
-   *  `create_client_with_tags` — второго запроса «а теперь привяжи» не бывает.
-   *  Читается один раз, на рождении черновика. */
-  link?: LinkTarget | null;
-  /** Черновик открыт пунктом «Разделить клиента» (STORY-086, сценарий ж):
-   *  номер — это запись `phones` исходной карточки, и после создания он
-   *  уходит оттуда. Бросили черновик — исходная не тронута: убирается номер
-   *  только в `save`, после того как клиент уже создан. */
-  split?: SplitRef | null;
-  /** Команда, ради записи которой заводят клиента (`/client` из записи). */
-  team?: string | null;
-}
+// The draft gate and route params are a pure core in `./useClientDraft/core`
+// (a guard test loads it standalone); dedupe and team pick are hooks there.
+export {
+  draftCanSave,
+  draftHasInput,
+  draftLinkFromParams,
+  draftLinkParams,
+  draftPhoneTyped,
+  type DraftGate,
+  type DraftLinkParams,
+  type DraftOpen,
+} from "@/features/clients/useClientDraft/core";
+export type { ClientDraftOptions };
 
 export function useClientDraft(
   active: boolean,
@@ -212,19 +64,7 @@ export function useClientDraft(
     scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
   const create = useCreateClient();
   const updateById = useUpdateClientById();
-  // КОМАНДА НОВОГО КЛИЕНТА (30.09) — чип ленты вкладки «Клиенты», из «Все» —
-  // первая команда. Шлём всегда: офлайн-запись умолчания сервера не знает.
-  const { data: savedTeam } = useClientsTeam(tenantId ?? null);
-  const { data: teams = [] } = useTeams();
-  const teamIds = teams.map((team) => team.id);
-  // КОМАНДА ЗАПИСИ СИЛЬНЕЕ ЧИПА (аудит 03.10): клиент, заведённый из
-  // записи, — клиент её команды. Раньше он уходил в команду последнего чипа
-  // вкладки «Клиенты» (или в первую), а от команды зависят теги, страна
-  // номера, поля карточки и отправитель SMS.
-  const bookingTeam =
-    team && (teamIds.length === 0 || teamIds.includes(team)) ? team : null;
-  const newClientTeam =
-    bookingTeam ?? teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
+  const newClientTeam = useNewClientTeam(tenantId, team);
   // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
   // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
@@ -233,9 +73,14 @@ export function useClientDraft(
   const [draft, setDraft] = useState<Client>(() =>
     createBlankClient({
       full_name: name?.trim() ?? "",
-      // ПУСТО, А НЕ «+357 »: код страны с 22.09 стоит ПОДПИСЬЮ над полем
-      // (`use-phone-country.tsx`), и продублированный в значении он мешал —
-      // после смены страны в поле оставался прежний код.
+      // КОМАНДА — С ПЕРВОГО КАДРА, если она уже известна. Поле номера,
+      // открытое сразу с фокусом (имя пришло из записи), берёт код страны на
+      // первом кадре и потом его не меняет: команда, дописанная эффектом
+      // ниже, приходила поздно, и греческая команда видела «+357».
+      ...(newClientTeam ? { team_id: newClientTeam } : {}),
+      // ПУСТО, А НЕ «+357 »: код страны стоит ПОДПИСЬЮ над полем
+      // (`use-phone-country.tsx`), и продублированный в значении он мешал бы —
+      // после смены страны в поле оставался бы прежний код.
       phone: phone?.trim() ? formatPhoneAsYouType(phone.trim(), country) : "",
       // Та же одна форма связи, что пишет писатель (`use-link-writer.ts`):
       // три ключа, «места нет» — это `null`.
@@ -250,11 +95,11 @@ export function useClientDraft(
         : [],
     }),
   );
-  // КОМАНДА ЧЕРНОВИКА ВИДНА СТРАНИЦЕ СРАЗУ (аудит 03.10): подпись страны над
+  // КОМАНДА ЧЕРНОВИКА ВИДНА СТРАНИЦЕ СРАЗУ: подпись страны над
   // номером читает `client.team_id`, и у черновика без неё код брался от
   // пояса компании, а не команды, куда клиент уйдёт. Выбранную руками
   // команду не трогаем — только ту, что поставили сами.
-  const autoTeam = useRef<string | null>(null);
+  const autoTeam = useRef<string | null>(newClientTeam ?? null);
   useEffect(() => {
     if (!active || !newClientTeam) return;
     const previous = autoTeam.current;
@@ -270,9 +115,17 @@ export function useClientDraft(
   // поля, которое дописалось при снятии фокуса.
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const [duplicate, setDuplicate] = useState<Client | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const e164 = active ? tryToE164(draft.phone.trim(), country) : null;
+  const { duplicate, setDuplicate, findDuplicate, checkedFor } = useDraftDuplicate({
+    active,
+    e164,
+    tenantId,
+    scopeKind: scope?.kind,
+    draftClient,
+  });
+  // Засов «идёт создание» — синхронный, в отличие от create.isPending.
+  const savingRef = useRef(false);
 
   const updateDraft = (patch: Partial<Client>) =>
     setDraft((current) => ({ ...current, ...patch }));
@@ -311,75 +164,25 @@ export function useClientDraft(
     setCreateError(null);
   };
 
-  /** Поиск клиента по каноническому номеру. Сеть — авторитет, но при её
-   *  отказе ищем в ОФЛАЙН-КЭШЕ: правило владельца «телефон уникален» не
-   *  должно отключаться вместе с сетью, когда весь список лежит в SQLite.
-   *  Тот же приём уже применён на экране чата. */
-  const findDuplicate = useCallback(async (key: string): Promise<Client | null> => {
-    if (!tenantId) return null;
-    const sameNumber = (list: readonly Client[]) =>
-      list.find((c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === key) ?? null;
-    // В компании, где человек работает, номеров в его окне нет никогда (30.09:
-    // номер — по одному, дверью): искать дубль нечем, а качать ради этого
-    // весь список — лишний трафик. Арбитр — UNIQUE-индекс базы: его отказ
-    // говорит нейтрально «уже есть у компании» (ниже, `isPhoneTakenError`).
-    if (scope?.kind === "member") return null;
-    try {
-      return (await findClientByPhoneE164(draftClient, key, tenantId)) ?? null;
-    } catch {
-      try {
-        const cached = await listClientsCached(draftClient, tenantId);
-        return sameNumber(cached);
-      } catch {
-        // Ни сети, ни кэша — создать разрешаем, финальный арбитр всё равно
-        // UNIQUE-индекс в базе (23505 обрабатывается ниже).
-        return null;
-      }
-    }
-  }, [tenantId, scope?.kind, draftClient]);
-
-  const sequence = useRef(0);
-  // Номер, для которого фоновая проверка уже ответила (аудит 29.09:
-  // «создание клиента крутится 4–6 с»). Повторять её перед записью для того
-  // же номера — лишняя поездка в сеть; арбитр всё равно UNIQUE-индекс базы.
-  const checkedFor = useRef<string | null>(null);
-  // Засов «идёт создание» — синхронный, в отличие от create.isPending.
-  const savingRef = useRef(false);
-  useEffect(() => {
-    if (!active) return;
-    const currentSequence = ++sequence.current;
-    if (!e164 || !tenantId) {
-      setDuplicate(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      const existing = await findDuplicate(e164);
-      if (sequence.current === currentSequence) {
-        setDuplicate(existing);
-        checkedFor.current = e164;
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [active, e164, tenantId, findDuplicate]);
 
   const isDirty = useMemo(
     () => active && draftHasInput(draft, dial),
     [active, draft, dial],
   );
 
-  // Владелец 2026-07-25: телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
+  // Телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
   // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —
   // без разбираемого номера канонического ключа нет, а значит и дубль
   // ловить нечем. Разбор чисто локальный, офлайну не мешает.
   // Имя НЕ уникально (тёзок сколько угодно, дедуп только по номеру), но
-  // ОБЯЗАТЕЛЬНО (владелец 2026-07-26): безымянный клиент не находится ни
+  // ОБЯЗАТЕЛЬНО: безымянный клиент не находится ни
   // поиском, ни глазами в списке, а в SMS-шаблон подставлять нечего.
   // Исключение одно — клиент СО СВЯЗЬЮ, по одному имени (`draftCanSave`).
   const nameFilled = draft.full_name.trim().length > 0;
   const linked = (draft.memberships?.length ?? 0) > 0;
   const phoneTyped = draftPhoneTyped(draft.phone, dial);
   // Дубль найден — сохранять НЕЧЕГО: два клиента на одном номере невозможны
-  // (решение владельца), и save() при дубле молча выходил. Кнопка при этом
+  // (правило продукта), и save() при дубле молча выходил. Кнопка при этом
   // оставалась яркой и активной: тап давал вибрацию и ничего больше. Гасим её
   // здесь, а баннер под номером говорит, что делать.
   const canSave = draftCanSave({
@@ -402,7 +205,7 @@ export function useClientDraft(
    *  и человеку говорится словами, что убрать его надо руками. */
   const dropSplitPhone = async (ref: SplitRef, createdKey: string | null) => {
     const fresh = qc
-      .getQueriesData<Client | null>({ queryKey: ["client", ref.sourceId] })
+      .getQueriesData<Client | null>({ queryKey: clientKeys.card(ref.sourceId) })
       .map(([, row]) => row)
       .find((row): row is Client => !!row);
     const step = fresh
@@ -441,7 +244,7 @@ export function useClientDraft(
     // ПОЛЕ ПОД ПАЛЬЦЕМ ДОПИСЫВАЕТ СЕБЯ ПРИ УХОДЕ С НЕГО («Обращение», почта,
     // новый номер). Тап по «Создать клиента» с открытой клавиатурой отдавал
     // в базу черновик ДО этой записи — последнее набранное поле молча
-    // терялось (аудит 22.09). Снимаем фокус, даём кадр на запись и читаем
+    // терялось. Снимаем фокус, даём кадр на запись и читаем
     // черновик свежим — из ссылки, а не из замыкания этого нажатия.
     Keyboard.dismiss();
     await new Promise((resolve) => setTimeout(resolve, 80));
@@ -458,9 +261,9 @@ export function useClientDraft(
         return null;
       }
     }
-    // Дубль уже найден дебаунсом — создать нельзя. Раньше второй тап
-    // намеренно пропускал «другого человека на том же номере»; владелец
-    // это отменил: два клиента на одном номере невозможны.
+    // Дубль уже найден дебаунсом — создать нельзя. Второй тап не пропускает
+    // «другого человека на том же номере»: два клиента на одном номере
+    // невозможны.
     if (duplicate) {
       haptics.warning();
       savingRef.current = false;
@@ -477,8 +280,7 @@ export function useClientDraft(
         phone: e164 ? d.phone.trim() : "",
         // Стёртый номер «Телефона 2» в черновике хранится (`savePhone`, чтобы
         // перенабор не терял строку), а при создании отсеивается — иначе
-        // карточка рождалась с пустой строкой «Телефон 2 | +357 | Номер»
-        // (повторный аудит 03.10).
+        // карточка рождалась с пустой строкой «Телефон 2 | +357 | Номер».
         phones: d.phones.filter((p) => !isDialOnly(p.number ?? "", country)),
         full_name: d.full_name.trim(),
         phone_e164: e164,
@@ -501,10 +303,8 @@ export function useClientDraft(
       // записи до возврата: иначе на карточке Павла на миг стоял бы номер,
       // который только что стал Марией.
       if (split) await dropSplitPhone(split, e164);
-      // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЗАПИСИ, ВОЗВРАЩАЕТСЯ В ЗАПИСЬ (владелец
-      // 2026-08-31: «нажимаю „Готово" — и оно остаётся на странице клиента, а
-      // должно сразу переходить в саму запись, я ж делаю в первую очередь
-      // запись»).
+      // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЗАПИСИ, ВОЗВРАЩАЕТСЯ В ЗАПИСЬ: «Готово» не
+      // оставляет на странице клиента, а сразу переходит в запись.
       //
       // Карточка открыта ПОВЕРХ записи (`/book/client`, см. pending-client.ts):
       // запись стоит в стеке прямо под нами со всем набранным, поэтому

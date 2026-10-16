@@ -375,7 +375,7 @@ Deno.serve(async (req: Request) => {
   // Build template ctx with a memoised email lookup. owner.new_member
   // template needs auth.users.email by user_id; we read via the
   // service-role client (RLS bypass via the policy added in
-  // 20260501_002 + service_role's auth.users access).
+  // 20260501000002 + service_role's auth.users access).
   const emailCache = new Map<string, string | null>();
   const ctx: TemplateCtx = {
     lookupEmail: async (userId: string) => {

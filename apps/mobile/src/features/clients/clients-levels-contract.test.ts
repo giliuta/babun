@@ -3,8 +3,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
+import { clientsListSource, clientsListTopBarSource } from "./list/source-for-tests";
 
-// КЛИЕНТЫ СЛУШАЮТСЯ УРОВНЕЙ — СТОРОЖ ПРАВИЛА (STORY-082, владелец 19.09).
+// КЛИЕНТЫ СЛУШАЮТСЯ УРОВНЕЙ — СТОРОЖ ПРАВИЛА (STORY-082).
 //
 // Миграция `clients_access_levels_live` накатана и проверена прогоном в
 // откате; сторож внутри неё отрабатывает ОДИН раз, на накате. Этот тест —
@@ -48,100 +50,99 @@ function lastDefiner(fn: string): string {
   return last;
 }
 
-// КЛИЕНТЫ ПО КОМАНДАМ (владелец 29.09): правило видимости переписано
+// КЛИЕНТЫ ПО КОМАНДАМ: правило видимости переписано
 // сознательно — «Клиенты», «Какие клиенты» и «Телефоны» стали правами команды.
 // Сторож теперь держит НОВУЮ миграцию и её условия: видимость, телефоны и
 // правка считаются по командам в паре с «Клиентами» этой же команды.
 const PER_TEAM = "20260929160000_clients_rights_per_team.sql";
 const perTeam = norm(readFileSync(join(MIGRATIONS_DIR, PER_TEAM), "utf8"));
 
-// ЗАЩИТА БАЗЫ (владелец 30.09): списки сотрудника контактов не несут никогда,
+// ЗАЩИТА БАЗЫ: списки сотрудника контактов не несут никогда,
 // номер — дверью по одному клиенту; «Около записи» и «В день записи». Три
 // функции переписаны сознательно — сторож держит их новые условия.
 const ONE_BY_ONE = "20260930233000_clients_contacts_one_by_one.sql";
 const oneByOne = norm(readFileSync(join(MIGRATIONS_DIR, ONE_BY_ONE), "utf8"));
 
-// БЛОКИ КАРТОЧКИ (владелец 30.09: «страница клиентов по правам — полностью»):
-// у каждого блока карточки своё право в команде; строка сотрудника — маской
+// БЛОКИ КАРТОЧКИ (страница клиентов целиком по правам): у каждого блока карточки своё право в команде; строка сотрудника — маской
 // `client_masked_for_member` по положениям `access_client_blocks`.
 const CARD_BLOCKS = "20260930234000_clients_card_blocks.sql";
 const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"));
 
-// ОБХОДНЫЕ ДОРОГИ (аудит 30.09): SMS, чеки, копия записи, старые записи
+// ОБХОДНЫЕ ДОРОГИ: SMS, чеки, копия записи, старые записи
 // мастера — данные клиента не уходят мимо «номер по одному» и «Около записи».
 const LEAKS = "20260930235950_clients_leak_paths.sql";
-// ССЫЛКА ИЗ SMS ОТМЕНЯЕТ ЗАПИСЬ (аудит 04.10): сотруднику её выдают только с
+// ССЫЛКА ИЗ SMS ОТМЕНЯЕТ ЗАПИСЬ: сотруднику её выдают только с
 // правом «Отменять и удалять записи»; защита клиента LEAKS — на месте.
 const SMS_LINKS = "20261004085941_sms_links_and_archived_calendars.sql";
 const smsLinks = norm(readFileSync(join(MIGRATIONS_DIR, SMS_LINKS), "utf8"));
-// Копия партнёра принимает номер с телефона (повтор без дубля, 03.10) —
+// Копия партнёра принимает номер с телефона (повтор без дубля) —
 // с прежним сторожем клиента команды.
 const COPY = "20261003191837_member_copy_idempotent.sql";
 const leaks = norm(readFileSync(join(MIGRATIONS_DIR, LEAKS), "utf8"));
 
-// «ГЛАВНОЕ» КЛИЕНТОВ (владелец 01.10): «Открывает карточку» гасит блоки
+// «ГЛАВНОЕ» КЛИЕНТОВ: «Открывает карточку» гасит блоки
 // страницы клиента, «Карточка из записи» — окно клиента записи. Обе функции
 // переписаны сознательно — сторож держит их новые условия.
 const OPEN_CARD = "20261001161500_clients_open_card_rights.sql";
 const openCard = norm(readFileSync(join(MIGRATIONS_DIR, OPEN_CARD), "utf8"));
 
-// «БАЗА КЛИЕНТОВ» — «СКРЫТА» ИЛИ «ТОЛЬКО ВИДИТ» (владелец 02.10): окно
+// «БАЗА КЛИЕНТОВ» — «СКРЫТА» ИЛИ «ТОЛЬКО ВИДИТ»: окно
 // «2 недели» / «Месяц» едет с днём, блок карточки с «Меняет» правится сам,
 // база (имя, номера) — только владельцу. Функции переписаны сознательно.
 const BASE_READ = "20261002233700_clients_base_read_window.sql";
 const baseRead = norm(readFileSync(join(MIGRATIONS_DIR, BASE_READ), "utf8"));
 
-// «БАЗА КЛИЕНТОВ» — ТРИ СТУПЕНИ (владелец 02.10, вслед за BASE_READ):
+// «БАЗА КЛИЕНТОВ» — ТРИ СТУПЕНИ (вслед за BASE_READ):
 // «Открывает карточку» и «Телефон» убраны — их даёт база; «Редактирует»
 // заводит, правит и удаляет клиентов. Функции переписаны сознательно.
 const THREE_LEVELS = "20261002235300_clients_base_three_levels.sql";
 const threeLevels = norm(readFileSync(join(MIGRATIONS_DIR, THREE_LEVELS), "utf8"));
 
-// БАЗА — ТОЛЬКО КЛИЕНТЫ КОМАНДЫ (владелец 02.10): «Ограничение по времени»
+// БАЗА — ТОЛЬКО КЛИЕНТЫ КОМАНДЫ: «Ограничение по времени»
 // (бывшее «Какие клиенты») сужает их; «История записей» и «Карточка из
 // записи» убраны — их даёт база и видимая запись.
 const TEAM_BASE = "20261002235800_clients_team_base_time_limit.sql";
 const teamBase = norm(readFileSync(join(MIGRATIONS_DIR, TEAM_BASE), "utf8"));
 
-// «ОГРАНИЧЕНИЯ» — ШЕСТЬ ШАГОВ (владелец 02.10, вариант 1): Неделя · 2 недели ·
+// «ОГРАНИЧЕНИЯ» — ШЕСТЬ ШАГОВ: Неделя · 2 недели ·
 // Месяц · 3 месяца · Полгода · Без ограничения; умолчание — «Неделя».
 const LIMITS = "20261002235930_clients_limits_steps.sql";
 const limits = norm(readFileSync(join(MIGRATIONS_DIR, LIMITS), "utf8"));
 
-// «КАРТОЧКА КЛИЕНТА» ПО БЛОКАМ СТРАНИЦЫ (владелец 02.10): «Клиент», «История»,
+// «КАРТОЧКА КЛИЕНТА» ПО БЛОКАМ СТРАНИЦЫ: «Клиент», «История»,
 // «SMS» — свои права; номер — по «Клиенту», SMS с карточки — по «SMS».
 const CLIENT_BLOCKS = "20261003001200_clients_card_blocks_client_history_sms.sql";
 const clientBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CLIENT_BLOCKS), "utf8"));
 
-// «ГЛАВНОЕ» (владелец 02.10): база — Скрыта / Видит; «Создание клиента» и
+// «ГЛАВНОЕ»: база — Скрыта / Видит; «Создание клиента» и
 // «Меню клиента» — свои права «Не может / Может».
 const CREATE_MENU = "20261003002400_clients_create_and_menu_rights.sql";
 const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"));
 
-// «УДАЛЕНИЕ КЛИЕНТА» — СВОИМ ПРАВОМ, АРХИВА НЕТ (владелец 03.10): удаление
+// «УДАЛЕНИЕ КЛИЕНТА» — СВОИМ ПРАВОМ, АРХИВА НЕТ: удаление
 // одно, клиенту с историей база срок стирания не ставит.
 const DELETE_RIGHT = "20261003004100_clients_delete_right_no_archive.sql";
 const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"));
 
-// НОМЕР — СРАЗУ (владелец 03.10): «Клиент: Видит» отдаёт контакты целиком,
+// НОМЕР — СРАЗУ: «Клиент: Видит» отдаёт контакты целиком,
 // без двери и точек; «Скрыт» — без контактов.
 const PHONE_OPEN = "20261003010500_clients_phone_open_with_client_block.sql";
 const phoneOpen = norm(readFileSync(join(MIGRATIONS_DIR, PHONE_OPEN), "utf8"));
 
-// СТРОКА ИСТОРИИ SMS ЗНАЕТ КЛИЕНТА И ШАБЛОН (STORY-089, 03.10): «SMS
+// СТРОКА ИСТОРИИ SMS ЗНАЕТ КЛИЕНТА И ШАБЛОН (STORY-089): «SMS
 // фиксируются за клиентом», в строке — имя шаблона. Номер и деньги — по-прежнему
 // только владельцу (защита `LEAKS`), это сторожит тест ниже.
 const SMS_JSON = "20261003013700_sms_message_client_and_template.sql";
 const smsJson = norm(readFileSync(join(MIGRATIONS_DIR, SMS_JSON), "utf8"));
 
-// SMS ИЗ ЗАПИСИ — КЛИЕНТУ НА ЭКРАНЕ (03.10): клиент сменён и не сохранён — SMS
+// SMS ИЗ ЗАПИСИ — КЛИЕНТУ НА ЭКРАНЕ: клиент сменён и не сохранён — SMS
 // ему и всё равно о записи. Охрана клиента сотрудника и номера — та же; другой
-// клиент, чем у записи, — по праву «SMS: Меняет» (аудит 03.10, тело взято из
-// базы и дополнено одной проверкой).
+// клиент, чем у записи, — по праву «SMS: Меняет» (тело взято из базы и дополнено одной
+// проверкой).
 const SMS_SEND = "20261003120713_member_security_gaps.sql";
 const smsSend = norm(readFileSync(join(MIGRATIONS_DIR, SMS_SEND), "utf8"));
 
-// ДЫРЫ ПОСЛЕ АУДИТА 03.10 и СЛОВО ВЛАДЕЛЬЦА 03.10: «завёл сам» — в наборе
+// ЗАКРЫТЫЕ ДЫРЫ: «завёл сам» — в наборе
 // своей команды; «Метка» и «Тег» — два права; «Долг и деньги» ушли в
 // «Историю», у неё три положения («Скрыта» · «Своя команда» · «Все команды»).
 // Тела взяты из базы и дополнены — сторож держит новые условия.
@@ -465,7 +466,7 @@ describe("сервер: клиенты по уровням", () => {
 
   test("обходные дороги закрыты: SMS, чеки, копия записи, старые записи мастера", () => {
     assert.ok(leaks.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
-    // Строку истории переписала миграция «клиент и шаблон» (03.10) — маска та же.
+    // Строку истории переписала миграция «клиент и шаблон» — маска та же.
     assert.ok(smsJson.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
     assert.ok(smsJson.includes("'cost_cents', case when p_owner then m.cost_cents else 0 end,"), "SMS снова отдают цену сотруднику");
     assert.ok(
@@ -480,14 +481,14 @@ describe("сервер: клиенты по уровням", () => {
       leaks.includes("if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'"),
       "выбор номера SMS проверяет угаданный номер",
     );
-    // Отправку переписала миграция «клиент на экране» (03.10) — охрана та же.
+    // Отправку переписала миграция «клиент на экране» — охрана та же.
     for (const guard of [
       "if not is_owner and not public.member_client_in_team(v_client, v_team) then raise exception 'sms:rights'",
       "if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'",
       "if not public.sms_client_owns_phone(v_client, p_phone) then raise exception 'sms:phone'",
       "if not is_owner and p_appointment_id is null and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
       "where cl.id = v_client and cl.tenant_id = v_tenant;",
-      // Другой клиент, чем у записи, — по праву «SMS: Меняет» (аудит 03.10).
+      // Другой клиент, чем у записи, — по праву «SMS: Меняет».
       "if v_client is distinct from a.client_id and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
     ]) {
       assert.ok(smsSend.includes(guard), `отправка SMS потеряла охрану: ${guard}`);
@@ -520,7 +521,7 @@ describe("сервер: клиенты по уровням", () => {
       leaks.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
       "копия давней записи возвращает клиента в окно",
     );
-    // Копию с 03.10 определяет миграция без дублей — сторож клиента в ней тот же.
+    // Копию определяет миграция без дублей — сторож клиента в ней тот же.
     const copy = norm(readFileSync(join(MIGRATIONS_DIR, COPY), "utf8"));
     assert.equal(lastDefiner("member_appointment_copy"), COPY, "копия переопределена позже");
     assert.ok(
@@ -622,7 +623,7 @@ describe("сервер: клиенты по уровням", () => {
   });
 
   // МАСКИРОВКУ МОЖНО ПЕРЕОПРЕДЕЛИТЬ — НО ТОЛЬКО ПРЯЧА НЕ МЕНЬШЕ. STORY-085
-  // (2026-09-21) законно переписала оба помощника: номера людей клиента и
+  // законно переписала оба помощника: номера людей клиента и
   // реквизиты компании теперь тоже прячутся. Сторож поэтому держит не имя
   // файла, а правило: последнее определение обнуляет КАЖДОЕ поле, которое
   // обнуляла миграция уровней. Ослабить — упадёт; усилить — можно.
@@ -655,8 +656,8 @@ describe("сервер: клиенты по уровням", () => {
     }
   });
 
-  // STORY-085 (2026-09-21): человек клиента — отдельный клиент, и его контакты
-  // прячет его собственная строка тем же помощником. STORY-086 (2026-09-22)
+  // STORY-085: человек клиента — отдельный клиент, и его контакты
+  // прячет его собственная строка тем же помощником. STORY-086
   // добавила связи ТРЕТИЙ ключ — место: без него у вопроса «кто живёт в Вилле
   // 5» нет ответа. Свободным текстом ключ не стал: триггер сверяет место с
   // объектами самой карточки-группы, поэтому телефон внутри связи — мимо
@@ -765,7 +766,7 @@ describe("сервер: клиенты по уровням", () => {
     const start = sql.search(/create or replace function public\.list_client_members\s*\(/i);
     const body = sql.slice(start, sql.indexOf("$function$;", start));
     for (const [rule, why] of [
-      // С 30.09 — по блоку «Люди» карточки-группы; контакты людей гасит маска.
+      // По блоку «Люди» карточки-группы; контакты людей гасит маска.
       ["visible := public.access_client_ids();", "набор сотрудника больше не читается"],
       ["if not (p_group_id = any(visible)) then", "карточка-группа не сверяется с набором"],
       [
@@ -802,8 +803,8 @@ describe("сервер: клиенты по уровням", () => {
   test("скрытые маской связи сотрудник не запишет обратно", () => {
     const file = lastDefiner("update_client_with_tags");
     const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    // С 02.10 номера, имя и мессенджеры — блок «Клиент»: правит их только
-    // «Меняет» (судят по значению). С 03.10 номер приходит целиком тому, кто
+    // Номера, имя и мессенджеры — блок «Клиент»: правит их только
+    // «Меняет» (судят по значению). Номер приходит целиком тому, кто
     // блок видит, поэтому «сначала открой дверью» снято — пустых номеров
     // маски поверх настоящих больше нет. Связи — блок «Люди»: скрыты — в
     // строке их нет, «Только видит» — записать нельзя, «Меняет» — строка
@@ -991,7 +992,7 @@ describe("экраны: вкладка «Клиенты» открывается
   test("дверь права строки шестерёнки стоит на воротах источника", () => {
     const door = readFileSync(resolve(here, "ClientSettingsRoute.tsx"), "utf8");
     assert.match(door, /<ClientsCompanyRoute kind="tab">/);
-    // Страница нескольких строк («Объекты», 02.10) закрыта, только если
+    // Страница нескольких строк («Объекты») закрыта, только если
     // скрыты все её строки.
     assert.match(door, /rows\.every\(\(key\) => levels\[key\] === "hidden"\)/, "«Скрыты» открывались бы адресом");
   });
@@ -1001,8 +1002,8 @@ describe("экраны: вкладка «Клиенты» открывается
     assert.match(door, /<ClientsCompanyRoute kind="card" forceActive>/);
   });
 
-  // 03.10: «Связь» и «Карты» из записи стояли за ролью календаря — партнёр
-  // с открытой строкой упирался в стену, а шестерёнка листа ему пряталась.
+  // «Связь» и «Карты» из записи не должны стоять за ролью календаря: партнёр
+  // с открытой строкой упирался бы в стену, а шестерёнка листа ему пряталась.
   test("«Связь» и «Карты» из записи — те же ворота строки, что во вкладке", () => {
     for (const page of ["channels", "maps"]) {
       const door = readFileSync(resolve(here, `../../../app/(shared)/${page}.tsx`), "utf8");
@@ -1014,19 +1015,19 @@ describe("экраны: вкладка «Клиенты» открывается
     }
   });
 
-  // ВИЗУАЛ ВКЛАДКИ НЕ ЗАВИСИТ ОТ ТОГО, ЧТО ОТКРЫТО В КАЛЕНДАРЕ (владелец
-  // 20.09: «у нас пропали шестерёнки сверху слева… визуал вообще не
-  // меняется»). Первый заход гасил шестерёнку и аналитику, пока своя
-  // компания не станет активной.
+  // ВИЗУАЛ ВКЛАДКИ НЕ ЗАВИСИТ ОТ ТОГО, ЧТО ОТКРЫТО В КАЛЕНДАРЕ: шестерёнка и
+  // аналитика не гаснут, пока своя компания не станет активной.
   test("шестерёнка и аналитика не смотрят на активную компанию", () => {
-    const list = read("index.tsx");
+    // Список — маршрут + папка `list/`; шапка с лентой команд — `ListTopBar.tsx`.
+    const list = clientsListSource();
+    const top = clientsListTopBarSource();
     // Срез строго по разметке шапки: от неё до ленты команд под ней. Якорь —
-    // сам тег; не найден — тест падает, а не проверяет весь файл (до 04.10
-    // якорем был снесённый `<ClientsFilterBar`, и срез молча шёл до конца).
-    const start = list.indexOf("minHeight: 48");
-    const end = list.indexOf("<ScopeChips");
+    // сам тег; не найден — тест падает, а не проверяет весь файл (якорь
+    // в виде снесённого `<ClientsFilterBar` молча шёл бы срезом до конца).
+    const start = top.indexOf("minHeight: 48");
+    const end = top.indexOf("<ScopeChips");
     assert.ok(start > 0 && end > start, "границы шапки списка не найдены");
-    const header = list.slice(start, end);
+    const header = top.slice(start, end);
     assert.ok(header.includes("Настройки клиентов"), "шапка списка не найдена");
     assert.ok(
       !/isActive/.test(header),
@@ -1042,15 +1043,15 @@ describe("экраны: вкладка «Клиенты» открывается
       !list.includes("useCurrentRole"),
       "список снова спрашивает роль в активной компании вместо источника",
     );
-    // ДВЕРИ ШАПКИ НЕ ЗАВИСЯТ И ОТ ИСТОЧНИКА (владелец 20.09: «визуал целой
-    // страницы мы полностью сохраняем»): шестерёнка и аналитика стоят всегда,
+    // ДВЕРИ ШАПКИ НЕ ЗАВИСЯТ И ОТ ИСТОЧНИКА (визуал страницы сохраняется
+    // целиком): шестерёнка и аналитика стоят всегда,
     // а что за ними — решает уже сама страница.
     assert.ok(
       !/\{caps\.manage[^}]*\?\s*\(?\s*<Pressable/.test(header),
       "двери шапки снова гаснут по правам",
     );
     // Футер на месте и гаснет, а не исчезает — по ВЫБРАННОЙ команде
-    // (владелец 04.10: «если запрещено — гаси»): своя — `caps.create`,
+    // (запрещено — гасим): своя — `caps.create`,
     // команда партнёра — её «Создание клиента».
     assert.ok(
       /disabled=\{!createHere\}/.test(list),
@@ -1083,7 +1084,7 @@ describe("экраны: вкладка «Клиенты» открывается
   });
 
   test("хуки клиентов читают источник, а не активную компанию", () => {
-    const queries = readFileSync(join(here, "queries.ts"), "utf8");
+    const queries = readModuleSource(join(here, "queries.ts"));
     for (const hook of ["useClients", "useClient", "useClientTags", "useCreateClient", "useArchiveClients"]) {
       const at = queries.indexOf(`export function ${hook}(`);
       assert.ok(at >= 0, `нет хука ${hook}`);

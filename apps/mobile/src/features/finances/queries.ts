@@ -6,6 +6,7 @@ import {
   listRefundTotals,
   listTransactionsForAppointments,
   listTransactionsForRange,
+  rowToTx,
   updateTransaction,
   type TransactionDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
@@ -21,6 +22,7 @@ import {
 } from "@babun/shared/db/repositories/finance-categories";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
+import { containsPattern } from "@/lib/like-pattern";
 import { useTenantId } from "@/lib/tenant";
 import {
   financeCategoriesQueryKey,
@@ -116,7 +118,7 @@ export function useTransactions(
 
 /**
  * Операции, привязанные к записям, — в любой день внесения. Календарь ставит
- * деньги записи в день записи (владелец 2026-10-01), и полосе недели, клетке
+ * деньги записи в день записи, и полосе недели, клетке
  * месяца и шторке дня нужны и те, что внесены раньше видимых дней.
  *
  * Ключ — под общим префиксом `["transactions", компания]`: оплата, возврат и
@@ -139,6 +141,31 @@ export function useAppointmentsLedger(
     placeholderData,
     queryFn: () =>
       listTransactionsForAppointments(supabase, tenantId as string, key.split(",")),
+  });
+}
+
+/**
+ * All-time search by note — the fallback of the «Финансы» feed when the open
+ * period has nothing for the typed text. Notes only, newest 50: the screen
+ * enables it just while the period is honestly empty. Key sits under the
+ * `["transactions", company]` prefix, so ledger invalidation refreshes it.
+ */
+export function useAllTimeNoteSearch(trimmedQuery: string, enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["transactions", tenantId, "search-all-time", trimmedQuery],
+    enabled: !!tenantId && enabled,
+    queryFn: async (): Promise<FinanceTransaction[]> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .ilike("notes", containsPattern(trimmedQuery))
+        .order("occurred_on", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToTx);
+    },
   });
 }
 
@@ -172,8 +199,8 @@ export function useFinanceCategories() {
 // refreshBalances() после каждой мутации). Периодные итоги счетов живут под
 // ["transactions"] — их роняет первая же строка.
 //
-// ["receipts"] здесь не лишний. Сам собой чек больше не рождается (20.09,
-// `receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
+// ["receipts"] здесь не лишний. Сам собой чек больше не рождается
+// (`receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
 // выписанный документ: возврат его гасит, снятие возврата — оживляет.
 // Открытая панель «Чеки» смонтирована и без инвалидации об этом не узнаёт.
 export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
@@ -186,8 +213,7 @@ export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   // висеть в списке до перезапуска приложения.
   qc.invalidateQueries({ queryKey: ["debts"] });
   // «История платежей» записи — свой ключ вне ["transactions"]: без него
-  // оплата и возврат по инвойсу доходили до неё только через минуту (аудит
-  // 017, 03.10).
+  // оплата и возврат по инвойсу доходили бы до неё только через минуту.
   qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
 }
 
@@ -261,8 +287,8 @@ export function useUpdateCategory() {
   });
 }
 
-/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — у команды (владелец 2026-09-10: «шесть
- *  точек справа для передвижения… везде это добавь»). Пишем всю пачку разом:
+/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — у команды (шесть точек справа для
+ *  передвижения). Пишем всю пачку разом:
  *  перетаскивание меняет позиции всех видимых строк команды. */
 export function useReorderFinanceCategories() {
   const qc = useQueryClient();

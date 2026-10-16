@@ -21,9 +21,9 @@ const MIGRATIONS = join(__dirname, "../../../../../supabase/migrations");
 const DEFINER = /create or replace function public\.member_check_appointment_field/i;
 
 /** Тело `member_check_appointment_field` из ПОСЛЕДНЕЙ миграции, которая её
- *  определяет, — истина сервера. Прежде тест держал файл 24.09 и не увидел,
- *  что 30.09 событие получило клиента и объект, а заметка записи — своё право
- *  (сторож, который не мог упасть; аудит формы записи 03.10). */
+ *  определяет, — истина сервера. Тест, державший устаревший файл миграции, не заметил бы,
+ *  что событие получило клиента и объект, а заметка записи — своё право
+ *  (сторож, который не мог упасть). */
 function serverFieldCheck(): string {
   const files = readdirSync(MIGRATIONS)
     .filter((name) => name.endsWith(".sql"))
@@ -99,7 +99,7 @@ describe("запись сотрудника — зеркало серверно�
     assert.equal(isOwnRecordAlreadyCreated({ code: "42501", message: "access:block:calendar.create" }), false);
     assert.equal(isOwnRecordAlreadyCreated(null), false);
     // Путь владельца: `Error` без кода, текст базы за префиксом обёртки
-    // (03.10 — второе «Создать» после перезапуска базы показывало его как есть).
+    // (второе «Создать» после перезапуска базы показывало его как есть).
     assert.equal(
       isOwnRecordAlreadyCreated(
         new Error('createAppointment: duplicate key value violates unique constraint "appointments_pkey"'),
@@ -172,7 +172,7 @@ describe("запись сотрудника — зеркало серверно�
     );
     assert.equal(memberWriteRefusal("access:field:paid_amount", titleOf), "Это поле меняет только владелец");
     assert.equal(memberWriteRefusal("access:client", titleOf), "Этот клиент вам недоступен");
-    // Запись сотрудника не уходит из своей команды (владелец 30.09).
+    // Запись сотрудника не уходит из своей команды.
     assert.equal(
       memberWriteRefusal("updateAppointment: access:team_move", titleOf),
       "Запись остаётся в своей команде",

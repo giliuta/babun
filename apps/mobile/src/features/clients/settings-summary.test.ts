@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import { blocksSummary, listRowSummary, objectTypesSummary, tagsSummary } from "./settings-summary";
 
-// Подписи строк шестерёнки «Клиентов» (02.10, «по функциям»).
+// Подписи строк шестерёнки «Клиентов» («по функциям»).
 
 describe("подписи настроек клиентов", () => {
   test("строка в списке", () => {

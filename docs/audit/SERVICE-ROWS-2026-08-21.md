@@ -21,7 +21,7 @@
   **«Описание»** (коллизия с будущим настоящим описанием).
 - `packages/shared/src/local/finance/invoice-generator.ts` — `GeneratedInvoiceLine = {title, qty, unitPrice}`,
   `serviceName(serviceId)` лукапом живого каталога, ветка схлопывания `title × qty` (строка 137).
-- `apps/web/supabase/migrations/20260528_002_finance_redesign.sql:163` — `invoice_lines(id, invoice_id,
+- `apps/web/supabase/migrations/20260528000002_finance_redesign.sql:163` — `invoice_lines(id, invoice_id,
   position, title, qty numeric(10,3), unit_price, total)`. Колонки описания НЕТ, ограничения длины у `title` НЕТ.
 - `apps/mobile/src/components/ui/BottomSheet.tsx:286` — `ScrollView` **без `ref` и без `scrollTo`** наружу.
 - `apps/mobile/src/features/services/InlineServiceCreate.tsx` — **вторая дверь создания услуги**: два поля,
@@ -352,7 +352,7 @@ you add here will be visible to the customer»). Вчерашний труп «�
 Второй подписи под полем нет — эйбрау и есть подпись, писать имя блока дважды запрещено.
 
 **ДОХОДИТ ЛИ ДО КЛИЕНТА — СЕГОДНЯ НЕТ, И ЭТО ПРОВЕРЕНО ПО КОДУ.** `invoice_lines` = `id, invoice_id,
-position, title, qty, unit_price, total` (`20260528_002_finance_redesign.sql:163`); колонки описания
+position, title, qty, unit_price, total` (`20260528000002_finance_redesign.sql:163`); колонки описания
 нет. `GeneratedInvoiceLine = {title, qty, unitPrice}` (`invoice-generator.ts:40`). `pdf.ts:25` печатает
 `line.title` и четыре числа. То есть по закону 2026-08-21 описание В ТАКОМ ВИДЕ завести НЕЛЬЗЯ —
 это была бы вторая единица измерения.

@@ -20,19 +20,19 @@ import {
   useComposeReceipt,
   useIssueReceipt,
   useUpdateReceipt,
-} from "@/features/documents/receipts-queries";
+} from "@/features/finances/receipts-queries";
 import { useReceiptSource } from "@/features/documents/use-receipt-source";
 import { useReceiptDraftPaper } from "@/features/documents/use-receipt-draft-paper";
-import { useNextInvoiceSeries } from "@/features/invoices/queries";
+import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/session/tenant";
 import { useServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 
 // НОВЫЙ ЧЕК — ТОНКИЙ МАРШРУТ НАД СОСТАВИТЕЛЕМ, как `invoices/new.tsx` над
 // `InvoiceEditor`: экран держит только действие и переход, все блоки и листы
@@ -47,7 +47,7 @@ export default function NewReceiptScreen() {
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = useState(false);
   // Выписанный чек ждёт, пока уедет предпросмотр: переход, начатый под
-  // модальным листом, iOS показывал не всегда (проверка на 17e, 04.10).
+  // модальным листом, iOS показывал не всегда (замечено на iPhone 17e).
   const justIssued = useRef<Receipt | null>(null);
   const toast = useToast();
   const calendarSettings = useCalendarSettings();
@@ -60,7 +60,7 @@ export default function NewReceiptScreen() {
   const issueForPayment = useIssueReceipt();
   const updateReceipt = useUpdateReceipt();
 
-  // ОТКУДА ЧЕК (владелец 2026-10-03/04): с нуля; на принятую оплату — значок
+  // ОТКУДА ЧЕК: с нуля; на принятую оплату — значок
   // чека в записи, «Выписать чек» инвойса; правка выписанного — «Изменить» в
   // листе чека, тот же номер. Заполнение — `useReceiptSource`.
   const source = useReceiptSource(params, change);
@@ -74,7 +74,7 @@ export default function NewReceiptScreen() {
   const owner = useCurrentRole().data === "owner";
   const companies = useCompanies();
 
-  // НОМЕР ЧЕКА — В БЛОКЕ «РЕКВИЗИТЫ», КАК У ИНВОЙСА (владелец 04.10):
+  // НОМЕР ЧЕКА — В БЛОКЕ «РЕКВИЗИТЫ», КАК У ИНВОЙСА:
   // следующий номер серии этого юрлица, владелец правит его вручную. У
   // выписанного чека номер уже дан — строки нет.
   const companyId =
@@ -93,8 +93,8 @@ export default function NewReceiptScreen() {
   const nameFor = (line: { serviceId: string; serviceName?: string }) =>
     line.serviceName ?? catalog.get(line.serviceId)?.name ?? "Услуга";
 
-  // ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ (владелец 2026-09-20: «перед этим всегда должно
-  // показывать превью»). Собирается ровно той же моделью, что печатает PDF.
+  // ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ: перед выпиской всегда показываем
+  // превью. Собирается ровно той же моделью, что печатает PDF.
   //
   // НАЛОГ ЧЕКА С НУЛЯ СЧИТАЕТСЯ ТАК ЖЕ, КАК ЕГО ПОСЧИТАЕТ СЕРВЕР: изнутри
   // полученной суммы (`fill_transaction_vat`); ставка — набранная в «Итого»
@@ -178,8 +178,8 @@ export default function NewReceiptScreen() {
       });
       setPreviewOpen(false);
       toast(editing ? `Чек ${receipt.number} сохранён` : `Чек ${receipt.number} выписан`, "success");
-      // ВЫПИСАННЫЙ ЧЕК ОТКРЫВАЕТСЯ СВОЕЙ СТРАНИЦЕЙ, как инвойс (владелец
-      // 04.10: «нажимаю — сохраняется, и уже всё можно отправлять»), когда
+      // ВЫПИСАННЫЙ ЧЕК ОТКРЫВАЕТСЯ СВОЕЙ СТРАНИЦЕЙ, как инвойс (после
+      // сохранения чек уже можно отправлять), когда
       // предпросмотр уехал.
       justIssued.current = receipt;
     } catch (error) {

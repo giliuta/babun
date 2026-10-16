@@ -30,24 +30,23 @@ import { AmountBlock } from "./AmountBlock";
 import { askBudgetNotificationPermission } from "./budget-notify";
 import { budgetInputText, parseBudgetInput } from "./category-budget";
 import { useFinanceCategories, useInsertCategory, useUpdateCategory } from "./queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { useCategoryMonthSpend } from "./use-category-budget";
 
 // ШТОРКА КАТЕГОРИИ — ОДНА НА СТРАНИЦУ КАТЕГОРИЙ И НА ШЕСТЕРЁНКУ «ФИНАНСОВ»
-// (владелец 03.10: в шестерёнке у доходов, расходов и долгов свои блоки с
+// (в шестерёнке у доходов, расходов и долгов свои блоки с
 // самими категориями — тап по категории правит её на месте, «+» заводит
 // новую, не уводя на страницу). Вынесена из `cabinet/categories.tsx` как была.
 //
-// ЛИСТ СОБРАН ИЗ БЛОКОВ, КАК ДОЛГ, ОПЕРАЦИЯ И СЧЁТ (владелец 2026-09-24:
-// «переделай в категориях так, чтобы соблюдать нашу архитектуру»). Каждый
+// ЛИСТ СОБРАН ИЗ БЛОКОВ, КАК ДОЛГ, ОПЕРАЦИЯ И СЧЁТ. Каждый
 // вопрос — свой блок со своей шапкой и границами, а не поле формы с ярлыком:
 // «Категория» — имя, цвет и значок одной строкой (как у календаря и счёта),
 // «Бюджет в месяц» — тот же блок суммы, что в операции, «В операции
 // спрашивать» — тумблеры в карточке.
 //
-// ЧТО СПРАШИВАТЬ В ОПЕРАЦИИ (владелец 2026-09-24: «зарплата смотрит
-// сотрудников, другая прикрепляет клиента»). Три независимых тумблера, а не
+// ЧТО СПРАШИВАТЬ В ОПЕРАЦИИ (зарплата смотрит
+// сотрудников, другая прикрепляет клиента). Три независимых тумблера, а не
 // выбор одного из трёх: у чаевых и клиент, и мастер; топливу нужен чек.
 //
 // БЮДЖЕТ НА МЕСЯЦ — только у расхода; пусто — бюджета нет. Уведомление
@@ -92,7 +91,7 @@ export function CategoryEditorSheet({
   const fmt = (n: number) => money(n, currency);
 
   // УХОДЯЩИЙ ЛИСТ НЕ ПЕРЕСТРАИВАЕТСЯ (краш Fabric «unmount … different
-  // index», 03.10): пока шторка уезжает, она рисует ту же категорию, с
+  // index»): пока шторка уезжает, она рисует ту же категорию, с
   // которой открылась, а не «новую · расход» по умолчанию.
   const lastTarget = useRef(target);
   if (target) lastTarget.current = target;
@@ -102,12 +101,12 @@ export function CategoryEditorSheet({
     view?.mode === "edit" ? view.category.type : (view?.kind ?? "expense");
   const teamId = view?.mode === "create" ? view.teamId : (editing?.team_id ?? null);
   // «Во всех командах» — только там, где человек сам правит категории этого
-  // вида (03.10): сервер вставку в чужую команду отбил бы, и создание
+  // вида: сервер вставку в чужую команду отбил бы, и создание
   // упало бы целиком. У владельца — все команды.
   const levelsOf = useFinanceSettingLevelsOf();
   const teams = allTeamsList.filter((team) => levelsOf(team.id)[CATEGORY_KIND_ROW[kind]] === "write");
   const spend = useCategoryMonthSpend(kind === "expense" && view != null);
-  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг): категории того же
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (как у услуг): категории того же
   // вида из других команд аккаунта, которых здесь нет по имени. Только у
   // владельца; шаблон несёт и вопросы, и бюджет.
   const isOwner = useDataRole().data === "owner";
@@ -133,8 +132,8 @@ export function CategoryEditorSheet({
   const [budgetText, setBudgetText] = useState("");
   const [allTeams, setAllTeams] = useState(false);
 
-  // ЗАКРЫТЬ БЕЗ СОХРАНЕНИЯ — ТОЛЬКО ПОСЛЕ ВОПРОСА (аудит 2026-09-24: свайп
-  // по граберу молча терял набранное имя и тумблеры). Снимок — то, с чем
+  // ЗАКРЫТЬ БЕЗ СОХРАНЕНИЯ — ТОЛЬКО ПОСЛЕ ВОПРОСА (иначе свайп
+  // по граберу молча терял бы набранное имя и тумблеры). Снимок — то, с чем
   // лист открылся; вопрос задаётся, когда лист уже уехал (окно поверх
   // уезжающего листа iOS не покажет) — как у формы операции.
   const opened = useRef("");
@@ -175,7 +174,7 @@ export function CategoryEditorSheet({
     }
     setAllTeams(false);
     setPicking(false);
-  }, [target]);
+  }, [target, setPicking]);
 
   // У долга «кто» уже есть своим блоком (клиент или имя) — прикреплять нечего.
   const attachable = kind !== "debt";

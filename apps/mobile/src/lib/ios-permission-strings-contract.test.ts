@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// ТЕКСТЫ РАЗРЕШЕНИЙ iOS (выпуск в App Store, 06.10). Ревьюер Apple читает
+// ТЕКСТЫ РАЗРЕШЕНИЙ iOS (выпуск в App Store). Ревьюер Apple читает
 // окно «Babun запрашивает доступ к камере» на английском — базовые строки
 // Info.plist обязаны быть английскими, а переводы лежат в
 // `locales/<язык>.json` (Expo кладёт их в <язык>.lproj/InfoPlist.strings).

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) =>
@@ -10,16 +11,19 @@ const read = (relative: string) =>
 
 describe("native settings persistence contract", () => {
   test("reference updates confirm a returned row and team snapshots use CAS", () => {
-    const source = read("../reference/queries.ts");
+    const source = readModuleSource(resolve(here, "../reference/queries.ts"));
     assert.doesNotMatch(source, /\bas any\b/);
     assert.match(source, /\.select\("id"\)[\s\S]*\.maybeSingle\(\)/);
-    assert.match(source, /expectedUpdatedAt: string/);
-    assert.match(source, /\.eq\("updated_at", expectedUpdatedAt\)/);
+    assert.match(source, /\.eq\("updated_at", team\.updated_at\)/);
   });
 
   test("global sign-out and account deletion await tenant-data erasure", () => {
-    const source = read("../../../app/(dashboard)/cabinet/account.tsx");
-    const authClear = read("../../lib/auth-clear.ts");
+    // The page is the thin route plus `cabinet/account/`.
+    const source = readModuleSource(
+      resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"),
+      resolve(here, "../cabinet/account"),
+    );
+    const authClear = readModuleSource(resolve(here, "../../lib/auth-clear.ts"));
     assert.doesNotMatch(source, /\bwipeLocalData\b/);
     assert.match(source, /await signOutScopeAndWipe\("global"\)/);
     assert.match(source, /await wipeTenantScopedData\(\)/);
@@ -28,7 +32,11 @@ describe("native settings persistence contract", () => {
   });
 
   test("inventory is read-only outside owner and master cache is visibility-scoped", () => {
-    const screen = read("../../../app/(dashboard)/cabinet/inventory.tsx");
+    // The screen is the thin route plus `features/inventory/`.
+    const screen = readModuleSource(
+      resolve(here, "../../../app/(dashboard)/cabinet/inventory.tsx"),
+      resolve(here, "../inventory"),
+    );
     const query = read("../inventory/queries.ts");
     const cache = read("../../../../../packages/shared/src/local/equipment.ts");
     assert.match(screen, /const owner = role === "owner"/);

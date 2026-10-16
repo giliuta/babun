@@ -1,6 +1,6 @@
 import { SUPPORT_CONTACTS } from "@/features/cabinet/help";
 
-// КТО СТОИТ ЗА BABUN — ДЛЯ ПОЛИТИКИ, УСЛОВИЙ И УДАЛЕНИЯ АККАУНТА (04.10).
+// КТО СТОИТ ЗА BABUN — ДЛЯ ПОЛИТИКИ, УСЛОВИЙ И УДАЛЕНИЯ АККАУНТА.
 //
 // App Store и Google Play требуют страницы, где названо, кто обрабатывает
 // данные и как с ним связаться. Имя, адрес и почту называет владелец —
@@ -18,7 +18,7 @@ export interface LegalOperator {
   address: string;
 }
 
-// Владелец 04.10: выпускаем от себя (личная лицензия Apple) — имя ровно как в
+// Выпуск от себя (личная лицензия Apple) — имя ровно как в
 // аккаунте Apple Developer, его же App Store покажет продавцом.
 export const LEGAL_OPERATOR: LegalOperator = {
   name: "Artem Hiliuta",

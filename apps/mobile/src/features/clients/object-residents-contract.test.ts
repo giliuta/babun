@@ -3,9 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
+// Split into an entry and a parts folder (rule of 400 lines): the guards read both.
+const objectsBlock = () =>
+  readModuleSource(resolve(here, "blocks/ObjectsBlock.tsx"), resolve(here, "blocks/objects-block"));
 
 // ЖИЛЬЦЫ ОБЪЕКТА: ОДНА ДВЕРЬ, ОДНО ОКНО ЗА РАЗ, ОДНА ШТОРКА ВЫБОРА (STORY-086).
 //
@@ -23,11 +27,11 @@ const read = (relative: string) => readFileSync(resolve(here, relative), "utf8")
 // сервера, которые можно было бы спросить, — есть разметка и порядок вызовов.
 
 describe("жилец заводится в листе виллы и нигде больше", () => {
-  // 03.10 владелец снял жильцов из листа объекта: «добавить жильца —
-  // полностью убираем, это перебор». Двери нет нигде.
+  // Жильцов в листе объекта нет: отдельная дверь «Добавить жильца» — перебор.
+  // Двери нет нигде.
   test("двери «Добавить жильца» нет ни в листе объекта, ни под виллами", () => {
     const sheet = read("ObjectEditSheet.tsx");
-    const block = read("blocks/ObjectsBlock.tsx");
+    const block = objectsBlock();
     assert.doesNotMatch(sheet, /addLabel="Добавить жильца"/, "в лист объекта вернулась дверь жильца");
     assert.doesNotMatch(sheet, /<ClientLinksBlock/, "в лист объекта вернулся блок «Жильцы»");
     // Ищется ДВЕРЬ, а не слово: почему её здесь нет, написано в самом файле
@@ -41,8 +45,8 @@ describe("жилец заводится в листе виллы и нигде �
     const doors = [...block.matchAll(/<ChooseRow[\s\S]*?label="([^"]+)"/g)].map(
       (m) => m[1],
     );
-    // Одна и та же дверь стоит и в карточке, и на своей странице (03.10:
-    // там объекты — отдельными карточками), но другой двери нет.
+    // Одна и та же дверь стоит и в карточке, и на своей странице (там
+    // объекты — отдельными карточками), но другой двери нет.
     assert.deepEqual(
       [...new Set(doors)],
       ["Добавить объект"],
@@ -51,7 +55,7 @@ describe("жилец заводится в листе виллы и нигде �
   });
 
   test("под виллой на странице — только показание, без правки", () => {
-    const block = read("blocks/ObjectsBlock.tsx");
+    const block = objectsBlock();
     // Строка жильцов приходит готовой и печатается как есть.
     assert.match(block, /residents=\{residentsFor\?\.\(loc\)\}/);
     // Ни строк связей, ни поля роли: правится роль только там, где человек
@@ -128,7 +132,7 @@ describe("шторка связи — одна шторка клиента с г
 describe("лист «Новый объект» закрывается после добавления", () => {
   test("добавили — лист уходит всегда, а форма пустеет только после записи", () => {
     const sheet = read("ObjectSheet.tsx");
-    // Прогон 22.09: на карточке клиента лист оставался открытым с пустой
+    // На карточке клиента лист раньше оставался открытым с пустой
     // формой (ради трёх вилл подряд), и «Добавить объект» выглядел так, будто
     // ничего не сохранилось. Закрытие безусловное — и после `onAdded`, и без.
     const add = sheet.slice(sheet.indexOf("const add = async"), sheet.indexOf("return (\n    <BottomSheet"));

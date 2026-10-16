@@ -3,13 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 
-import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useMirror } from "@/session/mirror-state";
 import { listAppointmentsPaged } from "@/features/calendar/queries";
 import { masterAppointmentJsonToAppointment } from "@/features/calendar/master-appointment-mapper";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import type { supabase } from "@/lib/supabase";
 
-import { viewKeyOf, type ClientsScope } from "./clients-company";
+import { viewKeyOf, type ClientsScope } from "@/session/clients-company";
 import { mirrorHistory } from "./member-history";
 
 // ИСТОРИЯ ЗАПИСЕЙ КЛИЕНТОВ У СОТРУДНИКА — ДВЕРЬЮ СЕРВЕРА (`member-history.ts`).

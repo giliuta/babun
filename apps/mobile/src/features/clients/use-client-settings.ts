@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useClientsCapabilities, useClientsScopeOrNull } from "./company-scope";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/session/company-scope";
 import {
   clientSettingLevels,
   type ClientSettingLevel,
@@ -9,9 +9,9 @@ import {
 import { useAccessMapOf } from "./sources";
 
 // ЖИВОЙ СЛОЙ НАД `settings-levels.ts`: источник вкладки, роль в нём и карта
-// прав ЕГО компании (01.10 — не только открытой в календаре: партнёр со
+// прав ЕГО компании (не только открытой в календаре: партнёр со
 // своей компанией правит настройки команд работодателя из своей вкладки).
-// Вне вкладки (Кабинет) источника нет — там, как и раньше, экран владельца,
+// Вне вкладки (Кабинет) источника нет — там экран владельца,
 // и всё открыто.
 
 /** Положения строк шестерёнки для любой команды компании экрана. */

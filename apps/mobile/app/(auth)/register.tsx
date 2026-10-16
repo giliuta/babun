@@ -26,8 +26,8 @@ import { getPendingInvitationToken } from "@/features/settings/pending-invitatio
 // Non-functional OAuth placeholders are not shown. Terms is a one-line legal note.
 // После отправки — «Введите код» из письма Babun (EmailCodeCard); верный код
 // сразу открывает календарь. Мастера «название бизнеса / род занятий» больше
-// нет (владелец 04.10): имя аккаунта — первое поле этой формы.
-// НА iPhone — ТОЛЬКО ПО ПРИГЛАШЕНИЮ (App Review 07.10, `CAN_SIGN_UP_HERE`).
+// нет: имя аккаунта — первое поле этой формы.
+// НА iPhone — ТОЛЬКО ПО ПРИГЛАШЕНИЮ (App Review, `CAN_SIGN_UP_HERE`).
 // Ссылка с экрана входа убрана, а прямой переход сюда без приглашения
 // возвращает на вход: аккаунт компании заводится на babun.app.
 export default function RegisterRoute() {

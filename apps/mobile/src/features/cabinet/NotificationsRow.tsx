@@ -8,7 +8,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useDevicePermission, useDeviceReminders } from "./device-notifications";
 import { notificationsSummary, remindersSilenced } from "./device-reminders";
 
-// «УВЕДОМЛЕНИЯ» — СТРОКА-ДВЕРЬ КАБИНЕТА (разрез 007 + 008, 2026-09-15; место в
+// «УВЕДОМЛЕНИЯ» — СТРОКА-ДВЕРЬ КАБИНЕТА (разрез 007 + 008; место в
 // корне выбирает 007). Подпись — живое состояние этого телефона: разрешены ли
 // уведомления и сколько напоминаний ждут. Янтарь — только когда напоминания
 // есть, а зазвонить им не дадут. Плитка оранжевая: в словаре пигментов это

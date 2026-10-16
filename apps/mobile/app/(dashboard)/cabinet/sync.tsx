@@ -5,6 +5,7 @@ import {
   ScrollView,
   Text,
   View,
+  Platform,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { CheckCircle2, RefreshCw, Trash2, WifiOff } from "lucide-react-native";
@@ -38,6 +39,7 @@ import { useTenantId } from "@/lib/tenant";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
+import { clientKeys } from "@/lib/client-query-keys";
 
 const MAX_ATTEMPTS = 3;
 
@@ -126,10 +128,10 @@ export default function SyncStatusScreen() {
               related.map((item) => removeOpAndEmit(item.id)),
             );
             // СТРОКУ С ТЕЛЕФОНА СНИМАЕМ, ТОЛЬКО ЕСЛИ ЕЁ НЕ БЫЛО НА СЕРВЕРЕ
-            // (несохранённая вставка). Раньше снималась и у отброшенной
-            // ПРАВКИ: запись пропадала с календаря целиком — слот казался
-            // свободным, клиент исчезал из списка, а без сети не возвращались
-            // до перечитки (аудит работы без сети 03.10). Правку заменит
+            // (несохранённая вставка). У отброшенной ПРАВКИ снять строку
+            // нельзя: запись пропала бы с календаря целиком — слот казался бы
+            // свободным, клиент исчез бы из списка, а без сети не вернулись бы
+            // до перечитки. Правку заменит
             // строка сервера при перечитке ниже: очередь по ней пуста, и
             // перечитку больше ничто не держит.
             if (related.some((item) => item.op === "insert")) {
@@ -137,8 +139,8 @@ export default function SyncStatusScreen() {
             }
             await Promise.all([
               queryClient.invalidateQueries({ queryKey: ["appointments"] }),
-              queryClient.invalidateQueries({ queryKey: ["clients"] }),
-              queryClient.invalidateQueries({ queryKey: ["client-tags"] }),
+              queryClient.invalidateQueries({ queryKey: clientKeys.all() }),
+              queryClient.invalidateQueries({ queryKey: clientKeys.tagAll() }),
             ]);
             await refresh();
           } catch (error) {
@@ -185,7 +187,9 @@ export default function SyncStatusScreen() {
           >
             <WifiOff color={t.warning} size={20} />
             <Text className="flex-1 text-sm" style={{ color: t.body }}>
-              Изменения хранятся только на этом iPhone и отправятся после подключения.
+              {Platform.OS === "android"
+                ? "Изменения хранятся только на этом телефоне и отправятся после подключения."
+                : "Изменения хранятся только на этом iPhone и отправятся после подключения."}
             </Text>
           </View>
         ) : null}
@@ -202,7 +206,11 @@ export default function SyncStatusScreen() {
           <EmptyState
             icon={<CheckCircle2 color={t.success} size={36} />}
             title="Всё синхронизировано"
-            subtitle="На этом iPhone нет ожидающих изменений."
+            subtitle={
+              Platform.OS === "android"
+                ? "На этом телефоне нет ожидающих изменений."
+                : "На этом iPhone нет ожидающих изменений."
+            }
           />
         ) : null}
 
@@ -228,7 +236,9 @@ export default function SyncStatusScreen() {
                       ? op.last_error || "Сервер отклонил изменение."
                       : online
                         ? "Ожидает отправки"
-                        : "Сохранено на этом iPhone"}
+                        : Platform.OS === "android"
+                          ? "Сохранено на этом телефоне"
+                          : "Сохранено на этом iPhone"}
                   </Text>
                 </View>
               </View>

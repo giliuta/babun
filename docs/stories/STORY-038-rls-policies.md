@@ -139,7 +139,7 @@ Expected: no hits in app code. If any hit appears outside `.env.local`-related f
 
 ### G1 — SQL migration (interactive: stop and ask user to apply)
 
-**File: `apps/web/supabase/migrations/20260429_001_rls_policies.sql`**
+**File: `apps/web/supabase/migrations/20260429000001_rls_policies.sql`**
 
 ```sql
 -- ─────────────────────────────────────────────────────────────────────
@@ -482,7 +482,7 @@ If 12/12 pass on production → declare **STORY-038 closed**. Update the bottom-
 
 | Path | Purpose |
 |---|---|
-| `apps/web/supabase/migrations/20260429_001_rls_policies.sql` | helper + RLS + 5 policies |
+| `apps/web/supabase/migrations/20260429000001_rls_policies.sql` | helper + RLS + 5 policies |
 
 ### Modify
 

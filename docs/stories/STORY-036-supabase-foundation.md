@@ -22,7 +22,7 @@ LocalStorage was always a stopgap. STORY-035 landed the package boundary (`@babu
 2. `.env.local.example` lists all three vars with placeholder values.
 3. Browser Supabase client works in `apps/web/src/lib/supabase/client.ts`.
 4. Server Supabase client (with Next 16 async cookies) works in `apps/web/src/lib/supabase/server.ts`.
-5. Migration `20260427_001_init_clients.sql` applied to project `qvgemicqeqwz` and visible in Supabase Dashboard.
+5. Migration `20260427000001_init_clients.sql` applied to project `qvgemicqeqwz` and visible in Supabase Dashboard.
 6. One `tenants` row exists with the agreed `DEV_TENANT_ID` UUID.
 7. Generated types file `packages/shared/src/db/database.types.ts` exists and `tsc --noEmit` is green when imported.
 8. Repository functions in `packages/shared/src/db/repositories/clients.ts` cover CRUD: `listClients / getClient / createClient / updateClient / deleteClient`.
@@ -198,9 +198,9 @@ We do **not** add a `middleware.ts` in this story — there's no auth yet to ref
 
 ### G2 — SQL schema
 
-**Location.** Per the brief: `babun-crm/apps/web/supabase/migrations/20260427_001_init_clients.sql`. **Conflict to resolve:** existing migrations live at root `supabase/migrations/`. See `R0` in Risks — proposed resolution is to **leave root migrations alone** (they're STORY-001's broader plan, currently dormant) and put STORY-036's narrower migration under `apps/web/supabase/migrations/`. This means `npx supabase` is run from `apps/web/`. If the user prefers one canonical folder, we'll fold and consolidate before applying.
+**Location.** Per the brief: `babun-crm/apps/web/supabase/migrations/20260427000001_init_clients.sql`. **Conflict to resolve:** existing migrations live at root `supabase/migrations/`. See `R0` in Risks — proposed resolution is to **leave root migrations alone** (they're STORY-001's broader plan, currently dormant) and put STORY-036's narrower migration under `apps/web/supabase/migrations/`. This means `npx supabase` is run from `apps/web/`. If the user prefers one canonical folder, we'll fold and consolidate before applying.
 
-**File: `babun-crm/apps/web/supabase/migrations/20260427_001_init_clients.sql`**
+**File: `babun-crm/apps/web/supabase/migrations/20260427000001_init_clients.sql`**
 
 ```sql
 -- STORY-036 — Supabase foundation, clients vertical only.
@@ -729,7 +729,7 @@ If `git status` is clean of env files, proceed with `git add <specific paths>` (
 |---|---|
 | `babun-crm/apps/web/.env.local.example` | Template for required env vars |
 | `babun-crm/apps/web/supabase/config.toml` | Created by `supabase link` (auto) |
-| `babun-crm/apps/web/supabase/migrations/20260427_001_init_clients.sql` | Schema (tenants, clients, client_tags, junction) + dev tenant seed |
+| `babun-crm/apps/web/supabase/migrations/20260427000001_init_clients.sql` | Schema (tenants, clients, client_tags, junction) + dev tenant seed |
 | `babun-crm/apps/web/src/lib/supabase/server.ts` | SSR client (Next 16 async cookies) |
 | `babun-crm/apps/web/src/components/clients/ClientsListSkeleton.tsx` | Loading shimmer |
 | `babun-crm/packages/shared/src/db/database.types.ts` | Output of `npm run db:types` |

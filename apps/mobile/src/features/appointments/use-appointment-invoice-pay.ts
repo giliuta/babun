@@ -7,13 +7,12 @@ import {
 } from "@babun/shared/local/finance/invoice-ledger";
 import { randomUuid } from "@babun/shared/sync";
 
-import { useInvoicePayments, useRecordInvoicePayment } from "@/features/invoices/queries";
+import { useInvoicePayments, useRecordInvoicePayment } from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
-// ДЕНЬГИ ЗАПИСИ С ИНВОЙСОМ — В ИНВОЙС (владелец 04.10: «выставил инвойс, он
-// скинул предоплату, я нажал оплатить и сделал чек — а инвойс остался
-// неоплаченным; это расхождение во всех слоях финансов»). Пока по записи есть
+// ДЕНЬГИ ЗАПИСИ С ИНВОЙСОМ — В ИНВОЙС (иначе после предоплаты и чека инвойс
+// оставался бы неоплаченным — расхождение во всех слоях финансов). Пока по записи есть
 // выставленный неоплаченный инвойс, счёт клиенту — он: к оплате — его
 // остаток, плитка счёта записывает платёж ИНВОЙСА (`record_invoice_payment`),
 // сервер закрывает им и запись (`settle_appointment_from_invoice_payment`), а

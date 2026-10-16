@@ -3,7 +3,7 @@ import type { Database } from "../database.types";
 import type { FinanceTransaction } from "../../local/finance/transaction";
 import { rowToTx } from "./finance-transactions";
 
-// «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10; миграция 20261003224700).
+// «УДАЛЁННЫЕ ОПЕРАЦИИ» (миграция 20261003224700).
 //
 // Удалённая операция уходит из журнала целиком, а её снимок 30 дней лежит в
 // `deleted_operations`. Лента, остатки и аналитика ящика не читают — для них

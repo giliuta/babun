@@ -106,7 +106,7 @@ describe("outstanding and amount checks", () => {
 });
 
 describe("деньги блока считаются по итогу ФОРМЫ", () => {
-  // Владелец 2026-09-12: оплаченная запись (160 из 160), дописал услуги до
+  // Оплаченная запись (160 из 160), дописали услуги до
   // €280 — блок продолжал говорить «Оплачено» и гасил все плитки, кроме уже
   // оплаченной. Остаток брался из базы, а в базе лежит прошлая версия записи.
   const paidFully = apt({
@@ -360,7 +360,7 @@ describe("blockCaption", () => {
     assert.equal(blockCaption({ ...base, amountMode: true }), null);
     assert.equal(blockCaption({ ...base, amountMode: true, started: false }), null);
     // Плитки принимают деньги и до визита — подпись называет сумму, а не
-    // отсылает к «предоплате или инвойсу» (владелец 2026-09-24).
+    // отсылает к «предоплате или инвойсу».
     assert.deepEqual(blockCaption({ ...base, started: false }), { text: "К оплате €135", tone: "neutral" });
     assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "warning" });
     assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "warning" });
@@ -393,7 +393,7 @@ describe("labels", () => {
   });
 });
 
-// ПЕРЕНЕСЛИ В ФОРМЕ И НЕ СОХРАНИЛИ (017, 03.10): сервер записал бы оплату и
+// ПЕРЕНЕСЛИ В ФОРМЕ И НЕ СОХРАНИЛИ: сервер записал бы оплату и
 // закрыл визит по прежней дате, а «Сохранить» отказало бы.
 describe("дата и время формы против сохранённых", () => {
   test("новая запись — без замка; всё совпадает — без замка", () => {

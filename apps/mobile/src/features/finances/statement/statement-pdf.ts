@@ -1,5 +1,5 @@
-import { shareHtmlAsPdf } from "@/features/documents/share-pdf";
-import { escapeHtml } from "@/features/invoices/pdf";
+import { shareHtmlAsPdf } from "@/lib/share-pdf";
+import { escapeHtml } from "@/lib/paper/pdf";
 import type { StatementDocument } from "./statement-document";
 
 // PDF ВЫПИСКИ — ТЕ ЖЕ ЧЕРНИЛА, ЧТО У ЧЕКА (`documents/receipt-pdf.ts`), НО

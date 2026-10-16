@@ -11,7 +11,7 @@ import { useTenantId } from "@/lib/tenant";
 import { NEVER_PAUSE } from "./accounts";
 import { invalidateLedger } from "./queries";
 
-// «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10) — ящик живёт на сервере, офлайн его
+// «УДАЛЁННЫЕ ОПЕРАЦИИ» — ящик живёт на сервере, офлайн его
 // не прочитать и не тронуть: все записи — `NEVER_PAUSE`, ошибка сразу.
 
 /** Ящик всей компании; страница и дверь режут его по команде сами — кэш один. */
@@ -24,7 +24,7 @@ export function useDeletedOperations() {
   });
 }
 
-/** Строка уходит из ящика, как только сервер ответил «готово» (03.10): без
+/** Строка уходит из ящика, как только сервер ответил «готово»: без
  *  этого она висела 2–3 секунды — пока перечитывается весь журнал. */
 function dropFromTrash(qc: ReturnType<typeof useQueryClient>, tenantId: string | null, id: string) {
   qc.setQueryData<DeletedOperation[]>(deletedOperationsQueryKey(tenantId), (rows) =>

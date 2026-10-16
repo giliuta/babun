@@ -24,7 +24,7 @@
 import { Platform } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { renderTemplate } from "@babun/shared/local/sms-templates";
-import { addressedAs, firstName } from "./sms-name";
+import { addressedAs, firstName } from "@/lib/sms-name";
 
 /** Dialable phone for the sms: address. Prefers the canonical E.164
  *  (phone_e164) so a locally-typed number without a country code still

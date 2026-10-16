@@ -2,8 +2,8 @@ import { Stack } from "expo-router";
 import { CabinetRoleBoundary } from "@/features/settings/CabinetRoleBoundary";
 import { MirrorReturnRetry } from "@/features/access/mirror/MirrorReturnRetry";
 
-// ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (владелец 2026-09-24:
-// «открываю финансы, нажимаю „назад“ — перекидывает на календарь»). Экран
+// ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (иначе «назад» из
+// вкладки перекидывает на предыдущую). Экран
 // вкладки, открытый снаружи — из календаря, из формы, дверью листа, по
 // ссылке, — ложился в стек вкладки ОДИН, без её корня под собой, и «назад»
 // уходил из вкладки на предыдущую. `initialRouteName` кладёт корень вниз
@@ -14,7 +14,7 @@ export default function CabinetLayout() {
   return (
     <CabinetRoleBoundary>
       <Stack screenOptions={{ headerShown: false }} />
-      {/* Выход из «его глазами» возвращает на страницу прав (01.10). */}
+      {/* Выход из «его глазами» возвращает на страницу прав. */}
       <MirrorReturnRetry />
     </CabinetRoleBoundary>
   );

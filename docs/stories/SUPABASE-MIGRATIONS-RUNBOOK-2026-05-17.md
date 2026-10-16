@@ -13,12 +13,12 @@ the post-deploy advisor + security review surfaced additional gaps.
 ## Order (applied in this sequence)
 
 ```
-20260517_001_payment_status_and_finance_sync.sql
-20260517_002_recurring_reminder_manual_fields.sql
-20260517_003_webhooks_master_docs_ratings.sql
-20260517_004_master_ratings_security.sql
-20260517_005_post_apply_hardening.sql               (advisor follow-up)
-20260517_007_feedback_rpc_security_definer.sql      (Beta #52 unblock)
+20260517000001_payment_status_and_finance_sync.sql
+20260517000002_recurring_reminder_manual_fields.sql
+20260517000003_webhooks_master_docs_ratings.sql
+20260517000004_master_ratings_security.sql
+20260517000005_post_apply_hardening.sql               (advisor follow-up)
+20260517000007_feedback_rpc_security_definer.sql      (Beta #52 unblock)
 20260517_009_feedback_rpc_hardening.sql             (security-review fix)
 ```
 

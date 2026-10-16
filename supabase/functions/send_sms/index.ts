@@ -20,47 +20,16 @@
 // Без ключей Twilio функция ничего не списывает и не трогает очередь:
 // сообщения ждут, пока ключи не появятся.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { serviceClient } from "../_shared/service-client.ts";
+import { constantTimeEqual, json } from "../_shared/http.ts";
 import { analyzeSmsEncoding, MAX_SMS_PARTS, stripEmoji } from "./encoding.ts";
 import { renderSms, type SmsRenderVars } from "./render.ts";
 
 const BATCH = 20;
 const MAX_BATCHES = 10;
 
-const json = (status: number, body: unknown): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
 
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const legacyServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  let serviceKey: string | undefined;
-  if (secretKeysJson) {
-    try {
-      const candidates = Object.values(
-        JSON.parse(secretKeysJson) as Record<string, unknown>,
-      ).filter((v): v is string => typeof v === "string" && v.length > 20);
-      serviceKey = candidates.find((v) => v.startsWith("sb_secret_")) ?? candidates[0];
-    } catch {
-      // fall through
-    }
-  }
-  if (!serviceKey) serviceKey = legacyServiceKey || undefined;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
-function constantTimeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < left.length; i++) mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
-  return mismatch === 0;
-}
 
 // deno-lint-ignore no-explicit-any
 async function authorized(sb: any, request: Request): Promise<boolean> {

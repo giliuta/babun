@@ -4,10 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 
-import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "./tiers";
+import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "@/session/tiers";
 
-// ЦЕНА НА СТРАНИЦЕ «ТАРИФ» = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE (с 12.10 — одна
-// цена за календарь, количество = живые календари).
+// ЦЕНА НА СТРАНИЦЕ «ТАРИФ» = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE (одна цена за
+// календарь, количество = живые календари).
 //
 // Страница показывает цены из `tiers.ts`, а заводит цену в Stripe и
 // списывает деньги функция `tariff-checkout` — своим списком в центах. Два
@@ -45,6 +45,14 @@ describe("цена за календарь: страница и Stripe", () => {
     assert.doesNotMatch(FN, /too_many_partners/);
     assert.match(FN, /proration_behavior: "none"/);
     assert.equal(TIER_LIMITS.max.partners, 1000);
+  });
+
+  test("сверка количества не трогает старую подписку с плоской ценой", () => {
+    // Иначе Про за €X при трёх календарях стал бы стоить 3 × €X.
+    const sync = FN.slice(FN.indexOf('if (action === "sync")'), FN.indexOf("const period: Period"));
+    const guard = sync.indexOf("/^babun_calendar_/.test(item.price?.lookup_key");
+    assert.ok(guard > 0, "sync меняет количество, не проверив цену «за календарь»");
+    assert.ok(guard < sync.indexOf('"items[0][quantity]"'), "проверка цены стоит после записи количества");
   });
 
   test("вебхук узнаёт цену за календарь и пишет число календарей", () => {

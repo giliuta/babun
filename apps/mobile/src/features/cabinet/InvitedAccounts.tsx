@@ -7,31 +7,29 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useMirror } from "@/session/mirror-state";
 import { useTeams } from "@/features/reference/queries";
-import { useMyMemberships } from "@/features/settings/my-memberships";
-import { useMyCalendars, useSwitchWorkspace } from "@/features/settings/workspaces";
+import { useMyMemberships } from "@/session/my-memberships";
+import { useMyCalendars, useSwitchWorkspace } from "@/session/workspaces";
 import { notify } from "@/lib/notify";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useTenantId } from "@/lib/tenant";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 
-import { AccountScopeProvider, useAccountGate, useAccountName } from "./account-scope";
+import { AccountScopeProvider, useAccountGate, useAccountName } from "@/session/account-scope";
 import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
 
-// АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ, — В КАБИНЕТЕ ПАРТНЁРА (владелец 04.10: «там,
-// где у нас „Пригласить“, будем закреплены мы как наша компания, и там идут
-// все разрешения — вниз опускается то, что мы разрешаем, а всё остальное
-// остаётся у этого человека»; «чтобы клиент случайно не перепутал и не
-// оплатил что-то своё»).
+// АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ, — В КАБИНЕТЕ ПАРТНЁРА: здесь идут все
+// разрешения пригласившего, а всё остальное остаётся у самого человека, чтобы
+// он случайно не перепутал и не оплатил что-то своё.
 //
 // Под строкой приглашений — по блоку на каждый аккаунт, где человек партнёр:
 // шапка — имя аккаунта, первой строкой — его команды, ниже — только то, что
 // этот аккаунт открыл правами раздела «Кабинет»: тариф, оплаты тарифа, SMS,
-// реквизиты, история изменений, партнёры (04.10). Нет права — нет строки.
+// реквизиты, история изменений, партнёры. Нет права — нет строки.
 // «Партнёры» (директор) открываются В ЭТОМ аккаунте: телефон сначала
 // переходит в него — страницы партнёров живут в открытом аккаунте. Каждая строка открывает страницу ЗА ЭТОТ
 // аккаунт (`?tenant=`), а не за тот, что открыт на телефоне, — и платят на
@@ -43,8 +41,7 @@ export function InvitedAccounts() {
   const mirror = useMirror();
   const tenantId = useTenantId();
   const teams = useTeams().data ?? [];
-  // «ПОСМОТРЕТЬ ЕГО ГЛАЗАМИ» (владелец 04.10: «как это будет выглядеть у
-  // мастера»): у него этот аккаунт — пригласивший, и блок стоит ровно так, как
+  // «ПОСМОТРЕТЬ ЕГО ГЛАЗАМИ» (как это будет выглядеть у мастера): у него этот аккаунт — пригласивший, и блок стоит ровно так, как
   // у него: его команды и строки по его правам (карта зеркала).
   if (mirror && tenantId) {
     const attached = new Set(mirror.map.attachedCalendars);

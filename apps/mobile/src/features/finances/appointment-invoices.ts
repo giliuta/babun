@@ -1,0 +1,42 @@
+// ИНВОЙСЫ ЗАПИСИ — ТОЛЬКО ЖИВЫЕ СЧЕТА, НЕ КРЕДИТ-НОТЫ.
+//
+// Кредит-нота живёт в той же таблице и несёт заявку своего инвойса, а статус у
+// неё «выставлена». После отмены инвойса блоки «Оплата» и «Файлы» записи
+// находили её по заявке и открывали как «инвойс записи» — предложения
+// выставить новый не было. Правило одно на
+// оба блока: аннулированные и отменённые отпадают, кредит-ноты — тоже.
+
+export interface AppointmentInvoiceRow {
+  id: string;
+  appointment_id: string | null;
+  status: string;
+}
+
+export function liveAppointmentInvoices<T extends AppointmentInvoiceRow>(
+  invoices: readonly T[],
+  appointmentId: string | null | undefined,
+  creditNoteIds: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+): T[] {
+  if (!appointmentId) return [];
+  return invoices.filter(
+    (inv) =>
+      inv.appointment_id === appointmentId &&
+      inv.status !== "void" &&
+      inv.status !== "cancelled" &&
+      !creditNoteIds.has(inv.id),
+  );
+}
+
+/** ИНВОЙСЫ В «ФАЙЛАХ» ЗАПИСИ — все её инвойсы, кроме кредит-нот: отменённый
+ *  стоит серым, нота — часть его. Для денег записи
+ *  («Оплата») правило прежнее — `liveAppointmentInvoices`. */
+export function appointmentInvoiceFiles<T extends AppointmentInvoiceRow>(
+  invoices: readonly T[],
+  appointmentId: string | null | undefined,
+  creditNoteIds: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+): T[] {
+  if (!appointmentId) return [];
+  return invoices.filter(
+    (inv) => inv.appointment_id === appointmentId && !creditNoteIds.has(inv.id),
+  );
+}

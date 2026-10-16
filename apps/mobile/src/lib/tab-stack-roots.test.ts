@@ -4,9 +4,8 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// СТОРОЖ: у каждой вкладки корень лежит под любым её экраном (владелец
-// 2026-09-24: «открываю финансы, нажимаю „назад“ — перекидывает на
-// календарь»). Без `initialRouteName` экран, открытый снаружи вкладки,
+// СТОРОЖ: у каждой вкладки корень лежит под любым её экраном («назад» из
+// финансов не должен перекидывать на календарь). Без `initialRouteName` экран, открытый снаружи вкладки,
 // ложился в её стек один, и «назад» уводил из вкладки.
 const here = dirname(fileURLToPath(import.meta.url));
 const dashboard = join(here, "../../app/(dashboard)");

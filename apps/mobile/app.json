@@ -67,8 +67,7 @@
           "contactsPermission": "Babun reads your contacts only when you open “From phone contacts”, so you can choose people to add as clients."
         }
       ],
-      "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-apple-authentication"
     ],
     "locales": {
       "en": "./locales/en.json",

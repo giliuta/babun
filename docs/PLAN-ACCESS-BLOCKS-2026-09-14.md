@@ -362,7 +362,7 @@ using (
   - Тело функции берётся из `pg_get_functiondef` без комментариев.
   - Сторож ловит `execute`, чтение через представления и вызовы других функций в обход.
   - Форма `(select access_*)` проверяется в `pg_policies.qual/with_check`, а не в телах функций.
-  - Нынешний сторож `20260912330000` ищет вызовы с пустыми скобками и не видит вызовов с аргументами.
+  - Нынешний сторож `20260912235700` ищет вызовы с пустыми скобками и не видит вызовов с аргументами.
 - **Серверные функции** (`supabase/functions/*`).
   - Любая функция, которая читает таблицы компании ключом `service_role`, либо зовёт функцию с правилом блока, либо стоит в списке исключений.
   - Лента для внешних календарей `calendar-ics` в коде есть, а на боевой не выложена: выложены только `send_push` и `send_sms`.
@@ -631,8 +631,8 @@ using (
 
 **Файлы.**
 - `/Users/artem/Documents/Babun/supabase/migrations/20260912150000_calendar_members.sql` — связи с `tenants`, `auth.users`, `teams(tenant_id, id)`; связи с `tenant_members` нет.
-- `/Users/artem/Documents/Babun/supabase/migrations/20260912400000_identity_computed_once.sql` — `list_master_appointments_safe` показывает записи, где мастер — он, ИЛИ календарь по назначению, ИЛИ право `view`; ветку назначений держат и три правила чтения.
-- `/Users/artem/Documents/Babun/supabase/migrations/20260912410000_calendar_ribbon_stable_order.sql` — `list_my_calendars` не отдаёт календари без строки прав.
+- `/Users/artem/Documents/Babun/supabase/migrations/20260912235800_identity_computed_once.sql` — `list_master_appointments_safe` показывает записи, где мастер — он, ИЛИ календарь по назначению, ИЛИ право `view`; ветку назначений держат и три правила чтения.
+- `/Users/artem/Documents/Babun/supabase/migrations/20260912235900_calendar_ribbon_stable_order.sql` — `list_my_calendars` не отдаёт календари без строки прав.
 - `/Users/artem/Documents/Babun/supabase/migrations/20260913000000_grants_narrow_role_in_policies.sql` — `with check` у `appointments_update` проверяет новый календарь, но не клиента.
 - `/Users/artem/Documents/Babun/supabase/migrations/20260914120000_definer_functions_obey_calendar_grants.sql`, `/Users/artem/Documents/Babun/supabase/migrations/20260914121000_grant_access_helpers_to_signed_in_only.sql` — починка 14.09.
 - `/Users/artem/Documents/Babun/supabase/migrations/20260914130000_invite_signup_writes_calendar_grants.sql` и `/Users/artem/Documents/Babun/apps/mobile/src/features/settings/invitation-grants-contract.test.ts` — не закоммичены. `handle_new_user` принимает приглашение по токену и email, не проверяя подтверждение почты.

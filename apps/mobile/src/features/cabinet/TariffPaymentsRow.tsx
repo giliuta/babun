@@ -5,15 +5,14 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
 
-import { accountHref } from "./CabinetAccountRoute";
+import { accountHref } from "@/session/CabinetAccountRoute";
 import { latestPaymentLine } from "./tariff-payments";
 import { LATEST_PAYMENTS_SAMPLE, useTariffPayments } from "./use-tariff-payments";
 
-// «ОПЛАТЫ ТАРИФА» — СТРОКА-ДВЕРЬ КАБИНЕТА (владелец 03.10: «оплаты тарифа —
-// да, надо»). Подпись — последняя оплата; если последней оказалась неудачная,
+// «ОПЛАТЫ ТАРИФА» — СТРОКА-ДВЕРЬ КАБИНЕТА. Подпись — последняя оплата; если последней оказалась неудачная,
 // об этом сказано красным: деньги не списались, тариф под угрозой. Пока
 // читается — подписи нет, как у соседних дверей. `tenantId` — строка блока
-// аккаунта, который пригласил (04.10).
+// аккаунта, который пригласил.
 export function TariffPaymentsRow({ tenantId }: { tenantId?: string } = {}) {
   const t = useThemeColors();
   const router = useRouter();

@@ -11,7 +11,7 @@ import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/Pay
 import { RecordRowView } from "@/features/finances/RecordRow";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import {
   SAMPLE_DEBT,
@@ -92,7 +92,7 @@ export function MoneyPreview({ blockKey, level }: { blockKey: string; level: Acc
           {write ? <Action label="Принять оплату" /> : null}
         </PreviewFrame>
       );
-    // «Документы» (владелец 03.10: своё право) — инвойс и чек, как в панели
+    // «Документы» (своё право) — инвойс и чек, как в панели
     // «Документы»; «Выставляет» — кнопка внизу, как на странице.
     case "finance.documents":
       return (
@@ -101,7 +101,7 @@ export function MoneyPreview({ blockKey, level }: { blockKey: string; level: Acc
           {write ? <Action label="Выставить инвойс" /> : null}
         </PreviewFrame>
       );
-    // «Прибыль» (владелец 03.10: своё право) — плитка страницы: доход минус
+    // «Прибыль» (своё право) — плитка страницы: доход минус
     // расход команды за период. Смотрят её, правки у неё нет.
     case "finance.profit":
       return (

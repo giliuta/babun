@@ -8,14 +8,14 @@ import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { DocumentPill } from "@/features/appointments/AppointmentFileTiles";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { WhenRow } from "@/features/appointments/BookingSummary";
-import { IdentityCard, TeamLabelRow } from "@/features/appointments/TeamLabelRow";
+import { IdentityCard, TeamLabelRow } from "@/components/blocks/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import {
   SAMPLE_CLIENT,
@@ -71,7 +71,7 @@ export function RecordPreview({
   const rb = previewRecord(blocks, levels);
   const ev = previewEvent(blocks, levels);
   const on = (write: boolean) => (write ? noop : undefined);
-  // Телефон клиента в записи — по блоку «Клиент» карточки (02.10).
+  // Телефон клиента в записи — по блоку «Клиент» карточки.
   const phoneOpen = levels["clients.client"] === "read" || levels["clients.client"] === "write";
 
   switch (blockKey) {
@@ -173,7 +173,7 @@ export function RecordPreview({
       );
     // Статус виден всегда; меняет — «Видит и меняет». Отмена — «Отмена и
     // удаление» в «Календаре».
-    // «SMS» записи (03.10): блок внизу записи — что ушло её клиенту.
+    // «SMS» записи: блок внизу записи — что ушло её клиенту.
     case "record.sms":
       return (
         <PreviewFrame state={levelState(rb.sms)}>

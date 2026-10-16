@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { unsentChangesNote } from "./unsent-changes";
+import { readModuleSource } from "./module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -28,7 +28,7 @@ describe("выход и неотправленные правки (аудит 03
   });
 
   test("оба выхода спрашивают до стирания", () => {
-    const authClear = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const authClear = readModuleSource(resolve(here, "auth-clear.ts"));
     const local = authClear.slice(
       authClear.indexOf("export async function signOutAndWipe()"),
       authClear.indexOf("export async function signOutScopeAndWipe("),
@@ -38,9 +38,10 @@ describe("выход и неотправленные правки (аудит 03
         local.indexOf("unsentChangesNow()") < local.indexOf("signOutScopeAndWipe(\"local\")"),
       "«Выйти» читает очередь раньше, чем стирает",
     );
-    const account = readFileSync(
+    // The page is the thin route plus `features/cabinet/account/`.
+    const account = readModuleSource(
       resolve(here, "../../app/(dashboard)/cabinet/account.tsx"),
-      "utf8",
+      resolve(here, "../features/cabinet/account"),
     );
     assert.match(account, /await unsentChangesNow\(\)/);
   });

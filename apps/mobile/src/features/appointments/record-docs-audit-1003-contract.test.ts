@@ -3,18 +3,22 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
+import { invoiceEditorSource } from "../invoices/invoice-editor/editor-source";
+import { bookFormSource } from "./book-form/source-for-tests";
+import { clientCardSource } from "../clients/card/source-for-tests";
 
-// АУДИТ ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS 03.10 — сторожа на сборку экранов;
+// СТОРОЖА ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS — сторожа на сборку экранов;
 // чистые правила (цена лестницы, поля партнёра, части SMS) проверены своими
 // тестами рядом с ними.
 const here = dirname(fileURLToPath(import.meta.url));
 const src = (rel: string) => readFileSync(resolve(here, "..", rel), "utf8");
-const app = (rel: string) => readFileSync(resolve(here, "../../../app", rel), "utf8");
 
 describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("оплата судит «визит начался» по часам команды записи", () => {
     assert.match(src("appointments/business-now.ts"), /export function useBusinessNow\(teamId\?: string \| null\)/);
-    assert.match(src("appointments/PaymentBlock.tsx"), /useBusinessNow\(teamId\)/);
+    const block = readModuleSource(resolve(here, "PaymentBlock.tsx"), resolve(here, "payment-block"));
+    assert.match(block, /useBusinessNow\(teamId\)/);
   });
 
   test("маршрут листа выезда и события — общей шторкой карт", () => {
@@ -32,7 +36,8 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("инвойс: отказ выпуска виден в листе, VAT без номера ловится заранее", () => {
-    const editor = src("invoices/InvoiceEditor.tsx");
+    // The form is `InvoiceEditor.tsx` plus its `invoice-editor/` folder.
+    const editor = invoiceEditorSource();
     assert.match(editor, /error=\{error\}/);
     assert.match(editor, /vatMode !== "off" && rate > 0 && pickedCompany && !pickedCompany\.vat_number\?\.trim\(\)/);
     assert.match(src("invoices/InvoicePreviewSheet.tsx"), /\) : error \? \(/);
@@ -40,8 +45,8 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("фото и видео записи: камера не пишет видео, пачка не рвётся молча", () => {
-    // Минуту видео с камеры (03.10 — VGA, чтобы влезла в 50 МБ) сняли 06.10
-    // целиком: видео пишет звук, а микрофона в сборке нет — на живом iPhone
+    // Минуту видео с камеры (VGA, чтобы влезла в 50 МБ) снимать целиком нельзя:
+    // видео пишет звук, а микрофона в сборке нет — на живом iPhone
     // камера падала. Видео приходит только из галереи; сторож — в
     // appointment-photo-picker-contract.test.ts.
     assert.match(src("appointments/use-file-pickers.ts"), /launchCameraAsync\(\{\s*mediaTypes: \["images"\],/);
@@ -53,7 +58,7 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("форма записи: лестница, часы команды, снятый объект, команда при оплате", () => {
-    const book = app("book/index.tsx");
+    const book = bookFormSource();
     assert.match(book, /overrideWithQuantity\(p\[id\], qty, repriceable, catalog\.get\(id\)\)/);
     assert.match(book, /const businessNow = useBusinessNow\(teamId\);/);
     assert.match(book, /setLocationId\(null\);[\s\S]{0,400}if \(kind === "work"\) setAddress\(""\);/);
@@ -61,26 +66,26 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("партнёр: один номер новой записи на форму, команда записи не меняется", () => {
-    const book = app("book/index.tsx");
+    const book = bookFormSource();
     assert.match(book, /patch: \{ \.\.\.buildPatch\(\), id: newRecordIdRef\.current \},/);
     assert.match(book, /const newRecordIdRef = useRef\(randomUuid\(\)\);/);
     assert.match(book, /teams=\{isMemberView && isEdit \? teams\.filter\(\(tm\) => tm\.id === teamId\) : teams\}/);
-    assert.match(src("calendar/mutations.ts"), /if \(error && !isOwnRecordAlreadyCreated\(error\)\) \{/);
+    assert.match(readModuleSource(resolve(here, "../calendar/mutations.ts")), /if \(error && !isOwnRecordAlreadyCreated\(error\)\) \{/);
   });
 
   test("«Оплаты тарифа»: без подписки и без оплат нет двери в портал", () => {
     const screen = src("cabinet/TariffPaymentsScreen.tsx");
     // Подписка — только оплаченный не «навсегда»; на пробном и без тарифа
-    // дверь вела в «Подписки ещё нет» (аудит Кабинета 03.10).
+    // дверь вела в «Подписки ещё нет».
     assert.match(screen, /const hasSubscription = tariffState\.paid && !tariffState\.forever;/);
-    // Дверь — только владельцу: партнёр с «Оплатами тарифа» (04.10) видит
+    // Дверь — только владельцу: партнёр с «Оплатами тарифа» видит
     // оплаты, но подпиской не управляет. И только на сайте: в приложении из
-    // магазина двери в Stripe нет (владелец 04.10, `lib/pay-here.ts`).
+    // магазина двери в Stripe нет (`lib/pay-here.ts`).
     assert.match(screen, /\{!CAN_PAY_HERE \|\| !owner \|\| \(!hasSubscription && months\.length === 0\) \? null : \(/);
   });
 
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {
-    const card = app("(dashboard)/clients/[id].tsx");
+    const card = clientCardSource();
     assert.match(card, /today: now\.ymd,\s*nowHm: now\.hm,/);
   });
 });

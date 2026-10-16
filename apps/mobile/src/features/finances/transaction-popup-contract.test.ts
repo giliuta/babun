@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-// ЛИСТ ОПЕРАЦИИ ДОЖИВАЕТ ДО КОНЦА УХОДА (04.10). Лента открывает его самим
+// ЛИСТ ОПЕРАЦИИ ДОЖИВАЕТ ДО КОНЦА УХОДА. Лента открывает его самим
 // значением (`visible={!!popupTx}`, `transaction={popupTx}`) и на закрытии
 // обнуляет оба в одном кадре. Вопрос «Удалить перевод?» / «Удалить операцию?»
 // лист задаёт по `onExited` — а ранний `if (!transaction) return null` снимал
 // лист целиком, `onExited` не приходил, и «Отменить перевод» закрывал лист
 // молча: перевод оставался в ленте.
-const popup = readFileSync(
-  resolve(dirname(fileURLToPath(import.meta.url)), "TransactionPopup.tsx"),
-  "utf8",
+// The sheet is `TransactionPopup.tsx` plus its `transaction-popup/` parts.
+const here = dirname(fileURLToPath(import.meta.url));
+const popup = readModuleSource(
+  resolve(here, "TransactionPopup.tsx"),
+  resolve(here, "transaction-popup"),
 );
 
 test("лист операции держит последнюю операцию, пока уезжает", () => {

@@ -2,7 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { getStorage } from "@babun/shared/storage";
 import { tenantPrefKey } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { useDesignBase } from "@/features/appointments/booking-prefs";
 import {
   useSaveTeamDesign,
@@ -16,10 +16,8 @@ import {
 // Дефолт-мердж при чтении: объект от старой сборки не может скрыть
 // новое поле.
 
-// ДЕНЕГ В СТРОКЕ НЕТ (владелец 01.10: «уберём полностью этот блок — долг,
-// доход, ожидается — со страницы клиентов»). Они остаются на странице клиента.
-// И НИ КОМАНДЫ, НИ МЕТКИ, НИ ТЕГОВ (01.10: «оставить только последний
-// визит, и всё»).
+// ДЕНЕГ В СТРОКЕ НЕТ (долг, доход, ожидается): они на странице клиента.
+// И НИ КОМАНДЫ, НИ МЕТКИ, НИ ТЕГОВ: в строке только последний визит.
 export type CardField = "phone" | "last";
 
 export type CardFieldPrefs = Record<CardField, boolean>;
@@ -28,7 +26,7 @@ const CARD_FIELDS: CardField[] = ["phone", "last"];
 
 /** Всё видно по умолчанию — карточка до появления тогглов. */
 export const DEFAULT_CARD_FIELDS: CardFieldPrefs = {
-  // Владелец 2026-08-06: «хочу, чтоб сразу было видно номер телефона».
+  // Номер телефона виден сразу.
   phone: true,
   last: true,
 };
@@ -36,7 +34,7 @@ export const DEFAULT_CARD_FIELDS: CardFieldPrefs = {
 // Тот же ключ, что и web (localStorage) — единая конвенция `babun-…`.
 const KEY = "babun-client-card-fields";
 
-// У КАЖДОЙ КОМАНДЫ СВОЙ НАБОР (владелец 30.09). Ключ команды называет
+// У КАЖДОЙ КОМАНДЫ СВОЙ НАБОР. Ключ команды называет
 // компанию (`tenantPrefKey`) — такой переживает переход в другую компанию и
 // возвращение. Команда, которая ещё ничего не меняла, живёт общим набором:
 // нынешняя настройка не пропадает.
@@ -88,7 +86,7 @@ function setCardFields(
 const cardFieldsKey = (teamId: string | null, tenantId: string | null) =>
   ["client-card-fields", tenantId, teamId] as const;
 
-/** НАБОР КОМАНДЫ НА СЕРВЕРЕ (`team_design.client_list_off`, 30.09): владелец
+/** НАБОР КОМАНДЫ НА СЕРВЕРЕ (`team_design.client_list_off`): владелец
  *  настроил — у всех людей команды так же. `null` — сервер набор не хранит,
  *  тогда набор с телефона. */
 function fromServerOff(off: readonly string[] | null | undefined): CardFieldPrefs | null {
@@ -169,11 +167,3 @@ export function useToggleCardField(teamId: string | null = null) {
   };
 }
 
-/** Краткое живое резюме включённых полей (строка в настройках, web
- *  cardSummary). */
-export function cardFieldsSummary(p: CardFieldPrefs): string {
-  const parts = ["Имя"];
-  if (p.phone) parts.push("телефон");
-  if (p.last) parts.push("посл. запись");
-  return parts.join(" · ");
-}

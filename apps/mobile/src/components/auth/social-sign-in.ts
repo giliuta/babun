@@ -1,23 +1,25 @@
-import { Platform } from "react-native";
-import * as Linking from "expo-linking";
+import { Platform, TurboModuleRegistry } from "react-native";
 import { requireOptionalNativeModule } from "expo";
 
-import { parseRecoveryLink } from "@/lib/recovery-link";
+import GOOGLE_OAUTH from "../../../google-oauth.json";
+
 import { supabase } from "@/lib/supabase";
 
-// ВХОД ЧЕРЕЗ APPLE И GOOGLE (владелец 09.10: «регистрироваться сразу через
-// Apple, напрямую одной кнопкой, и то же самое Google»). Одна кнопка и входит,
+// ВХОД ЧЕРЕЗ APPLE И GOOGLE — напрямую, одной кнопкой. Одна кнопка и входит,
 // и заводит аккаунт: есть он у этой почты — вход, нет — Supabase создаёт его,
 // а пароль человек придумывает следом на «Почти готово» (`signup-finish.ts`).
 //
-// • Apple на iPhone — родным окном (`expo-apple-authentication`): так требует
-//   Apple, и это один тап Face ID. Токен Apple меняется на сессию Supabase.
-// • Google везде и Apple в Android — страницей входа провайдера в системном
-//   окне (`expo-web-browser`, ASWebAuthenticationSession / Custom Tabs): она
-//   возвращает в приложение адрес с сессией, его разбирает тот же
-//   `parseRecoveryLink`, что и ссылки из писем.
-// • На сайте — обычный переход на страницу провайдера и обратно на /login,
-//   сессию из адреса забирает экран входа (`useSessionFromEmailLink`).
+// БЕЗ ЧУЖОГО АДРЕСА: страница Google в браузере писала бы «продолжить на
+// rdtokosbqvgemicqeqwz.supabase.co» — туда она возвращает, а должно быть
+// babun.app. Поэтому:
+// • Apple — только на iPhone, родным окном (`expo-apple-authentication`):
+//   один тап Face ID, токен Apple меняется на сессию Supabase.
+// • Google на телефоне — родным окном выбора аккаунта
+//   (`@react-native-google-signin`), в нём имя приложения «Babun»; на сайте —
+//   кнопкой Google Identity Services прямо на babun.app (`GoogleWebButton`),
+//   в ней «Войти в babun.app». Оба отдают id-токен → signInWithIdToken.
+// • Старая дорога через страницу Google в браузере снята совсем: в сборке
+//   без родного модуля кнопки Google просто нет, пока она не обновится.
 //
 // РОДНЫЕ МОДУЛИ ГРУЗЯТСЯ ЛЕНИВО. Старые сборки (TestFlight, Babun Dev) их не
 // содержат, и обычный import ронял бы весь экран входа; там кнопок просто нет.
@@ -36,13 +38,29 @@ const hasNative = (name: string) => {
 
 /** Родной Apple есть только на iPhone новой сборки. */
 const NATIVE_APPLE = Platform.OS === "ios" && hasNative("ExpoAppleAuthentication");
-const WEB_BROWSER = Platform.OS !== "web" && hasNative("ExpoWebBrowser");
+/** Родной Google: модуль в сборке и, на iPhone, свой iOS-клиент Google. */
+const NATIVE_GOOGLE =
+  Platform.OS !== "web" &&
+  (() => {
+    try {
+      return TurboModuleRegistry.get("RNGoogleSignin") != null;
+    } catch {
+      return false;
+    }
+  })() &&
+  (Platform.OS === "android" || !!GOOGLE_OAUTH.ios);
 
-/** Какие кнопки умеет это устройство. */
+/** Публичный id веб-клиента Google: им подписаны id-токены для Supabase. */
+export const GOOGLE_WEB_CLIENT_ID = GOOGLE_OAUTH.web;
+
+/** Какие кнопки умеет это устройство. Apple — только iPhone: правило Apple
+ *  4.8 про него, а на сайте и в Android вход Apple требовал бы чужой
+ *  страницы и ключа, который истекает раз в полгода. */
 export function availableProviders(): SocialProvider[] {
-  if (Platform.OS === "web") return ["apple", "google"];
-  if (Platform.OS === "ios") return [...(NATIVE_APPLE ? (["apple"] as const) : []), ...(WEB_BROWSER ? (["google"] as const) : [])];
-  return WEB_BROWSER ? ["google", "apple"] : [];
+  if (Platform.OS === "web") return ["google"];
+  const google = NATIVE_GOOGLE ? (["google"] as const) : [];
+  if (Platform.OS === "ios") return [...(NATIVE_APPLE ? (["apple"] as const) : []), ...google];
+  return [...google];
 }
 
 /** КАКИЕ ВХОДЫ ВКЛЮЧЕНЫ НА СЕРВЕРЕ (`/auth/v1/settings`, публичный ответ
@@ -58,21 +76,16 @@ export async function fetchEnabledProviders(): Promise<SocialProvider[]> {
   return (["apple", "google"] as const).filter((p) => body.external?.[p] === true);
 }
 
-function redirectTarget(): string {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    return `${window.location.origin}/login`;
-  }
-  // babun://login в магазинной сборке, babundev://login в дев-сборке.
-  return Linking.createURL("login");
-}
-
 export async function signInWith(provider: SocialProvider): Promise<SocialResult> {
   try {
     if (provider === "apple" && NATIVE_APPLE) return await nativeApple();
-    return await browserOAuth(provider);
+    if (provider === "google" && NATIVE_GOOGLE) return await nativeGoogle();
+    return { ok: false, cancelled: false };
   } catch (e) {
-    const code = (e as { code?: string })?.code;
-    if (code === "ERR_REQUEST_CANCELED" || code === "ERR_CANCELED") return { ok: false, cancelled: true };
+    const code = String((e as { code?: string })?.code ?? "");
+    // Отмена окна: Apple — ERR_REQUEST_CANCELED, Google — SIGN_IN_CANCELLED
+    // (на Android — «12501»).
+    if (/CANCEL/i.test(code) || code === "12501") return { ok: false, cancelled: true };
     return { ok: false, cancelled: false, message: (e as Error)?.message };
   }
 }
@@ -102,41 +115,30 @@ async function nativeApple(): Promise<SocialResult> {
   return { ok: true };
 }
 
-async function browserOAuth(provider: SocialProvider): Promise<SocialResult> {
-  const redirectTo = redirectTarget();
-  const web = Platform.OS === "web";
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo, skipBrowserRedirect: !web },
+async function nativeGoogle(): Promise<SocialResult> {
+  const Google = await import("@react-native-google-signin/google-signin");
+  const { GoogleSignin } = Google;
+  GoogleSignin.configure({
+    webClientId: GOOGLE_OAUTH.web,
+    iosClientId: GOOGLE_OAUTH.ios || undefined,
   });
+  if (Platform.OS === "android") await GoogleSignin.hasPlayServices();
+  const response = await GoogleSignin.signIn();
+  if (!Google.isSuccessResponse(response)) return { ok: false, cancelled: true };
+  const token = response.data.idToken;
+  // Аккаунт Google в приложении не запоминаем: следующий вход снова
+  // предложит выбор — на общем телефоне бригады это важно.
+  await GoogleSignin.signOut().catch(() => undefined);
+  if (!token) return { ok: false, cancelled: false };
+  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token });
   if (error) return { ok: false, cancelled: false, message: error.message };
-  // На сайте браузер уже уходит на страницу провайдера.
-  if (web) return { ok: true };
-  if (!data?.url) return { ok: false, cancelled: false };
-
-  const WebBrowser = await import("expo-web-browser");
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-  if (result.type !== "success") return { ok: false, cancelled: true };
-  const credential = parseRecoveryLink(result.url);
-  if (credential?.kind !== "session") {
-    const reason = errorFromRedirect(result.url);
-    return { ok: false, cancelled: false, message: reason ?? undefined };
-  }
-  const { error: sessionError } = await supabase.auth.setSession({
-    access_token: credential.accessToken,
-    refresh_token: credential.refreshToken,
-  });
-  if (sessionError) return { ok: false, cancelled: false, message: sessionError.message };
   return { ok: true };
 }
 
-/** Провайдер вернул отказ: `#error=…&error_description=…`. */
-function errorFromRedirect(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ""));
-    return parsed.searchParams.get("error_description") ?? fragment.get("error_description");
-  } catch {
-    return null;
-  }
+/** Вход по id-токену, который выдала кнопка Google на сайте. `nonce` —
+ *  исходная строка; Google получил её хэш. */
+export async function signInWithGoogleIdToken(token: string, nonce: string): Promise<SocialResult> {
+  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token, nonce });
+  if (error) return { ok: false, cancelled: false, message: error.message };
+  return { ok: true };
 }

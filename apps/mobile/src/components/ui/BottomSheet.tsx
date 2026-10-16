@@ -7,30 +7,16 @@ import {
   useState,
 } from "react";
 import {
-  Keyboard,
   Modal,
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import Animated, {
-  Easing,
-  ReduceMotion,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
@@ -42,12 +28,16 @@ import {
   clearOverlay,
   isSheetOpen,
   newSheetId,
+  overlayBackFor,
   pushSheet,
   removeSheet,
-  setOverlay,
   topSheet,
   useSheetStackVersion,
 } from "@/components/ui/sheet-overlay";
+import { OverlayLayers } from "@/components/ui/bottom-sheet/OverlayLayers";
+import { SheetFooter } from "@/components/ui/bottom-sheet/SheetFooter";
+import { SheetHeader } from "@/components/ui/bottom-sheet/SheetHeader";
+import { useSheetMotion } from "@/components/ui/bottom-sheet/use-sheet-motion";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
 // ЕДИНСТВЕННЫЙ способ показать выезжающую снизу панель. Заменяет собой
@@ -57,10 +47,9 @@ import {
 // Здесь скрим проявляется opacity-ом НА МЕСТЕ, а лист отдельно выезжает
 // пружиной снизу и так же уезжает вниз. Всё гейтится на Reduce Motion.
 // Правило: любой новый нижний лист = <BottomSheet>. См. DESIGN-SYSTEM.md.
-
-// Пружина входа: почти критически задемпфирована — плавный «доводчик» без
-// дешёвого пружинения. Выход — короткий ease-in вниз.
-const SPRING = { damping: 28, stiffness: 300, mass: 1 } as const;
+//
+// Parts live in `bottom-sheet/`: motion and drag gesture (`use-sheet-motion`),
+// header, footer and the overlay portal. The stack logic stays here.
 
 /** Сколько лист уезжает вниз. Экспортируется, потому что действие, которое
  *  открывает СВОЁ окно поверх (второй лист, Alert, «Поделиться»), обязано
@@ -68,11 +57,6 @@ const SPRING = { damping: 28, stiffness: 300, mass: 1 } as const;
 export const SHEET_EXIT_MS = 260;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-/** Обычная JS-функция для `runOnJS`: жест не должен захватывать `Keyboard`. */
-function dismissKeyboard() {
-  Keyboard.dismiss();
-}
 
 export function BottomSheet({
   visible,
@@ -122,11 +106,11 @@ export function BottomSheet({
   title?: string;
   /** Тихая строка под именем листа: чей это лист — команда, счёт, клиент.
    *  Такое подписывают, а не выбирают, и отдельной строкой-полем оно
-   *  выглядело нажимаемым, хотя не нажимается (2026-09-09). */
+   *  выглядело нажимаемым, хотя не нажимается. */
   subtitle?: string;
   footer?: ReactNode;
   scroll?: boolean;
-  /** ССЫЛКА НА ПРОКРУТКУ ТЕЛА (2026-08-21). Лист с таблицей обязан САМ
+  /** ССЫЛКА НА ПРОКРУТКУ ТЕЛА. Лист с таблицей обязан САМ
    *  доводить до глаза строку, которую только что добавили: она приезжает
    *  вниз, берёт автофокус, клавиатура поднимается — и строка оказывается ПОД
    *  клавиатурой, а команда «＋» снаружи выглядит не сделавшей ничего. То же с
@@ -136,14 +120,13 @@ export function BottomSheet({
   grabber?: boolean;
   avoidKeyboard?: boolean;
   /** ЛИСТ САМ ПЛАТИТ БОКОВЫЕ ПОЛЯ. По умолчанию да — иначе каждая новая форма
-   *  прилипает к краям листа (владелец 2026-08-17: «какого хуя оно всё слева
-   *  слито»), и разработчик обязан помнить про отступ, которого не видно в
+   *  прилипает к краям листа,
+   *  и разработчик обязан помнить про отступ, которого не видно в
    *  коде. `false` — только для листов, которые пришли со своей раскладкой:
    *  списки строк во всю ширину и карточки, уже отбивающие себя сами. */
   padded?: boolean;
-  /** ОПАСНОЕ ДЕЙСТВИЕ ЖИВЁТ В ШАПКЕ, А НЕ ВТОРОЙ КНОПКОЙ ВНИЗУ (владелец
-   *  2026-08-18: «внизу строчка „удалить“ — там должна быть справа вверху
-   *  мусорка, это гораздо лучше, чем сразу две кнопки внизу»). Внизу листа
+  /** ОПАСНОЕ ДЕЙСТВИЕ ЖИВЁТ В ШАПКЕ, А НЕ ВТОРОЙ КНОПКОЙ ВНИЗУ.
+   *  Внизу листа
    *  ровно ОДНА кнопка — та, ради которой лист открыли; «Удалить» под ней
    *  стояло вплотную к большому пальцу и читалось как второй равноправный
    *  выход. */
@@ -152,7 +135,7 @@ export function BottomSheet({
    *  этого можно показывать другое окно — второй лист или вопрос хоста.
    *  Таймер `SHEET_EXIT_MS` мерил анимацию, а не снятие окна, и «Удалить
    *  объект» из листа правки получал от iOS «already presenting» — вопрос не
-   *  появлялся (2026-09-04). Кто открывает окно вслед за листом, ждёт этот
+   *  появлялся. Кто открывает окно вслед за листом, ждёт этот
    *  сигнал, а не таймер. */
   onExited?: () => void;
   /** Открытый поверх другого листа — рисуется ВНУТРИ его окна, а не вторым
@@ -161,7 +144,8 @@ export function BottomSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ (04.10). В браузере
+  const keyboardShown = useKeyboardShown();
+  // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ. В браузере
   // вкладка, открытая «за кадром», грузит код при окне 0×0: константа
   // модуля давала `maxHeight: 0`, лист схлопывался, и строки уходили под
   // нижний край — выбрать язык на входе было нельзя.
@@ -174,7 +158,7 @@ export function BottomSheet({
   // Остаётся смонтированным на время анимации закрытия, потом снимается.
   const [mounted, setMounted] = useState(visible);
 
-  // ЛИСТ УЕЗЖАЕТ С ТЕМ, ЧТО ПОКАЗЫВАЛ (краш 2026-10-03 02:22). Почти
+  // ЛИСТ УЕЗЖАЕТ С ТЕМ, ЧТО ПОКАЗЫВАЛ. Почти
   // три десятка листов открываются самим значением (`visible={x !== null}`) и
   // на закрытии получают null в ТОМ ЖЕ коммите, что и `visible=false`: тело
   // перестраивается — строки пропадают, на их место встаёт «пусто» — в
@@ -231,10 +215,6 @@ export function BottomSheet({
     if (!isSheetOpen(host)) closeRef.current();
   }, [stackVersion, visible]);
 
-  const ty = useSharedValue(SCREEN_H); // сдвиг листа вниз (0 = на месте)
-  const scrim = useSharedValue(0); // прозрачность затемнения (0…1)
-  const sheetH = useSharedValue(0); // измеренная высота листа
-
   useEffect(() => {
     if (visible) setMounted(true);
   }, [visible]);
@@ -245,78 +225,17 @@ export function BottomSheet({
     if (!visible) target.current = null;
   }, [mounted, visible]);
 
-  useEffect(() => {
-    if (!mounted) return;
-    if (visible) {
-      // Вход: лист пружиной из-за нижнего края. Стартуем с ИЗМЕРЕННОЙ
-      // высоты (фолбэк — экран): телепорт на весь экран делал вход и
-      // выход несимметричными, вход «прилетал» из-под таб-бара.
-      ty.value = sheetH.value > 0 ? sheetH.value : screenH.current;
-      ty.value = reduced
-        ? withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) })
-        : withSpring(0, SPRING);
-      scrim.value = withTiming(1, {
-        duration: reduced ? 200 : 260,
-        easing: Easing.out(Easing.quad),
-      });
-    } else {
-      // Выход: лист вниз на свою высоту, скрим гаснет; затем размонтируем.
-      const target = sheetH.value > 0 ? sheetH.value : screenH.current;
-      ty.value = withTiming(target, {
-        duration: reduced ? 160 : 240,
-        easing: Easing.in(Easing.cubic),
-      });
-      scrim.value = withTiming(
-        0,
-        // 240 — в такт листу (было 220, скрим гас раньше панели).
-        { duration: reduced ? 160 : 240, easing: Easing.in(Easing.quad) },
-        (fin) => {
-          if (fin) runOnJS(setMounted)(false);
-        },
-      );
-    }
-  }, [mounted, visible, reduced, ty, scrim, sheetH]);
-
-  const scrimStyle = useAnimatedStyle(() => ({ opacity: scrim.value }));
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: ty.value }],
-  }));
-
-  // Свайп вниз по граберу закрывает лист (грабер это и обещает). Жест
-  // живёт только на верхней зоне — не конфликтует со скроллом тела.
-  // Тянем лист за пальцем; отпустили за порогом (или рывком) — закрываем,
-  // иначе пружиной возвращаем на место.
-  const drag = Gesture.Pan()
-    // Тянут лист вниз — клавиатура уходит первой. Иначе панель уползает ПОД
-    // клавиатуру (отдельное окно выше приложения), палец идёт, а порог
-    // закрытия не достигается: жест читается как сломанный.
-    .onStart(() => {
-      // СВОЯ ФУНКЦИЯ, А НЕ `Keyboard.dismiss` (2026-09-22): ссылка на метод
-      // тянула в worklet весь объект `Keyboard`, и вызов на потоке UI падал
-      // нативным abort — любой лист ронял приложение при свайпе за грабер.
-      runOnJS(dismissKeyboard)();
-    })
-    .onChange((e) => {
-      ty.value = Math.max(0, ty.value + e.changeY);
-      // Скрим следует за пальцем: панель уезжала, а затемнение стояло
-      // на месте до самого отпускания.
-      const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
-      scrim.value = Math.max(0, 1 - ty.value / h);
-    })
-    .onEnd((e) => {
-      const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
-      if (ty.value > h * 0.3 || e.velocityY > 800) {
-        runOnJS(onClose)();
-      } else {
-        // Возврат за пальцем не должен телепортироваться при Reduce
-        // Motion — это прямой отклик на жест, а не декорация.
-        ty.value = withSpring(0, {
-          ...SPRING,
-          reduceMotion: ReduceMotion.Never,
-        });
-        scrim.value = withTiming(1, { duration: 160 });
-      }
-    });
+  // Enter/exit animation and the drag gesture; its effect runs after the two
+  // above, in the same order as before the split.
+  const { sheetH, scrimStyle, sheetStyle, drag } = useSheetMotion({
+    mounted,
+    visible,
+    reduced,
+    screenH,
+    SCREEN_H,
+    setMounted,
+    onClose,
+  });
 
   if (!mounted) return null;
 
@@ -354,77 +273,13 @@ export function BottomSheet({
           всегда. Заголовок ничего не нажимает, поэтому конфликта нет, а
           площадь жеста вырастает до нормальной. */}
       {grabber || shown.title ? (
-        <GestureDetector gesture={drag}>
-          <View>
-            {grabber ? (
-              <View className="items-center pb-1 pt-2.5">
-                <View
-                  style={{
-                    width: 36,
-                    height: 5,
-                    borderRadius: 3,
-                    // «Чёрное не серое»: separator на surface ~1.1:1 — жест
-                    // обещан, а язычка не видно. Ink+alpha, как у системного.
-                    backgroundColor: "rgba(11,18,32,0.14)",
-                  }}
-                />
-              </View>
-            ) : null}
-            {shown.title ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingTop: grabber ? 4 : 12,
-                  paddingBottom: 12,
-                }}
-              >
-                {/* Заголовок остаётся ПО ЦЕНТРУ ЛИСТА: пустышка слева той же
-                    ширины, что действие справа, иначе имя уезжает влево тем
-                    сильнее, чем крупнее системный шрифт. */}
-                <View style={{ width: 44 }} />
-                <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
-                  <Text
-                    accessibilityRole="header"
-                    maxFontSizeMultiplier={1.2}
-                    numberOfLines={1}
-                    style={{
-                      fontSize: 17,
-                      fontWeight: "600",
-                      textAlign: "center",
-                      color: t.ink,
-                    }}
-                  >
-                    {shown.title}
-                  </Text>
-                  {shown.subtitle ? (
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      numberOfLines={1}
-                      style={{
-                        marginTop: 2,
-                        fontSize: 13,
-                        textAlign: "center",
-                        color: t.sub,
-                      }}
-                    >
-                      {shown.subtitle}
-                    </Text>
-                  ) : null}
-                </View>
-                <View
-                  style={{
-                    width: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {shown.headerAction}
-                </View>
-              </View>
-            ) : null}
-          </View>
-        </GestureDetector>
+        <SheetHeader
+          drag={drag}
+          grabber={grabber}
+          title={shown.title}
+          subtitle={shown.subtitle}
+          headerAction={shown.headerAction}
+        />
       ) : null}
       {scroll ? (
         <ScrollView
@@ -442,7 +297,16 @@ export function BottomSheet({
       ) : (
         shown.children
       )}
-      {shown.footer ? <SheetFooter padded={padded}>{shown.footer}</SheetFooter> : null}
+      {shown.footer ? (
+        <SheetFooter padded={padded}>{shown.footer}</SheetFooter>
+      ) : Platform.OS === "android" && !keyboardShown ? (
+        // ЛИСТ БЕЗ ФУТЕРА НЕ УХОДИТ ПОД НАВИГАЦИЮ ANDROID. Окно листа
+        // edge-to-edge, и последняя строка выбора ложилась под полосу жестов,
+        // а при трёх кнопках навигации — под «Назад / Домой», где её не
+        // нажать. Футер этот отступ уже держит (`SheetFooter`), тело без
+        // футера держит его же. На iOS эта ветка не нужна.
+        <View style={{ height: insets.bottom }} />
+      ) : null}
     </Animated.View>
   );
 
@@ -461,14 +325,15 @@ export function BottomSheet({
             scrimStyle,
           ]}
         />
-        {/* ANDROID — ПОДЪЁМ У КАЖДОГО ЛИСТА (владелец 12.10: «на андроид
-            шторка загораживает всё»). Сборка рисует окна во весь экран
+        {/* ANDROID — ПОДЪЁМ У КАЖДОГО ЛИСТА.
+            Сборка рисует окна во весь экран
             (edge-to-edge), и Android больше не сжимает окно под клавиатурой:
             лист с полями целиком уходил под неё вместе с кнопкой. Подъём
             безвреден листу без ввода — он срабатывает только с клавиатурой.
             На iOS — по флагу, как было. */}
         {avoidKeyboard || Platform.OS === "android" ? (
           <KeyboardLift
+            pointerEvents="box-none"
             style={{ flex: 1, justifyContent: "flex-end" }}
           >
             {sheet}
@@ -493,7 +358,7 @@ export function BottomSheet({
   );
 
   if (asOverlay) {
-    return <OverlayLayers target={target.current as string} layers={layers} />;
+    return <OverlayLayers target={target.current as string} layers={layers} onBack={onClose} />;
   }
 
   return (
@@ -502,7 +367,15 @@ export function BottomSheet({
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      // «НАЗАД» ANDROID СНАЧАЛА ЗАКРЫВАЕТ ВОПРОС ПОВЕРХ ЛИСТА. Вопрос
+      // лежит в окне этого листа, и «Назад» приходит сюда, и без перехвата он закрыл бы
+      // весь лист под вопросом (а лист с защитой — открыл бы «Закрыть без
+      // сохранения?»).
+      onRequestClose={() => {
+        const back = overlayBackFor(sheetId);
+        if (back) back();
+        else onClose();
+      }}
     >
       {/* GestureHandlerRootView внутри Modal обязателен — иначе жест
           перетаскивания грабера не долетает (RN Modal — отдельное окно).
@@ -513,44 +386,5 @@ export function BottomSheet({
         <SheetOverlayOutlet id={sheetId} />
       </GestureHandlerRootView>
     </Modal>
-  );
-}
-
-/** Слои листа-накладки уходят в окно листа под ним (`SheetOverlayOutlet`). */
-function OverlayLayers({ target, layers }: { target: string; layers: ReactNode }) {
-  useLayoutEffect(() => {
-    setOverlay(target, layers);
-  });
-  useEffect(() => () => clearOverlay(target), [target]);
-  return null;
-}
-
-/** Подвал листа — ЕДИНСТВЕННОЕ место, где лист платит нижний безопасный
- *  отступ. Отдельным компонентом, чтобы подписка на клавиатуру жила только у
- *  листов с подвалом: `BottomSheet` смонтирован у экрана всегда (закрытый он
- *  просто рисует null), и общий хук подписал бы на события клавиатуры все
- *  листы экрана разом.
- *
- *  Под клавиатурой отступ меньше: её кадр на iOS уже включает полосу
- *  home-индикатора, и обе высоты вместе давали ~34pt пустоты, которые потолок
- *  листа отбирал у содержимого. */
-function SheetFooter({
-  children,
-  padded,
-}: {
-  children: ReactNode;
-  padded?: boolean;
-}) {
-  const insets = useSafeAreaInsets();
-  const keyboardShown = useKeyboardShown();
-  return (
-    <View
-      style={{
-        paddingHorizontal: padded ? GUTTER : 0,
-        paddingBottom: keyboardShown ? 12 : Math.max(insets.bottom, 16),
-      }}
-    >
-      {children}
-    </View>
   );
 }

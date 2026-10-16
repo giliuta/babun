@@ -6,16 +6,14 @@ import { parseClientNotificationTarget } from "@/features/clients/reminders";
 import { clockTime, dayMonth, localDayKey, weekdayName } from "./when";
 
 // «УВЕДОМЛЕНИЯ» В КАБИНЕТЕ — КАК СТРАНИЦА ЧИТАЕТ НАПОМИНАНИЯ ЭТОГО ТЕЛЕФОНА
-// (владелец 2026-09-15: «три строки — полная хуетень… максимально удобно и
-// информативно»; разрез 007 + 008: страница и строка-дверь — 008).
+// (страница и строка-дверь).
 //
 // Лист чистый: записи реестра `lib/notifications.ts` → строки страницы и подпись
 // строки-двери. Нативного модуля и хранилища здесь нет — решение целиком под
 // тестом.
 //
-// ИСТОЧНИКИ, И У КАЖДОГО СВОЯ ПРАВДА (03.10 добавлены `self:` — колокольчик
-// записи, и `auto:` — «О записях»; до этого колокольчик падал в «другое» и не
-// открывался):
+// ИСТОЧНИКИ, И У КАЖДОГО СВОЯ ПРАВДА (`self:` — колокольчик записи, `auto:` —
+// «О записях»; без них колокольчик падал бы в «другое» и не открывался):
 //   • `appointment:` — ручное «Напомнить» из записи. Живёт только на этом
 //     телефоне, пересоздать его некому, поэтому отмена отсюда честная;
 //   • `event:` — напоминание события из базы (`event_push_enabled`). Сверка
@@ -220,12 +218,15 @@ export interface PermissionRowView {
   action: "request" | "settings" | null;
 }
 
-export function permissionRow(permission: DevicePermission): PermissionRowView {
+export function permissionRow(permission: DevicePermission, android = false): PermissionRowView {
   switch (permission) {
     case "granted":
       return { sub: "Разрешены", action: "settings" };
     case "denied":
-      return { sub: "Выключены в настройках iPhone", action: "settings" };
+      return {
+        sub: android ? "Выключены в настройках телефона" : "Выключены в настройках iPhone",
+        action: "settings",
+      };
     case "undetermined":
       return { sub: "Не разрешены", action: "request" };
     case "unavailable":

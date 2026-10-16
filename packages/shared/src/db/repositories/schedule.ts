@@ -13,8 +13,9 @@
 // `tenant_id = current_tenant_id()` policy filters reads + writes.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Json } from "../database.types";
+import type { Database } from "../database.types";
 import type { ScheduleMap, TeamSchedule } from "../../local/schedule";
+import { toJson } from "../json";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["team_schedules"]["Row"];
@@ -52,7 +53,7 @@ export async function upsertScheduleEntry(
       {
         tenant_id: tenantId,
         team_id: teamId,
-        schedule: schedule as unknown as Json,
+        schedule: toJson(schedule),
       },
       { onConflict: "tenant_id,team_id" },
     );

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import { crewAddress, crewBlocks } from "./crew-blocks";
 
 const TEAM = "team-1";
@@ -86,7 +86,7 @@ describe("карточка записи у команды спрашивает �
 });
 
 // STORY-088: выключенное у компании не видно ни при каком праве — «ни у
-// кого, даже у владельца» (владелец 24.09).
+// кого, даже у владельца».
 describe("функции компании сильнее прав", () => {
   test("выключенные объекты, оплата, файлы и заметка пропадают и у владельца", () => {
     const blocks = crewBlocks({

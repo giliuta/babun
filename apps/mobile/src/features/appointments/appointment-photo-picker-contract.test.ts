@@ -48,14 +48,14 @@ function assertCompatiblePicker(source: string): void {
 describe("appointment photo picker", () => {
   test("requests an iOS-compatible representation before upload", () => {
     assertCompatiblePicker(appointmentSource);
-    // Файлы клиента (03.10) выбирают тем же `useFilePickers`, что и запись:
+    // Файлы клиента выбирают тем же `useFilePickers`, что и запись:
     // своего вызова галереи у страницы нет — значит, и своего режима тоже.
     assert.match(clientFiles, /useFilePickers\(/);
     assert.match(clientPage, /useClientFileUpload\(id\)/);
     assert.doesNotMatch(clientPage, /launchImageLibraryAsync|launchCameraAsync/);
   });
 
-  // Выпуск в App Store, 06.10: видео с камеры пишет звук, а микрофон в
+  // Для выпуска в App Store: видео с камеры пишет звук, а микрофон в
   // сборке выключен — expo-image-picker бросал
   // MissingMicrophonePermissionException, и камера на живом iPhone не
   // открывалась. Камера — только фото; видео — из галереи.

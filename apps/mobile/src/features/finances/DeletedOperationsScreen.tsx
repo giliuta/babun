@@ -27,12 +27,12 @@ import {
 import { useFinanceCategories } from "./queries";
 import { useFinanceSettingLevel } from "./use-finance-settings";
 import { useSession } from "@/providers/SessionProvider";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
 import { recordRows, type RecordRow } from "./record-rows";
 
 // «УДАЛЁННЫЕ ОПЕРАЦИИ» — КАК «УДАЛЁННЫЕ СЧЕТА» И «УДАЛЁННЫЕ КЛИЕНТЫ»
-// (владелец 03.10: «удалённые операции добавляем — это отлично»). Дверь —
+// Дверь —
 // шестерёнка «Финансов», блок «Деньги»; страница — выбранной там команды.
 //
 // Строка — та же плашка, что в ленте «Финансов» (`RecordRowView`): что за
@@ -62,7 +62,7 @@ export function DeletedOperationsScreen() {
   const toast = useToast();
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamName = (useTeams().data ?? []).find((item) => item.id === team)?.name;
-  // ПРАВО СТРОКИ «Удалённые операции» (03.10): «Только видит» — список без
+  // ПРАВО СТРОКИ «Удалённые операции»: «Только видит» — список без
   // кромок и меню; «Возвращает» — вернуть и стереть СВОЁ (что удалил сам и
   // что сам заводил — сервер вставку чужой операции не пустит). Владелец —
   // всё.

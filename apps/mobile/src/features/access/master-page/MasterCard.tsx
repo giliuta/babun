@@ -4,14 +4,14 @@ import { Stack, useRouter, type Href } from "expo-router";
 
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 import { isInvitationEmail } from "@/features/settings/invitation-flow";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 
-import { useAccessBlocks } from "../queries";
+import { useAccessBlocks } from "@/session/access-queries";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import {
   closeMasterDraft,
@@ -36,11 +36,9 @@ import {
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { useDraftTeamAccess } from "./draft-team-access";
-import { useStepAllowed, useTeamsAllowed } from "./use-partner-manager";
+import { useStepAllowed, useTeamsAllowed } from "@/session/use-partner-manager";
 
-// КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
-// должен сразу открывать полную страницу мастера, как добавление клиента»).
-// Как у клиента, создание и жизнь — одна карточка с режимом (AGENTS, Canon
+// КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ. Как у клиента, создание и жизнь — одна карточка с режимом (AGENTS, Canon
 // Reuse п.2), а не три похожих экрана:
 //   • draft  — `new?team=`: черновик до «Пригласить»;
 //   • invite — `invite-<uuid>`: приглашение без ответа, правится на месте;
@@ -82,7 +80,7 @@ function MasterDraftCard({
   const blocksQuery = useAccessBlocks({ fresh: true });
   const blocks = blocksQuery.data;
   const create = useCreateMasterInvitation();
-  // ДИРЕКТОР (04.10): зовёт только в свои команды и даёт не выше своих прав —
+  // ДИРЕКТОР: зовёт только в свои команды и даёт не выше своих прав —
   // заготовка новой команды («Видит» в шести правах) урезается по его правам,
   // иначе сервер отказал бы всему приглашению.
   const allows = useStepAllowed();
@@ -103,7 +101,7 @@ function MasterDraftCard({
   const last = useRef(opened);
   if (current) last.current = current;
   const draft = last.current.draft;
-  // Зовут по существующей карточке без аккаунта (STORY-087): имя и телефон
+  // Зовут по существующей карточке без аккаунта: имя и телефон
   // уже её, должность и цвет живут в ней и здесь не правятся.
   const masterId = last.current.masterId ?? null;
 
@@ -149,7 +147,7 @@ function MasterDraftCard({
     router.push(
       `/cabinet/people/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
     );
-  // Лента команд и «Доступ» — как у сотрудника (01.10).
+  // Лента команд и «Доступ» — как у сотрудника.
   const access = useDraftTeamAccess({
     blocks,
     draft,
@@ -228,7 +226,7 @@ function MasterDraftCard({
         editable
         cardFieldsEditable={!masterId}
         emailEditable
-        // Новый партнёр — только почта (01.10); по старой карточке без
+        // Новый партнёр — только почта; по старой карточке без
         // аккаунта имя уже есть, блок прежний.
         emailOnly={!masterId}
         autoFocusName={!masterId}
@@ -259,7 +257,7 @@ function MasterDraftCard({
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
         // Команды — лентой, права выбранной — «Доступом» разделами, как у
-        // сотрудника (01.10). «Добавить» справа от ленты — шторка команд.
+        // сотрудника. «Добавить» справа от ленты — шторка команд.
         onOpenCalendars={() => setCalendarsOpen(true)}
         teamChips={blocks ? access.teamChips : undefined}
         teamRights={access.teamRights}

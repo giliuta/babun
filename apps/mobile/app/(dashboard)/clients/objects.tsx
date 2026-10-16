@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { useInClientsTab } from "@/features/clients/reference-href";
+import { useInClientsTab } from "@/lib/reference-href";
 import { ScrollView, View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import type { Client } from "@babun/shared/local/clients";
@@ -17,23 +17,22 @@ import type { Appointment } from "@babun/shared/local/appointments";
 
 const NO_APPOINTMENTS: Appointment[] = [];
 
-// ВСЕ ОБЪЕКТЫ КЛИЕНТА — СВОЯ СТРАНИЦА (владелец 22.09: «блок объекты —
-// нажимаю, и открывается страница, где все объекты… если у клиента 12
-// объектов, их надо пролистать, чтобы добраться до файлов»). Тот же путь,
+// ВСЕ ОБЪЕКТЫ КЛИЕНТА — СВОЯ СТРАНИЦА: иначе при 12 объектах
+// до файлов на карточке не долистать. Тот же путь,
 // что у истории записей: на карточке первые строки и дверь, здесь — весь
 // список.
 //
 // Блок собирает ТОТ ЖЕ компонент, что на карточке (`ClientObjectsSection`):
 // листы правки и добавления, жильцы, заметки объектов — всё одно и то же.
 //
-// 03.10: на карточке — один объект, тап по нему — сюда. Здесь тап по объекту
+// На карточке — один объект, тап по нему — сюда. Здесь тап по объекту
 // — лист правки, а «Добавить объект» — кнопкой внизу, как «Записать клиента»
 // в истории: на одном уровне с кнопками соседних экранов.
 
 export default function ClientObjectsScreenRoute() {
   return (
-    // ПРАВА — КАК У САМОЙ КАРТОЧКИ, а не как у визитов и вложений (аудит
-    // 23.09): это продолжение её блока, и сотрудник, которому карточка
+    // ПРАВА — КАК У САМОЙ КАРТОЧКИ, а не как у визитов и вложений :
+    // это продолжение её блока, и сотрудник, которому карточка
     // открыта, видит здесь то же самое; правку гасят права блока.
     <ClientsCompanyRoute kind="card">
       <ClientObjectsScreen />
@@ -57,7 +56,7 @@ function ClientObjectsScreen() {
   };
   // Жильцы объектов — та же проводка, что на карточке: строки, роли и дверь
   // заведения живут в одном месте (`ClientPeopleDoor`).
-  // Права блоков этого клиента (30.09): «Объекты» и «Люди» — видно ли и
+  // Права блоков этого клиента: «Объекты» и «Люди» — видно ли и
   // правится ли, как на карточке.
   const access = useCardAccess(client, false);
   const [adding, setAdding] = useState(false);
@@ -89,8 +88,8 @@ function ClientObjectsScreen() {
             update={update}
             draft={false}
             readOnly={!access.objects.edit}
-            // «был 12 авг» — из записей: без права «История» их нет (аудит
-            // 03.10 — на карточке так и было, на странице дата протекала).
+            // «был 12 авг» — из записей: без права «История» их нет
+            // (иначе на странице дата протекала бы).
             appointments={access.history.show ? appointments : NO_APPOINTMENTS}
             bare
             adding={adding}

@@ -1,11 +1,11 @@
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, type AccessGate } from "@/features/access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate, type AccessGate } from "@/session/my-access";
 import { isFeatureOn, type CompanyFeatureKey } from "@babun/shared/local/company-features";
 
 // ЧТО ИЗ ЗАПИСИ ВИДИТ И МЕНЯЕТ КОМАНДА — ОДНИМ ОТВЕТОМ (STORY-084).
 //
-// Карточка записи у мастера (`CrewAppointmentSheet`) до 21.09 не спрашивала
-// права вовсе, а сервер уже спрашивал: при «Статус записи: Скрыт» кнопки
+// Карточка записи у мастера (`CrewAppointmentSheet`) должна спрашивать
+// права, как и сервер: при «Статус записи: Скрыт» кнопки
 // статуса оставались на месте и падали отказом. Кнопка, на которую сервер
 // откажет, на экране не рисуется (AGENTS, правило 10).
 //

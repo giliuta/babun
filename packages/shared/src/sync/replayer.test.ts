@@ -26,6 +26,7 @@ import {
   cacheUpsert,
   cacheGetOne,
   markOpPermanentlyFailed,
+  type CachedAppointmentData,
   type CachedClient,
   type QueuedOp,
 } from "../db/cache/sql";
@@ -152,7 +153,7 @@ afterEach(() => {
   __resetCacheForTests();
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const asSupabase = (c: unknown) => c as any;
 
 describe("replayer — insert", () => {
@@ -198,7 +199,7 @@ describe("replayer — insert", () => {
     expect(await queueDepth()).toBe(0);
   });
 
-  // Аудит 04.10: клиент без тегов шёл прямой вставкой мимо серверных
+  // Клиент без тегов не должен идти прямой вставкой мимо серверных
   // умолчаний (`create_client_with_tags` ставит команду) и уезжал без команды.
   test("клиент без тегов встаёт той же функцией, что в сети, с пустым списком тегов", async () => {
     await enqueueOp({
@@ -772,13 +773,12 @@ describe("replayer — навсегда упавшая правка держит
       payload: { tenant_id: TENANT },
       expected_updated_at: null,
       attempts,
-      last_error: null,
     });
     expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_A, 0)], "appointments", TENANT)).toBe(false);
     expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_B, 0)], "appointments", TENANT)).toBe(true);
   });
 
-  // Аудит 04.10: запись к клиенту, чья вставка упала навсегда, ждёт его, не
+  // Запись к клиенту, чья вставка упала навсегда, ждёт его, не
   // тратя попыток, — и без этой сверки держала перечитку календаря вечно.
   test("запись, ждущая навсегда упавшего клиента, не замораживает перечитку календаря", () => {
     const clientInsert: QueuedOp = {
@@ -801,7 +801,6 @@ describe("replayer — навсегда упавшая правка держит
       payload: { id: UUID_A, tenant_id: TENANT, client_id: UUID_C },
       expected_updated_at: null,
       attempts: 0,
-      last_error: null,
     };
     const laterEdit: QueuedOp = { ...appointmentInsert, id: 3, created_at: 3, op: "update", payload: { tenant_id: TENANT } };
     expect(tenantRefreshHeld([clientInsert, appointmentInsert, laterEdit], "appointments", TENANT)).toBe(false);
@@ -946,7 +945,7 @@ describe("replayer — статус и деньги записи силой не
     expect(toasts).toHaveLength(1);
     expect(toasts[0]).toContain("не применена");
     expect(await queueDepth()).toBe(0);
-    const cached = await cacheGetOne<{ status: string; updated_at: string }>("appointments", UUID_A);
+    const cached = await cacheGetOne<CachedAppointmentData>("appointments", UUID_A);
     expect(cached?.status).toBe("scheduled");
   });
 
@@ -1138,7 +1137,7 @@ describe("replayer — гейт по компании", () => {
 
     // Живое чтение. Компанию спрашивают на гейт слива и по ходу операции:
     // 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой, 4 — после
-    // двусмысленного «ноль строк», перед проверкой видимости (аудит 03.10),
+    // двусмысленного «ноль строк», перед проверкой видимости,
     // 5 — начало круга по второй. Первая обязана доехать целиком, ко второй
     // человек уже в другой компании.
     let читаний = 0;
@@ -1199,11 +1198,11 @@ describe("replayer — гейт по компании", () => {
   });
 });
 
-// ─── Правки без компании в теле (до 24.09) ────────────────────────────
-// Гейт 12.09 молча пропускал правку без компании на каждом круге: она не
-// уходила и не падала, а пока в очереди висит правка записи, перечитка
-// записей с сервера не идёт — календарь телефона замирал, и оплата, принятая
-// сервером, на экране оставалась «не оплачено» (владелец 2026-09-24).
+// ─── Правки без компании в теле ────────────────────────────
+// Гейт, молча пропускающий правку без компании на каждом круге, не отправляет
+// её и не роняет, а пока в очереди висит правка записи, перечитка записей с
+// сервера не идёт — календарь телефона замирает, и оплата, принятая
+// сервером, на экране остаётся «не оплачено».
 
 describe("replayer — правки без компании в теле", () => {
   test("компания берётся из строки кэша, правка уходит, в SET компании нет", async () => {
@@ -1545,14 +1544,14 @@ describe("replayer — привязанный к компании клиент",
 });
 
 // ─── Вид только для чтения подталкивает, сливает клиент хоста ──────────
-// Шим постраничного календаря отдаётся обёртке `listAppointments` вместо
-// клиента, и её фоновое перечитывание подталкивает выгрузку им же. У шима
+// Вид календаря только для чтения отдаётся обёртке `listAppointments` вместо
+// клиента, и её фоновое перечитывание подталкивает выгрузку им же. У вида
 // `from()` умеет только `select` — правка записи падала «update is not a
-// function» и после трёх попыток пропадала (владелец 03.10: сменил клиента
-// записи, через десять секунд вернулся прежний).
+// function» и после трёх попыток пропадала (сменили клиента записи, через
+// десять секунд вернулся прежний).
 
 describe("replayer — вид только для чтения", () => {
-  /** Шим под видом клиента: только `select`, как `pagingClient`. */
+  /** Вид под видом клиента: только `select`, как `readOnlyClient`. */
   const readOnlyView = () => ({
     [READ_ONLY_VIEW_FIELD]: true,
     from: () => ({ select: () => ({}) }),
@@ -1599,7 +1598,7 @@ describe("replayer — вид только для чтения", () => {
   });
 });
 
-// ─── Выход из аккаунта и слив без входа (аудит 04.10) ─────────────────
+// ─── Выход из аккаунта и слив без входа ─────────────────
 // После выхода хост гасит компанию (`forgetActiveTenantId`), а гейт брал
 // вместо неё снимок с запуска — и слив шёл дальше без входа. Аноним по RLS не
 // видит ни строки: удаление находило ноль строк, проверка видимости — тоже, и

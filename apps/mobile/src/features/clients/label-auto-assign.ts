@@ -14,12 +14,12 @@ import {
 } from "@babun/shared/sync/clientsCached";
 import { isOnline } from "@babun/shared/sync";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import type { UserRole } from "@/features/settings/tenant";
-import { dayCitiesQueryKey } from "@/features/calendar/day-cities";
+import type { UserRole } from "@/session/tenant";
+import { dayCitiesQueryKey } from "@/features/reference/day-cities";
 import { clientsQueryKey } from "./queries";
+import { clientKeys } from "@/lib/client-query-keys";
 
-// Метка дня → метка клиента («Тихий лист 2», решение владельца
-// 2026-07-22). Best-effort вызов из onSuccess создания/переноса записи:
+// Метка дня → метка клиента («Тихий лист 2»). Best-effort вызов из onSuccess создания/переноса записи:
 // рабочая запись в день с ЯВНОЙ меткой (day_cities) переносит её на
 // клиента, пока метку не выбрали вручную (city_manual).
 //
@@ -39,7 +39,7 @@ export async function autoAssignClientLabel(opts: {
   clientId: string;
   teamId: string | null;
   date: string;
-  /** Метка САМОЙ записи (2026-09-04). Есть — она и переезжает на клиента:
+  /** Метка САМОЙ записи. Есть — она и переезжает на клиента:
    *  день в Лимассоле, а этого клиента возили в Пафос, и клиент должен
    *  запомнить Пафос. Нет — работает прежнее правило метки дня. */
   city?: string | null;
@@ -77,8 +77,8 @@ export async function autoAssignClientLabel(opts: {
     if (client.city.trim() === label) return;
 
     await updateClient(supabase, clientId, { city: label }, tenantId);
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    qc.invalidateQueries({ queryKey: ["client", clientId] });
+    qc.invalidateQueries({ queryKey: clientKeys.all() });
+    qc.invalidateQueries({ queryKey: clientKeys.card(clientId) });
   } catch {
     // Автоматика не должна ронять сохранение записи — тихий скип
     // (холодный оффлайн-кэш, гонка с удалением клиента и т.п.).

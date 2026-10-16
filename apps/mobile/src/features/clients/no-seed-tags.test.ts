@@ -3,9 +3,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-// ГОТОВЫХ ТЕГОВ НЕТ (владелец 30.09 и 1.10: «не надо делать стандартные теги
-// типа „Постоянные“ — пользователь системы сам разрабатывает свои теги»).
+// ГОТОВЫХ ТЕГОВ НЕТ: стандартных тегов типа «Постоянные» не заводим —
+// пользователь системы сам разрабатывает свои теги.
 // Регистрация перестала их заводить в 20260930220000_client_settings_per_team
 // (кусок `handle_new_user` вырезан в базе). Сторож — чтобы ни одна поздняя
 // миграция и ни один экран не вернули их незаметно.
@@ -25,9 +26,10 @@ describe("готовых тегов клиентов нет", () => {
 
   test("тег создаёт только человек — экраном «Теги клиентов»", () => {
     const app = resolve(here, "../../../app");
-    const tags = readFileSync(join(app, "(dashboard)/clients/tags.tsx"), "utf8");
+    // The route is thin; the page lives in `tags-page/`.
+    const tags = readModuleSource(join(app, "(dashboard)/clients/tags.tsx"), join(here, "tags-page"));
     assert.match(tags, /useCreateClientTag\(\)/);
-    const queries = readFileSync(join(here, "queries.ts"), "utf8");
+    const queries = readModuleSource(join(here, "queries.ts"));
     assert.doesNotMatch(queries, /["']Постоянн|["']VIP["']/);
   });
 });

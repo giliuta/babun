@@ -3,11 +3,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { operationSheetSource } from "../../features/finances/operation-sheet/sheet-source";
 
 // КРОМКА СВАЙПА ЗАКРЕПЛЕНА ЗА СМЫСЛОМ, А НЕ ЗА СИЛОЙ ДЕЙСТВИЯ.
-//
-// Владелец 2026-08-29: «удалить справа, скрыть слева, а не наоборот».
-// Владелец 2026-09-10: «свайп вправо — это удалить, а не скрыть».
 //
 // Закон уже был — но лежал КОММЕНТАРИЕМ в одном экране (`cabinet/services`), и
 // следующий заход вывел из него собственное правило «правая кромка несёт самое
@@ -22,10 +20,8 @@ import { fileURLToPath } from "node:url";
 //   нечего удалять     — правой кромки нет вовсе (`label`/`onAction` опущены);
 //   тап по строке      — правка, а не смена состояния.
 //
-// ИСКЛЮЧЕНИЙ НЕТ. Единственное жило у списка `/accounts` («Перевести» на правой
-// кромке); список снесён 2026-09-15 (владелец: счета — на «Финансах», перевод
-// — кнопкой в футере), и вместе с ним снята лазейка, через которую на правую
-// кромку могло вернуться не-разрушительное слово.
+// ИСКЛЮЧЕНИЙ НЕТ: ни одно не-разрушительное слово («Перевести» и подобные) не
+// стоит на правой кромке; перевод между счетами — кнопкой в футере.
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** `apps/mobile` */
@@ -195,7 +191,8 @@ describe("кромки свайпа", () => {
     assert.match(screen, /Number\(a\.hidden\) - Number\(b\.hidden\)/);
     // Лист операции берёт выбор из общего правила (`pickableCategories`):
     // сторож смотрит и на правило, и на то, что лист его зовёт.
-    const sheet = readFileSync(join(app, "src/features/finances/OperationSheet.tsx"), "utf8");
+    // The form is `OperationSheet.tsx` plus its `operation-sheet/` folder.
+    const sheet = operationSheetSource();
     assert.ok(
       sheet.includes("pickableCategories("),
       "лист операции: выбор категорий обязан идти через pickableCategories",
@@ -206,7 +203,7 @@ describe("кромки свайпа", () => {
       /c\.id === keepId \|\| \(!c\.hidden/,
       "pickableCategories: скрытая категория обязана исчезать из выбора — кроме уже выбранной",
     );
-    // Категории у команды (2026-09-24): шаблоны и долги берут выбор из того
+    // Категории у команды: шаблоны и долги берут выбор из того
     // же правила, а не своим фильтром — иначе скрытая и чужая команда
     // вернутся в выбор в одном из трёх мест.
     for (const [file, hint] of [

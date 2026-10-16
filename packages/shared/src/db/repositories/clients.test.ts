@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import type { Location } from "../../local/clients";
 import { listClients, listClientTags } from "./clients";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 
-function pagedSupabase(tables: Record<string, Array<Record<string, unknown>>>) {
+function pagedSupabase(tables: Record<string, Record<string, unknown>[]>) {
   return {
     from(table: string) {
       let rows = [...(tables[table] ?? [])];
@@ -93,14 +94,14 @@ describe("client repository paging", () => {
     expect(result[1004]?.tag_ids).toEqual(["tag-1004"]);
   });
 
-  // Регресс 2026-07-26. Маппер перечисляет поля объекта руками, а запись
+  // Регресс. Маппер перечисляет поля объекта руками, а запись
   // (clientToUpdate) отдаёт locations в базу целиком. Пока маппер не читал
   // график ТО и тип объекта, первая же правка объекта стирала их и на
   // сервере, а serviceDueState всегда возвращал null — блок «Обслуживание»
   // молчал при заполненных датах. Поле, добавленное в Location/ACUnit, но
   // забытое здесь, воспроизводит ровно эту потерю.
   test("объект и кондиционер доезжают до домена целиком (график ТО не теряется)", async () => {
-    const location = {
+    const location: Location = {
       id: "loc-1",
       label: "Дом",
       address: "Агиос Тихонас 21",

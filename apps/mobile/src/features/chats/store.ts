@@ -11,7 +11,7 @@ import { getStorage } from "@babun/shared/storage/provider";
 import {
   isMessagingReady,
   requireMessagingReady,
-} from "./readiness";
+} from "@/lib/messaging-readiness";
 
 // This module contains the old device-local interaction prototype so its UI
 // can be reused when the real repository lands. It must never become a live

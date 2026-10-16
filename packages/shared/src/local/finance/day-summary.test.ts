@@ -20,7 +20,7 @@ const appt = (over: Partial<Appointment>): Appointment =>
     ...over,
   }) as unknown as Appointment;
 
-// «ДОХОД» ДНЯ — ПРИШЕДШИЕ ДЕНЬГИ (владелец 2026-09-24).
+// «ДОХОД» ДНЯ — ПРИШЕДШИЕ ДЕНЬГИ.
 describe("заработано за день", () => {
   test("неоплаченная запись — не доход, но она в плане", () => {
     const totals = computeDayFinance([appt({})], [], []);

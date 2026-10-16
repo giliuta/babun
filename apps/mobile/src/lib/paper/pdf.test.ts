@@ -1,0 +1,320 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import type { Client } from "@babun/shared/local/clients";
+import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
+import type { Tenant } from "@/session/tenant";
+import { buildInvoicePdfHtml, escapeHtml } from "./pdf";
+
+const invoice: InvoiceLedgerWithLines = {
+  id: "invoice-1",
+  tenant_id: "tenant-1",
+  number: "INV-2026-007",
+  year: 2026,
+  seq: 7,
+  issued_on: "2026-07-20",
+  due_on: "2026-07-27",
+  client_id: "client-1",
+  appointment_id: null,
+  brigade_id: null,
+  subtotal_net: 100,
+  vat_percent: 19,
+  vat_amount: 19,
+  total: 119,
+  currency: "EUR",
+  language: "ru",
+  status: "issued",
+  pdf_url: null,
+  notes: "Оплата по договору <A&B>",
+  created_at: "2026-07-20T08:00:00Z",
+  updated_at: "2026-07-20T08:00:00Z",
+  created_by: null,
+  lines: [{
+    id: "line-1",
+    invoice_id: "invoice-1",
+    position: 0,
+    title: "Сервис <премиум>",
+    description: null,
+    qty: 1,
+    unit: null,
+    unit_price: 100,
+    total: 100,
+  }],
+};
+
+const tenant = {
+  name: "AC Service",
+  legal_name: "AC Service Ltd",
+  vat_number: "CY123",
+  iban: "CY00 0000",
+  bank_name: "Bank",
+  business_address: "Limassol",
+  contact_email: "billing@example.com",
+  contact_phone: "+357 000000",
+} as Tenant;
+
+const client = {
+  full_name: "Иван & Мария",
+  email: "client@example.com",
+  phone: "+357 111111",
+  address: "Старый адрес",
+  city: "Лимасол",
+  locations: [{
+    id: "location-1",
+    label: "Дом",
+    address: "Основной адрес 5",
+    // Адрес печатается из «Точного адреса» (город заполнен).
+    addressParts: { street: "Основной адрес 5", city: "Лимасол" },
+    mapUrl: "",
+    isPrimary: true,
+  }],
+} as Client;
+
+describe("invoice PDF HTML", () => {
+  it("includes legal requisites, recipient, totals and safe escaped lines", () => {
+    const html = buildInvoicePdfHtml({
+      // Адрес получателя — точный адрес ОБЪЕКТА счёта.
+      invoice: { ...invoice, location_id: "location-1" },
+      tenant,
+      client,
+      settlement: {
+        income: 50,
+        refunded: 0,
+        paid: 50,
+        remaining: 69,
+        overpaid: 0,
+        isPartial: true,
+        isPaid: false,
+      },
+      payments: [{
+        id: "payment-1",
+        invoice_id: invoice.id,
+        type: "income",
+        amount: 50,
+        account_id: "account-1",
+        payment_method: "transfer",
+        occurred_on: "2026-07-21",
+        refund_of_id: null,
+        notes: null,
+        created_at: "2026-07-21T08:00:00Z",
+      }],
+      accountNames: new Map([["account-1", "Основной счёт"]]),
+    });
+
+    assert.match(html, /AC Service Ltd/);
+    assert.match(html, /CY123/);
+    assert.match(html, /CY00 0000/);
+    assert.match(html, /Иван &amp; Мария/);
+    assert.match(html, /Основной адрес 5/);
+    // Телефона клиента на бумаге нет.
+    assert.doesNotMatch(html, /\+357 111111/);
+    assert.match(html, /Сервис &lt;премиум&gt;/);
+    // Статуса на бумаге нет: он живёт в приложении.
+    assert.doesNotMatch(html, /Частично оплачен/);
+    // Способ `transfer` во всём продукте называется «Банк»: «Перевод» —
+    // это тип операции между своими счетами, и одно слово на две вещи
+    // путало даже нас.
+    assert.match(html, /Основной счёт · Банк/);
+    assert.doesNotMatch(html, /<A&B>/);
+  });
+
+  it("states honestly when a recipient is absent", () => {
+    const html = buildInvoicePdfHtml({
+      invoice: { ...invoice, client_id: null },
+      tenant,
+      settlement: {
+        income: 0,
+        refunded: 0,
+        paid: 0,
+        remaining: 119,
+        overpaid: 0,
+        isPartial: false,
+        isPaid: false,
+      },
+      payments: [],
+    });
+
+    assert.match(html, /Получатель не указан/);
+    assert.doesNotMatch(html, /Иван/);
+  });
+
+  it("prefers immutable party snapshots over edited live records", () => {
+    const html = buildInvoicePdfHtml({
+      invoice: {
+        ...invoice,
+        seller_snapshot: {
+          schema_version: 1,
+          tenant_id: "tenant-1",
+          name: "Historical Seller Ltd",
+          display_name: "Historical Seller",
+          legal_name: "Historical Seller Ltd",
+          vat_number: "OLD-VAT",
+          business_address: "Old seller address",
+          address: "Old seller address",
+          city: "Old City",
+          country: "CY",
+          contact_email: "old-seller@example.com",
+          contact_phone: "+357 000001",
+          iban: "OLD-IBAN",
+          bank_name: "Old Bank",
+          currency: "EUR",
+        },
+        client_snapshot: {
+          schema_version: 1,
+          client_id: "client-1",
+          full_name: "Historical Client",
+          phone: "+357 000002",
+          phone_e164: "+357000002",
+          whatsapp_phone: null,
+          email: "old-client@example.com",
+          address: "Old client address",
+          city: "Old City",
+          primary_address: "Old client address",
+          archived: false,
+          deleted_at: null,
+        },
+      },
+      tenant: { ...tenant, legal_name: "Renamed Seller Ltd", vat_number: "NEW-VAT" },
+      client: { ...client, full_name: "Renamed Client", email: "new-client@example.com" },
+      settlement: {
+        income: 0,
+        refunded: 0,
+        paid: 0,
+        remaining: 119,
+        overpaid: 0,
+        isPartial: false,
+        isPaid: false,
+      },
+      payments: [],
+    });
+
+    assert.match(html, /Historical Seller Ltd/);
+    assert.match(html, /OLD-VAT/);
+    assert.match(html, /Historical Client/);
+    assert.match(html, /old-client@example\.com/);
+    assert.doesNotMatch(html, /Renamed Seller Ltd/);
+    assert.doesNotMatch(html, /Renamed Client/);
+    assert.doesNotMatch(html, /NEW-VAT/);
+  });
+
+  it("does not fill blank issued snapshot fields from later live edits", () => {
+    const html = buildInvoicePdfHtml({
+      invoice: {
+        ...invoice,
+        seller_snapshot: {
+          schema_version: 1,
+          tenant_id: "tenant-1",
+          name: "Historical Seller Ltd",
+          display_name: "Historical Seller",
+          legal_name: "Historical Seller Ltd",
+          vat_number: null,
+          business_address: null,
+          address: null,
+          city: null,
+          country: null,
+          contact_email: null,
+          contact_phone: null,
+          iban: null,
+          bank_name: null,
+          currency: "EUR",
+        },
+        client_snapshot: {
+          schema_version: 1,
+          client_id: "client-1",
+          full_name: "Historical Client",
+          phone: null,
+          phone_e164: null,
+          whatsapp_phone: null,
+          email: null,
+          address: null,
+          city: null,
+          primary_address: null,
+          archived: false,
+          deleted_at: null,
+        },
+      },
+      tenant: { ...tenant, vat_number: "LATER-VAT", iban: "LATER-IBAN" },
+      client: { ...client, email: "later-client@example.com" },
+      settlement: {
+        income: 0,
+        refunded: 0,
+        paid: 0,
+        remaining: 119,
+        overpaid: 0,
+        isPartial: false,
+        isPaid: false,
+      },
+      payments: [],
+    });
+
+    assert.doesNotMatch(html, /LATER-VAT/);
+    assert.doesNotMatch(html, /LATER-IBAN/);
+    assert.doesNotMatch(html, /later-client@example\.com/);
+  });
+
+  it("escapes every HTML control character", () => {
+    assert.equal(escapeHtml(`<&>\"'`), "&lt;&amp;&gt;&quot;&#039;");
+  });
+
+  // ПЕРВЫЙ ЗАХОД ЗЕРКАЛА-СОСТАВИТЕЛЯ: пустые зоны бумаги в
+  // составителе печатают короткое приглашение акцентным цветом («Логотип»,
+  // «Юр. адрес», «Выбрать клиента», «Срок оплаты», «Комментарий»). Эти слова
+  // живут ТОЛЬКО в `InvoicePaper.tsx` (через `invoicePaperZones`) — сам PDF
+  // рисуется отдельным шаблоном из той же модели `InvoiceDocument` и о
+  // приглашениях не знает вовсе. Документ ниже пуст ровно там, где бумага
+  // предлагает эти слова: без логотипа, без реквизитов продавца, без
+  // клиента, без срока оплаты и без комментария.
+});
+
+// ДВА АДРЕСА ПОЛУЧАТЕЛЯ: юрадрес реквизитов — на
+// компанию, а объектов у неё много. Оба необязательны: без реквизитов и без
+// объекта инвойс выставляется просто на имя клиента.
+describe("invoice recipient addresses", () => {
+  const snapshot = (extra: Record<string, unknown>) => ({
+    schema_version: 1,
+    client_id: "client-1",
+    full_name: "Ivan Petrov",
+    phone: null,
+    phone_e164: null,
+    whatsapp_phone: null,
+    email: null,
+    address: null,
+    city: null,
+    primary_address: "Primary location 1",
+    archived: false,
+    deleted_at: null,
+    ...extra,
+  });
+  const settlement = {
+    income: 0, refunded: 0, paid: 0, remaining: 119, overpaid: 0, isPartial: false, isPaid: false,
+  };
+  const render = (clientSnapshot: ReturnType<typeof snapshot>) =>
+    buildInvoicePdfHtml({
+      invoice: { ...invoice, language: "en", client_snapshot: clientSnapshot },
+      tenant,
+      client,
+      settlement,
+      payments: [],
+    });
+
+  it("prints the legal address of the chosen requisites above the object address", () => {
+    const html = render(snapshot({
+      legal_name: "Petrov Holdings Ltd",
+      vat_number: "CY999",
+      billing_address: "Arch. Makariou 1\nNicosia 1065",
+      object: { id: "loc-2", label: "Shop", address_parts: { street: "Ledras 20", city: "Nicosia" } },
+    }));
+    assert.match(html, /Petrov Holdings Ltd/);
+    const legal = html.indexOf("Arch. Makariou 1");
+    const city = html.indexOf("Nicosia 1065");
+    const site = html.indexOf("Ledras 20");
+    assert.ok(legal > 0 && city > legal, "legal address is printed line by line");
+    assert.ok(site > city, "object address follows the legal address");
+  });
+
+  it("prints just the client name without requisites and without an object", () => {
+    const html = render(snapshot({ object: null }));
+    assert.match(html, /Ivan Petrov/);
+    assert.doesNotMatch(html, /Primary location 1/);
+    assert.doesNotMatch(html, /Recipient not set/);
+  });
+});

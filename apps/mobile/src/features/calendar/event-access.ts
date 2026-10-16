@@ -1,5 +1,5 @@
 import type { Appointment } from "@babun/shared/local/appointments";
-import type { UserRole } from "@/features/settings/role-policy";
+import type { UserRole } from "@/session/role-policy";
 
 export function isCalendarEvent(
   appointment: Pick<Appointment, "kind">,

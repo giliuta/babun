@@ -1,6 +1,6 @@
 import type { Database, Json } from "@babun/shared/db/database.types";
 import type { Client } from "@babun/shared/local/clients";
-import { contactsHiddenOf } from "@/features/clients/member-contacts";
+import { contactsHiddenOf } from "@/session/member-contacts";
 
 type Service = Database["public"]["Tables"]["services"]["Row"];
 type Team = Database["public"]["Tables"]["teams"]["Row"];
@@ -109,7 +109,7 @@ export function masterClientJsonToClient(value: Json): Client {
     deleted_at: null,
     favorite_master_id: null,
     created_at: requiredString(row, "created_at"),
-    // Номер мастеру — по одному, дверью (30.09): список отдаёт пустой
+    // Номер мастеру — по одному, дверью: список отдаёт пустой
     // телефон и причину. До миграции ключа нет — прежнее поведение.
     ...(hidden !== undefined ? { contacts_hidden: hidden } : {}),
   };
@@ -129,7 +129,7 @@ export function masterServiceJsonToService(value: Json): Service {
     // наряде тем же способом, что и все остальные.
     icon: nullableString(row, "icon"),
     // Команда-владелец нужна мастеру не ради прав, а ради каталога: услуга
-    // принадлежит ровно одной команде (2026-08-17).
+    // принадлежит ровно одной команде.
     team_id: requiredString(row, "team_id"),
     name: requiredString(row, "name"),
     color: requiredString(row, "color"),
@@ -268,7 +268,7 @@ export function operationalTeamJsonToTeam(value: Json): Team {
     lead_id: null,
     lead_ids: [],
     helper_ids: [],
-    // Юрлицо команды — дело документов владельца (STORY-101).
+    // Юрлицо команды — дело документов владельца.
     legal_entity_id: null,
   };
 }

@@ -38,7 +38,7 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
   "finance.expense",
   "finance.accounts",
   "finance.debts",
-  // Плитки «Документы» и «Прибыль» (владелец 03.10).
+  // Плитки «Документы» и «Прибыль».
   "finance.documents",
   "finance.profit",
 ];
@@ -51,8 +51,7 @@ export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
   "clients.delete",
 ];
 
-/** Блоки карточки клиента (владелец 30.09: «страница клиентов по правам —
- *  полностью»): вид — сам блок карточки. */
+/** Блоки карточки клиента: вид — сам блок карточки. */
 export const CLIENT_CARD_PREVIEW_KEYS: readonly string[] = [
   "clients.note",
   "clients.people",
@@ -75,14 +74,14 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "calendar.booking_form",
   "calendar.services",
   "calendar.labels",
-  // Строки шестерёнки клиентов (владелец 01.10) — тот же вид строки.
+  // Строки шестерёнки клиентов — тот же вид строки.
   "clients.settings_card",
   "clients.settings_ways",
   "clients.settings_objects",
   "clients.settings_maps",
   "clients.settings_tags",
   "clients.settings_sources",
-  // Строки шестерёнки финансов (владелец 03.10) — тот же вид строки.
+  // Строки шестерёнки финансов — тот же вид строки.
   "finance.settings_accounts",
   "finance.settings_trash",
   "finance.settings_categories_income",
@@ -91,7 +90,7 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "finance.settings_currency",
 ];
 
-/** Права «Кабинета» (04.10) — строкой блока аккаунта в Кабинете партнёра.
+/** Права «Кабинета» — строкой блока аккаунта в Кабинете партнёра.
  *  «Реквизиты» — здесь же: их строка живёт в Кабинете с 03.10. */
 export const CABINET_PREVIEW_KEYS: readonly string[] = [
   "cabinet.tariff",
@@ -102,7 +101,7 @@ export const CABINET_PREVIEW_KEYS: readonly string[] = [
   "company.partners",
 ];
 
-/** «Ограничения» записей и финансов (03.10) — общий вид сроков. */
+/** «Ограничения» записей и финансов — общий вид сроков. */
 export const WINDOW_PREVIEW_KEYS: readonly string[] = ["calendar.window", "finance.window"];
 
 export function hasBlockPreview(key: string): boolean {

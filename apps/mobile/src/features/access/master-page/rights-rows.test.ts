@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "../access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
 import { areaWord, draftLevel, emptyMasterDraft, toggleTeam, withLevel } from "./master-draft";
 import {
   draftFromMemberAccess,
@@ -13,7 +13,7 @@ import {
 // Реестр — копия строк `access_blocks` (миграция 20260914140000), как в
 // тесте черновика: свёртка проверяется на настоящих ключах.
 //
-// ЖИВОСТЬ ЗДЕСЬ ВКЛЮЧЕНА У ВСЕХ (STORY-083): страница с 20.09 предлагает
+// ЖИВОСТЬ ЗДЕСЬ ВКЛЮЧЕНА У ВСЕХ: страница предлагает
 // только те блоки, которые сервер правда проверяет (`offeredBlocks`), а этот
 // тест про ПОРЯДОК и СВЁРТКУ строк — ему нужен полный реестр. Правило «неживое
 // не показываем» проверяется отдельно, ниже и в `rights-copy.test.ts`.
@@ -30,7 +30,7 @@ const REGISTRY: AccessBlock[] = (
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
-    // «Долг и деньги» снято 03.10 — деньги идут с «Историей» (три положения).
+    // Деньги идут с «Историей» (три положения).
     ["clients.history", "clients", "company", OFF_READ_WRITE, 230],
     ["services", "company", "company", OFF_READ_WRITE, 310],
     ["company.currency", "company", "company", ["read", "write"], 330],
@@ -69,7 +69,7 @@ const foldedOf = (sections: ReturnType<typeof rightsSections>, area: string) =>
   );
 
 // «Новые записи» своей строки не имеют — они влиты в «Записи клиентов»
-// (владелец 30.09): свёртку их строки проверять нечего, её нет и при
+//: свёртку их строки проверять нечего, её нет и при
 // открытом главном (отдельный тест ниже).
 const CALENDAR_DEPENDANTS = [
   "record.amount",
@@ -94,7 +94,7 @@ describe("страница прав — какие строки видны", () 
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
     draft = withLevel(draft, block("calendar.records"), "off", "team-1");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
-    // Оплата стоит под ценами (30.09): чтобы её строка была видна, цены
+    // Оплата стоит под ценами: чтобы её строка была видна, цены
     // открыты.
     draft = withLevel(draft, block("record.amount"), "read", "team-2");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
@@ -106,7 +106,7 @@ describe("страница прав — какие строки видны", () 
       assert.equal(shown.includes(key), true, `${key} не виден при открытом главном`);
     }
     assert.deepEqual(hidden, ["calendar.records", "calendar.settings"]);
-    // Свёрнутые не пропадают — стоят серыми (владелец 30.09).
+    // Свёрнутые не пропадают — стоят серыми.
     const grey = foldedOf(rightsSections(REGISTRY, levelOf, "team-1"), "calendar");
     for (const key of CALENDAR_DEPENDANTS) {
       assert.equal(grey[key], "calendar.records", `${key} не серая при скрытых записях`);

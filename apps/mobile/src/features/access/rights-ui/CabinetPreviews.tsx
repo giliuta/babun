@@ -5,12 +5,10 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame } from "./PreviewFrame";
 
-// ВИД ПРАВ «КАБИНЕТА» В ШТОРКЕ (владелец 04.10: «можем дать доступ к
-// кабинету — реквизиты, тариф, SMS, оплата… зафиксировано за нашей
-// командой»). Строка — ровно та, что встанет у партнёра в Кабинете в блоке
+// ВИД ПРАВ «КАБИНЕТА» В ШТОРКЕ (реквизиты, тариф, SMS, оплата). Строка — ровно та, что встанет у партнёра в Кабинете в блоке
 // вашего аккаунта: «Скрыт» — её там нет, «Видит» — строка без оплаты,
 // «Оплачивает» / «Пополняет» — со страницей, где кнопка платит за ваш
 // аккаунт и называет его.

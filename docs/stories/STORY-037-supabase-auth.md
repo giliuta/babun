@@ -89,7 +89,7 @@ If any leftover found → fix in this group.
 
 ### G1 — SQL migration (interactive: stop and ask user to apply)
 
-**File: `apps/web/supabase/migrations/20260428_001_auth_tenants.sql`**
+**File: `apps/web/supabase/migrations/20260428000001_auth_tenants.sql`**
 
 ```sql
 -- ─────────────────────────────────────────────────────────────────────
@@ -515,7 +515,7 @@ After all 9 pass → proceed to G9.
 
 | Path | Purpose |
 |---|---|
-| `apps/web/supabase/migrations/20260428_001_auth_tenants.sql` | tenants.owner_user_id + handle_new_user trigger |
+| `apps/web/supabase/migrations/20260428000001_auth_tenants.sql` | tenants.owner_user_id + handle_new_user trigger |
 | `apps/web/src/lib/supabase/auth-client.ts` | signIn / signUp / signOut / reset helpers |
 | `apps/web/src/app/register/page.tsx` | new |
 | `apps/web/src/app/forgot-password/page.tsx` | new |

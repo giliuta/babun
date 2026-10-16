@@ -4,14 +4,14 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
+import { readModuleSource } from "@/lib/module-source";
 import { buildReceiptPdfHtml } from "./receipt-pdf";
 import { RECEIPT_WORDS } from "./receipt-words";
 
 // СОСТАВ ДОКУМЕНТА ЖИВЁТ В МОДЕЛИ, А НЕ В ДВУХ ВЁРСТКАХ.
 //
-// Владелец 2026-09-20: «давай сделаем, чтобы визуал был точно такой же, как в
-// PDF — то есть оно открывает один в один зеркало PDF, который мы
-// сгенерировали». `ReceiptPaper.tsx` (экран) и `receipt-pdf.ts` (PDF) — два
+// Визуал экрана точно такой же, как в PDF — зеркало PDF один в один.
+// `ReceiptPaper.tsx` (экран) и `receipt-pdf.ts` (PDF) — два
 // РЕНДЕРА одной модели `ReceiptDocument` (`receipt-document.ts`), тем же
 // приёмом, что у инвойса (`invoices/document.ts` + `InvoicePaper.tsx` +
 // `invoices/pdf.ts`). Ни у экрана, ни у PDF нет права печатать поле, которого
@@ -28,7 +28,7 @@ import { RECEIPT_WORDS } from "./receipt-words";
 const here = dirname(fileURLToPath(import.meta.url));
 const paperSource = readFileSync(resolve(here, "ReceiptPaper.tsx"), "utf8");
 const pdfSource = readFileSync(resolve(here, "receipt-pdf.ts"), "utf8");
-const documentSource = readFileSync(resolve(here, "receipt-document.ts"), "utf8");
+const documentSource = readModuleSource(resolve(here, "receipt-document.ts"));
 
 /** Код без `/* … *\/` и `// …` — комментарий не имеет права ни подтвердить,
  *  ни сломать проверку состава. */
@@ -38,7 +38,7 @@ function stripComments(source: string): string {
 
 const paperCode = stripComments(paperSource);
 // ПОРЯДОК СЧИТАЕТСЯ ПО ТЕЛУ, А НЕ ПО ВСЕМУ ФАЙЛУ. В <head> печатаемого HTML
-// с 2026-09-20 живёт <title>Чек RC-…</title> — имя файла для браузера; оно не
+// живёт <title>Чек RC-…</title> — имя файла для браузера; оно не
 // печатается на бумаге, но слово «Чек» в нём стоит раньше названия компании и
 // ломало проверку порядка. Сравниваем то, что видит глаз.
 const pdfCode = stripComments(pdfSource).replace(/<head>[\s\S]*?<\/head>/, "");
@@ -70,14 +70,14 @@ describe("бумага чека и PDF печатают одну модель в
 
   test("модель не разрослась тихо — поля идут в этом порядке", () => {
     assert.deepEqual(fields, [
-      // Слова бумаги — на языке документа (03.10): оба рендера берут их из
+      // Слова бумаги — на языке документа: оба рендера берут их из
       // модели, а не держат свои.
       "words",
       "number",
       "voidLabel",
       "seller",
       "issuedOn",
-      // Владелец 04.10: «чек — как инвойс» — получатель и инвойс оплаты.
+      // Получатель и инвойс оплаты — как у инвойса.
       "recipient",
       "basis",
       "lines",

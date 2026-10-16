@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { operationSheetSource } from "./operation-sheet/sheet-source";
 
 // СТОРОЖ: файл чека чистит ФОРМА, когда закрыта насовсем, а не строка на
-// своём размонтировании (аудит 2026-09-24). Лист снимает строку при каждом
+// своём размонтировании. Лист снимает строку при каждом
 // отъезде — вопрос «Закрыть без сохранения?», поход за клиентом, — и чистка
 // строки стирала файл, который форма ещё держала.
 const here = dirname(fileURLToPath(import.meta.url));
@@ -18,8 +19,9 @@ describe("чистка файла чека — у формы", () => {
     assert.ok(row.includes("session.uploads"), "строка не пишет в сессию формы");
   });
   test("обе формы держат сессию и чистят при закрытии", () => {
-    for (const f of ["OperationSheet.tsx", "use-debt-draft.ts"]) {
-      const src = read(f);
+    // The operation form is `OperationSheet.tsx` plus `operation-sheet/`.
+    const sources = { "OperationSheet.tsx": operationSheetSource(), "use-debt-draft.ts": read("use-debt-draft.ts") };
+    for (const [f, src] of Object.entries(sources)) {
       assert.ok(src.includes("useReceiptSession()"), `${f}: нет сессии файлов`);
       assert.ok(src.includes("receiptSession.flush()"), `${f}: не чистит при закрытии`);
     }

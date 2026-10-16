@@ -1,13 +1,12 @@
 // «МОИ КОМПАНИИ» В КАБИНЕТЕ — ЧИСТЫЕ ПРАВИЛА.
 //
-// Владелец 2026-09-15: Кабинет должен быть полноценным и информативным. Где
-// человек состоит и кем — это его, а не компании: лента календарей
+// Где человек состоит и кем — это его, а не компании: лента календарей
 // (`list_my_calendars`) отдаёт по строке на КАЛЕНДАРЬ, здесь они собираются в
 // компании. Какая компания «сейчас» — решает компания УСТРОЙСТВА: флаг сервера
 // `isActive` сразу после перехода ещё прежний (см. `useCalendarChips`).
 
-import type { MyCalendar } from "../settings/workspaces";
-import { isUserRole, ROLE_LABELS, type UserRole } from "../settings/role-policy";
+import type { MyCalendar } from "@/session/workspaces";
+import { isUserRole, ROLE_LABELS, type UserRole } from "@/session/role-policy";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 export interface CompanyCalendar {

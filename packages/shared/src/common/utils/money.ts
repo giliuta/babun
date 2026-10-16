@@ -22,8 +22,8 @@ export interface MoneyInputOptions {
   allowZero?: boolean;
 }
 
-/** Код валюты ISO 4217 (`tenants.currency`). До 2026-09-06 база допускала
- *  ровно пять кодов; теперь — любой из словаря `ALL_CURRENCIES`. */
+/** Код валюты ISO 4217 (`tenants.currency`). База допускает
+ *  любой код из словаря `ALL_CURRENCIES`. */
 export type MoneyCurrency = string;
 
 export const DEFAULT_CURRENCY: MoneyCurrency = "EUR";
@@ -64,12 +64,11 @@ export function moneySymbol(currency: string | null | undefined): string {
   return currencyDef(code)?.symbol ?? code;
 }
 
-// ВАЛЮТА ТЕНАНТА — ОДНА НА ПРОЦЕСС (2026-09-06). Владелец: «выбираю валюту в
-// настройках календаря, и она меняет финансы и так далее». `formatEUR` и
+// ВАЛЮТА ТЕНАНТА — ОДНА НА ПРОЦЕСС: валюта из настроек меняет финансы везде. `formatEUR` и
 // `formatEURExact` зовутся из ~180 мест, и у большинства нет доступа к тенанту
 // (чистые модули, SMS, экспорт). Поэтому валюта живёт реестром: `useTenant`
 // выставляет её при каждой загрузке профиля, а все форматтеры без явного кода
-// читают отсюда. До первой загрузки — евро, как и было.
+// читают отсюда. До первой загрузки — евро.
 let currentCurrency: MoneyCurrency = DEFAULT_CURRENCY;
 
 export function setDefaultCurrency(code: string | null | undefined): void {

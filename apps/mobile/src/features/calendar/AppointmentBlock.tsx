@@ -1,88 +1,41 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Text, useWindowDimensions, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { memo } from "react";
+import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolateColor,
-  runOnJS,
   useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
 } from "react-native-reanimated";
-import { Banknote, Check, CreditCard, Landmark, Wallet } from "lucide-react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
-import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { blockFrame, type PlacedAppt } from "@/features/calendar/layout";
 import {
   blockEdge,
   CANCELLED_BORDER,
-  type BlockColors,
 } from "@/features/calendar/status-colors";
-import { blockLadder, rowsThatFit, textOverflows } from "@/features/calendar/block-geometry";
-import { blockMoney } from "@/features/calendar/block-status";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
-import { BLOCK_GLASS } from "@/components/ui/RecordMark";
 import { blockPropsEqual } from "@/features/calendar/grid-memo";
 import { useUnstretchedStyle } from "@/features/calendar/zoom";
+import { pct } from "@/features/calendar/grid-units";
 import {
-  dayShort,
-  GAP,
-  MIN_H,
-  minToHM,
-  pct,
-  RAIL_W,
-  shiftYmd,
-} from "@/features/calendar/grid-units";
+  BlockGlass,
+  DeckBadge,
+  FadeTail,
+  LiveTimeBadge,
+  moneyWords,
+  OffLabelDot,
+  ResizeHandles,
+  StatusRow,
+} from "./appointment-block/BlockDecor";
+import { blockLayout } from "./appointment-block/block-layout";
+import type { AppointmentBlockProps } from "./appointment-block/block-props";
+import { BlockText } from "./appointment-block/BlockText";
+import { useBlockDrag } from "./appointment-block/use-block-drag";
+import { useBlockGesture } from "./appointment-block/use-block-gesture";
 
-// БЛОК ЗАПИСИ НА СЕТКЕ — вынесен из DayView.tsx 24.09 (файл вырос за 2000
-// строк). Поведение не менялось: плотный цвет, лестница содержимого, меню по
+// БЛОК ЗАПИСИ НА СЕТКЕ — вынесен из DayView.tsx (тот перерос 2000
+// строк): плотный цвет, лестница содержимого, меню по
 // долгому нажатию, свободное перемещение (перенос по получасам и дням,
 // растяжка за край) только в режиме правки.
-
-/** Высота зоны края блока, за которую запись растягивают. */
-const EDGE_H = 16;
-/** Зона у края экрана, где перетаскивание уходит в соседнюю неделю. */
-const EDGE_PAGE = 28;
-/** Блик — общий со знаком записи в настройках (`BLOCK_GLASS`). */
-const GLASS = BLOCK_GLASS;
-/** Тающий хвост: ширина и ступени плотности плёнки (слева направо). */
-const FADE_W = 14;
-const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.92];
-/** Кегль значков нижней строки — меньше текста, чтобы не спорить с именем;
- *  в широком блоке «Дня» 11 терялся — там 14. */
-const statusIcon = (width: number) => (width >= 96 ? 14 : 11);
-
-/** Значки оплаты словами — для VoiceOver: значок без подписи немой. */
-function moneyWords(money: ReturnType<typeof blockMoney>): string {
-  if (!money || money.state === "unpaid") return "";
-  if (money.state === "partial") return ", оплачена частично";
-  if (money.method === "cash") return ", оплачена наличными";
-  if (money.method === "card") return ", оплачена картой";
-  if (money.method === "transfer") return ", оплачена переводом";
-  return ", оплачена";
-}
-
-/** Значок оплаты: способ последнего платежа; не платили — кошелёк. */
-function MoneyIcon({
-  method,
-  size,
-  color,
-  opacity,
-}: {
-  method: "cash" | "card" | "transfer" | "other" | null;
-  size: number;
-  color: string;
-  opacity: number;
-}) {
-  const Icon =
-    method === "cash" ? Banknote : method === "card" ? CreditCard : method === "transfer" ? Landmark : Wallet;
-  return (
-    <View style={{ opacity }}>
-      <Icon color={color} size={size} strokeWidth={2.4} />
-    </View>
-  );
-}
+// Parts live in `appointment-block/`: size arithmetic (`block-layout`), the
+// drag and resize JS side (`use-block-drag`), the gesture worklets
+// (`use-block-gesture`) and the card's decorations.
 
 // `memo` со сравнением размещения по содержимому (`blockPropsEqual`): перенос
 // одной записи пересоздаёт размещения всей колонки, а перерисовать надо только
@@ -110,216 +63,65 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   deckSize,
   onMenu,
   onReschedule,
-}: {
-  placed: PlacedAppt;
-  /** Committed pixels-per-hour — px math (drag snap, text fit) only;
-   *  the on-screen geometry is percent-based and zoom-independent. */
-  hourH: number;
-  laneW: number;
-  startHour: number;
-  endHour: number;
-  stepMinutes: number;
-  colors: BlockColors;
-  /** Цвет чужой метки: точка в правом нижнем углу, затемнённая против
-   *  ЗАЛИВКИ блока. null — метка своя. */
-  offLabelColor: string | null;
-  /** Высота строки текста при текущем системном шрифте. Считается ОДИН раз в
-   *  колонке: `useWindowDimensions` внутри каждого из полутора сотен блоков
-   *  недели стоил бы кадра. */
-  lineH: number;
-  label: string;
-  service: string | null;
-  /** Куда ехать: снимок адреса записи, иначе адрес клиента. null — адреса
-   *  нет, и тогда оранжевый блок «нет объекта» называет дыру пустотой. */
-  address: string | null;
-  /** Запланирована, а время уже прошло — незакрытая работа, то есть
-   *  недополученные деньги. Сигнал ОДИН: кант вдвое толще (2pt против 1). Ни
-   *  своего цвета, ни углового знака у просрочки нет — кант остаётся цветом
-   *  записи, а почему именно так, объяснено в `status-colors`. */
-  overdue?: boolean;
-  /** Запись в режиме правки («Двигать и растягивать» из меню): только тогда
-   *  её можно тащить и тянуть за края. В покое запись закреплена. */
-  editing?: boolean;
-  /** Ширина колонки дня в Неделе: в свободном перемещении запись ходит и
-   *  по дням — шагом в колонку. В Дне не задана: там одна колонка. */
-  dayW?: number;
-  onEdit: (a: Appointment) => void;
-  /** Место в стопке узкой колонки (`decksFor`): номер снизу и размер.
-   *  Числами, а не объектом, — чтобы `memo` сравнивал по значению. */
-  deckIndex?: number;
-  deckSize?: number;
-  /** Долгое нажатие — меню записи. Двигать и растягивать — только после
-   *  выбора этого в меню (владелец 2026-09-24: «просто так тянуть нельзя,
-   *  она зафиксирована; зажимаешь — окно, выбрал — тогда можно»). */
-  onMenu?: (a: Appointment) => void;
-  /** Undefined for crew: the block stays tappable but has no drag affordance. */
-  onReschedule?: (a: Appointment, s: string, e: string, date?: string) => void;
-}) {
+}: AppointmentBlockProps) {
   const t = useThemeColors();
-  const { apt, startMin, endMin, colIndex, colCount } = placed;
-  const ty = useSharedValue(0);
-  const active = useSharedValue(0);
-  /** 0 — покой, 1 — под пальцем. Гонит заливку и лёгкое сжатие. */
-  const press = useSharedValue(0);
-  /** Сколько ступеней магнита пройдено от начала переноса. */
-  const snapSteps = useSharedValue(0);
-  /** Сдвиг по дням в свободном перемещении (в точках, шагом в колонку). */
-  const tx = useSharedValue(0);
-  const daySteps = useSharedValue(0);
-  /** Растяжка за край: смещение верхнего и нижнего края в точках. */
-  const topPx = useSharedValue(0);
-  const botPx = useSharedValue(0);
-  const rSteps = useSharedValue(0);
-  /** 0 — перенос, 1 — растяжка верхнего края, 2 — нижнего. */
-  const edgeMode = useSharedValue(0);
-  /** Где палец коснулся карточки (y от её верха). */
-  const touchY = useSharedValue(0);
-  // Ступень магнита — полчаса, но не мельче шага сетки команды: у кого сетка
-  // по часу, запись прыгает по часу. Клавиатура и диктор ходят по шагу
-  // сетки (`moveBy(stepMinutes)`), магнит — только палец.
-  const dragStep = Math.max(30, Math.min(60, stepMinutes));
-  const screenW = useWindowDimensions().width;
-  /** Новое начало, пока запись под пальцем, — пишется на самой карточке. */
-  const [liveStart, setLiveStart] = useState<string | null>(null);
-  // Переход на другой день чувствуется сильнее шага времени.
-  const lastDays = useRef(0);
-  const resetDays = () => {
-    lastDays.current = 0;
-  };
-  const onSnap = (steps: number, days = 0) => {
-    if (days !== lastDays.current) haptics.edge();
-    else haptics.step();
-    lastDays.current = days;
-    if (steps === 0 && days === 0) {
-      setLiveStart(null);
-      return;
-    }
-    // Подпись под пальцем — то, что встанет при отпускании (аудит 03.10):
-    // без того же ограничения она показывала «-1:-30» и «24:30».
-    const time = minToHM(
-      clampStart(startMin + steps * dragStep, Math.max(15, spanEnd - startMin)),
-    );
-    setLiveStart(days === 0 ? time : `${dayShort(apt.date, days)} ${time}`);
-  };
-  const clearLive = () => setLiveStart(null);
-
-  const winStart = startHour * 60;
-  const winEnd = endHour * 60;
-  const totalMin = winEnd - winStart;
-  // Clamp into the visible window (web windowStart/windowEnd semantics):
-  // a block starting before the window pins to the top instead of getting
-  // a negative top and vanishing above the grid.
-  const visStart = Math.max(startMin, winStart);
-  const visEnd = Math.min(endMin, winEnd);
-  // МЕСТО В КОЛОНКЕ — `blockFrame` (layout.ts, под тестом): в Дне записи
-  // рядом с растяжкой вправо, в узкой Неделе — «веером» поверх друг друга.
-  const frame = blockFrame(
+  const { apt, startMin, endMin } = placed;
+  // Size arithmetic of the card — `blockLayout`, pure and under test.
+  const layout = blockLayout({
     placed,
     laneW,
-    GAP,
-    deckSize && deckSize > 1 ? { index: deckIndex ?? 0, size: deckSize } : undefined,
-  );
-  // Верхняя карточка стопки несёт «+N» — сколько записей под ней.
-  const deckMore =
-    deckSize && deckSize > 1 && deckIndex === deckSize - 1 ? deckSize - 1 : 0;
-  const deckBadgeW = deckMore > 0 ? 20 : 0;
-  const { left, width } = frame;
-  void colIndex;
-  void colCount;
-  const cancelled = apt.status === "cancelled";
-  const completed = apt.status === "completed";
-  // ═══ ГЕОМЕТРИЯ И ЦВЕТ БЛОКА ═══
-  // Всё считается арифметикой от ширины и высоты, а не флагом «компактный»:
-  // блок недели и блок дня — один и тот же блок при разной ширине.
-  const cardH = Math.max(MIN_H(lineH), ((visEnd - visStart) / 60) * hourH) - 2;
-  // Третья ступень паддинга (3pt) в колонке недели уже 60pt — как у чипов
-  // «весь день» (`chipPad`): имя из шести букв («Андрей») влезает целиком,
-  // а не обрывается на «Андре».
-  const pad = width >= 96 ? 6 : width >= 60 ? 4 : 3;
-  // ТОЛЩИНА — ВЕСЬ СИГНАЛ ПРОСРОЧКИ, И ЭТО ЕДИНСТВЕННЫЙ КАНАЛ, КОТОРЫЙ
-  // УСИЛИВАЕТСЯ ПРИ СУЖЕНИИ. Кант 1 → 2pt меняет долю канта в площади плитки:
-  // 21pt (две наложенные записи в Неделе) 13.6 % → 26.4 %, неделя 46pt
-  // 8.7 % → 17.0 %, день 330pt 5.1 % → 10.2 %. То есть канал работает ровно
-  // там, где знака нет (markSize 0 при ширине < 40), и слабеет там, где есть
-  // текст. Геометрия не меняется ни при дейтеранопии, ни при перекраске
-  // палитры владельцем — в отличие от любого оттенка.
-  // КОНТУР 1.5pt У КАЖДОГО БЛОКА (владелец 2026-09-24, вариант 3 второй
-  // итерации: «контур добавить, насыщенность»): свой же цвет на полтона
-  // глубже отделяет соседние записи и даёт плотной заливке край — не тёмная
-  // рамка (владелец 04.10: «ядовито чёрная окантовка»). Толстого чёрного
-  // канта просрочки нет (владелец 2026-10-01: «некрасиво») — незакрытая
-  // запись говорит жирным временем.
-  const bw = 1.5;
-  // Гейт точки чужой метки: в колонке уже 40pt ей места нет.
-  const markSize = width >= 40 ? 8 : 0;
-  // УГЛОВОГО ЗНАКА «ВЫПОЛНЕНО» БОЛЬШЕ НЕТ (владелец 15.10: «что значит
-  // справа вверху… как будто точку поставили?»). В колонке недели галка не
-  // помещалась, и оставалась немая полупрозрачная точка. «Выполнено» ушло в
-  // строку значков внизу — галкой, рядом с оплатой.
-  // Внутренняя ширина НЕ зависит от толщины канта: компенсация паддинга ниже
-  // (`pad - (bw - 1)`) гасит лишний кант ровно, поэтому вычитаем 2, а не 2·bw.
-  const textW = width - 2 * pad - 2;
-  // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
-  // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
-  // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
-  // РУЧКА РАСТЯЖКИ СВЕРХУ — НЕ ПОВЕРХ ИМЕНИ (повторный аудит 03.10, на
-  // симуляторе). В «Свободном перемещении» верхняя ручка (top 3, высота 4)
-  // ложилась белой полосой прямо на первую строку — имя читалось
-  // перечёркнутым. Пока ручка видна, текст отступает под неё, а строк
-  // считается на столько меньше — и с нижней ручкой тоже: иначе сдвинутая
-  // вниз последняя строка ложилась уже под нижнюю.
-  const resizable = editing && !!onReschedule && apt.status !== "cancelled";
-  const topHandle = resizable && cardH >= 40 ? 6 : 0;
-  const bottomHandle = resizable && cardH >= 24 ? 6 : 0;
-  const rowsFit = rowsThatFit(cardH - topHandle - bottomHandle, lineH);
-  // СТРОКА ЛИБО НАРИСОВАНА ЦЕЛИКОМ, ЛИБО ЕЁ НЕТ. Прежняя формула
-  // `floor((cardH − 9) / lineH) + 1` пускала строку, когда до неё не хватало
-  // почти целой: получасовая запись при обычном зуме (высота 28) получала две
-  // строки на место под одну, и время рисовалось разрезанным пополам обрезкой
-  // карточки. Половина цифры хуже отсутствующей цифры, а время у записи и без
-  // того названо рельсом слева и позицией блока — потому имя и стоит первым.
-  // Единица снизу остаётся: у самого низкого блока имя пытается напечататься
-  // всегда, как было.
-  // ЛЕСТНИЦА — ЧИСТОЙ ФУНКЦИЕЙ ПОД ТЕСТОМ (`blockLadder`): имя (в узком блоке
-  // — имя и фамилия двумя строками), время, услуга, адрес — сколько влезает.
-  // Потолка в три строки и гейта ширины 120pt у услуги с адресом больше нет:
-  // владелец хочет, чтобы в блок «больше влазило».
-  const money = blockMoney(apt);
-  const ladder = blockLadder({
-    rowsFit,
-    hasService: !!service,
-    hasStatus: !cancelled && (money !== null || completed),
+    startHour,
+    endHour,
+    hourH,
+    lineH,
+    label,
+    service,
+    offLabelColor,
+    deckIndex,
+    deckSize,
+    editing,
+    overdue,
+    reschedulable: !!onReschedule,
   });
-  const { showService, showStatus, lastRow } = ladder;
-  // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
-  // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
-  // адрес, и на карточке, где последней осталась услуга (или время), её хвост
-  // заезжал под точку.
-  // «+N» стопки: внизу, если под именем есть ещё строка; иначе сверху, и
-  // тогда имя отступает на ширину значка.
-  const deckBadgeLow = deckMore > 0 && rowsFit >= 2;
-  // ШИРИНА ПЕРВОЙ СТРОКИ ИМЕНИ — после значка «+N» сверху. Значок резервировался
-  // уже ПОСЛЕ гейта 24pt: у верхней карточки стопки в Неделе (две короткие
-  // записи в одно время) имени оставалось ~14pt — «А…» (повторный аудит
-  // 03.10). Гейт меряет то, что останется имени на самом деле.
-  const nameLineW = textW - (deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
-  const dotReserve =
-    offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
-  // Строки, чей край тает: только те, что не влезают. Плёнка по всей кромке
-  // гасила бы и короткое время «10:00» в узкой колонке недели.
-  const timeText = textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start;
-  const fadeRows: number[] = [];
-  if (!cancelled && textW >= 24) {
-    const nameW = nameLineW - (lastRow === "name" ? dotReserve : 0);
-    if (nameLineW >= 24 && textOverflows(label, nameW, { bold: true })) fadeRows.push(0);
-    if (
-      ladder.showTime &&
-      textOverflows(timeText, textW - (lastRow === "time" ? dotReserve : 0), { bold: overdue })
-    )
-      fadeRows.push(1);
-    if (showService && service && textOverflows(service, textW - (lastRow === "service" ? dotReserve : 0)))
-      fadeRows.push(2);
-  }
+  const {
+    winStart,
+    winEnd,
+    totalMin,
+    visStart,
+    visEnd,
+    frame,
+    deckMore,
+    left,
+    width,
+    cancelled,
+    completed,
+    cardH,
+    pad,
+    bw,
+    markSize,
+    topHandle,
+    bottomHandle,
+    deckBadgeLow,
+    money,
+    showStatus,
+    fadeRows,
+    textW,
+  } = layout;
+  const drag = useBlockDrag({
+    apt,
+    startMin,
+    endMin,
+    winStart,
+    winEnd,
+    hourH,
+    stepMinutes,
+    cardH,
+    cancelled,
+    editing,
+    onReschedule,
+  });
+  // Plain locals: the animated-style worklets capture values, not `drag`.
+  const { ty, active, press, tx, topPx, botPx, liveStart, moveBy, canResize } = drag;
 
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
   const edge = blockEdge(colors, apt.status);
@@ -330,301 +132,24 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // говорила до сих пор, живёт только там, где имя влезает.
   const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
 
-  // ПРИЗЕМЛЕНИЕ БЕЗ РЫВКА (владелец 2026-09-30: «свободное перемещение
-  // подлагивает»). Перенос уходит в кэш не в тот же кадр, что отпускание:
-  // мутация кладёт новое время через микрозадачи и таймер уведомлений. Пока
-  // смещение сбрасывалось сразу после `onReschedule`, блок на кадр-два
-  // возвращался на СТАРОЕ место и только потом прыгал на новое. Теперь
-  // смещение держится, пока место блока не сменится (эффект ниже), а если
-  // перенос так и не приземлился (отказ, тот же слот), — пружиной домой.
-  const landing = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const awaitLanding = () => {
-    if (landing.current) clearTimeout(landing.current);
-    landing.current = setTimeout(() => {
-      landing.current = null;
-      ty.value = withSpring(0);
-      tx.value = withSpring(0);
-      topPx.value = withSpring(0);
-      botPx.value = withSpring(0);
-    }, 1500);
-  };
-  useLayoutEffect(() => {
-    if (!landing.current) return;
-    clearTimeout(landing.current);
-    landing.current = null;
-    ty.value = 0;
-    tx.value = 0;
-    topPx.value = 0;
-    botPx.value = 0;
-  }, [startMin, endMin, apt.date, ty, tx, topPx, botPx]);
-  useEffect(
-    () => () => {
-      if (landing.current) clearTimeout(landing.current);
-    },
-    [],
-  );
-
-  // КОНЕЦ ЗАПИСИ — НЕ ПОЗЖЕ 23:59 (аудит 2026-10-03). «24:00» у записи не
-  // бывает (форма записи и `addMinutesHM` останавливаются на 23:59), а
-  // перенос в последний слот дня и растяжка до края писали «24:00»: длина
-  // такой записи считалась нулём, «Перенести»/«Копировать» брали окно не той
-  // длины, и сегодняшняя неоплаченная запись не становилась долгом.
-  const endHM = (min: number) => minToHM(Math.min(min, 23 * 60 + 59));
-  // …и обратно: конец 23:59 в арифметике — это конец суток (аудит 03.10).
-  // Иначе длительность выходила на минуту короче: запись 22:00–23:59 при
-  // каждом переносе вниз становилась 22:01–23:59, 22:02–23:59…, а растяжка
-  // нижнего края на шаг вверх давала 23:44 вместо 23:45.
-  const spanEnd = endMin >= 23 * 60 + 59 ? 24 * 60 : endMin;
-  /** Начало, которое запись может занять: в окне, но не теснее, чем стоит. */
-  const clampStart = (newStart: number, duration: number) => {
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(spanEnd, winEnd) - duration;
-    return Math.max(lo, Math.min(hi, newStart));
-  };
-
-  const commit = (translationY: number, dayDelta = 0) => {
-    if (!onReschedule) {
-      ty.value = withSpring(0);
-      tx.value = withSpring(0);
-      return;
-    }
-    const duration = Math.max(15, spanEnd - startMin);
-    // Base the move on the UNCLAMPED startMin (like moveBy below), not on
-    // the clamped visual top: a block clipped by the visible window
-    // (e.g. 06:30 with startHour=7) must keep its real start, not get
-    // silently pinned to the window edge.
-    const step = dragStep;
-    const deltaMin =
-      Math.round(((translationY / hourH) * 60) / step) * step;
-    // Clamp into the window, but never TIGHTER than where the block
-    // already sits — a clipped block may legitimately stay clipped.
-    const newStart = clampStart(startMin + deltaMin, duration);
-    if (newStart === startMin && dayDelta === 0) {
-      // Некуда двигать — мягко возвращаем карточку на место.
-      ty.value = withSpring(0);
-      tx.value = withSpring(0);
-      return;
-    }
-    onReschedule(
-      apt,
-      minToHM(newStart),
-      endHM(newStart + duration),
-      dayDelta === 0 ? undefined : shiftYmd(apt.date, dayDelta),
-    );
-    // Смещение сбросит приземление — когда блок встанет на новый слот.
-    awaitLanding();
-  };
-
-  const moveBy = (deltaMin: number) => {
-    if (!onReschedule) return;
-    const duration = Math.max(15, spanEnd - startMin);
-    const newStart = clampStart(startMin + deltaMin, duration);
-    if (newStart === startMin) return;
-    onReschedule(apt, minToHM(newStart), endHM(newStart + duration));
-  };
-
-  // ═══ РАСТЯЖКА ЗА КРАЙ (владелец 2026-09-24: «запись растягивать по
-  // времени — тянуть вниз, увеличивать, если тянуть вверх») ═══
-  // Нижний край двигает конец, верхний — начало. Тот же жест, что перенос
-  // (удержание 300 мс, потом тянуть), — обычная прокрутка сетки по краю в
-  // растяжку не превращается. Шаг — сетка команды (15 мин), со щелчком на
-  // каждой ступени; короче 15 минут запись не становится.
-  // Тянуть можно любую запись от 24pt — и получасовой перерыв при обычном
-  // масштабе. Зона края у короткой записи пропорционально меньше (не больше
-  // трети высоты), чтобы середина, за которую переносят, оставалась.
-  const canResize = editing && !!onReschedule && !cancelled && cardH >= 24;
-  const edgeH = Math.min(EDGE_H, cardH / 3);
-  const resizeStep = Math.max(15, Math.min(60, stepMinutes));
-  const durMin = Math.max(resizeStep, spanEnd - startMin);
-  const maxShrink = Math.floor((durMin - resizeStep) / resizeStep);
-  const onResizeSnap = (edge: "top" | "bottom", steps: number) => {
-    haptics.step();
-    const s0 = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
-    const e0 = edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd;
-    setLiveStart(`${minToHM(s0)}–${endHM(e0)}`);
-  };
-  const commitResize = (edge: "top" | "bottom", steps: number) => {
-    setLiveStart(null);
-    const reset = () => {
-      topPx.value = withSpring(0);
-      botPx.value = withSpring(0);
-    };
-    if (!onReschedule || steps === 0) {
-      reset();
-      return;
-    }
-    // За край суток — до края, а не откат (повторный аудит 03.10): подпись
-    // во время растяжки уже показывала «–23:59» / «00:00», а на отпускании
-    // запись молча прыгала обратно. Перенос клампится так же (`clampStart`).
-    const ns = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
-    const ne = Math.min(24 * 60, edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd);
-    if ((ns === startMin && ne === spanEnd) || ne - ns < resizeStep) {
-      reset();
-      return;
-    }
-    onReschedule(apt, minToHM(ns), endHM(ne));
-    // Края сбросит приземление — когда блок встанет в новую высоту.
-    awaitLanding();
-  };
-
-  const pan = Gesture.Pan()
-    // В режиме правки палец двигает запись сразу — сетка при этом не
-    // прокручивается (`scrollLocked`), путаницы жестов нет.
-    .minDistance(2)
-    // Режим решает ТОЧКА КАСАНИЯ, а не место активации: за первый кадр
-    // движения палец успевает уйти на десяток точек, и у короткой записи
-    // середина «переезжала» в зону нижнего края (поймано на симуляторе).
-    .onBegin((e) => {
-      touchY.value = e.y;
-    })
-    .onStart(() => {
-      active.value = withSpring(1);
-      snapSteps.value = 0;
-      runOnJS(resetDays)();
-      daySteps.value = 0;
-      rSteps.value = 0;
-      // РЕЖИМ — ПО МЕСТУ КАСАНИЯ, одним жестом: нижний край растягивает
-      // конец, верхний — начало, середина переносит.
-      edgeMode.value =
-        canResize && touchY.value >= cardH - edgeH
-          ? 2
-          : canResize && cardH >= 40 && touchY.value <= edgeH
-            ? 1
-            : 0;
-    })
-    .onUpdate((e) => {
-      if (edgeMode.value !== 0) {
-        const edge = edgeMode.value === 1 ? "top" : "bottom";
-        const stepPx = (resizeStep / 60) * hourH;
-        let steps = Math.round(e.translationY / stepPx);
-        // Сжиматься можно до одной ступени; расти — сколько угодно.
-        if (edge === "bottom") steps = Math.max(-maxShrink, steps);
-        else steps = Math.min(maxShrink, steps);
-        if (edge === "top") topPx.value = steps * stepPx;
-        else botPx.value = steps * stepPx;
-        if (steps !== rSteps.value) {
-          rSteps.value = steps;
-          runOnJS(onResizeSnap)(edge, steps);
-        }
-        return;
-      }
-      // МАГНИТ (владелец 2026-09-24: «прикольная штука»): карточка не
-      // плывёт за пальцем, а прыгает по ступеням `dragStep` (полчаса), и
-      // каждый переход отзывается щелчком — попасть в нужное время можно,
-      // не глядя на рельс. На мелком масштабе (28pt в час) палец иначе
-      // промахивался мимо слота.
-      const stepPx = (dragStep / 60) * hourH;
-      const steps = Math.round(e.translationY / stepPx);
-      ty.value = steps * stepPx;
-      // ПО ДНЯМ — шагом в колонку (свободное перемещение, владелец 24.09:
-      // «между днями полностью как угодно; вправо сильно — перелистнёт на
-      // следующую неделю»). За край недели запись уходит в соседнюю.
-      let days = dayW ? Math.round(e.translationX / dayW) : 0;
-      // КРАЙ ЭКРАНА = СОСЕДНЯЯ НЕДЕЛЯ: дальше воскресенья тянуть некуда,
-      // поэтому палец у правого края ставит запись на день ПОСЛЕ последней
-      // видимой колонки (у левого, за рельсом времени, — на день до первой).
-      //
-      // …НО ТОЛЬКО КОГДА ПАЛЕЦ ТУДА ПРИВЕЛИ (аудит 2026-10-03). Край считался
-      // по месту пальца, а не по движению: запись воскресенья, взятая в
-      // правых 28pt (больше половины узкой колонки), уезжала на понедельник
-      // следующей недели при движении строго вниз.
-      const edgeMove = dayW ? Math.max(12, dayW * 0.3) : 0;
-      if (dayW && e.translationX > edgeMove && e.absoluteX > screenW - EDGE_PAGE) days += 1;
-      else if (dayW && e.translationX < -edgeMove && e.absoluteX < RAIL_W + EDGE_PAGE / 2) days -= 1;
-      tx.value = days * (dayW ?? 0);
-      if (steps !== snapSteps.value || days !== daySteps.value) {
-        snapSteps.value = steps;
-        daySteps.value = days;
-        runOnJS(onSnap)(steps, days);
-      }
-    })
-    .onEnd((e, success) => {
-      // ЖЕСТ ОТМЕНИЛА СИСТЕМА (звонок, баннер, системный свайп) — это не
-      // «отпустил»: RNGH зовёт onEnd с success=false, и перенос с последним
-      // смещением уходил в базу сам (аудит 2026-10-03). Карточка — домой.
-      if (!success) {
-        edgeMode.value = 0;
-        ty.value = withSpring(0);
-        tx.value = withSpring(0);
-        topPx.value = withSpring(0);
-        botPx.value = withSpring(0);
-        runOnJS(clearLive)();
-        active.value = withSpring(0);
-        return;
-      }
-      if (edgeMode.value !== 0) {
-        runOnJS(commitResize)(edgeMode.value === 1 ? "top" : "bottom", rSteps.value);
-        edgeMode.value = 0;
-        active.value = withSpring(0);
-        return;
-      }
-      // Отпустил, не сдвинув (<8px) — это «подержал» → контекстное меню
-      // (web ActionMenuModal). Сдвинул — перенос: сброс ty решает commit
-      // на JS (перенос состоялся → мгновенно, база уже переписана
-      // оптимистически; нет → пружиной домой).
-      if (Math.abs(e.translationY) < 8 && daySteps.value === 0) {
-        ty.value = withSpring(0);
-        tx.value = withSpring(0);
-      } else {
-        runOnJS(commit)(e.translationY, daySteps.value);
-      }
-      runOnJS(clearLive)();
-      active.value = withSpring(0);
-    })
-    // Жест отменён системой (звонок, пейджер) — подпись времени не должна
-    // остаться висеть на карточке.
-    .onFinalize(() => {
-      runOnJS(clearLive)();
-    });
-  // Мгновенный отклик на обычный тап (iOS-подсветка): лёгкое притухание
-  // с onBegin, возврат в onFinalize — раньше блок «молчал» до открытия шита.
-  // maxDuration не задаём: до порога long-press отпускание — всегда тап,
-  // после — pan уже активен и Exclusive отменяет tap сам; явный
-  // maxDuration(250) оставлял мёртвое окно 250–300 мс без реакции.
-  // Смена режима (вход/выход из свободного перемещения) пересобирает жесты —
-  // незавершённое нажатие не должно пережить её.
-  useEffect(() => {
-    press.value = withTiming(0, { duration: 120 });
-  }, [editing, press]);
-  // Касание записи ощущается рукой (владелец 04.10) — тик до открытия.
-  const openWithTick = (a: Appointment) => {
-    haptics.tap();
-    onEdit(a);
-  };
-  const tap = Gesture.Tap()
-    .onBegin(() => {
-      press.value = withTiming(1, { duration: 90 });
-    })
-    .onFinalize(() => {
-      press.value = withTiming(0, { duration: 150 });
-    })
-    .onEnd(() => runOnJS(openWithTick)(apt));
-  // A crew member still gets the useful long-press actions (next status,
-  // call, route), but never enters the drag gesture that the server rejects.
-  const longPress = Gesture.LongPress()
-    .minDuration(300)
-    .onStart(() => {
-      // Долгое нажатие перехватило тап — его «притухание» гасим сразу:
-      // жест дальше перестраивается под меню/перемещение, и onFinalize тапа
-      // до карточки уже не доходит (карточка оставалась уменьшенной).
-      press.value = withTiming(0, { duration: 120 });
-      if (onMenu) runOnJS(onMenu)(apt);
-    });
-  // В ПОКОЕ ЗАПИСЬ ЗАКРЕПЛЕНА: тап открывает, долгое нажатие — меню.
-  // Тащить и тянуть — только в режиме правки, который включает пункт меню.
-  const gesture = editing && onReschedule
-    ? pan
-    : onMenu
-      ? Gesture.Exclusive(longPress, tap)
-      : tap;
-
+  const gesture = useBlockGesture({
+    drag,
+    apt,
+    cardH,
+    hourH,
+    dayW,
+    editing,
+    onEdit,
+    onMenu,
+    onReschedule,
+  });
 
   // The wrapper owns position + stacking (zIndex must live among siblings);
   // the card owns the drag transform + shadow, so the wrapper's percent
   // geometry stays untouched by the gesture springs.
   // ТЕНЬ ПЕРЕТАСКИВАНИЯ — НА ОБЁРТКЕ. На карточке она рисовалась под
   // `overflow: "hidden"` и не была видна ни разу.
-  // ЦВЕТНАЯ ТЕНЬ (вариант 5, 24.09): плотный блок «парит» над сеткой своим
+  // ЦВЕТНАЯ ТЕНЬ плотный блок «парит» над сеткой своим
   // же тоном; под пальцем тень глубже. У отменённой тени нет — ей некуда
   // ехать, и выпуклость её бы выделяла.
   const stackZ = frame.z;
@@ -643,7 +168,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // тому же он перетирал `opacity: 0.55` отменённой, то есть тот сигнал не
   // работал вовсе. Заливка под пальцем — 40 %: имя и время на ней читаются
   // (измерено, 5.81 : 1 и 4.85 : 1 в худшем цвете палитры).
-  // ПЛОТНАЯ ЗАЛИВКА (владелец 2026-09-24, вариант 7): блок — сам цвет записи,
+  // ПЛОТНАЯ ЗАЛИВКА: блок — сам цвет записи,
   // затемнённый ровно до читаемого белого имени; сквозь него больше не
   // просвечивают ни часовые линии, ни линия «сейчас». Выполненная носит ту же
   // заливку и белую галку; отменённая по-прежнему теряет цвет.
@@ -668,7 +193,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       ? fillIdle
       : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
   }));
-  // Плёнка тающего хвоста — та же заливка с тем же откликом под пальцем.
+  // Заливка карточки без геометрии — для тающего хвоста строк.
   const fillStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
   }));
@@ -720,9 +245,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               right: 0,
               // 2pt дыхания до следующего блока.
               bottom: 2,
-              // КАНТ ПО ВСЕМУ ПЕРИМЕТРУ ВМЕСТО ЛЕВОГО КОРЕШКА (владелец
-              // 2026-09-05: «когда слева только полосочка — это полная
-              // хрень»). Заливка отвечает за группировку, кант — за
+              // КАНТ ПО ВСЕМУ ПЕРИМЕТРУ ВМЕСТО ЛЕВОГО КОРЕШКА. Заливка отвечает за группировку, кант — за
               // категорию: при 18 % оттенки различаются слишком слабо, чтобы
               // называть ими сущности, а кант в полную силу разводит те же
               // пары даже при дальтонизме.
@@ -747,262 +270,44 @@ export const AppointmentBlock = memo(function AppointmentBlock({
             cardStyle,
           ]}
         >
-          {/* РУЧКА РАСТЯЖКИ — видно, что нижний край тянется. Сам край ловит
-              общий жест карточки (`edgeMode`), ручка касаний не принимает. */}
-          {canResize
-            ? (cardH >= 40 ? (["top", "bottom"] as const) : (["bottom"] as const)).map(
-                (edge) => (
-                  <View
-                    key={edge}
-                    pointerEvents="none"
-                    style={{
-                      position: "absolute",
-                      [edge]: 3,
-                      left: 0,
-                      right: 0,
-                      alignItems: "center",
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 22,
-                        height: 4,
-                        borderRadius: 999,
-                        backgroundColor: "rgba(255,255,255,0.9)",
-                      }}
-                    />
-                  </View>
-                ),
-              )
-            : null}
-          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга (владелец 15.10: «самое
-              оптимальное — имя, время и услуга»; адреса на блоке нет). Имя
-              первым: время уже названо рельсом слева и позицией блока, а имя
-              не выводится ниоткуда. Кегль 13 — типографический пол продукта.
-              Лестница только дописывается вниз и не переставляется: при щипке
-              глаз не должен терять якорь. */}
-          {/* ЩИПОК ТЯНЕТ РАМКУ, НО НЕ БУКВЫ (владелец 04.10): обратный масштаб
+          {canResize ? <ResizeHandles cardH={cardH} /> : null}
+          {/* ЩИПОК ТЯНЕТ РАМКУ, НО НЕ БУКВЫ: обратный масштаб
               жеста от верхнего края — текст карточки держит форму. */}
           <Animated.View style={[{ transformOrigin: "top" }, unstretched]}>
-            {textW >= 24 && nameLineW >= 24 ? (
-              <Text
-                style={{
-                  color: nameColor,
-                  fontSize: 13,
-                  lineHeight: lineH,
-                  fontWeight: "700",
-                  marginRight: Math.max(
-                    deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
-                    lastRow === "name" ? dotReserve : 0,
-                  ),
-                  textDecorationLine: cancelled ? "line-through" : "none",
-                }}
-                numberOfLines={1}
-                // ОДИН КЕГЛЬ У ВСЕХ И ХВОСТ ТАЕТ (владелец 15.10: «имя всегда
-                // разных размеров — должно писаться одним размером и уходить в
-                // скрытие»). Подгонки кегля нет: короткие имена ужимались до
-                // 11pt, длинные — нет, и соседние блоки недели писали имя разным
-                // размером. Длинное имя режется по краю, а край прячет плёнка в
-                // цвет блока ниже. У отменённой заливка полупрозрачная, плёнке
-                // спрятать нечем — ей многоточие.
-                ellipsizeMode={cancelled ? "tail" : "clip"}
-                maxFontSizeMultiplier={1.3}
-              >
-                {label}
-              </Text>
-            ) : null}
-            {ladder.showTime && textW >= 24 ? (
-              <Text
-                style={{
-                  color: subColor,
-                  fontSize: 13,
-                  lineHeight: lineH,
-                  fontWeight: overdue ? "700" : "500",
-                  marginRight: lastRow === "time" ? dotReserve : 0,
-                  fontVariant: ["tabular-nums"],
-                }}
-                numberOfLines={1}
-                // Жирное время просрочки в узкой колонке не влезало и рубилось
-                // многоточием («13:…») — теперь тает, как имя.
-                ellipsizeMode={cancelled ? "tail" : "clip"}
-                maxFontSizeMultiplier={1.3}
-              >
-                {timeText}
-              </Text>
-            ) : null}
-            {showService && textW >= 24 ? (
-              <Text
-                style={{
-                  color: subColor,
-                  fontSize: 13,
-                  lineHeight: lineH,
-                  marginRight: lastRow === "service" ? dotReserve : 0,
-                }}
-                numberOfLines={1}
-                ellipsizeMode={cancelled ? "tail" : "clip"}
-                maxFontSizeMultiplier={1.3}
-              >
-                {service}
-              </Text>
-            ) : null}
-          </Animated.View>
-          {/* ТАЮЩИЙ ХВОСТ — плёнка в цвет заливки у правого края строки,
-              ступенями от прозрачной к плотной: не влезающие имя, время или
-              услуга растворяются, а не рубятся по букве. Ступени, а не
-              градиент: градиентный модуль нативный, а блок обновляется по
-              воздуху. Отклик под пальцем — тот же `fillStyle`, что у карточки. */}
-          {fadeRows.map((row) => (
-            <View
-              key={row}
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 2 - (bw - 1) + topHandle + row * lineH,
-                height: lineH,
-                right: 0,
-                width: FADE_W + pad - (bw - 1),
-                flexDirection: "row",
-              }}
-            >
-              {FADE_STEPS.map((a) => (
-                <Animated.View key={a} style={[{ flex: 1, opacity: a }, fillStyle]} />
-              ))}
-              <Animated.View style={[{ width: pad - (bw - 1) }, fillStyle]} />
-            </View>
-          ))}
-          {/* БЛИК СВЕРХУ: плёнки белого дают плавный объём без градиентной
-              библиотеки (её нативный модуль потребовал бы пересборки клиента).
-              Лежит НАД текстом и тающим хвостом: текст белый, и белая плёнка
-              его не меняет, а хвост в цвет блока иначе лёг бы тёмной полосой
-              поверх блика. Касаний не принимает; у отменённой блика нет. */}
-          {cancelled
-            ? null
-            : GLASS.map(([h, a]) => (
-                <View
-                  key={h}
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: h,
-                    backgroundColor: `rgba(255,255,255,${a})`,
-                  }}
-                />
-              ))}
-          {/* НОВОЕ ВРЕМЯ — ПРЯМО НА КАРТОЧКЕ, пока она под пальцем: рельс
-              слева далеко от пальца, а магнит щёлкает по получасам. */}
-          {liveStart ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 2,
-                right: 2,
-                zIndex: 2,
-                paddingHorizontal: 5,
-                borderRadius: t.radius.card,
-                backgroundColor: "rgba(11,18,32,0.78)",
-              }}
-            >
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  color: BLOCK_TEXT,
-                  fontSize: 13,
-                  lineHeight: 18,
-                  fontWeight: "700",
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {liveStart}
-              </Text>
-            </View>
-          ) : null}
-          {/* «+N» СТОПКИ — справа вверху верхней карточки: под ней ещё записи
-              на то же время; тап откроет их списком. */}
-          {deckMore > 0 ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                // Высокая карточка — «+N» в нижнем углу, имя не трогает;
-                // низкая — в верхнем, а имя уступает ему место.
-                ...(deckBadgeLow ? { bottom: 4 } : { top: 2 }),
-                right: 2,
-                zIndex: 3,
-                minWidth: 18,
-                height: 16,
-                paddingHorizontal: 3,
-                borderRadius: 8,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.92)",
-              }}
-            >
-              <Text
-                maxFontSizeMultiplier={1.1}
-                style={{
-                  fontSize: 11,
-                  lineHeight: 13,
-                  fontWeight: "800",
-                  color: colors.solid,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                +{deckMore}
-              </Text>
-            </View>
-          ) : null}
-          {/* СТРОКА ЗНАЧКОВ ВНИЗУ (владелец 15.10: «внизу иконочки — оплатили
-              или не оплатили, без суммы в евро»). Порядок постоянный: деньги,
-              выполнено. Деньги — значком способа (наличные · карта · перевод),
-              частично — тот же значок вполсилы, не оплачено — бледный кошелёк.
-              Выполнено — галка; у невыполненной места нет, чтобы будущие записи
-              не мигали пустыми значками. «Нет объекта» говорит цвет блока. */}
-          {showStatus && textW >= 24 ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: pad - (bw - 1),
-                bottom: 3 + bottomHandle,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: width >= 96 ? 6 : 4,
-              }}
-            >
-              {money ? (
-                <MoneyIcon
-                  method={money.method}
-                  size={statusIcon(width)}
-                  color={BLOCK_TEXT}
-                  opacity={money.state === "paid" ? 1 : money.state === "partial" ? 0.62 : 0.38}
-                />
-              ) : null}
-              {completed ? <Check color={BLOCK_TEXT} size={statusIcon(width)} strokeWidth={3} /> : null}
-            </View>
-          ) : null}
-          {/* ЧУЖАЯ МЕТКА — точка в нижнем углу: сам блок залит цветом записи.
-              Точка несёт цвет метки как есть, а белое кольцо отделяет её от
-              чужой заливки при любом сочетании. */}
-          {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
-            <View
-              style={{
-                position: "absolute",
-                bottom: 2,
-                right: 2,
-                width: 9,
-                height: 9,
-                borderRadius: 999,
-                // Точка лежит на плотном чужом цвете: белое кольцо отделяет
-                // её от заливки, и цвет метки виден как есть.
-                backgroundColor: offLabelColor,
-                borderWidth: 1.5,
-                borderColor: BLOCK_TEXT,
-              }}
+            <BlockText
+              layout={layout}
+              label={label}
+              service={service}
+              lineH={lineH}
+              overdue={overdue}
+              nameColor={nameColor}
+              subColor={subColor}
             />
+          </Animated.View>
+          <FadeTail
+            rows={fadeRows}
+            top={2 - (bw - 1) + topHandle}
+            lineH={lineH}
+            inset={pad - (bw - 1)}
+            fillStyle={fillStyle}
+          />
+          {cancelled ? null : <BlockGlass />}
+          {liveStart ? <LiveTimeBadge liveStart={liveStart} /> : null}
+          {deckMore > 0 ? (
+            <DeckBadge deckMore={deckMore} deckBadgeLow={deckBadgeLow} color={colors.solid} />
+          ) : null}
+          {showStatus && textW >= 24 ? (
+            <StatusRow
+              money={money}
+              completed={completed}
+              width={width}
+              left={pad - (bw - 1)}
+              bottom={3 + bottomHandle}
+            />
+          ) : null}
+
+          {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
+            <OffLabelDot color={offLabelColor} />
           ) : null}
         </Animated.View>
       </Animated.View>

@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
-import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
+import { AREA_TITLE, type AccessBlock, type AccessLevel } from "@/session/access-map";
 import { TeamRightsCards } from "../rights-ui/TeamRightsCards";
 import { CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
 import type { RightsArea } from "./master-draft";
@@ -21,13 +21,12 @@ export type { RightsFocus };
 
 // «ПРАВА» — ОДНА СТРАНИЦА НА ЧЕРНОВИК, ПРИГЛАШЕНИЕ, СОТРУДНИКА И ШАБЛОН.
 //
-// СТРОКИ И ШТОРКА (владелец 29.09: «как в настройках iPhone… по строке
-// поднимается шторка, и сам этот блок визуально в этой шторке сверху»).
-// Строки, итог и шторку рисует `TeamRightsCards` — то же тело стоит на
+// СТРОКИ И ШТОРКА (как в настройках iPhone): по строке поднимается шторка, и
+// сам блок виден в ней сверху. Строки, итог и шторку рисует `TeamRightsCards` — то же тело стоит на
 // главной странице сотрудника под лентой команд. Кнопки «Сохранить» нет —
 // выбранное ложится сразу.
 //
-// СТРОК ТОЛЬКО У ЖИВЫХ БЛОКОВ (STORY-083): пятнадцать из двадцати одного
+// СТРОК ТОЛЬКО У ЖИВЫХ БЛОКОВ: пятнадцать из двадцати одного
 // сервер не проверяет и не отказывает при записи, и настройка, которая
 // сохраняется и ничего не делает, хуже отсутствующей.
 //
@@ -78,7 +77,7 @@ export function MasterRightsView({
   /** Над разделами. */
   top?: ReactNode;
   /** Права отсюда не меняются — почему (директор: себя и директоров ведёт
-   *  владелец, 04.10). */
+   *  владелец). */
   lockedAll?: string;
   /** Заголовок: имя календаря, когда страница — права ОДНОГО календаря. */
   title?: string;

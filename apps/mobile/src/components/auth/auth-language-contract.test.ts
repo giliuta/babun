@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { APP_STORE_IDS } from "@babun/shared/i18n/locale";
 
-// ЯЗЫК ДО ВХОДА (владелец 04.10: «не все говорят на русском… как он зайдёт,
-// увидит русский — как он зарегистрируется»). Первый запуск говорит на языке
+// ЯЗЫК ДО ВХОДА: не все говорят на русском. Первый запуск говорит на языке
 // телефона или браузера, экраны входа дают его сменить, регистрация его
 // запоминает. Прежняя установка остаётся русской — её узнают по хранилищу.
 
@@ -38,10 +38,11 @@ describe("язык до входа", () => {
     for (const id of APP_STORE_IDS) assert.match(mmkv, new RegExp(`_ID = "${id}";`), id);
   });
 
-  // ШТОРКА ЯЗЫКОВ НА ВЕБЕ (04.10): высота окна, взятая константой при загрузке
+  // ШТОРКА ЯЗЫКОВ НА ВЕБЕ: высота окна, взятая константой при загрузке
   // модуля, в браузере бывала 0 — лист схлопывался, строки уходили под край.
   test("нижний лист берёт высоту окна при показе, а не при загрузке модуля", () => {
-    const sheet = read("../ui/BottomSheet.tsx");
+    // Entry + parts folder: the motion hook in `bottom-sheet/` reads the height too.
+    const sheet = readModuleSource(resolve(here, "../ui/BottomSheet.tsx"), resolve(here, "../ui/bottom-sheet"));
     assert.doesNotMatch(sheet, /Dimensions\.get\("window"\)/);
     assert.match(sheet, /const \{ height: SCREEN_H \} = useWindowDimensions\(\);/);
   });

@@ -16,11 +16,12 @@ import {
   REWARM_EVERY_MS,
   warmOtherCompanies,
 } from "@/lib/tenant-prefetch";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { isNewerAccess } from "@/features/access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { isNewerAccess } from "@/session/my-access";
 import { myAccessQueryKey } from "@/lib/company-query-keys";
+import { referenceKeys } from "@/features/reference/query-keys";
 
 /** Mounts the offline-sync replayer subscription for the app lifetime.
  *  Native-only: the replayer drains the SQLite queue via getSql(), which is
@@ -104,10 +105,10 @@ function AccessSignalsMount() {
         void evictCompanyFromDevice(tenantId, { fresh: true });
       }
     });
-    // ПРИГЛАШЕНИЯ МЕНЯЮТСЯ БЕЗ ПЕРЕЗАПУСКА (006, 14.09): сигнал уходит и
+    // ПРИГЛАШЕНИЯ МЕНЯЮТСЯ БЕЗ ПЕРЕЗАПУСКА : сигнал уходит и
     // приглашённому, и пригласившему — оба перечитывают свои списки.
     // Принятое приглашение у пригласившего — это ещё и новый человек
-    // календаря с карточкой мастера (15.09): без них «Мастера» показывали
+    // календаря с карточкой мастера: без них «Мастера» показывали
     // «Нет мастеров», пока экран не открыть заново.
     channel.on("broadcast", { event: "invitations_changed" }, (message) => {
       void queryClient.invalidateQueries({ queryKey: myInvitationsKeyRoot });
@@ -116,11 +117,11 @@ function AccessSignalsMount() {
         ?.tenant_id;
       if (typeof tenantId === "string") {
         void queryClient.invalidateQueries({ queryKey: ["calendar-members", tenantId] });
-        void queryClient.invalidateQueries({ queryKey: ["masters", tenantId] });
+        void queryClient.invalidateQueries({ queryKey: referenceKeys.mastersOfTenant(tenantId) });
       }
     });
-    // ПРАВА МЕНЯЮТСЯ СРАЗУ (владелец 15.09: «чтоб всё сразу менялось в живом
-    // времени»). Сервер шлёт `access_changed {tenant_id, version}` на каждую
+    // ПРАВА МЕНЯЮТСЯ СРАЗУ, БЕЗ ПЕРЕЗАПУСКА.
+    // Сервер шлёт `access_changed {tenant_id, version}` на каждую
     // смену уровней и прикрепления; уровней в сигнале нет — телефон
     // перечитывает свою карту, если номер новее того, что уже есть. Повтор и
     // запоздавший сигнал ничего не делают.

@@ -1,9 +1,9 @@
 import type { Debt } from "@babun/shared/local/finance/debt";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { moneyKey } from "@/features/access/my-access";
-import type { UserRole } from "@/features/settings/role-policy";
+import type { MemberAccessMap } from "@/session/access-map";
+import { moneyKey } from "@/session/my-access";
+import type { UserRole } from "@/session/role-policy";
 import type { FinanceDocument } from "./documents";
 import { levelInCalendar } from "./finance-page-access";
 import { asRecordWindow, recordWindowStart } from "@/features/appointments/record-window";
@@ -15,7 +15,7 @@ import { asRecordWindow, recordWindowStart } from "@/features/appointments/recor
 // (`finance_transactions_select_calendar`), оплата долга — ещё и «Долги» его
 // команды (`finance_transactions_select_debt`), долг — «Долги»
 // (`debts_read`), инвойс и чек — «Документами» команды документа
-// (`invoices_select_documents`, `receipts_select_documents`, с 03.10), чек —
+// (`invoices_select_documents`, `receipts_select_documents`), чек —
 // ещё и когда видна его операция (`receipts_read_own_money`), диспетчеру — все
 // (`receipts_read`).
 //
@@ -28,7 +28,7 @@ import { asRecordWindow, recordWindowStart } from "@/features/appointments/recor
 // на телефоне не считаются, и здесь работает только правило операции.
 
 type TxLike = Pick<FinanceTransaction, "type" | "team_id" | "debt_id"> & {
-  /** День операции — для «Ограничений» (03.10); без него окно не режет. */
+  /** День операции — для «Ограничений»; без него окно не режет. */
   occurred_on?: string;
 };
 type DebtLike = Pick<Debt, "team_id">;
@@ -52,7 +52,7 @@ export interface FinanceReader {
   role: UserRole | null | undefined;
   /** `undefined` — карта прав ещё не пришла. */
   map: MemberAccessMap | undefined;
-  /** Сегодня по часам бизнеса — для «Ограничений» финансов (03.10). Нет —
+  /** Сегодня по часам бизнеса — для «Ограничений» финансов. Нет —
    *  окно не режет (аналитика берёт свой период сама). */
   today?: string;
 }
@@ -69,7 +69,7 @@ export function financeReadRules({ role, map, today }: FinanceReader): FinanceRe
         ? moneyKey(map, "expense")
         : "finance.accounts";
 
-  /** «Ограничения» (владелец 03.10): доход, возврат и расход старше окна
+  /** «Ограничения»: доход, возврат и расход старше окна
    *  команды партнёру не видны — как сервер (`finance_transactions_window`).
    *  Платежи по долгам и переводы окно не режет. Ступени в карте нет (старая
    *  карта) — окна нет: прятать по догадке хуже. */
@@ -127,9 +127,8 @@ export type DocumentsReadable = (
 ) => FinanceDocument[];
 
 /** Документы периода, которые человек вправе прочитать: инвойс и чек — по
- *  «Документам» своей команды. «ДОКУМЕНТЫ: СКРЫТЫ» — НИ ОДНОГО (владелец
- *  04.10: «скрывается совсем, в документах пишется ноль, и их просто не
- *  видно»): чек своей операции сюда больше не проходит, хотя сервер его
+ *  «Документам» своей команды. «ДОКУМЕНТЫ: СКРЫТЫ» — НИ ОДНОГО: документы
+ *  скрываются совсем, в плитке ноль. Чек своей операции сюда не проходит, хотя сервер его
  *  отдаёт (`receipts_read_own_money` — для истории клиента и записи).
  *  Неизвестный чек не показывается. */
 export function readableDocuments(
@@ -153,8 +152,8 @@ export function readableDocuments(
 export interface MoneySides {
   income: boolean;
   expense: boolean;
-  /** «Прибыль» (`finance.profit`, аудит прав 04.10): «Скрыта» прятала только
-   *  плитку «Финансов», а аналитика показывала прибыль всё равно. Нужны и
+  /** «Прибыль» (`finance.profit`): «Скрыта» прячет не только
+   *  плитку «Финансов», но и аналитику: иначе она показала бы прибыль всё равно. Нужны и
    *  обе стороны денег, и само право. */
   profit: boolean;
 }

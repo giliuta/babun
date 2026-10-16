@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { InvoiceNumberRow } from "@/features/invoices/InvoiceNumberRow";
-import { useNextInvoiceSeries } from "@/features/invoices/queries";
-import { ScrollView, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, View } from "react-native";
 import { Building2 } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { FieldRow, RowCaption } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -16,22 +13,19 @@ import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import {
-  NUMBER_PADDINGS,
   canSaveCompany,
   cleanSeriesPrefix,
-  documentNumberPreview,
   isCompanyDraftDirty,
   normalizeCompanyDraft,
 } from "./company-rules";
 import type { Company, CompanyDraft } from "./queries";
+import { SeriesBlock } from "./company-sheet/SeriesBlock";
 
 // КАРТОЧКА РЕКВИЗИТОВ — ОДНА ФОРМА НА СОЗДАНИЕ И НА ПРАВКУ (тот же закон, что у
 // объекта: «если я показываю в одном месте, значит то же самое будет
 // показывать в другом»).
 //
-// БЛОКИ ИДУТ В ТОМ ПОРЯДКЕ, В КАКОМ ПЕЧАТАЕТСЯ БУМАГА (владелец 2026-09-22:
-// «очень много блоков… укомплектуй, чтобы правильно написалось и потом
-// вносилось в инвойс»). Шапка инвойса у AirFix: логотип слева, под ним FROM —
+// БЛОКИ ИДУТ В ТОМ ПОРЯДКЕ, В КАКОМ ПЕЧАТАЕТСЯ БУМАГА. Шапка инвойса у AirFix: логотип слева, под ним FROM —
 // юридическое имя, VAT, телефон, почта, адрес в несколько строк; внизу
 // «Notes & payment instructions» с IBAN. Отсюда четыре карточки:
 //   • «Логотип»     — шапка документа;
@@ -134,16 +128,15 @@ export function CompanySheet({
   // просто не теряется — открыли тот же набор снова, и всё на месте.
   // Черновик сбрасывается, только когда открыли ДРУГОЙ набор или сохранили.
   //
-  // …И ДОЖИВАЕТ ДО ПЕРЕЗАПУСКА ПРИЛОЖЕНИЯ (владелец 2026-09-22: «заполняю,
-  // заполняю — через время выбивает на календарь»). Реквизиты — длинная
-  // анкета; перезапуск (iOS выгрузил приложение в фоне, обновление сборки)
-  // стирал всё набранное. Пока набор отличается от сохранённого, черновик
+  // …И ДОЖИВАЕТ ДО ПЕРЕЗАПУСКА ПРИЛОЖЕНИЯ. Реквизиты — длинная анкета;
+  // перезапуск (iOS выгрузил приложение в фоне, обновление сборки) стёр бы
+  // всё набранное. Пока набор отличается от сохранённого, черновик
   // лежит на устройстве, отдельно на компанию и на набор; «Сохранить» его
   // убирает.
   const tenantId = useTenantId();
   const key = company?.id ?? "new";
   // Под `babun:`: черновик реквизитов (IBAN, VAT, адрес) обязан уйти вместе
-  // с «Выйти» — ключ без префикса чистка не видела (аудит 03.10).
+  // с «Выйти» — ключ без префикса чистка не видела.
   const storageKey = tenantId ? `babun:companies:draft:${tenantId}:${key}` : null;
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   useEffect(() => {
@@ -280,8 +273,8 @@ export function CompanySheet({
           />
         </View>
 
-        {/* ЛОГОТИП ПРИНАДЛЕЖИТ НАБОРУ (владелец 2026-09-20). Пусто — бумага
-          печатает логотип компании целиком, как раньше. */}
+        {/* ЛОГОТИП ПРИНАДЛЕЖИТ НАБОРУ. Пусто — бумага печатает логотип компании
+          целиком. */}
         <SectionCard dense title="Логотип">
           <LogoRow
             logoUrl={draft.logo_url ?? null}
@@ -325,12 +318,10 @@ export function CompanySheet({
         <RowCaption text="Печатается в инвойсе как реквизиты для оплаты." />
 
         {/* ОСНОВНЫЕ — ОТВЕТ НА ВОПРОС «ЧЕМ ПОДПИСАТЬ, ЕСЛИ НЕ ВЫБРАЛИ»
-          (владелец 2026-09-20). Тумблер ОДНОСТОРОННИЙ: основные назначают, а
-          не снимают — без основных документу нечем подписаться. Снимаются они
-          сами, когда основными делают другие. Раньше здесь стояло слово «Да»
-          синим на месте переключателя. */}
-        {/* НОМЕР ИНВОЙСА — ЗА РЕКВИЗИТАМИ (владелец 2026-09-30: «в реквизитах
-            пишем номер инвойса — за реквизитами сохраняется нумерация»).
+          Тумблер ОДНОСТОРОННИЙ: основные назначают, а не снимают — без основных
+          документу нечем подписаться. Снимаются они сами, когда основными
+          делают другие. */}
+        {/* НОМЕР ИНВОЙСА — ЗА РЕКВИЗИТАМИ: нумерация сохраняется за ними.
             Серия живёт на наборе (миграция 20260922050000): следующий номер
             этих реквизитов и правка «этот инвойс — 104». */}
         <SeriesBlock
@@ -358,69 +349,5 @@ export function CompanySheet({
         ) : null}
       </ScrollView>
     </BottomSheet>
-  );
-}
-
-// БЛОК «НОМЕР» (владелец 03.10: «буквы и длина номера — в реквизитах,
-// сразу»). Следующий инвойс показывает набранное до «Сохранить»: сменил
-// буквы — видишь, как будет. Порядок номера при этом не трогается — дальше
-// идёт тот же счётчик серии, выпущенные бумаги хранят свой номер.
-function SeriesBlock({
-  company,
-  draft,
-  onPadding,
-  children,
-}: {
-  company: Company | null;
-  draft: CompanyDraft;
-  onPadding: (padding: number) => void;
-  children: ReactNode;
-}) {
-  const t = useThemeColors();
-  const year = new Date().getFullYear();
-  const next = useNextInvoiceSeries(year, company?.id ?? null).data ?? null;
-  const padding = draft.number_padding ?? company?.number_padding ?? 4;
-  const prefix =
-    cleanSeriesPrefix(draft.invoice_prefix ?? "") || company?.invoice_prefix || "INV";
-  return (
-    <SectionCard dense title="Номер">
-      {company ? (
-        <InvoiceNumberRow
-          stacked
-          label="Следующий инвойс"
-          target={{ companyId: company.id, year, next }}
-          preview={next ? documentNumberPreview(prefix, year, next.seq, padding) : undefined}
-        />
-      ) : null}
-      {children}
-      <View
-        style={{
-          // Линия — как у строк-полей над ней: от края до края карточки.
-          borderTopWidth: 1,
-          borderTopColor: t.separator,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          minHeight: 60,
-          paddingHorizontal: 16,
-          paddingVertical: 8,
-        }}
-      >
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 15, color: t.ink }}
-        >
-          Цифр в номере
-        </Text>
-        <SegmentedControl
-          compact
-          options={NUMBER_PADDINGS.map((n) => ({ value: String(n), label: String(n) }))}
-          value={String(padding)}
-          onChange={(value) => onPadding(Number(value))}
-          style={{ width: 176 }}
-        />
-      </View>
-    </SectionCard>
   );
 }

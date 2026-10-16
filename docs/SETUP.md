@@ -16,7 +16,7 @@ cookie-authenticated endpoints, so CSRF does not apply.
 
 ## Supabase Dashboard config (one-time, per project)
 
-After running the auth migration (`20260428_001_auth_tenants.sql`), set the
+After running the auth migration (`20260428000001_auth_tenants.sql`), set the
 following in the Supabase Dashboard:
 
 - **Authentication → Sign In / Providers → Email → "Confirm email" OFF.**
@@ -186,8 +186,8 @@ build that depends on them**, otherwise the build ships a broken bundle.
   `app_metadata.tenant_id` (fresh session before `handle_new_user` fired), or the
   request runs as `anon`. Check with `select public.current_tenant_id();` under
   your own session. **Do NOT disable RLS** — the old
-  `supabase/migrations/20260427_002_disable_rls.sql` is a historical file
-  superseded by `20260429_001_rls_policies.sql`; running it strips tenant
+  `supabase/migrations/20260427000002_disable_rls.sql` is a historical file
+  superseded by `20260429000001_rls_policies.sql`; running it strips tenant
   isolation from `clients` while granting `all` to `anon`.
 - **`invalid input syntax for type uuid`** — id field passed to Supabase isn't UUID-formatted. New clients should use `crypto.randomUUID()` (handled by `createBlankClient`); legacy `cli-…` ids will fail.
 

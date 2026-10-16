@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { MemberAccessMap } from "../access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import {
   anyClientSetting,
   clientSettingLevels,
   type ClientSettingsInput,
 } from "./settings-levels";
 
-// «НАСТРОЙКИ КЛИЕНТОВ» ПО ПРАВАМ (владелец 01.10): строка шестерёнки — по
+// «НАСТРОЙКИ КЛИЕНТОВ» ПО ПРАВАМ: строка шестерёнки — по
 // своему праву команды, как «Настройки команды» у календаря.
 
 const TEAM = "team-1";

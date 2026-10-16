@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 
@@ -20,6 +19,7 @@ import {
   type WarmTarget,
 } from "./tenant-prefetch-plan";
 import { keyNamesKnownTenant, querySurvivesSwitch } from "./tenant-query-keys";
+import { readModuleSource } from "./module-source";
 
 const T = "11365a87-bef9-4f6c-a030-b15083fe646b";
 const OTHER = "2bc7907e-b149-44a9-92ff-a5e73403031c";
@@ -218,7 +218,8 @@ function stripComments(source: string): string {
     .replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 }
 
-const sourceOf = (rel: string) => stripComments(readFileSync(join(here, rel), "utf8"));
+// Split data layers (barrel + folder) are read whole: see `module-source.ts`.
+const sourceOf = (rel: string) => stripComments(readModuleSource(join(here, rel)));
 
 interface HookContract {
   file: string;
@@ -235,11 +236,11 @@ const SERVICES = "../features/services/queries.ts";
 const CLIENTS = "../features/clients/queries.ts";
 const FINANCES = "../features/finances/queries.ts";
 const ACCOUNTS = "../features/finances/accounts.ts";
-const INVOICES = "../features/invoices/queries.ts";
+const INVOICES = "../features/finances/invoices-queries.ts";
 const DEBTS = "../features/finances/debts-queries.ts";
 
 const HOOKS: Record<WarmKind, HookContract> = {
-  tenant: { file: "../features/settings/tenant.ts", hooks: ["useTenant"], builder: "tenantQueryKey" },
+  tenant: { file: "../session/tenant.ts", hooks: ["useTenant"], builder: "tenantQueryKey" },
   "calendar-settings": {
     file: "../features/settings/local-settings.ts",
     hooks: ["useCalendarSettings"],
@@ -261,7 +262,7 @@ const HOOKS: Record<WarmKind, HookContract> = {
     builder: "allServicesQueryKey",
   },
   cities: { file: REFERENCE, hooks: ["useCities"], builder: "citiesQueryKey" },
-  "day-cities": { file: "../features/calendar/day-cities.ts", hooks: ["useDayCities"], builder: "dayCitiesQueryKey" },
+  "day-cities": { file: "../features/reference/day-cities.ts", hooks: ["useDayCities"], builder: "dayCitiesQueryKey" },
   "team-schedules-all": {
     file: "../features/reference/team-schedule.ts",
     hooks: ["useTeamSchedule", "useAllTeamSchedules"],

@@ -6,11 +6,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { evictCompanyFromDevice, forgetEviction } from "@/lib/evict-company";
 import { useTenantId } from "@/lib/tenant";
-import { can, type AppCapability } from "./role-policy";
-import { useCurrentRole } from "./tenant";
+import { can, type AppCapability } from "@/session/role-policy";
+import { useCurrentRole } from "@/session/tenant";
 
 /**
- * Способности, чей отказ ОБЪЯСНЯЮТ, а не обвиняют (ТЗ 2026-08-10 §7, §8).
+ * Способности, чей отказ ОБЪЯСНЯЮТ, а не обвиняют.
  * «Недостаточно прав» человек читает как поломку продукта, хотя на деле дверь
  * просто не открыта владельцем. Заголовок раздела здесь всегда во
  * множественном числе — «Счета», «Финансы», «Инвойсы», «Документы», — поэтому

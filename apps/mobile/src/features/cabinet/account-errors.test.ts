@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { deleteRefusal, passwordRefusal } from "./account-errors";
+import { readModuleSource } from "@/lib/module-source";
 
 describe("«Вход и безопасность» говорит словами", () => {
   test("ответы Supabase при смене пароля — фразами", () => {
@@ -29,7 +29,11 @@ describe("«Вход и безопасность» говорит словами
   });
 
   test("страница зовёт эти слова, а шапка — как строка Кабинета", () => {
-    const page = readFileSync(path.join(__dirname, "../../../app/(dashboard)/cabinet/account.tsx"), "utf8");
+    // The page is the thin route plus `account/`.
+    const page = readModuleSource(
+      path.join(__dirname, "../../../app/(dashboard)/cabinet/account.tsx"),
+      path.join(__dirname, "account"),
+    );
     assert.match(page, /<ScreenHeader title="Вход и безопасность" \/>/);
     assert.match(page, /throw await deleteRefusal\(invokeError\)/);
     assert.match(page, /passwordRefusal\(error\.message\)/);

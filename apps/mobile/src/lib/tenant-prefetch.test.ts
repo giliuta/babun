@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "./module-source";
 
 // СТОРОЖ: ПРОГРЕВ ЧУЖОЙ КОМПАНИИ — ТОЛЬКО В ПАМЯТЬ.
 //
@@ -14,8 +15,7 @@ import { describe, test } from "node:test";
 // чужим заголовком (`kickReplayer`), ложная «свежесть» активной компании
 // (`emitRevalidated`).
 //
-// Условие сессии 005 при передаче файлов: «побочные эффекты — тест в обе
-// стороны». Обе стороны здесь: у активной компании побочное действие ОСТАЁТСЯ
+// Побочные эффекты — тест в обе стороны: у активной компании побочное действие ОСТАЁТСЯ
 // в хуке; у прогрева его НЕТ.
 
 const here = __dirname;
@@ -49,7 +49,7 @@ const FORBIDDEN_IN_PREFETCH = [
 
 describe("прогрев чужой компании не имеет побочных действий", () => {
   const prefetch = read("tenant-prefetch.ts");
-  const fetchers = read("../features/settings/company-fetchers.ts");
+  const fetchers = read("../session/company-fetchers.ts");
 
   test("исполнитель прогрева не зовёт ничего из запрещённого списка", () => {
     for (const name of FORBIDDEN_IN_PREFETCH) {
@@ -89,8 +89,10 @@ describe("прогрев чужой компании не имеет побоч�
   });
 
   test("обратная сторона: у активной компании побочные действия на месте", () => {
-    const tenantHook = read("../features/settings/tenant.ts");
-    const settingsHook = read("../features/settings/local-settings.ts");
+    const tenantHook = read("../session/tenant.ts");
+    const settingsHook = stripComments(
+      readModuleSource(join(here, "../features/settings/local-settings.ts")),
+    );
     assert.ok(tenantHook.includes("setDefaultCurrency(profile?.currency)"));
     assert.ok(settingsHook.includes("safeSaveCalendarSettings(settings)"));
     assert.ok(settingsHook.includes("safeSaveOperationalCalendarSettings("));

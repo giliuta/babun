@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
+import { readModuleSource } from "./module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** apps/mobile — от него отсчитываются пути в каталоге. */
@@ -12,9 +14,8 @@ const ROOT = resolve(APP, "../..");
 
 const catalog = readFileSync(resolve(APP, "docs/BLOCKS.md"), "utf8");
 
-// БИБЛИОТЕКА БЛОКОВ НЕ ИМЕЕТ ПРАВА ВРАТЬ (владелец 2026-09-10: «потом я
-// говорю — посмотри в файле, как сделано, и он сразу видит: вот так надо
-// было»). Документ, на который так смотрят, обязан указывать на живой код:
+// БИБЛИОТЕКА БЛОКОВ НЕ ИМЕЕТ ПРАВА ВРАТЬ: по ней сверяют, как сделано. Документ,
+// на который так смотрят, обязан указывать на живой код:
 // на этом проекте дважды «исправляли» верно работающий код обратно к
 // устаревшему абзацу — раздел про объекты клиента описывал удалённые
 // страницы, и именно он позволил форме объекта разойтись на две.
@@ -59,9 +60,9 @@ describe("библиотека блоков указывает на живой �
       "src/features/appointments/AppointmentFilesBlock.tsx",
       "src/features/appointments/AppointmentFileTiles.tsx",
       "src/features/appointments/FileAddSheet.tsx",
-      "src/features/appointments/InlineNoteField.tsx",
+      "src/components/blocks/InlineNoteField.tsx",
       "src/features/appointments/BookingSummary.tsx",
-      "src/features/appointments/TeamLabelRow.tsx",
+      "src/components/blocks/TeamLabelRow.tsx",
       "src/features/appointments/ServicesBlock.tsx",
       "src/features/appointments/ClientBlock.tsx",
       "src/features/clients/blocks/ObjectsBlock.tsx",
@@ -79,7 +80,8 @@ describe("библиотека блоков указывает на живой �
   });
 
   test("образцы разметки всё ещё стоят там, куда посылает каталог", () => {
-    const book = readFileSync(resolve(APP, "app/book/index.tsx"), "utf8");
+    // The booking form is the route plus `src/features/appointments/book-form/`.
+    const book = bookFormSource();
     // Блоки записи, которые каталог показывает разметкой (пока они не вынесены
     // в компоненты). Исчезла подпись — каталог посылает в пустоту.
     for (const marker of [
@@ -91,14 +93,14 @@ describe("библиотека блоков указывает на живой �
       "<AppointmentFilesBlock",
       "<ClientPickerSheet",
       "<ServicePicker",
-      // «Клиент», «Услуги» и «Итого» с 2026-09-20 — компоненты: запись
+      // «Клиент», «Услуги» и «Итого» — компоненты: запись
       // ставит их тегом, а разметка живёт в одном месте на два документа.
       "<ClientBlock",
       "<ServicesBlock",
     ]) {
       assert.ok(
         book.includes(marker),
-        `в app/book/index.tsx больше нет «${marker}» — поправь BLOCKS.md`,
+        `в форме записи (app/book + book-form/) больше нет «${marker}» — поправь BLOCKS.md`,
       );
     }
     const servicesBlock = readFileSync(
@@ -131,9 +133,8 @@ describe("библиотека блоков указывает на живой �
     }
   });
 
-  // ЧИСЛА ГЕОМЕТРИИ — ГЛАВНОЕ, ЧТО КОПИРУЮТ (владелец 2026-09-10: «мне
-  // главное, чтоб была выполнена полностью эта же архитектура: отступ от
-  // блоков, отступ от надписи, полностью выбор иконки, всё»). Каталог
+  // ЧИСЛА ГЕОМЕТРИИ — ГЛАВНОЕ, ЧТО КОПИРУЮТ: копия обязана повторять ту же
+  // архитектуру — отступ от блоков, отступ от надписи, выбор иконки. Каталог
   // называет их числами; если код поедет, а каталог останется, копировать по
   // нему станет вредно. Поэтому каждое число проверяется в источнике.
   test("отступы и кегли блока в коде те же, что в каталоге", () => {
@@ -166,8 +167,8 @@ describe("библиотека блоков указывает на живой �
     assert.match(choose, /fontSize: 17,/, "кегль двери блока больше не 17");
     assert.match(choose, /size=\{compact \? 30 : 34\}/, "плотный кружок двери поехал");
 
-    // ВЫБРАННОЕ В БЛОКЕ — СТРОКА ШТОРКИ (владелец 2026-09-15: «так же, как в
-    // шторке — с подсветкой и иконкой»). Своих чисел у выбранного больше нет:
+    // ВЫБРАННОЕ В БЛОКЕ — СТРОКА ШТОРКИ: с подсветкой и иконкой, как в шторке.
+    // Своих чисел у выбранного больше нет:
     // оно рисуется `SelectRow`, а снизу держит 8pt — как между строками
     // шторки, иначе подсветка ложится на край карточки.
     const ref = readFileSync(resolve(APP, "src/components/ui/ReferenceBlock.tsx"), "utf8");
@@ -185,7 +186,7 @@ describe("библиотека блоков указывает на живой �
       "пропала защита от rgba-токена: подложка кружка станет чёрной",
     );
 
-    const note = readFileSync(resolve(APP, "src/features/appointments/InlineNoteField.tsx"), "utf8");
+    const note = readFileSync(resolve(APP, "src/components/blocks/InlineNoteField.tsx"), "utf8");
     assert.match(note, /marginHorizontal: 12,/);
     assert.match(note, /paddingVertical: 7,/);
     assert.match(note, /fontSize: 13,/);
@@ -200,40 +201,38 @@ describe("библиотека блоков указывает на живой �
 
   test("иконка сущности та же, что обещает каталог", () => {
     const expected: [string, string, string][] = [
-      // Значок клиента уехал вместе с блоком (2026-09-20).
+      // Значок клиента уехал вместе с блоком.
       ["src/features/appointments/ClientBlock.tsx", "UserRound", "клиент"],
-      // Значок услуги уехал вместе с блоком: с 2026-09-20 «Услуги» —
+      // Значок услуги уехал вместе с блоком: «Услуги» —
       // компонент, и `Briefcase` живёт там же, где пустое состояние блока.
       ["src/features/appointments/ServicesBlock.tsx", "Briefcase", "услуга"],
-      // Значок объекта — у двери «Добавить объект»; строки шторки выбора с
-      // 03.10 носят вид типа объекта (без типа — домик), как строка объекта.
+      // Значок объекта — у двери «Добавить объект»; строки шторки выбора
+      // носят вид типа объекта (без типа — домик), как строка объекта.
       ["src/features/clients/blocks/ObjectsBlock.tsx", "MapPin", "объект"],
       ["src/features/reference/LabelPickerSheet.tsx", "Bookmark", "метка"],
       ["src/features/clients/TagPickerSheet.tsx", "Tag", "тег"],
       ["src/features/clients/ObjectFields.tsx", "MapPinned", "точка на карте"],
       ["src/features/clients/ObjectFields.tsx", "Send", "попросить адрес"],
-      // ЗНАЧОК НАСТРОЙКИ ОДИН — ползунки. Здесь стояло «настройки блока —
-      // ползунки, настройки списка — шестерёнка»; владелец снял это различие
-      // 2026-09-10, глядя на лист категорий: «не шестерёнка, а вот эти
-      // маленькие тумблеры». Обе двери ведут на страницу справочника, и
-      // разный значок обещал разницу, которой нет.
-      // Носителем этой двери был блок «Тип объекта» — последний блок ВЫБОРА
-      // с ползунками в своей шапке. 2026-09-10 он переехал на `ReferenceBlock`
-      // + шторку, и дверь ушла в шапку ШТОРКИ, как у типа события. Глиф
-      // остался за примитивом, который его рисует (`RowGroup`, `ChoiceRow`);
-      // если он исчезнет и оттуда — «настроить» в продукте нечем.
+      // ЗНАЧОК НАСТРОЙКИ ОДИН — ползунки, а не шестерёнка для списка: обе двери
+      // ведут на страницу справочника, и разный значок обещал бы разницу, которой
+      // нет.
+      // Дверь в справочник живёт в шапке ШТОРКИ (блок «Тип объекта» — на
+      // `ReferenceBlock` + шторка, как тип события). Глиф остался за примитивом,
+      // который его рисует (`RowGroup`, `ChoiceRow`); если он исчезнет и оттуда —
+      // «настроить» в продукте нечем.
       ["src/components/ui/card-rows.tsx", "Settings2", "настройки блока"],
       // Тип события выбирается блоком со шапкой и шторкой, как категория:
-      // ползунков в шапке БЛОКА больше нет — дверь в справочник живёт в шапке
-      // ШТОРКИ (владелец 2026-09-10). Сам значок настроек списка — `Settings2`,
-      // «палочки с кружочками», а не шестерёнка (владелец 2026-09-10).
+      // ползунков в шапке БЛОКА нет — дверь в справочник живёт в шапке ШТОРКИ.
+      // Сам значок настроек списка — `Settings2`, «палочки с кружочками», а не
+      // шестерёнка.
       ["src/features/appointments/EventTypeBlock.tsx", "Tag", "тип события"],
       ["src/features/finances/CategoryBlock.tsx", "Tag", "категория"],
       ["src/components/ui/PickerSheet.tsx", "Settings2", "настройки списка"],
       ["src/components/ui/ValuePickerSheet.tsx", "Settings2", "настройки списка"],
     ];
     for (const [path, icon, role] of expected) {
-      const source = readFileSync(resolve(APP, path), "utf8");
+      // A barrel with a folder (`card-rows.tsx` + `card-rows/`) reads as one.
+      const source = readModuleSource(resolve(APP, path));
       assert.match(
         source,
         new RegExp(`\\b${icon}\\b`),

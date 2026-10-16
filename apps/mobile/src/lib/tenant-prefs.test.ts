@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryKVStorage, setStorage } from "@babun/shared/storage";
 import { CHROME_STORAGE_KEY } from "./chrome-cache";
+import { readModuleSource } from "./module-source";
 
 import {
   TENANT_SCOPED_KEY_PREFIXES,
@@ -108,7 +109,7 @@ describe("настройки, помнящиеся по компании", () =>
   });
 
   test("чистка при переходе спрашивает реестр, а не свой список", () => {
-    const authClear = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const authClear = readModuleSource(resolve(here, "auth-clear.ts"));
     assert.match(authClear, /isTenantScopedKey\(key\)/);
     // Второй список тех же префиксов внутри чистки разойдётся с реестром на
     // первой же правке — именно так в продукте и заводятся две правды.
@@ -148,7 +149,7 @@ describe("настройки, помнящиеся по компании", () =>
 
         // Форма 1: ключ собирается строкой — `babun-что-то:${tenantId}`, и с
         // точкой, и с выражением (`${tenantId ?? "none"}`): обе формы прошли
-        // мимо сторожа, и три ключа жили вне реестра (аудит 03.10).
+        // мимо сторожа, и три ключа жили вне реестра.
         for (const m of src.matchAll(/`([A-Za-z0-9:._-]+)[:.]\$\{tenantId[^}]*\}/g)) {
           found.set(m[1], rel);
         }
@@ -183,11 +184,12 @@ describe("настройки, помнящиеся по компании", () =>
     );
 
     // И НАОБОРОТ: ключ хранилища вне подметаемых префиксов переживает
-    // «Выйти» — черновик реквизитов с IBAN оставался на телефоне (03.10).
+    // «Выйти» — черновик реквизитов с IBAN оставался на телефоне.
     // Имена, которые не ключи хранилища, перечислены явно.
-    // `auto` — ключ владельца в реестре уведомлений (`auto:<компания>:<запись>`,
-    // 03.10), сам реестр подметается выходом целиком.
-    const NOT_STORAGE = new Set(["tenant", "personal-event-types", "auto"]);
+    // `auto`, `event`, `self` — ключи владельцев в реестре уведомлений
+    // (`<группа>:<компания>:<запись>`),
+    // сам реестр подметается выходом целиком.
+    const NOT_STORAGE = new Set(["tenant", "personal-event-types", "auto", "event", "self"]);
     const unwiped = [...found]
       .filter(([prefix]) => !NOT_STORAGE.has(prefix))
       .filter(([prefix]) => !WIPED_PREFIXES.some((p) => prefix.startsWith(p)))

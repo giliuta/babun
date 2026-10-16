@@ -1,14 +1,13 @@
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { templateTokenKeys } from "@babun/shared/local/sms-templates";
 
-// ШАБЛОНЫ SMS КОМАНДЫ — ФОРМА ДАННЫХ И ПРАВИЛА (STORY-089, 29.09). Чистый
+// ШАБЛОНЫ SMS КОМАНДЫ — ФОРМА ДАННЫХ И ПРАВИЛА. Чистый
 // модуль: разбор ответа базы, слова «когда», черновик настройки и его
 // проверка. Без React и сети — его читают тесты.
 //
-// Владелец 29.09: «каждой команде свой шаблон… когда добавляю шаблон,
-// полноценно настраиваю: когда отправлять — за 24 часа или в такое-то
-// время… тихих часов такого понятия нет, мы программируем шаблон в
-// определённое время… главное — удобно, чтоб не было косяков». Поэтому:
+// У каждой команды свои шаблоны; у шаблона настраивается, когда отправлять
+// (за 24 часа или в такое-то время); тихих часов как понятия нет — шаблон
+// программируется на определённое время. Поэтому:
 //   • «когда» — у шаблона, восемь вариантов, у каждого свой срок;
 //   • у автоматического шаблона — окно «можно отправлять с … до …» (часы
 //     календаря); «накануне в ЧЧ:ММ» уходит ровно в своё время, окна у него
@@ -136,14 +135,6 @@ export function windowWords(from: number, to: number): string {
 
 /** Действует ли окно отправки: ручному и «накануне в ЧЧ:ММ» — нет. */
 export const usesWindow = (trigger: SmsWhen): boolean => trigger !== "manual" && trigger !== "day_before";
-
-/** Сроки на выбор — видны сразу, ставятся одним тапом. */
-export const HOURS_BEFORE = [1, 2, 3, 6, 12, 24, 48, 72] as const;
-export const HOURS_AFTER = [1, 2, 3, 6, 24, 48] as const;
-export const DAY_BEFORE_TIMES = ["09:00", "12:00", "15:00", "17:00", "18:00", "19:00", "20:00"] as const;
-export const REPEAT_MONTHS = [1, 3, 6, 9, 12] as const;
-export const WINDOW_FROM = [7, 8, 9, 10] as const;
-export const WINDOW_TO = [20, 21, 22, 24] as const;
 
 /** Короткая подпись фишки срока: «24 ч», «2 дня», «6 мес». */
 export function hoursChip(h: number): string {
@@ -283,8 +274,7 @@ const VISIT_FIELDS = new Set(["Day", "Date", "Time", "Master", "Service", "Addre
 const AFTER_VISIT: ReadonlySet<SmsWhen> = new Set(["cancelled", "after", "repeat"]);
 
 /** Что владелец должен знать о шаблоне, чтобы он уходил как задумано, —
- *  с учётом «когда отправлять»; пусто — ничего. Владелец 01.10: «чтобы
- *  правильно применялась… правильные настройки». */
+ *  с учётом «когда отправлять»; пусто — ничего. */
 export function templateWarnings(d: Pick<TemplateDraft, "body" | "trigger">): string[] {
   const keys = templateTokenKeys(d.body);
   const out: string[] = [];

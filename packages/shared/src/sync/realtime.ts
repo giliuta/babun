@@ -36,7 +36,7 @@ type DbSupabase = SupabaseClient<Database>;
 
 /** Public-schema table names to subscribe to, paired with the cache table the
  *  change maps onto. `client_tags` (DB) → `tags` (cache vocab). */
-const TABLE_MAP: ReadonlyArray<{ dbTable: string; cacheTable: CachedTable }> = [
+const TABLE_MAP: readonly { dbTable: string; cacheTable: CachedTable }[] = [
   { dbTable: "clients", cacheTable: "clients" },
   { dbTable: "appointments", cacheTable: "appointments" },
   { dbTable: "client_tags", cacheTable: "tags" },
@@ -89,8 +89,7 @@ export function startRealtimeTenantSync(
     const channel = supabase
       .channel(channelName)
       .on(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase-js overload for postgres_changes is untyped for the generic table string
-        "postgres_changes" as any,
+        "postgres_changes",
         {
           event: "*",
           schema: "public",

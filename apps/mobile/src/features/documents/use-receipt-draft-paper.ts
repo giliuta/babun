@@ -5,8 +5,8 @@ import {
 } from "@babun/shared/local/client-requisites";
 import { useClients } from "@/features/clients/queries";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
-import { invoiceDictionary, type InvoiceLanguage } from "@/features/invoices/dictionary";
-import { clientParty } from "@/features/invoices/document";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
+import { clientParty } from "@/lib/paper/document";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import {
   buildDraftReceiptDocument,
@@ -14,7 +14,7 @@ import {
   type ReceiptDocumentLineInput,
 } from "./receipt-document";
 
-// БУМАГА ЧЕРНОВИКА ЧЕКА — ИЗ ТОГО ЖЕ, ЧТО ЛЯЖЕТ В СНИМОК (04.10). Продавец —
+// БУМАГА ЧЕРНОВИКА ЧЕКА — ИЗ ТОГО ЖЕ, ЧТО ЛЯЖЕТ В СНИМОК. Продавец —
 // выбранные реквизиты, а не профиль компании: предпросмотр показывал «Giliuta»,
 // а выписанный чек — «455 · VAT 555» (проверка на 17e). Получатель — правилом
 // инвойса (`clientParty`): реквизиты клиента, объект.

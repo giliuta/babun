@@ -1,20 +1,14 @@
-import type { Appointment } from "@babun/shared/local/appointments";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import {
-  invoiceLineTotal,
-  type InvoiceLineLedger,
-} from "@babun/shared/local/finance/invoice-ledger";
-import {
-  generateInvoiceFromAppointment,
-  INVOICE_GENERATOR_DEFAULTS,
-  type ServiceNameLookup,
-} from "@babun/shared/local/finance/invoice-generator";
-import { formatInvoiceMoney } from "@/features/invoices/format";
-import { clientSnapshotParty, formatQty } from "@/features/invoices/document";
-import { invoiceDictionary } from "@/features/invoices/dictionary";
+import { formatInvoiceMoney } from "@/lib/paper/format";
+import { clientSnapshotParty, formatQty } from "@/lib/paper/document";
+import { invoiceDictionary } from "@/lib/paper/dictionary";
 import { parseInvoiceClientSnapshot } from "@babun/shared/local/finance/invoice-ledger";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { RECEIPT_WORDS, type ReceiptWords } from "./receipt-words";
+import type {
+  ReceiptDocumentLineInput,
+  ReceiptLineItemsInput,
+} from "./receipt-document/lines";
 
 // ОДИН ДОКУМЕНТ ЧЕКА — ОДНА МОДЕЛЬ ДЛЯ PDF (по образцу invoices/document.ts).
 //
@@ -27,39 +21,26 @@ import { RECEIPT_WORDS, type ReceiptWords } from "./receipt-words";
 // `formatInvoiceDate`: у счёта дата словом, у чека — цифрой, это два разных
 // документа со своей бумагой.
 //
-// ВЛАДЕЛЕЦ 2026-09-20: «в чеке должен быть перечень услуг с ценой, по сути
-// как инвойс, но не инвойс». Перечень — НЕОБЯЗАТЕЛЬНЫЙ вход: его собирает
-// вызывающий (страница чека, `use-issued-receipt-doc`) через `receiptLinesFromInvoice` или
+// Чек — перечень услуг с ценой, по сути как инвойс, но не инвойс. Перечень —
+// НЕОБЯЗАТЕЛЬНЫЙ вход: его собирает вызывающий (страница чека,
+// `use-issued-receipt-doc`) через `receiptLinesFromInvoice` или
 // `receiptLinesFromAppointment` ниже, а эта функция остаётся чистой — только
 // форматирует готовое, без единого запроса внутри.
 //
-// ТОТ ЖЕ ВЛАДЕЛЕЦ, ТОТ ЖЕ РАЗГОВОР, после показа чека со строками: «клиент
-// убираем», «оплата давай не писать», «оплачено тоже давай не писать» — чек
-// называет компанию, номер, дату, перечень работ и итог; ни получателя, ни
-// способа оплаты, ни позитивного штампа «Оплачено» бумага не несёт. Пометка
-// «Аннулирован» — исключение: чек мог погаснуть возвратом, это состояние
-// документа, а не декоративный статус, и без неё бумага бы врала.
+// Чек называет компанию, номер, дату, перечень работ и итог; ни получателя
+// без инвойса, ни способа оплаты, ни позитивного штампа «Оплачено» бумага не
+// несёт. Пометка «Аннулирован» — исключение: чек мог погаснуть возвратом, это
+// состояние документа, а не декоративный статус, и без неё бумага бы врала.
+//
+// Line items and their sources live in `./receipt-document/lines`.
 
-export interface ReceiptDocumentLineInput {
-  name: string;
-  qty: number;
-  /** Единица количества: «4 м» вместо голого «4», как в счёте. */
-  unit?: string | null;
-  unitPrice: number;
-  sum: number;
-}
-
-export interface ReceiptLineItemsInput {
-  lines: readonly ReceiptDocumentLineInput[];
-  /** Скидка ОТДЕЛЬНОЙ СТРОКОЙ — только когда цены строк её ЕЩЁ НЕ учитывают.
-   *
-   *  Единственный такой путь сегодня — чек, составленный вручную: там строки
-   *  идут по прайсу, а скидка вычитается из итога. У чека по записи её нет
-   *  (генератор уже ужал цены), у чека по инвойсу тоже (инвойс не хранит
-   *  скидку отдельно от цены строки). Передать её там, где она уже в ценах,
-   *  значит вычесть дважды — аудит бумаги 2026-09-20 поймал ровно это. */
-  discountAmount?: number;
-}
+export {
+  receiptCoversFullAmount,
+  receiptLinesFromAppointment,
+  receiptLinesFromInvoice,
+  type ReceiptDocumentLineInput,
+  type ReceiptLineItemsInput,
+} from "./receipt-document/lines";
 
 export interface ReceiptDocumentLine {
   name: string;
@@ -73,21 +54,19 @@ export interface ReceiptDocument {
   words: ReceiptWords;
   number: string;
   /** «Аннулирован» — печатается ТОЛЬКО когда чек погашен возвратом; живой чек
-   *  не подписывает себя штампом вовсе (владелец 2026-09-20: «оплачено тоже
-   *  давай не писать» — сумма в «Получено» и так очевидна). */
+   *  не подписывает себя штампом вовсе (сумма в «Получено» и так очевидна). */
   voidLabel: string | null;
   seller: { name: string; lines: string[] };
-  /** Цифрами и полностью — «19.09.2026» (владелец 2026-09-20: «дату оставляем,
-   *  только давай дату цифрами полностью сделаем»). Считает `formatReceiptDate`
+  /** Цифрами и полностью — «19.09.2026». Считает `formatReceiptDate`
    *  ниже — не `formatInvoiceDate`, у того дата словом для другого документа. */
   issuedOn: string;
-  /** ПОЛУЧАТЕЛЬ — КАК В ИНВОЙСЕ (владелец 04.10: «чек — как инвойс… выписать
-   *  чек на принятие оплаты именно на этот объект»). Та же вёрстка, что у
+  /** ПОЛУЧАТЕЛЬ — КАК В ИНВОЙСЕ (чек на принятие оплаты именно на этот
+   *  объект). Та же вёрстка, что у
    *  инвойса (`clientSnapshotParty`): имя или юрназвание, номера, юрадрес,
    *  адрес объекта. Подпись — словом инвойса на языке бумаги. */
   recipient: { label: string; name: string; lines: string[] } | null;
-  /** «Инвойс INV-2026-005» — за какой документ эти деньги (владелец 04.10:
-   *  «как понять, что это оплата именно за тот инвойс»). */
+  /** «Инвойс INV-2026-005» — за какой документ эти деньги (чтобы было
+   *  понятно, что это оплата именно за тот инвойс). */
   basis: string | null;
   /** Перечень услуг — пусто, когда источника нет (ручной доход с клиентом)
    *  либо запись/инвойс ещё не подтянулись. PDF и экран рисуют РОВНО этот
@@ -103,7 +82,7 @@ export interface ReceiptDocument {
   vat: { label: string; value: string } | null;
 }
 
-/** Снимок продавца. С 2026-09-20 сервер кладёт в него не только имя и адрес,
+/** Снимок продавца. Сервер кладёт в него не только имя и адрес,
  *  но и то, без чего бумагу не примет компания-клиент: номер НДС, банк и счёт
  *  (`_issue_receipt_core`, миграция реквизитов). Читаем ВСЁ, что он кладёт:
  *  поле, которое лежит в документе и не печатается, — это поле, которого для
@@ -134,8 +113,8 @@ function sellerLines(seller: ReceiptSellerSnapshot | null, words: ReceiptWords):
  * ЧЕРНОВИК ЧЕКА — ТА ЖЕ МОДЕЛЬ, ЧТО У ВЫДАННОГО.
  *
  * Составитель (`ReceiptComposer`) рисует бумагу ТЕМ ЖЕ `ReceiptPaper`, что и
- * лист уже выписанного чека: иначе «зеркало документа» (владелец 2026-09-20)
- * стало бы вторым, похожим, но своим — и в день, когда изменится печать,
+ * лист уже выписанного чека: иначе «зеркало документа» стало бы вторым,
+ * похожим, но своим — и в день, когда изменится печать,
  * составитель остался бы показывать вчерашнюю бумагу.
  *
  * Строки `receipts` за этим документом ещё нет, поэтому поля приходят
@@ -214,7 +193,7 @@ export function buildReceiptDocument(
 ): ReceiptDocument {
   const words = RECEIPT_WORDS[language];
   const dict = invoiceDictionary(language);
-  // Снимок получателя: у чеков с 04.10 — как у инвойса; у старых только имя
+  // Снимок получателя: у новых чеков — как у инвойса; у старых только имя
   // (`name`), их бумага печатает его одно.
   const buyer = receipt.client_snapshot
     ? parseInvoiceClientSnapshot(receipt.client_snapshot)
@@ -272,91 +251,6 @@ export function buildReceiptDocument(
   };
 }
 
-/**
- * Перечень печатается ТОЛЬКО когда чек закрывает источник ПОЛНОСТЬЮ.
- *
- * И у инвойса, и у записи в проводке может быть НЕСКОЛЬКО чеков — оплата
- * частями рождает свой чек на каждую проводку дохода
- * (`issue_receipt_for_income` срабатывает на КАЖДУЮ из них). Напечатать на
- * чеке частичного платежа ПОЛНЫЙ перечень работ значило бы соврать: «Итого
- * работ €250» рядом с «Получено €100» без единого слова об остатке. Здесь —
- * простое и безопасное правило: суммы совпали до цента → перечень
- * печатается; нет → чек остаётся таким, как сегодня, без строк.
- */
-export function receiptCoversFullAmount(
-  receiptAmount: number,
-  sourceTotal: number,
-): boolean {
-  return Math.round(receiptAmount * 100) === Math.round(sourceTotal * 100);
-}
-
-/**
- * Строки чека из УЖЕ ВЫСТАВЛЕННОГО инвойса.
- *
- * Суммы берутся ГОТОВЫМИ (`line.total`) — инвойс сверил их с сервером в
- * момент выставления (`assertInvoiceControlRead`), пересчитывать здесь ещё
- * раз нечего.
- */
-export function receiptLinesFromInvoice(
-  lines: readonly Pick<InvoiceLineLedger, "title" | "qty" | "unit" | "unit_price" | "total">[],
-): ReceiptLineItemsInput {
-  return {
-    lines: lines.map((line) => ({
-      name: line.title,
-      qty: line.qty,
-      unit: line.unit,
-      unitPrice: line.unit_price,
-      sum: line.total,
-    })),
-  };
-}
-
-/** Каталог здесь не спрашиваем: у записей после 2026-08-25 имя и единица уже
- *  лежат в снимке услуги (`AppointmentService.serviceName`/`unit`), а у более
- *  старых чек печатает дефолтную строку генератора — та же деградация, что и
- *  у счёта по такой же записи. Второй поход в справочник не добавил бы новых
- *  данных, а только завёл бы лишний запрос там, где чек уже открыт. */
-const NO_CATALOG_FALLBACK: ServiceNameLookup = () => undefined;
-
-/**
- * Строки чека из СНИМКА УСЛУГ ЗАПИСИ — тем же генератором, что печатает счёт
- * по этой записи (`generateInvoiceFromAppointment`): одна и та же работа не
- * имеет права печататься разным перечнем в счёте и в чеке.
- *
- * РЕЖИМ ЗАФИКСИРОВАН НА «УСЛУГИ» (решение разработчика 2026-09-20): чек обязан
- * перечислять работы всегда, даже если компания настроила свои счета одной
- * строкой (`tenants.invoice_line_source = 'total'`) — это два разных
- * документа с разной целью, и настройка ОДНОГО не разоружает перечень в другом.
- */
-export function receiptLinesFromAppointment(
-  appointment: Appointment,
-): ReceiptLineItemsInput {
-  const draft = generateInvoiceFromAppointment(
-    appointment,
-    { ...INVOICE_GENERATOR_DEFAULTS, lineSource: "services" },
-    NO_CATALOG_FALLBACK,
-  );
-  return {
-    // `unit` НОРМАЛИЗУЕТСЯ ДО `null` (генератор его местами вовсе не кладёт в
-    // объект — «одна строка» без услуг обходится без него, и `line.unit`
-    // читался бы как `undefined`): у поля документа должно быть ровно два
-    // состояния, «есть строка» и «нет», а не три с невидимой разницей.
-    lines: draft.lines.map((line) => ({
-      name: line.title,
-      qty: line.qty,
-      unit: line.unit ?? null,
-      unitPrice: line.unitPrice,
-      sum: invoiceLineTotal(line.qty, line.unitPrice),
-    })),
-    // СКИДКИ ЗДЕСЬ НЕТ, И ЭТО НЕ ЗАБЫВЧИВОСТЬ. Генератор масштабирует строки
-    // по `total_amount` (`invoice-generator.ts`, `factor = total / gross`) —
-    // скидка на визит УЖЕ сидит в ценах строк. Напечатать её ещё и отдельной
-    // строкой значит вычесть дважды: работ на €200 со скидкой €20 давали
-    // «Итого работ €180 · Скидка −€20 · Получено €180», и клиент, сложив,
-    // искал пропавшие двадцать евро. Найдено аудитом бумаги 2026-09-20.
-  };
-}
-
 /** Дата чека — цифрами и полностью: «19.09.2026». НЕ `formatInvoiceDate` (тот
  *  печатает словом — «19 сентября 2026 г.» — для инвойса, и трогать его нельзя,
  *  им пользуется другой документ). `issued_on` приходит как «ГГГГ-ММ-ДД» —
@@ -382,7 +276,7 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-/** НАЛОГ СВЕРХУ ИЛИ ВНУТРИ — ПО ЧИСЛАМ САМОГО ЧЕКА (проверка на 17e, 04.10):
+/** НАЛОГ СВЕРХУ ИЛИ ВНУТРИ — ПО ЧИСЛАМ САМОГО ЧЕКА (проверка на 17e):
  *  оплата инвойса с VAT сверху печаталась «Итого работ €150 · VAT 19% в сумме
  *  €28,50 · Получено €178,50» — «в сумме» врало. Строки + налог = получено —
  *  налог начислен сверху, подпись просто «VAT 19%»; иначе он внутри цены. */

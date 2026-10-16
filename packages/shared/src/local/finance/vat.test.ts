@@ -42,10 +42,13 @@ function tx(partial: Partial<FinanceTransaction>): FinanceTransaction {
     payment_method: null,
     notes: null,
     occurred_on: "2026-08-09",
+    occurred_time: null,
     receipt_url: null,
     transfer_group_id: null,
     invoice_id: null,
+    debt_id: null,
     refund_of_id: null,
+    reversal_kind: null,
     source: "manual",
     created_at: "2026-08-09T00:00:00Z",
     updated_at: "2026-08-09T00:00:00Z",
@@ -245,7 +248,7 @@ describe("действующий НДС: зеркало fill_transaction_vat", (
   test("тумблер компании «off» гасит и пины счёта/команды", () => {
     // Канон: «Работаем с НДС» выключен — налога нет во всём продукте, даже
     // если за счётом или командой закреплён свой режим (сервер проверяет
-    // t.vat_mode до coalesce — починка 2026-08-16, здесь то же правило).
+    // t.vat_mode до coalesce, здесь то же правило).
     expect(
       effectiveVatSettings(
         { mode: "off", rate: 19 },

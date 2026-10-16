@@ -11,8 +11,8 @@ import { getTotalUnread } from "@babun/shared/local/chats";
 import { useThemeColors } from "@/theme/colors";
 import { useChats } from "@/features/chats/store";
 import { useMyInvitations } from "@/features/access/inbox-queries";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { MESSAGING_ENABLED, can } from "@/features/settings/role-policy";
+import { useCurrentRole } from "@/session/tenant";
+import { MESSAGING_ENABLED, can } from "@/session/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { TeamActivityNotifier } from "@/features/cabinet/TeamActivityNotifier";
@@ -21,15 +21,15 @@ export default function DashboardLayout() {
   const t = useThemeColors();
   const role = useCurrentRole().data;
   const canMessages = can(role, "manage-messaging");
-  // ВКЛАДКИ НЕ ЗАВИСЯТ ОТ ПРАВА, И ЭТО РЕШЕНИЕ ВЛАДЕЛЬЦА (2026-09-13).
+  // ВКЛАДКИ НЕ ЗАВИСЯТ ОТ ПРАВА.
   //
-  // «Команда — это только база данных и разрешения на неё. Перехожу на
-  // команду — всё то же самое остаётся, меняется только база». Раньше
-  // Клиенты и Финансы прятались через `href: null`, когда роль не давала
-  // права, — и при переходе в компанию, где человек лишь смотрит, четыре
-  // вкладки становились двумя. По спецификации это и есть «экран поменялся».
+  // Команда — это только база данных и разрешения на неё: при переходе на
+  // другую команду экран тот же, меняется только база. Если прятать
+  // Клиентов и Финансы через `href: null`, когда роль не даёт права, то при
+  // переходе в команду, где человек лишь смотрит, четыре вкладки станут
+  // двумя, и экран «поменяется».
   //
-  // Теперь ряд вкладок ОДИН на все компании. Право проверяет граница внутри
+  // Поэтому ряд вкладок ОДИН на все команды. Право проверяет граница внутри
   // каждой вкладки (`clients/_layout`, `finances/_layout`, `chats/_layout`):
   // без права она показывает «появятся, когда владелец откроет доступ» — это
   // ровно тот «блок виден только для чтения», который допускает правило 10
@@ -47,8 +47,7 @@ export default function DashboardLayout() {
   // hidden tab is a navigation affordance; this query gate is the data guard.
   const { data: chats = [] } = useChats(canMessages);
   const unread = getTotalUnread(chats);
-  // ПРИГЛАШЕНИЯ ЖДУТ ОТВЕТА — КРАСНЫЙ СЧЁТЧИК НА «КАБИНЕТЕ» (владелец 14.09:
-  // «метка над кабинетом, красный значок справа, как в играх»). Вид тот же, что у
+  // ПРИГЛАШЕНИЯ ЖДУТ ОТВЕТА — КРАСНЫЙ СЧЁТЧИК НА «КАБИНЕТЕ». Вид тот же, что у
   // счётчика «Чатов», — второй анатомии значка в продукте не заводим.
   const { data: invitations = [] } = useMyInvitations();
   const invitationCount = invitations.length;
@@ -57,17 +56,15 @@ export default function DashboardLayout() {
   // переиспользует стек /calendar, который лежит НАД табами.
   return (
     <DashboardGate>
-      {/* Уведомления о делах команды из истории изменений (03.10) — пока
+      {/* Уведомления о делах команды из истории изменений — пока
           приложение открыто; без интерфейса. */}
       <TeamActivityNotifier />
       <RoleCapabilityBoundary capability="view-cabinet" title="Babun">
         <Tabs
           // ПОВТОРНЫЙ ТАП ПО СВОЕЙ ЖЕ ВКЛАДКЕ ВОЗВРАЩАЕТ К ЕЁ НАЧАЛУ.
-          // Владелец 2026-08-20: «тапаю на финансы — перехожу в финансы, тапаю
-          // обратно на календарь — возвращаюсь на ту же страницу, где был; а
-          // если я уже на календаре и тапну ещё раз — тогда выхожу в сам
-          // календарь». Переключение вкладок память стека НЕ трогает (это
-          // поведение табов из коробки) — здесь дописан только второй тап:
+          // Переключение вкладок память стека НЕ трогает (поведение табов
+          // из коробки): возврат на вкладку открывает ту же страницу, где
+          // были. Здесь добавлен только второй тап по текущей вкладке:
           // он разматывает стек вкладки до корня. Иначе из настроек можно
           // выйти лишь стрелкой «назад» столько раз, сколько провалился.
           screenListeners={({ navigation, route }) => ({
@@ -97,7 +94,7 @@ export default function DashboardLayout() {
               borderTopColor: t.separator,
             },
             tabBarLabelStyle: { fontSize: 10, fontWeight: "500" },
-            // СКРЫТАЯ ВКЛАДКА СПИТ (аудит Android 13.10). Однажды открытые
+            // СКРЫТАЯ ВКЛАДКА СПИТ. Однажды открытые
             // «Клиенты» и «Финансы» оставались подписаны на записи и на
             // каждое их изменение — перетаскивание блока, сохранение формы,
             // возврат приложения — пересчитывали в фоне статистику клиентов,

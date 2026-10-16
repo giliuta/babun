@@ -5,22 +5,22 @@ import { Paperclip } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
-import { clientSubParams } from "@/features/clients/clients-company";
-import { useReferenceHref } from "@/features/clients/reference-href";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { clientSubParams } from "@/session/clients-company";
+import { useReferenceHref } from "@/lib/reference-href";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { FileAddSheet } from "@/features/appointments/FileAddSheet";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useClientFileUpload, useClientFiles } from "@/features/clients/use-client-files";
-import { moreLabel } from "@/features/clients/more-label";
+import { moreLabel } from "@/lib/more-label";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// БЛОК «ФАЙЛЫ» НА КАРТОЧКЕ — КАК «ИСТОРИЯ» (владелец 03.10: «файлы — как
-// история, по датам… полноценные блоки, красивые»). В блоке — ПОСЛЕДНИЙ файл
+// БЛОК «ФАЙЛЫ» НА КАРТОЧКЕ — КАК «ИСТОРИЯ»: файлы по датам, полноценными
+// блоками. В блоке — ПОСЛЕДНИЙ файл
 // ленты (фото, документ, инвойс или чек) под заголовком своего дня; тап —
 // страница всех файлов (`/clients/attachments`), где каждый файл открывается
-// сразу. Квадраты фото и плашки-пилюли, общие с записью, здесь больше не
+// сразу. Квадраты фото и плашки-пилюли, общие с записью, здесь не
 // стоят: у записи файлов два-три, у клиента — лента за годы.
 //
 // Файлов нет — блок держит одна дверь «Добавить файл» (как «Добавить объект»).
@@ -72,7 +72,7 @@ export default function ClientFilesBlock({
     <>
       <SectionCard
         title="Файлы"
-        // «Ещё N» — файлов сверх показанного последнего (03.10).
+        // «Ещё N» — файлов сверх показанного последнего.
         action={more ? { label: more, pill: true, onPress: openAll } : undefined}
       >
         {last ? (

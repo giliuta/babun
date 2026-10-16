@@ -3,15 +3,15 @@ import { formatCountRu, type PluralFormsRu } from "@babun/shared/common/utils/pl
 import { categoriesDoorLine } from "./category-asks";
 import { hasBudget } from "./category-budget";
 
-// ПОДПИСИ ДВЕРЕЙ «НАСТРОЕК ФИНАНСОВ» ОДНОЙ КОМАНДЫ (владелец 2026-09-24:
-// «надо сделать качественные настройки в финансах по каждой команде»).
+// ПОДПИСИ ДВЕРЕЙ «НАСТРОЕК ФИНАНСОВ» ОДНОЙ КОМАНДЫ: настройки финансов свои у
+// каждой команды.
 // Каждая дверь печатает состояние ВЫБРАННОЙ команды, а не компании: сколько
 // её категорий и бюджетов, сколько шаблонов — не проваливаясь внутрь.
 
 const FORMS_BUDGET: PluralFormsRu = ["бюджет", "бюджета", "бюджетов"];
 const FORMS_OPERATION: PluralFormsRu = ["операция", "операции", "операций"];
 
-/** Дверь «Удалённые операции» (03.10): «Пусто» либо «2 операции» — сколько
+/** Дверь «Удалённые операции»: «Пусто» либо «2 операции» — сколько
  *  в ящике у выбранной команды. */
 export function deletedOperationsDoorLine(count: number): string {
   return count > 0 ? formatCountRu(count, FORMS_OPERATION) : "Пусто";
@@ -26,10 +26,9 @@ export function settingsTeamId(
   return teams[0]?.id ?? null;
 }
 
-/** ДВЕРЬ «СЧЕТА: ПОРЯДОК И НАСТРОЙКИ» НАД ПЛИТКАМИ СЧЕТОВ (владелец 03.10:
- *  «открываю счета команды и жму настройки — вижу счета именно той
- *  команды»). Выбрана команда — страница открывается на ней одной (`?team=`);
- *  «Без команды» и «все» — страница всех счетов, как раньше. */
+/** ДВЕРЬ «СЧЕТА: ПОРЯДОК И НАСТРОЙКИ» НАД ПЛИТКАМИ СЧЕТОВ: из счетов команды —
+ *  настройки именно её счетов. Выбрана команда — страница открывается на ней одной (`?team=`);
+ *  «Без команды» и «все» — страница всех счетов. */
 export function accountsSettingsHref(teamId: string | null, noTeam: string): string {
   return teamId && teamId !== noTeam
     ? `/accounts/settings?team=${encodeURIComponent(teamId)}`
@@ -71,7 +70,7 @@ export function requisitesDoorLine(liveSets: number, nextNumber: string | null):
   return nextNumber ? `${sets} · ${nextNumber}` : sets;
 }
 
-/** Дверь одной страницы категорий (владелец 2026-09-30: доходы, расходы и
+/** Дверь одной страницы категорий (доходы, расходы и
  *  долги — отдельными страницами): «5 категорий · 1 бюджет» либо «Пока нет».
  *  Скрытые и служебные не считаются; бюджет бывает только у расхода. */
 export function teamCategoryKindLine(

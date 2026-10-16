@@ -4,8 +4,7 @@ import { MasterRightsPage } from "@/features/access/master-page/MasterRightsPage
 import { invitationIdFromSegment } from "@/features/access/master-page/master-draft";
 import { rightsFocusOf } from "@/features/access/master-page/rights-focus";
 
-// «ПРАВА» — СТРАНИЦА ВНУТРИ МАСТЕРА (владелец 15.09: «разрешения можно сделать
-// отдельной страницей внутри уже мастера»). `new` — черновик нового мастера,
+// «ПРАВА» — СТРАНИЦА ВНУТРИ МАСТЕРА. `new` — черновик нового мастера,
 // `invite-<uuid>` — приглашение без ответа. У старой карточки без аккаунта
 // прав нет: права ставятся человеку, а не карточке, — адрес ведёт на её хаб.
 // Права сотрудника открываются из его карточки (`access/[userId]?rights=1`).

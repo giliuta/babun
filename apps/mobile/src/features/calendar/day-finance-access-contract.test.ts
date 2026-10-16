@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
 
-// ДЕНЬГИ В КАЛЕНДАРЕ — ПРАВОМ КАЛЕНДАРЯ «ДОХОД И РАСХОД ДНЯ» (владелец 04.10:
-// «функция расход/доход должна быть в доступах календаря — не общие
-// финансы»). Старые «ручные операции дня» сервер по-прежнему правит по
-// сторонам «Финансов» (срез 2а, 29.09). Экраны тянут react-native и под раннером не поднимаются, поэтому
+// ДЕНЬГИ В КАЛЕНДАРЕ — ПРАВОМ КАЛЕНДАРЯ «ДОХОД И РАСХОД ДНЯ», а не общими
+// финансами. Старые «ручные операции дня» сервер по-прежнему правит по
+// сторонам «Финансов». Экраны тянут react-native и под раннером не поднимаются, поэтому
 // проверка — по исходнику: верни проверку роли, общий ключ или убери серое
 // «Смотрит» — и сотрудник либо не увидит свои деньги, либо увидит кнопку,
 // которую сервер откажет.
@@ -26,7 +27,10 @@ function has(text: string, fragment: string, label: string, times = 1): void {
 }
 
 describe("шторка «Финансы дня»", () => {
-  const sheet = read("DayFinanceSheet.tsx");
+  // The sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`.
+  const sheet = normalize(
+    readModuleSource(join(__dirname, "DayFinanceSheet.tsx"), join(__dirname, "day-finance")),
+  );
 
   test("уровень — право календаря «Доход и расход дня» в ЭТОМ календаре (04.10)", () => {
     has(
@@ -115,7 +119,8 @@ describe("ручные операции дня", () => {
 });
 
 describe("полоса денег под календарём", () => {
-  const home = read("../../../app/(dashboard)/(home)/index.tsx");
+  // The calendar screen is the route file plus `features/calendar/home/`.
+  const home = normalize(calendarScreenSource());
 
   test("видна по праву календаря «Доход и расход дня», а не по роли и не по «Финансам»", () => {
     has(

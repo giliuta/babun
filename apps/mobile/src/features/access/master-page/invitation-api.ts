@@ -3,7 +3,7 @@ import type { Database } from "@babun/shared/db/database.types";
 
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { sendInvitationEmail } from "@/features/access/invitation-email";
+import { sendInvitationEmail } from "@/features/settings/invitation-email";
 
 import {
   createInvitationArgs,
@@ -17,11 +17,10 @@ import {
 } from "./invitation-contract";
 import type { MasterInvitationRequest } from "./master-draft";
 
-// ПРИГЛАШЕНИЕ С КАРТОЧКОЙ — ЕДИНСТВЕННАЯ ДОРОГА К СЕРВЕРУ (владелец 15.09:
-// «„Добавить мастера" — сразу полная карточка»). Календари, должность, цвет и
+// ПРИГЛАШЕНИЕ С КАРТОЧКОЙ — ЕДИНСТВЕННАЯ ДОРОГА К СЕРВЕРУ. Календари, должность, цвет и
 // права уходят вместе с приглашением и правятся, пока человек не ответил.
-// Прежняя шторка (`team-access.ts` → `useCreateInvitation`) остаётся для
-// своих вызовов; карточка мастера ходит только сюда — второй дороги к тем же
+// Шторка (`team-access.ts` → `useCreateInvitation`) остаётся для своих
+// вызовов; карточка мастера ходит только сюда — второй дороги к тем же
 // функциям базы из карточки нет.
 
 type InvitationRow = Database["public"]["Tables"]["invitations"]["Row"];

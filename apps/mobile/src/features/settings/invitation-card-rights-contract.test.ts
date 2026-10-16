@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// КАРТОЧКА МАСТЕРА ДО «ПРИГЛАСИТЬ» (владелец 15.09): имя, почта, телефон,
+// КАРТОЧКА МАСТЕРА ДО «ПРИГЛАСИТЬ»: имя, почта, телефон,
 // должность, цвет, несколько календарей и права по блокам заполняются в
 // приглашении и применяются разом при приёме. Сторож миграции проверяет это
 // один раз на накате; этот тест — каждый раз, когда функцию перепишут из старой
@@ -103,7 +103,7 @@ describe("rights helpers are internal and shared", () => {
     assert.doesNotMatch(migration, /grant execute on function public\.access_(validate|apply)_changes/);
   });
 
-  // Решение владельца 15.09: уровни хранятся сейчас, применяются, когда блок
+  // Уровни хранятся сразу, а применяются, когда блок
   // оживёт. Отказ `access:not_live` у писателя ломал бы карточку приглашения
   // на первом же переключателе — живых блоков пока нет.
   test("non-live blocks are accepted everywhere a level is written", () => {

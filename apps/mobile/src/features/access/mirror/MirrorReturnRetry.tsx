@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter, type Href } from "expo-router";
 
-import { returnStep } from "./mirror-return";
+import { returnStep } from "@/session/mirror-return";
 
 /** Стоит внутри стека вкладки: после выхода из «его глазами» достраивает
  *  цепочку страниц, откуда вошли (`mirror-return.ts`). Стек вкладки на

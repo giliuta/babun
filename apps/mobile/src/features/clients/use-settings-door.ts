@@ -1,9 +1,9 @@
 import type { Href } from "expo-router";
 import { useTenantId } from "@/lib/tenant";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useClientsScopeOrNull } from "./company-scope";
-import { useReferenceHref } from "./reference-href";
+import { useCurrentRole } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
+import { useReferenceHref } from "@/lib/reference-href";
 import { clientSettingsDoor } from "./settings-door";
 import { useClientSettingLevelsOf } from "./use-client-settings";
 

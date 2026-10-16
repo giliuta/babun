@@ -8,7 +8,7 @@ import {
   MESSAGING_READINESS,
   MessagingUnavailableError,
   requireMessagingReady,
-} from "./readiness";
+} from "@/lib/messaging-readiness";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -46,10 +46,9 @@ describe("messaging production-readiness gate", () => {
   });
 
   test("does not mistake outbound SMS audit rows for a conversation backend", () => {
-    // Репозиторий переехал в одну папку 2026-08-25: веб-приложения больше
-    // нет, миграции лежат в корне. Путь чинится здесь, а не отключением
-    // теста: он стережёт обещание «чаты работают», и молчащий сторож хуже
-    // отсутствующего.
+    // Репозиторий — одна папка: веб-приложения нет, миграции лежат в корне.
+    // Путь чинится здесь, а не отключением теста: он стережёт обещание «чаты
+    // работают», и молчащий сторож хуже отсутствующего.
     const migrationsDir = resolve(here, "../../../../../supabase/migrations");
     const sql = readdirSync(migrationsDir)
       .filter((name) => name.endsWith(".sql"))

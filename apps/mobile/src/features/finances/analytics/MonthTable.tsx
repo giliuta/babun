@@ -4,8 +4,8 @@ import { money } from "@babun/shared/common/utils/money";
 import { useThemeColors } from "@/theme/colors";
 import type { MonthRow } from "./analytics-math";
 
-// ПОМЕСЯЧНАЯ ТАБЛИЦА ГОДА — «Период · Доходы · Расходы · Прибыль» и итог
-// (образец владельца 2026-09-24). Числа без знака валюты в ячейках: колонки
+// ПОМЕСЯЧНАЯ ТАБЛИЦА ГОДА — «Период · Доходы · Расходы · Прибыль» и итог.
+// Числа без знака валюты в ячейках: колонки
 // читаются столбиком, а «€» в каждой клетке съедал бы ширину телефона —
 // валюта названа в шапке. Тап по месяцу — тот же экран за этот месяц.
 
@@ -29,7 +29,7 @@ export function MonthTable({
   onOpen: (row: MonthRow) => void;
 }) {
   const t = useThemeColors();
-  // Знак валюты компании, а не «€» гвоздём (аудит 2026-09-30).
+  // Знак валюты компании, а не «€» гвоздём.
   const currencySymbol = useMoney().symbol;
   const cell = (text: string, color: string, bold = false) => (
     <Text

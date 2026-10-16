@@ -5,7 +5,7 @@ import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useClientsSourceScope } from "@/features/clients/queries";
 import type { ClientSource } from "@/features/clients/acquisition-source";
 
-// ИСТОЧНИКИ КОМАНДЫ — данные (владелец 03.10): готовые засеяны строками,
+// ИСТОЧНИКИ КОМАНДЫ — данные: готовые засеяны строками,
 // правятся и удаляются как свои. Правила показа и выбора —
 // в `acquisition-source.ts`, здесь только чтение и правка `client_sources`.
 //
@@ -26,10 +26,9 @@ function useSourcesScope() {
   return { scope, tenantId, client };
 }
 
-// КОПИЯ НА ТЕЛЕФОНЕ (проверка системы 03.10): готовые источники раньше жили
-// в коде и были видны без сети; со справочником в базе без сети карточка
-// писала «не указан», а фильтр по источнику прятал всех. Копия на устройство —
-// по компании, обновляется каждым удачным чтением.
+// КОПИЯ НА ТЕЛЕФОНЕ: справочник источников лежит в базе, и без сети карточка
+// писала бы «не указан», а фильтр по источнику прятал бы всех. Копия на
+// устройство — по компании, обновляется каждым удачным чтением.
 const cacheKey = (tenantId: string) => `babun:clientSources.${tenantId}`;
 
 function readCachedSources(tenantId: string | null): ClientSource[] | undefined {

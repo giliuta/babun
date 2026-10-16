@@ -21,10 +21,10 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useClients } from "@/features/clients/queries";
-import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
-import { buildInvoiceDocument } from "@/features/invoices/document";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
-import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/features/invoices/format";
+import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
+import { buildInvoiceDocument } from "@/lib/paper/document";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
@@ -34,19 +34,18 @@ import {
   useInvoicePayments,
   useIssuePartialCreditNote,
   useNextInvoiceSeries,
-} from "@/features/invoices/queries";
+} from "@/features/finances/invoices-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК (владелец 2026-10-04:
-// «сначала превью, отредактировать, и она закрепляется чётко за инвойсом —
-// в одном файле»). Форма → превью → «Выписать». Реквизиты и серия — инвойса:
+// КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК: сначала превью с
+// правкой, закрепляется за инвойсом. Форма → превью → «Выписать». Реквизиты и серия — инвойса:
 // CN выдаётся из серии его юрлица, дата — сегодняшний день компании.
 //
-// СУММА — ВСЯ ИЛИ ЧАСТЬ (04.10). Вся — инвойс отменяется (`cancel_invoice`,
+// СУММА — ВСЯ ИЛИ ЧАСТЬ. Вся — инвойс отменяется (`cancel_invoice`,
 // строки инвойса с минусом); часть — инвойс остаётся в силе, к оплате —
 // остаток (`issue_partial_credit_note`), а если получено больше, разница
 // возвращается клиенту тем же движением.
@@ -82,8 +81,7 @@ export default function CreditNoteScreen() {
     !!row,
     "credit_note",
   );
-  // По умолчанию — английский (владелец 04.10: «делай пока что всё на
-  // английском»); русский — разовым выбором в превью.
+  // По умолчанию — английский; русский — разовым выбором в превью.
   const paperLanguage: InvoiceLanguage = language ?? "en";
   const client =
     (clients.data ?? []).find((c) => c.id === row?.client_id) ?? null;

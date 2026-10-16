@@ -5,8 +5,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useSmsAccount } from "@/features/sms/sms-account";
 
-// СТРОКА «SMS» В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089; владелец 29.09: «открываю
-// Команда 1 → SMS — все шаблоны этой команды»). Ведёт на SMS той команды,
+// СТРОКА «SMS» В НАСТРОЙКАХ КАЛЕНДАРЯ (все шаблоны этой команды). Ведёт на SMS той команды,
 // чьи настройки открыты (`?team=`, как «Услуги» и «Метки»).
 //
 // Подпись — живое состояние команды: имя отправителя (без него команда

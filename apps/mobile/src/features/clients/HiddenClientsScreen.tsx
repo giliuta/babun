@@ -18,23 +18,20 @@ import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { clientsOfTeam } from "@/features/clients/team-scope";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
-import { ownClientCardHref } from "@/features/clients/clients-company";
+import { useClientsScopeOrNull } from "@/session/company-scope";
+import { ownClientCardHref } from "@/session/clients-company";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
-// ЭКРАН УБРАННЫХ КЛИЕНТОВ. Полок было две — архив и корзина; с 03.10 одна,
-// «Удалённые клиенты» (владелец: «понятия „в архив" не будет»). Вёрстка
-// осталась общей, а подпись, хвост и глаголы приходят пропсами.
+// ЭКРАН УБРАННЫХ КЛИЕНТОВ. Полка одна — «Удалённые клиенты» (архива нет).
+// Вёрстка общая, а подпись, хвост и глаголы приходят пропсами.
 //
-// Строка — ТА ЖЕ `ClientRow`, что в рабочем списке (владелец 2026-08-08:
-// «чтоб выглядело как клиент полноценный с историей»): аватар, имя, номер,
-// долг, доход, последний визит. Раньше полка рисовала свою карточку с рамкой
-// и кнопкой внутри, и человек в ней выглядел записью в реестре, а не
-// клиентом. Тап ведёт в ПОЛНУЮ карточку со всей историей — не в огрызок.
+// Строка — ТА ЖЕ `ClientRow`, что в рабочем списке: аватар, имя, номер,
+// долг, доход, последний визит. Своя карточка с рамкой и кнопкой внутри
+// делала бы человека записью в реестре, а не клиентом. Тап ведёт в ПОЛНУЮ карточку со всей историей — не в огрызок.
 
 interface HiddenAction {
   id: string;
@@ -73,7 +70,7 @@ export function HiddenClientsScreen({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const { data: appointments = [] } = useAppointments();
-  // АРХИВ И КОРЗИНА — У КОМАНДЫ (владелец 30.09): из настроек команды полка
+  // КОРЗИНА — У КОМАНДЫ: из настроек команды полка
   // открывается с `?team=` и показывает её клиентов — тем же правилом, что
   // чип списка (свои клиенты и те, кого она обслуживала).
   const { team } = useLocalSearchParams<{ team?: string }>();
@@ -82,7 +79,7 @@ export function HiddenClientsScreen({
     [query.data, team, appointments],
   );
   const { data: teams = [] } = useTeams();
-  // Набор полей — команды клиента (у каждой команды свой, 30.09).
+  // Набор полей — команды клиента (у каждой команды свой).
   const teamIds = useMemo(() => teams.map((tm) => tm.id), [teams]);
   const cardFieldsFor = useCardFieldsByTeam(teamIds);
   // Деньги и визиты считаются ТЕМ ЖЕ селектором, что в рабочем списке:
