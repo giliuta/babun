@@ -315,7 +315,6 @@ function WeekHeaderRow({
   onPickDay: (d: Date) => void;
   onPickLabelDay?: (dateYmd: string) => void;
 }) {
-  const todayYmd = formatYMD(today);
   return (
     <View style={{ flex: 1, flexDirection: "row" }}>
       {days.map((d) => {
@@ -344,7 +343,6 @@ function WeekHeaderRow({
               date={d}
               size="sm"
               isToday={isToday}
-              isPast={ymd < todayYmd}
               count={count}
               label={label}
               // `null` — график сказал «выходной»; `undefined` — графика ещё

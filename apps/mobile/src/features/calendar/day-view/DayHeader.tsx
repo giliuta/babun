@@ -9,14 +9,12 @@ import { dayMonthLabel } from "../day-month-label";
 export function DayHeader({
   dateYmd,
   isToday,
-  isPast,
   dayOff = false,
   label,
   onLabelTap,
 }: {
   dateYmd: string;
   isToday: boolean;
-  isPast: boolean;
   /** У команды на эту дату выходной — на месте метки встанет слово. */
   dayOff?: boolean;
   /** Метка дня (город команды). null при отсутствии — шапка чистая,
@@ -45,7 +43,6 @@ export function DayHeader({
         date={date}
         size="lg"
         isToday={isToday}
-        isPast={isPast}
         label={label}
         dayOff={dayOff}
       />

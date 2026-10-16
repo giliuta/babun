@@ -1,8 +1,11 @@
-import { View } from "react-native";
 import type { WorkBand } from "./types";
 import { MinuteBand } from "./MinuteBand";
 
-/** Column backdrop: label tint, off-hours wash, team breaks, the past. */
+// ПЕРЕПАДЫ ЧИТАЮТСЯ СРАЗУ: будущее — чистый белый, прошедшее — заметно
+// серое (8%), нерабочее — один тёмный слой; сплошная серость давит на глаза.
+const PAST_FILL = "rgba(11,18,32,0.08)";
+
+/** Column backdrop: off-hours wash, team breaks, the past, label tint. */
 export function ColumnWashes({
   dateYmd,
   isToday,
@@ -12,6 +15,7 @@ export function ColumnWashes({
   band,
   workStart,
   workEnd,
+  workSegs,
   winStartMin,
   winEndMin,
   offHoursFill,
@@ -26,6 +30,7 @@ export function ColumnWashes({
   band: WorkBand | null;
   workStart: number;
   workEnd: number;
+  workSegs: { from: number; to: number }[];
   winStartMin: number;
   winEndMin: number;
   offHoursFill: string;
@@ -33,23 +38,16 @@ export function ColumnWashes({
   nowMin: number | null;
   nowMinutes?: number | null;
 }) {
+  // До какой минуты окна время уже прошло (null — ничего не прошло).
+  const pastEnd =
+    (todayYmd && dateYmd < todayYmd) ||
+    (isToday && nowMinutes != null && nowMinutes > winEndMin)
+      ? winEndMin
+      : nowMin != null
+        ? winStartMin + nowMin
+        : null;
   return (
     <>
-      {tintColor ? (
-        // ~5% alpha of the label colour — reads as a hue, not a fill, so
-        // gridlines / washes / blocks above keep their contrast.
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: `${tintColor}0d`,
-          }}
-        />
-      ) : null}
       {/* off-hours wash: before work start / after work end */}
       {workStart > winStartMin ? (
         <MinuteBand
@@ -86,31 +84,38 @@ export function ColumnWashes({
         ) : null,
       )}
 
-      {nowMin != null ? (
-        // Прошедшее время затемняется ОТЧЁТЛИВО — 0.05 читается
-        // сразу, но остаётся легче серых нерабочих часов (0.12).
-        <MinuteBand
-          fromMin={winStartMin}
-          toMin={winStartMin + nowMin}
-          winStartMin={winStartMin}
-          winEndMin={winEndMin}
-          color="rgba(11,18,32,0.05)"
-        />
-      ) : null}
-      {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
-          позади» видно при сканировании, тем же слоем, что «до сейчас».
-          И сегодня после конца окна: в 19:59 колонка затемнена до низа, а
-          в 20:30 была белой, как будущее. */}
-      {(todayYmd && dateYmd < todayYmd) ||
-      (isToday && nowMinutes != null && nowMinutes > winEndMin) ? (
-        <MinuteBand
-          fromMin={winStartMin}
-          toMin={winEndMin}
-          winStartMin={winStartMin}
-          winEndMin={winEndMin}
-          color="rgba(11,18,32,0.05)"
-        />
-      ) : null}
+      {/* ПРОШЕДШЕЕ И МЕТКА — ТОЛЬКО НА РАБОЧИХ ЧАСАХ: нерабочее время и
+          выходной одного цвета, прошло оно или нет. «Прошло» — до сейчас у
+          сегодня, весь день у прошедших дней и у сегодня после конца окна
+          (иначе в 20:30 колонка белела бы, как будущее). */}
+      {pastEnd != null
+        ? workSegs.map((seg) =>
+            seg.from < pastEnd ? (
+              <MinuteBand
+                key={`past-${seg.from}`}
+                fromMin={seg.from}
+                toMin={Math.min(seg.to, pastEnd)}
+                winStartMin={winStartMin}
+                winEndMin={winEndMin}
+                color={PAST_FILL}
+              />
+            ) : null,
+          )
+        : null}
+      {/* Метка дня — ~5% её цвета поверх серого «прошло»: прошедший день
+          метку не гасит. */}
+      {tintColor
+        ? workSegs.map((seg) => (
+            <MinuteBand
+              key={`tint-${seg.from}`}
+              fromMin={seg.from}
+              toMin={seg.to}
+              winStartMin={winStartMin}
+              winEndMin={winEndMin}
+              color={`${tintColor}0d`}
+            />
+          ))
+        : null}
     </>
   );
 }

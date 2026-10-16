@@ -93,11 +93,11 @@ export function ClientLabelTags({
   );
   const [shownTags, setShownTags] = useState<string[]>(client.tag_ids);
   useEffect(() => setShownTags(client.tag_ids), [client.tag_ids]);
-  // ТЕГ ОДИН, КАК МЕТКА: тап ставит этот тег вместо
-  // прежних, тап по единственному выбранному — снимает.
-  const pickTag = (id: string) => {
+  // ТЕГОВ НЕСКОЛЬКО: шторка отдаёт весь набор по «Применить», карточка
+  // показывает его сразу и откатывает, если запись не прошла.
+  const applyTags = (next: string[]) => {
     const before = shownTags;
-    const next = before.length === 1 && before[0] === id ? [] : [id];
+    if (next.length === before.length && next.every((id, i) => id === before[i])) return;
     setShownTags(next);
     void tagWriter
       .apply(() => next)
@@ -106,9 +106,13 @@ export function ClientLabelTags({
       })
       .catch(() => setShownTags(before));
   };
-  const chosen = tags.filter((tag) => shownTags.includes(tag.id));
-  // Тег один; у старых карточек их бывает больше — видно первый.
+  // ПОРЯДОК — КАК В НАБОРЕ КЛИЕНТА, А НЕ КАК В КАТАЛОГЕ: первый выбранный тег
+  // главный, его имя и цвет несёт плитка, остальные — «+N».
+  const chosen = shownTags
+    .map((id) => tags.find((tag) => tag.id === id))
+    .filter((tag): tag is ClientTag => !!tag);
   const tagsTitle = chosen[0]?.name ?? null;
+  const tagsMore = chosen.length > 1 ? `+${chosen.length - 1}` : undefined;
 
   // ПУСТАЯ ПЛИТКА ТОЛЬКО ДЛЯ ТОГО, КТО МОЖЕТ ЕЁ ЗАПОЛНИТЬ.
   // «Только видит» и значения нет — плитка-приглашение была бы кнопкой в
@@ -148,6 +152,7 @@ export function ClientLabelTags({
             icon={Tags}
             color={chosen[0]?.color || t.accent}
             title={tagsTitle ?? "Тег"}
+            badge={tagsMore}
             muted={!tagsTitle}
             onPress={
               tagLocked
@@ -157,8 +162,12 @@ export function ClientLabelTags({
                     setTagsOpen(true);
                   }
             }
-            accessibilityLabel={tagsTitle ? `Тег: ${tagsTitle}` : "Тег не выбран"}
-            accessibilityHint="Открывает выбор тега"
+            accessibilityLabel={
+              chosen.length > 0
+                ? `Теги: ${chosen.map((tag) => tag.name).join(", ")}`
+                : "Тег не выбран"
+            }
+            accessibilityHint="Открывает выбор тегов"
           />
         ) : null}
       </View>
@@ -191,7 +200,7 @@ export function ClientLabelTags({
         visible={tagsOpen && !doorway.parked}
         tags={teamTags}
         selected={shownTags}
-        onPick={pickTag}
+        onApply={applyTags}
         // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены. Дверь
         // общая с «Связью»: у клиента чужого аккаунта и без права её нет
         // (иначе вела бы в свои теги).
