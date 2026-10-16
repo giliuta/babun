@@ -105,6 +105,9 @@ export interface OperationGateInput {
   categoryName: string | undefined;
   /** Остаток долга в центах, если это оплата долга; иначе не задан. */
   debtRemainderCents?: number | null;
+  /** Сколько ляжет в операцию, в центах: введённое плюс VAT «сверху». Не
+   *  задано — то же, что введено. */
+  grossCents?: number | null;
   /** Σ возвратов не пришла из-за ОШИБКИ запроса, а не из-за того, что едет. */
   refundsFailed?: boolean;
   /** В выборе нет ни одной категории этой стороны денег у команды. */
@@ -128,8 +131,12 @@ export const REFUNDS_LOADING_REASON =
   "Возвраты по доходу ещё загружаются — уменьшить сумму можно после";
 
 /** Оплата долга больше его остатка: деньги ушли бы в доход, а долг — в минус. */
-export function overpaysDebt(g: Pick<OperationGateInput, "amountCents" | "debtRemainderCents">): boolean {
-  return g.debtRemainderCents != null && g.amountCents != null && g.amountCents > g.debtRemainderCents;
+export function overpaysDebt(
+  g: Pick<OperationGateInput, "amountCents" | "debtRemainderCents" | "grossCents">,
+): boolean {
+  // Долг гасит то, что ляжет в операцию: с VAT «сверху» 550 становятся 654,50.
+  const cents = g.grossCents ?? g.amountCents;
+  return g.debtRemainderCents != null && cents != null && cents > g.debtRemainderCents;
 }
 
 export function operationCanSave(

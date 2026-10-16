@@ -178,3 +178,14 @@ describe("доход с выданным чеком", () => {
     assert.match(operationInputReason(g)?.text ?? "", /^По доходу выдан чек REC-2026-0001 — /);
   });
 });
+
+describe("оплата долга с VAT «сверху» (16.10)", () => {
+  test("долг гасит сумму с налогом, а не введённое нетто", async () => {
+    const { overpaysDebt } = await import("./operation-guards");
+    // Остаток 600, введено 550 + 19% сверху = 654,50 — больше остатка.
+    assert.equal(overpaysDebt({ amountCents: 55000, grossCents: 65450, debtRemainderCents: 60000 }), true);
+    assert.equal(overpaysDebt({ amountCents: 50000, grossCents: 59500, debtRemainderCents: 60000 }), false);
+    // Без VAT — по введённому.
+    assert.equal(overpaysDebt({ amountCents: 60001, debtRemainderCents: 60000 }), true);
+  });
+});

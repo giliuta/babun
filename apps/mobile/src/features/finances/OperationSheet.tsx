@@ -145,7 +145,9 @@ export function OperationSheet({
   // Фото прикладывает владелец: хранилище чеков владельческое, у сотрудника
   // блока файла нет — требовать от него то, что он приложить не может, нельзя.
   const receiptMissing = asks.receipt && isOwner && !receiptUrl;
-  const receiptLocked = useReceiptLock({ visible, transaction, amountCents, accountId, date });
+  // Сравнивается то, что ляжет в операцию: в поле у VAT «сверху» стоит нетто.
+  const grossCents = amountCents == null ? null : Math.round(vatBreakdown.gross * 100);
+  const receiptLocked = useReceiptLock({ visible, transaction, amountCents: grossCents, accountId, date });
   const gate: OperationGateInput = {
     online, accountsFailed, txAccountClosed, amount, amountCents, refundedTotal,
     belowRefunded, lowersWhileRefundsUnknown, dateInFuture, accountMismatch,
@@ -157,6 +159,7 @@ export function OperationSheet({
     noCategories: cats.length === 0,
     canCreateCategory: isOwner,
     debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
+    grossCents,
     receiptLocked,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
