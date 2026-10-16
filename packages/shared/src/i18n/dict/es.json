@@ -5422,5 +5422,9 @@
  "Следующий год": "Año siguiente",
  "Вернуться к дням": "Volver a los días",
  "Выбрать год и месяц": "Elegir año y mes",
- "Весь {0} год": "Todo {0}"
+ "Весь {0} год": "Todo {0}",
+ "Вернуть запись?": "¿Restaurar la cita?",
+ "Вернуть запись": "Restaurar cita",
+ "При отмене оплата вернулась клиенту. Запись вернётся неоплаченной — новую оплату примете как обычно.": "Al cancelar, el pago se devolvió al cliente. La cita volverá sin pagar: cobre de nuevo como siempre.",
+ "{0}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.": "{0}: aparecerá un reembolso en caja. La cita se podrá restaurar, sin el pago."
 }

@@ -2054,6 +2054,22 @@ export default function CalendarTab() {
     );
   };
 
+  /** «Восстановить» отменённую. Если при отмене оплата вернулась клиенту,
+   *  визит вернётся неоплаченным — человек узнаёт это до, а не после. */
+  const restoreCancelled = (apt: Appointment) => {
+    if (apt.payment_status !== "refunded") {
+      setCancelled(apt, null);
+      return;
+    }
+    void confirmAction("Вернуть запись?", {
+      message:
+        "При отмене оплата вернулась клиенту. Запись вернётся неоплаченной — новую оплату примете как обычно.",
+      confirmLabel: "Вернуть запись",
+    }).then((ok) => {
+      if (ok) setCancelled(apt, null);
+    });
+  };
+
   /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
    *  отмена без причины в отчёте дня читается как «забыли». */
   const cancelWithReason = (apt: Appointment) => {
@@ -2066,7 +2082,7 @@ export default function CalendarTab() {
     const cancel = (label: string) =>
       holdsMoney(apt)
         ? void confirmAction("Отменить визит с оплатой?", {
-            message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Вернуть запись после этого будет нельзя.`,
+            message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.`,
             confirmLabel: "Отменить визит",
             destructive: true,
           }).then((ok) => {
@@ -2385,11 +2401,6 @@ export default function CalendarTab() {
     const address = (apt.address || client?.address || "").trim();
     const event = isCalendarEvent(apt);
     const mutable = canMutateAppointment(apt);
-    // Отменённую с возвратом оплаты не восстановить: сервер не меняет
-    // возвращённую оплату («создайте новую заявку») — пункт кончался бы
-    // отказом всегда.
-    const restorable =
-      apt.status !== "cancelled" || apt.payment_status !== "refunded";
     // ПЕРВОЕ СОБЫТИЕ СЕРИИ — САМА СЕРИЯ (повторный аудит 03.10): его перенос
     // сдвигает все повторы, а на день вне правила блок просто исчезал. У
     // удаления вопрос был всегда; теперь — и у переноса.
@@ -2475,10 +2486,10 @@ export default function CalendarTab() {
         (event ? ownEvent && eventRightsIn(apt.team_id ?? null).type === "write" : can.color)
       )
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
-      if (!event && can.cancel && restorable)
+      if (!event && can.cancel)
         items.push(
           apt.status === "cancelled"
-            ? { label: "Восстановить", run: () => setCancelled(apt, null) }
+            ? { label: "Восстановить", run: () => restoreCancelled(apt) }
             : { label: "Отменить визит", run: () => cancelWithReason(apt) },
         );
       if (event ? ownEvent : can.cancel)
@@ -2528,10 +2539,11 @@ export default function CalendarTab() {
           view: true,
         });
       if (!event) {
-        if (restorable)
-          items.push(
-            apt.status === "cancelled"
-              ? { label: "Восстановить", run: () => setCancelled(apt, null) }
+        // Отменённую восстанавливают всегда; с возвращённой оплатой — с
+        // вопросом (`restoreCancelled`), невозвращённые деньги отобьёт сервер.
+        items.push(
+          apt.status === "cancelled"
+              ? { label: "Восстановить", run: () => restoreCancelled(apt) }
               : { label: "Отменить визит", run: () => cancelWithReason(apt) },
           );
       }
