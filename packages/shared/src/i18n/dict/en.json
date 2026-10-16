@@ -3764,6 +3764,7 @@
  "Сумма платежа слишком большая": "Payment amount is too large",
  "Сумма позиции слишком большая: {0}": "Line amount too large: {0}",
  "Сумма ручной операции некорректна": "Invalid manual transaction amount",
+ "Сумма с VAT слишком большая: не больше {0}": "The amount with VAT is too large: at most {0}",
  "Сумма слишком большая: не больше {0}": "The amount is too large: at most {0}",
  "Сумма строки: {0}": "Line amount: {0}",
  "Сумма шаблона должна быть больше нуля": "Template amount must be greater than zero",

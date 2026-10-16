@@ -2,7 +2,7 @@
 // live, and the one reason printed under it. No React here — the sheet feeds
 // plain values and gets plain answers back.
 
-import { formatEURExact as formatEUR, moneyInputProblem } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR, MAX_MONEY_CENTS, moneyInputProblem } from "@babun/shared/common/utils/money";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -139,6 +139,12 @@ export function overpaysDebt(
   return g.debtRemainderCents != null && cents != null && cents > g.debtRemainderCents;
 }
 
+/** VAT «сверху» поднял сумму за предел колонки: введённое прошло, а
+ *  записать нечего — сервер ответил бы ошибкой про знаки после запятой. */
+export function grossTooLarge(g: Pick<OperationGateInput, "grossCents">): boolean {
+  return g.grossCents != null && g.grossCents > MAX_MONEY_CENTS;
+}
+
 export function operationCanSave(
   g: OperationGateInput & { canWrite: boolean; busy: boolean },
 ): boolean {
@@ -156,6 +162,7 @@ export function operationCanSave(
     !g.accountMismatch &&
     !g.dateInFuture &&
     !overpaysDebt(g) &&
+    !grossTooLarge(g) &&
     !g.receiptLocked &&
     !g.belowRefunded &&
     !g.lowersWhileRefundsUnknown &&
@@ -191,6 +198,11 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
                 "Введите сумму больше нуля и не больше двух знаков после запятой",
               error: true,
             }
+          : grossTooLarge(g)
+            ? {
+                text: `Сумма с VAT слишком большая: не больше ${formatEUR(MAX_MONEY_CENTS / 100)}`,
+                error: true,
+              }
           : g.receiptLocked
             ? {
                 text: `По доходу выдан чек ${g.receiptLocked} — сумму, счёт и дату не изменить: сначала оформите кредит-ноту`,

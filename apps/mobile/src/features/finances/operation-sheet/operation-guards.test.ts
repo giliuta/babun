@@ -189,3 +189,12 @@ describe("оплата долга с VAT «сверху» (16.10)", () => {
     assert.equal(overpaysDebt({ amountCents: 60001, debtRemainderCents: 60000 }), true);
   });
 });
+
+describe("сумма с VAT за пределом (16.10)", () => {
+  test("введённое в пределе, а с налогом — нет: кнопка гаснет с причиной", async () => {
+    const { grossTooLarge } = await import("./operation-guards");
+    assert.equal(grossTooLarge({ grossCents: 999_999_999_999 }), false);
+    assert.equal(grossTooLarge({ grossCents: 1_189_999_999_999 }), true);
+    assert.equal(grossTooLarge({ grossCents: null }), false);
+  });
+});
