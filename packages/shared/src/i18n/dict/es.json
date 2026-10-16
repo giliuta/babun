@@ -3764,7 +3764,7 @@
  "Сумма платежа слишком большая": "El importe del pago es demasiado alto",
  "Сумма позиции слишком большая: {0}": "Importe de la línea demasiado alto: {0}",
  "Сумма ручной операции некорректна": "Importe del movimiento manual no válido",
- "Сумма с VAT слишком большая: не больше {0}": "El importe con IVA es demasiado alto: como máximo {0}",
+ "Сумма с VAT слишком большая: не больше {0}": "El importe con VAT es demasiado alto: como máximo {0}",
  "Сумма слишком большая: не больше {0}": "El importe es demasiado alto: como máximo {0}",
  "Сумма строки: {0}": "Importe de la línea: {0}",
  "Сумма шаблона должна быть больше нуля": "El importe de la plantilla debe ser mayor que cero",

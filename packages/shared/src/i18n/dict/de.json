@@ -3764,7 +3764,7 @@
  "Сумма платежа слишком большая": "Zahlungsbetrag ist zu hoch",
  "Сумма позиции слишком большая: {0}": "Positionsbetrag zu hoch: {0}",
  "Сумма ручной операции некорректна": "Ungültiger Betrag der manuellen Buchung",
- "Сумма с VAT слишком большая: не больше {0}": "Der Betrag mit MwSt. ist zu hoch: höchstens {0}",
+ "Сумма с VAT слишком большая: не больше {0}": "Der Betrag mit VAT ist zu hoch: höchstens {0}",
  "Сумма слишком большая: не больше {0}": "Der Betrag ist zu hoch: höchstens {0}",
  "Сумма строки: {0}": "Zeilenbetrag: {0}",
  "Сумма шаблона должна быть больше нуля": "Vorlagenbetrag muss größer als null sein",
