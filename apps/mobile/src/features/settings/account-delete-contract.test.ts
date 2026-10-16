@@ -13,19 +13,38 @@ import { test } from "node:test";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const FN = readFileSync(path.join(ROOT, "supabase/functions/account-delete/index.ts"), "utf8");
 const WEBHOOK = readFileSync(path.join(ROOT, "supabase/functions/stripe-webhook/index.ts"), "utf8");
+const SUBS = readFileSync(path.join(ROOT, "supabase/functions/_shared/subscriptions.ts"), "utf8");
+const CLEANUP = readFileSync(path.join(ROOT, "supabase/functions/account-delete-cleanup/index.ts"), "utf8");
 
 test("подписки Stripe отменяются раньше первого необратимого шага", () => {
   const cancel = FN.indexOf("await cancelSoleOwnedSubscriptions(service, user.id)");
   const softDelete = FN.indexOf("service.auth.admin.deleteUser(\n    user.id,\n    true,");
   assert.ok(cancel > 0, "удаление аккаунта не отменяет подписки");
   assert.ok(softDelete > cancel, "подписка отменяется после блокировки аккаунта");
-  assert.match(FN, /method: "DELETE", headers/);
-  assert.match(FN, /status=all&limit=100/);
+  assert.match(SUBS, /method: "DELETE", headers/);
+  assert.match(SUBS, /status=all&limit=100/);
+});
+
+// Человеку ответили «аккаунт не удалён» — фоновый повтор не должен удалить
+// его следом: строка «requested» для него заявка.
+test("сбой отмены подписки снимает заявку на удаление", () => {
+  const cancel = FN.indexOf("await cancelSoleOwnedSubscriptions(service, user.id)");
+  const drop = FN.indexOf('.from("account_deletion_cleanup")\n      .delete()', cancel);
+  const answer = FN.indexOf('return json(503, { error: "Account deletion is temporarily unavailable" });', cancel);
+  assert.ok(drop > cancel && drop < answer, "отказ отмены оставляет заявку для фоновой чистки");
+});
+
+test("фоновая чистка отменяет подписку раньше блокировки и удаления данных", () => {
+  const cancel = CLEANUP.indexOf("await cancelSoleOwnedSubscriptions(service, claim.userId)");
+  const softDelete = CLEANUP.indexOf("service.auth.admin.deleteUser(claim.userId, true)");
+  const tenants = CLEANUP.indexOf('"delete_sole_owned_tenants_for_account"');
+  assert.ok(cancel > 0, "фоновая чистка удаляет аккаунт, не отменив подписку");
+  assert.ok(softDelete > cancel && tenants > cancel);
 });
 
 test("отбор аккаунтов — как у серверной чистки: только где человек единственный владелец", () => {
-  assert.match(FN, /\.eq\("role", "owner"\)/);
-  assert.match(FN, /o\.tenant_id === id && o\.user_id !== userId/);
+  assert.match(SUBS, /\.eq\("role", "owner"\)/);
+  assert.match(SUBS, /o\.tenant_id === id && o\.user_id !== userId/);
 });
 
 test("CORS пропускает заголовок компании", () => {
