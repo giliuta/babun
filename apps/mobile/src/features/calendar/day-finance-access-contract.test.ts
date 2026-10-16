@@ -53,7 +53,7 @@ describe("шторка «Финансы дня»", () => {
 
   test("операция из листа помечена «из календаря»", () => {
     has(sheet, `transaction={editingTx} fromCalendar refundedTotal={`, "признак");
-    // Возвраты — те же, что у формы на «Финансах» (16.10).
+    // Возвраты — те же, что у формы на «Финансах».
     has(sheet, `refundsFailed={refundTotalsFailed} onRetryRefunds={() => void refundTotalsQuery.refetch()} />`, "возвраты");
   });
 
