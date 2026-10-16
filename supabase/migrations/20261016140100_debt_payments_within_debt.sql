@@ -505,3 +505,31 @@ begin
   return new;
 end;
 $function$;
+
+-- ВОЗВРАТ ПЛАТЕЖА ПО ДОЛГУ. Возврат не несёт ссылки на долг, и остаток долга
+-- его не видел: клиенту вернули €100, а долг оставался закрытым. Платёж по
+-- долгу не возвращают, а удаляют — тогда долг сам открывается снова.
+create or replace function public.guard_refund_of_debt_payment()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $function$
+begin
+  if new.type = 'refund' and new.refund_of_id is not null and exists (
+    select 1 from public.finance_transactions original
+     where original.id = new.refund_of_id and original.debt_id is not null
+  ) then
+    raise exception 'Это оплата долга: вместо возврата удалите её — долг снова откроется'
+      using errcode = 'P0001', hint = 'debt:refund_payment';
+  end if;
+  return new;
+end;
+$function$;
+
+revoke all on function public.guard_refund_of_debt_payment() from public, anon, authenticated;
+
+drop trigger if exists trg_guard_refund_of_debt_payment on public.finance_transactions;
+create trigger trg_guard_refund_of_debt_payment
+  before insert on public.finance_transactions
+  for each row execute function public.guard_refund_of_debt_payment();
