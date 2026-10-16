@@ -1,6 +1,6 @@
 import { formatCountRu, type PluralFormsRu } from "@babun/shared/common/utils/plural-ru";
 
-// ПОДПИСИ «УДАЛЁННЫХ ЗАПИСЕЙ» (16.10) — без React, чтобы их держал тест.
+// ПОДПИСИ «УДАЛЁННЫХ ЗАПИСЕЙ» — без React, чтобы их держал тест.
 
 const FORMS_RECORD: PluralFormsRu = ["запись", "записи", "записей"];
 

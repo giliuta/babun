@@ -8,7 +8,7 @@ import { useCalendarActionsReader } from "@/features/appointments/useRecordRight
 import { useDeletedAppointments } from "./deleted-appointments";
 import { deletedAppointmentsDoorLine } from "./deleted-appointments-lines";
 
-// ДВЕРЬ «УДАЛЁННЫЕ ЗАПИСИ» В ШЕСТЕРЁНКЕ КАЛЕНДАРЯ (16.10) — как «Удалённые
+// ДВЕРЬ «УДАЛЁННЫЕ ЗАПИСИ» В ШЕСТЕРЁНКЕ КАЛЕНДАРЯ — как «Удалённые
 // операции» в шестерёнке «Финансов»: красная плитка корзины, подпись —
 // сколько в ящике у открытого календаря.
 //

@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 
-// «УДАЛЁННЫЕ ЗАПИСИ» (16.10) — ящик живёт на сервере, офлайн его не прочитать
+// «УДАЛЁННЫЕ ЗАПИСИ» — ящик живёт на сервере, офлайн его не прочитать
 // и не тронуть: все записи — `NEVER_PAUSE`, ошибка сразу. Удаление в ящик —
 // `useTrashAppointment` (mutations.ts), рядом с остальными правками записи.
 
