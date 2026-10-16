@@ -27,6 +27,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
     setAccountId,
     documentsReadable,
     scopedInvoices,
+    invoices,
     invoicePayments,
     scopedAppointments,
     accounts,
@@ -86,6 +87,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         canIssue={access.documents}
         readable={documentsReadable}
         invoices={scopedInvoices}
+        seriesInvoices={invoices}
         payments={invoicePayments}
         appointments={scopedAppointments}
         accounts={accounts}

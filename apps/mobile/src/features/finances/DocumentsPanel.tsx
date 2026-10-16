@@ -73,8 +73,13 @@ export function DocumentsPanel({
   onFilterChange,
   onOpen,
   refreshControl,
+  seriesInvoices,
 }: {
   invoices: InvoiceLedger[];
+  /** Все инвойсы компании — для «последнего в серии». В «Финансах клиента»
+   *  `invoices` — только его, и удаление предлагалось у номера, за которым в
+   *  серии стоят чужие: сервер отказывал уже после нажатия. */
+  seriesInvoices?: InvoiceLedger[];
   /** Проводки по инвойсам, ключ — invoice_id. */
   payments: Record<string, InvoicePaymentLedger[]>;
   appointments: Appointment[];
@@ -207,15 +212,16 @@ export function DocumentsPanel({
   // правой кромки нет.
   const invoiceById = new Map(invoices.map((item) => [item.id, item]));
   const receiptById = new Map((receipts ?? []).map((item) => [item.id, item]));
+  const series = seriesInvoices ?? invoices;
   const menuContext = (invoice: InvoiceLedger) => ({
-    all: invoices,
+    all: series,
     payments: payments[invoice.id] ?? [],
     hasReceipt: (receipts ?? []).some((receipt) => receipt.invoice_id === invoice.id),
   });
   const deleteAction = (doc: FinanceDocument) => {
     if (doc.kind !== "invoice") return null;
     const invoice = invoiceById.get(doc.id);
-    if (!invoice || invoiceDeleteBlock(invoice, invoices, false) !== null) return null;
+    if (!invoice || invoiceDeleteBlock(invoice, series, false) !== null) return null;
     return invoiceMenu.actionsFor(invoice, menuContext(invoice)).find((a) => a.key === "delete") ?? null;
   };
   // ПОЛНЫЙ СПИСОК, КАК У ЗАПИСИ В КАЛЕНДАРЕ: по удержанию вылезает список —

@@ -167,3 +167,11 @@ describe("двери и подписи по уровню", () => {
     assert.match(panels, /<AccountsPanel [^>]*canDeleteRow=\{canDeleteRow\} onDeleteRow=\{deleteRow\}/);
   });
 });
+
+test("«последний в серии» в «Финансах клиента» — по всем инвойсам компании", () => {
+  const panel = readFileSync(join(__dirname, "DocumentsPanel.tsx"), "utf8");
+  assert.match(panel, /const series = seriesInvoices \?\? invoices;/);
+  assert.match(panel, /all: series,/);
+  assert.match(panel, /invoiceDeleteBlock\(invoice, series, false\)/);
+  assert.match(readFileSync(join(__dirname, "home/HomePanels.tsx"), "utf8"), /seriesInvoices=\{invoices\}/);
+});
