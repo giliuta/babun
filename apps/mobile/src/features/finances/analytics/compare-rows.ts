@@ -1,4 +1,4 @@
-import { changePct } from "./analytics-math";
+import { changePct, changeText } from "./analytics-math";
 
 // СПИСОК «К ПРОШЛОМУ ПЕРИОДУ». Цвет изменения — смысл, а не знак: рост
 // расхода красный, падение — зелёное.
@@ -23,7 +23,7 @@ export function deltaOf(
   if (pct === null || pct === 0) return null;
   const up = pct > 0;
   return {
-    text: `${up ? "↑" : "↓"} ${Math.abs(pct)}%`,
+    text: changeText(pct),
     color: up === goodUp ? colors.success : colors.danger,
   };
 }

@@ -147,6 +147,7 @@ export function OperationSheet({
     belowRefunded, lowersWhileRefundsUnknown, dateInFuture, accountMismatch,
     teamId, teamAccountsCount: teamAccounts.length, accountId, categoryId,
     receiptMissing, categoryName: category?.name,
+    debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
   const isExpense = type === "expense";
@@ -184,7 +185,7 @@ export function OperationSheet({
   // (`features/finances/operation-delete.ts`), как счета и клиентов.
 
   const { askingClose, guardedClose, runAfterExit } = useOperationClose({
-    busy, onClose, onExited, draft,
+    busy, onClose, onExited, draft, vatRate: opVatRate,
   });
 
   const reason = operationReason(canWrite, operationInputReason(gate));

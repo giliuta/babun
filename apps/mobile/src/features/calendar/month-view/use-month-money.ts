@@ -3,6 +3,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatHM } from "@/features/appointments/helpers";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
+import { useInvoicedAppointmentSet } from "@/features/calendar/use-invoiced-appointments";
 import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
 import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
 import { awaitingAnswer } from "@/features/finances/ledger-select";
@@ -70,6 +71,7 @@ export function useMonthMoney({
   // Финансы всех дней одной мемоизацией (аудит: расчёт гонялся по 42
   // клеткам в каждом рендере). Дни без записей, но с операциями леджера или
   // ручными операциями (extras) тоже попадают в карту.
+  const invoiced = useInvoicedAppointmentSet();
   const totalsByDay = useMemo(() => {
     const m = new Map<string, DayMoney>();
     if (!showFinance) return m;
@@ -98,11 +100,12 @@ export function useMonthMoney({
           extras: getDayExtras(extrasMap, teamId, date),
           businessToday: todayStr,
           nowHm,
+          invoiced,
         }),
       );
     }
     return m;
-  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr, nowHmProp]);
+  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr, nowHmProp, invoiced]);
 
   return { todayStr, totalsByDay };
 }

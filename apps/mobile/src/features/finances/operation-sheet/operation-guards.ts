@@ -103,6 +103,13 @@ export interface OperationGateInput {
   categoryId: string | null;
   receiptMissing: boolean;
   categoryName: string | undefined;
+  /** Остаток долга в центах, если это оплата долга; иначе не задан. */
+  debtRemainderCents?: number | null;
+}
+
+/** Оплата долга больше его остатка: деньги ушли бы в доход, а долг — в минус. */
+export function overpaysDebt(g: Pick<OperationGateInput, "amountCents" | "debtRemainderCents">): boolean {
+  return g.debtRemainderCents != null && g.amountCents != null && g.amountCents > g.debtRemainderCents;
 }
 
 export function operationCanSave(
@@ -121,6 +128,7 @@ export function operationCanSave(
     !!g.accountId &&
     !g.accountMismatch &&
     !g.dateInFuture &&
+    !overpaysDebt(g) &&
     !g.belowRefunded &&
     !g.lowersWhileRefundsUnknown &&
     !g.txAccountClosed &&
@@ -154,6 +162,11 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
                 "Введите сумму больше нуля и не больше двух знаков после запятой",
               error: true,
             }
+          : overpaysDebt(g)
+            ? {
+                text: `По долгу осталось ${formatEUR((g.debtRemainderCents ?? 0) / 100)} — больше не принять`,
+                error: true,
+              }
           : g.belowRefunded
             ? {
                 text: `По этому доходу уже возвращено ${formatEUR(g.refundedTotal)} — сумма не может стать меньше возвращённого`,

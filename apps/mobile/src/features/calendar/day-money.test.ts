@@ -259,3 +259,22 @@ describe("по счетам", () => {
     assert.equal(split.reduce((s, e) => s + e.amount, 0), day.income);
   });
 });
+
+describe("работа под инвойсом — не долг дня", () => {
+  test("как в «Финансах»: долг ждёт оплаты инвойсом, а не записью", () => {
+    const past = appt({ id: "p", date: TODAY, time_start: "09:00", time_end: "10:00" });
+    const later = appt({ id: "l", date: TODAY, time_start: "15:00", time_end: "16:00" });
+    const day = dayMoney({
+      ymd: TODAY,
+      appointments: [past, later],
+      transactions: [],
+      services: [],
+      teamId: "t1",
+      businessToday: TODAY,
+      nowHm: "11:35",
+      invoiced: new Set(["p", "l"]),
+    });
+    assert.equal(day.debt, 0);
+    assert.equal(day.planned, 0);
+  });
+});

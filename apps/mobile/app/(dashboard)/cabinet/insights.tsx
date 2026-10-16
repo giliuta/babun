@@ -32,12 +32,18 @@ export default function InsightsRoute() {
     from?: string;
     to?: string;
   }>();
+  // Границы, переданные «Финансами», берутся всегда, а не только у своего
+  // периода: «Финансы» считают пресет по часам компании, а пересчёт здесь шёл
+  // по часам телефона — телефон в другом поясе открывал соседний месяц.
+  const bounds = !!from && !!to && YMD.test(from) && YMD.test(to) && from <= to;
   const start: AnalyticsStart = {
     period:
-      period === "custom" && from && to && YMD.test(from) && YMD.test(to) && from <= to
-        ? { preset: "custom", from, to }
+      period === "custom" && bounds
+        ? { preset: "custom", from: from as string, to: to as string }
         : KINDS.includes(period as PeriodKind)
-          ? makePeriod(period as PeriodKind)
+          ? bounds
+            ? { preset: period as PeriodKind, from: from as string, to: to as string }
+            : makePeriod(period as PeriodKind)
           : null,
   };
   if (!tenant) return <InsightsScreen start={start} />;

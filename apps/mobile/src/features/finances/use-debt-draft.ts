@@ -190,8 +190,10 @@ export function useDebtDraft({
   // переплата нигде не показывалась.
   const paidCents = Math.round(paid * 100);
   const belowPaid = !!debt && cents != null && cents > 0 && cents < paidCents;
+  // Будущая дата гасит кнопку сразу: сервер всё равно откажет, но уже после тапа.
+  const dateInFuture = date > todayYmd();
   const canSave =
-    online && !busy && !!debtTeamId && named && cents != null && cents > 0 && !belowPaid;
+    online && !busy && !!debtTeamId && named && cents != null && cents > 0 && !belowPaid && !dateInFuture;
 
   const reason = !online
     ? { text: OFFLINE, error: true }
@@ -206,7 +208,9 @@ export function useDebtDraft({
             : { text: "Введите сумму долга", error: false }
           : belowPaid
             ? { text: `Уже уплачено ${formatEURExact(paid)} — долг не меньше`, error: true }
-            : null;
+            : dateInFuture
+              ? { text: "Долг нельзя записать будущей датой", error: true }
+              : null;
 
   // Синхронный засов: `busy` включается только к следующему кадру, и
   // двойной тап успевал записать два одинаковых долга —

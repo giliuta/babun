@@ -158,3 +158,15 @@ describe("operationInputReason", () => {
     assert.equal(operationReason(true, null), null);
   });
 });
+
+describe("оплата долга не больше остатка", () => {
+  test("больше остатка — кнопка погашена и причина названа", () => {
+    const g = { ...ready, amount: "700", amountCents: 70000, debtRemainderCents: 60000 };
+    assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), false);
+    assert.match(operationInputReason(g)?.text ?? "", /^По долгу осталось /);
+  });
+  test("ровно остаток — можно", () => {
+    const g = { ...ready, amount: "600", amountCents: 60000, debtRemainderCents: 60000 };
+    assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), true);
+  });
+});

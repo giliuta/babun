@@ -4,6 +4,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { DayExtrasMap } from "@babun/shared/local/day-extras";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatHM } from "@/features/appointments/helpers";
+import { useInvoicedAppointmentSet } from "@/features/calendar/use-invoiced-appointments";
 import { dayMoney } from "@/features/calendar/day-money";
 import { dayMoneyRowReadable } from "@/features/calendar/day-money-access";
 import { awaitingAnswer } from "@/features/finances/ledger-select";
@@ -97,6 +98,7 @@ export function useDayLedger({
   // ДЕНЬГИ ДНЯ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА ПОД СЕТКОЙ (`day-money.ts`):
   // деньги записи — в дне записи, операция без записи — в своём дне, события —
   // не деньги.
+  const invoiced = useInvoicedAppointmentSet();
   const money = useMemo(
     () =>
       dayMoney({
@@ -108,8 +110,9 @@ export function useDayLedger({
         extras: legacyExtras,
         businessToday,
         nowHm,
+        invoiced,
       }),
-    [ymd, appts, dayTx, services, teamId, legacyExtras, businessToday, nowHm],
+    [ymd, appts, dayTx, services, teamId, legacyExtras, businessToday, nowHm, invoiced],
   );
   const { incomeRows, expenseRows, debtRecords, plannedRecords } = money;
 
