@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { uiLocale } from "@babun/shared/i18n/locale";
@@ -45,9 +45,11 @@ export function LegalScreen({ doc }: { doc: LegalDocId }) {
 
   return (
     <Screen edges={["top"]}>
-      <Head>
-        <title>{`${title} · Babun`}</title>
-      </Head>
+      {Platform.OS === "web" ? (
+        <Head>
+          <title>{`${title} · Babun`}</title>
+        </Head>
+      ) : null}
       <ScreenHeader
         title={LEGAL_SHORT[doc][lang]}
         right={
