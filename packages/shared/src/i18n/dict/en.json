@@ -4945,5 +4945,6 @@
  "Календаря этой записи больше нет — вернуть её некуда": "This appointment's calendar no longer exists — there is nowhere to restore it",
  "Событие может вернуть только его автор": "Only the event's author can restore it",
  "Эта запись уже в календаре": "This appointment is already in the calendar",
- "Получено по записи": "Received for appointment"
+ "Получено по записи": "Received for appointment",
+ "По заявке остались невозвращённые деньги; сначала верните их": "Money on this visit has not been refunded yet; refund it first"
 }
