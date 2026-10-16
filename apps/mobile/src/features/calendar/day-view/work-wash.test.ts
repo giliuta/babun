@@ -18,6 +18,7 @@ describe("workWash", () => {
       band: { startMin: 480, endMin: 1140 },
       workStart: 480,
       workEnd: 1140,
+      workSegs: [{ from: 480, to: 1140 }],
     });
     const w = workWash({ ...whole, workBand: undefined });
     assert.equal(w.workStart, 0);
@@ -29,6 +30,7 @@ describe("workWash", () => {
     assert.equal(w.band, null);
     assert.equal(w.workStart, 0);
     assert.equal(w.workEnd, 0);
+    assert.deepEqual(w.workSegs, []);
   });
 
   test("band outside the visible window is clamped on both sides", () => {
@@ -38,5 +40,24 @@ describe("workWash", () => {
     const late = workWash({ ...whole, startHour: 8, endHour: 18, workBand: { startMin: 1200, endMin: 1300 } });
     assert.equal(late.workStart, 1080);
     assert.equal(late.workEnd, 1080);
+  });
+
+  test("work stretches — the shift minus breaks, breaks clamped and merged", () => {
+    const band = {
+      startMin: 540,
+      endMin: 1080,
+      breaks: [
+        { startMin: 900, endMin: 960 },
+        { startMin: 780, endMin: 840 },
+        { startMin: 820, endMin: 870 },
+      ],
+    };
+    assert.deepEqual(workWash({ ...whole, workBand: band }).workSegs, [
+      { from: 540, to: 780 },
+      { from: 870, to: 900 },
+      { from: 960, to: 1080 },
+    ]);
+    const lunchToClose = { startMin: 540, endMin: 1080, breaks: [{ startMin: 1020, endMin: 1200 }] };
+    assert.deepEqual(workWash({ ...whole, workBand: lunchToClose }).workSegs, [{ from: 540, to: 1020 }]);
   });
 });

@@ -24,6 +24,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
     setMenuOpen,
     setRemindOpen,
     update,
+    toast,
     trashAsPartner,
     deleteWithUndo,
   } = card;
@@ -47,9 +48,17 @@ export function cardMenuActions(card: ClientCard, c: Client) {
     }
   };
 
+  // Чёрный список отменяется тем же тапом из тоста.
   const onToggleBlacklist = () => {
     setMenuOpen(false);
-    update({ blacklisted: !c.blacklisted });
+    const next = !c.blacklisted;
+    void update({ blacklisted: next }).then((ok) => {
+      if (!ok) return;
+      toast(next ? "Клиент в чёрном списке" : "Клиент убран из чёрного списка", "info", {
+        label: "Отменить",
+        onPress: () => void update({ blacklisted: !next }),
+      });
+    });
   };
 
 

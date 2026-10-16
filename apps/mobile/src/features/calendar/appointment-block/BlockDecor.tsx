@@ -1,5 +1,8 @@
 import { Text, View } from "react-native";
-import { Check } from "lucide-react-native";
+import Animated, { type AnimatedStyle } from "react-native-reanimated";
+import type { ViewStyle } from "react-native";
+import { Banknote, Check, CreditCard, Landmark, Wallet } from "lucide-react-native";
+import type { BlockMoney } from "@/features/calendar/block-status";
 import { useThemeColors } from "@/theme/colors";
 import { BLOCK_TEXT } from "@/components/ui/color-contrast";
 import { BLOCK_GLASS } from "@/components/ui/RecordMark";
@@ -40,9 +43,10 @@ export function ResizeHandles({ cardH }: { cardH: number }) {
   );
 }
 
-// БЛИК СВЕРХУ: три плёнки белого 7→5 % дают
-// плавный объём без градиентной библиотеки (её нативный модуль
-// потребовал бы пересборки клиента). Под текстом, касаний не
+// БЛИК СВЕРХУ: плёнки белого дают плавный объём без градиентной
+// библиотеки (её нативный модуль потребовал бы пересборки клиента). Лежит
+// НАД текстом и тающим хвостом: текст белый, и белая плёнка его не меняет,
+// а хвост в цвет блока иначе лёг бы тёмной полосой поверх блика. Касаний не
 // принимает; у отменённой блика нет.
 export function BlockGlass() {
   return (
@@ -144,36 +148,6 @@ export function DeckBadge({
   );
 }
 
-// УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: белый круг с галкой — работа
-// закрыта. Просрочка знака не носит: её сигнал — тёмный ободок
-// блока, и два разных знака в углу на колонке недели, где глиф не
-// рисуется, слились бы в два одинаковых кружка. Глиф рисуется только на широком
-// блоке: SVG монтирует отдельное дерево на каждый знак, а неделя
-// держит 21 колонку.
-export function DoneMark({ markSize }: { markSize: number }) {
-  return (
-    <View
-      style={{
-        position: "absolute",
-        top: 2,
-        right: 2,
-        width: markSize,
-        height: markSize,
-        borderRadius: 999,
-        // На плотной заливке зелёный круг тонул бы в зелёных записях;
-        // белая плёнка с белой галкой читается на любом цвете.
-        backgroundColor: "rgba(255,255,255,0.32)",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {markSize >= 14 ? (
-        <Check color={BLOCK_TEXT} size={10} strokeWidth={3.5} />
-      ) : null}
-    </View>
-  );
-}
-
 // ЧУЖАЯ МЕТКА — точка в нижнем углу: сам блок залит цветом записи.
 // Точка несёт цвет метки как есть, а белое кольцо отделяет её от
 // чужой заливки при любом сочетании.
@@ -195,4 +169,116 @@ export function OffLabelDot({ color }: { color: string }) {
       }}
     />
   );
+}
+
+/** Тающий хвост: ширина и ступени плотности плёнки (слева направо). */
+const FADE_W = 14;
+const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.92];
+
+// ТАЮЩИЙ ХВОСТ — плёнка в цвет заливки у правого края строки, ступенями от
+// прозрачной к плотной: не влезающие имя, время или услуга растворяются, а
+// не рубятся по букве. Ступени, а не градиент: градиентный модуль нативный, а
+// блок обновляется по воздуху. Отклик под пальцем — тот же `fillStyle`, что у
+// карточки.
+export function FadeTail({
+  rows,
+  top,
+  lineH,
+  inset,
+  fillStyle,
+}: {
+  rows: number[];
+  /** Верх первой строки внутри карточки. */
+  top: number;
+  lineH: number;
+  /** Правый паддинг карточки — плёнка закрывает и его. */
+  inset: number;
+  fillStyle: AnimatedStyle<ViewStyle>;
+}) {
+  return (
+    <>
+      {rows.map((row) => (
+        <View
+          key={row}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: top + row * lineH,
+            height: lineH,
+            right: 0,
+            width: FADE_W + inset,
+            flexDirection: "row",
+          }}
+        >
+          {FADE_STEPS.map((a) => (
+            <Animated.View key={a} style={[{ flex: 1, opacity: a }, fillStyle]} />
+          ))}
+          <Animated.View style={[{ width: inset }, fillStyle]} />
+        </View>
+      ))}
+    </>
+  );
+}
+
+/** Кегль значков нижней строки — меньше текста, чтобы не спорить с именем;
+ *  в широком блоке «Дня» 11 терялся — там 14. */
+const statusIcon = (width: number) => (width >= 96 ? 14 : 11);
+
+// СТРОКА ЗНАЧКОВ ВНИЗУ: что у записи уже есть, без суммы. Порядок
+// постоянный: деньги, выполнено. Деньги — значком способа (наличные · карта ·
+// перевод), частично — тот же значок вполсилы, не оплачено — бледный
+// кошелёк. Выполнено — галка; у невыполненной места нет, чтобы будущие
+// записи не мигали пустыми значками. «Нет объекта» говорит цвет блока.
+export function StatusRow({
+  money,
+  completed,
+  width,
+  left,
+  bottom,
+}: {
+  money: BlockMoney;
+  completed: boolean;
+  width: number;
+  left: number;
+  bottom: number;
+}) {
+  const size = statusIcon(width);
+  const Icon =
+    money?.method === "cash"
+      ? Banknote
+      : money?.method === "card"
+        ? CreditCard
+        : money?.method === "transfer"
+          ? Landmark
+          : Wallet;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left,
+        bottom,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: width >= 96 ? 6 : 4,
+      }}
+    >
+      {money ? (
+        <View style={{ opacity: money.state === "paid" ? 1 : money.state === "partial" ? 0.62 : 0.38 }}>
+          <Icon color={BLOCK_TEXT} size={size} strokeWidth={2.4} />
+        </View>
+      ) : null}
+      {completed ? <Check color={BLOCK_TEXT} size={size} strokeWidth={3} /> : null}
+    </View>
+  );
+}
+
+/** Значки оплаты словами — для VoiceOver: значок без подписи немой. */
+export function moneyWords(money: BlockMoney): string {
+  if (!money || money.state === "unpaid") return "";
+  if (money.state === "partial") return ", оплачена частично";
+  if (money.method === "cash") return ", оплачена наличными";
+  if (money.method === "card") return ", оплачена картой";
+  if (money.method === "transfer") return ", оплачена переводом";
+  return ", оплачена";
 }

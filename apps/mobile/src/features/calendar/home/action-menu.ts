@@ -14,7 +14,7 @@ import type { RecordNaming } from "./use-record-naming";
 
 type CreateActionMenuDeps =
   Pick<RecordActions, "openEdit" | "openReminderMenu" | "startFreeMove" | "startMove"
-    | "setCancelled" | "cancelWithReason" | "deleteAppointmentConfirmed" | "recordRoute">
+    | "restoreCancelled" | "cancelVisit" | "deleteAppointmentConfirmed" | "recordRoute">
   & Pick<CalendarSources, "clients">
   & Pick<CalendarRights, "canMutateAppointment" | "isCrew" | "smsInPlan" | "actionsIn"
     | "actorId" | "eventRightsIn" | "workInPlan" | "nudgeTariff">
@@ -28,7 +28,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
   const {
     openEdit, clients, canMutateAppointment, isCrew, todayYmd, openReminderMenu,
     smsInPlan, setSmsApt, setSmsOpen, actionsIn, actorId, startFreeMove, startMove,
-    eventRightsIn, setRecolor, setCancelled, cancelWithReason,
+    eventRightsIn, setRecolor, restoreCancelled, cancelVisit,
     deleteAppointmentConfirmed, copyInPlace, workInPlan, nudgeTariff, setSheetMenu,
     clientName, recordRoute,
   } = deps;
@@ -53,11 +53,6 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
     const address = (apt.address || client?.address || "").trim();
     const event = isCalendarEvent(apt);
     const mutable = canMutateAppointment(apt);
-    // Отменённую с возвратом оплаты не восстановить: сервер не меняет
-    // возвращённую оплату («создайте новую заявку») — пункт кончался бы
-    // отказом всегда.
-    const restorable =
-      apt.status !== "cancelled" || apt.payment_status !== "refunded";
     // ПЕРВОЕ СОБЫТИЕ СЕРИИ — САМА СЕРИЯ: его перенос
     // сдвигает все повторы, а на день вне правила блок просто исчезал. Поэтому
     // вопрос задаётся и у удаления, и у переноса.
@@ -138,11 +133,11 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
         (event ? ownEvent && eventRightsIn(apt.team_id ?? null).type === "write" : can.color)
       )
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
-      if (!event && can.cancel && restorable)
+      if (!event && can.cancel)
         items.push(
           apt.status === "cancelled"
-            ? { label: "Восстановить", run: () => setCancelled(apt, null) }
-            : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+            ? { label: "Восстановить", run: () => restoreCancelled(apt) }
+            : { label: "Отменить визит", run: () => cancelVisit(apt) },
         );
       if (event ? ownEvent : can.cancel)
         items.push({
@@ -190,12 +185,13 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
           view: true,
         });
       if (!event) {
-        if (restorable)
-          items.push(
-            apt.status === "cancelled"
-              ? { label: "Восстановить", run: () => setCancelled(apt, null) }
-              : { label: "Отменить визит", run: () => cancelWithReason(apt) },
-          );
+        // Отменённую восстанавливают всегда; с возвращённой оплатой — с
+        // вопросом (`restoreCancelled`), невозвращённые деньги отобьёт сервер.
+        items.push(
+          apt.status === "cancelled"
+            ? { label: "Восстановить", run: () => restoreCancelled(apt) }
+            : { label: "Отменить визит", run: () => cancelVisit(apt) },
+        );
       }
       if (mutable)
         items.push({

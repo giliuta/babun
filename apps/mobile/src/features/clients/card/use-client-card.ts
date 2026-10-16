@@ -12,6 +12,7 @@ import { useClientDraft, type DraftOpen } from "@/features/clients/useClientDraf
 import { useCardAccess } from "@/features/clients/use-card-access";
 import { contactsLocked } from "@/session/member-contacts";
 import { notify } from "@/lib/notify";
+import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { draftReasonOf } from "./draft-reason";
@@ -42,6 +43,7 @@ export function useClientCard() {
   } = route;
   const queries = useCardQueries(id, isDraft, scope);
   const { client, updateClient, appointments } = queries;
+  const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
   const {
@@ -193,6 +195,7 @@ export function useClientCard() {
     onDraftNameChange,
     saveDraft,
     update,
+    toast,
     draftReason,
     c,
     leavingRef,

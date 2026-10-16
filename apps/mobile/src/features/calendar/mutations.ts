@@ -11,7 +11,9 @@ import { useQuietMutation } from "@/lib/quiet-mutation";
 import {
   createAppointment,
   deleteAppointment,
+  trashAppointment,
 } from "@babun/shared/sync/appointmentsCached";
+import { deletedAppointmentsQueryKey } from "@/lib/company-query-keys";
 import { isOnline, isUuid, randomUuid } from "@babun/shared/sync";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import {
@@ -203,6 +205,43 @@ export function useDeleteAppointment() {
         cur?.filter((a) => a.id !== id),
       );
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
+    },
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** «УДАЛИТЬ» ИЗ КАЛЕНДАРЯ — В «УДАЛЁННЫЕ ЗАПИСИ» (миграция 20261016170000).
+ *  Одна дверь на всех: сервер сам ведёт сотрудника через его проверки
+ *  блоков. Фото не стираются — они вернутся вместе с записью, а насовсем
+ *  уходят из «Удалённых записей». `useDeleteAppointment` остаётся для отката
+ *  только что созданного («Отменить» в тосте): такую запись в ящик не кладут. */
+export function useTrashAppointment() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  const refusal = useMemberRefusal();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (id: string) => {
+      if (role !== "owner" && role !== "dispatcher" && role !== "master") {
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
+      }
+      try {
+        await trashAppointment(supabase, id);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        throw role === "master"
+          ? refusal("deleteAppointment", message.replace(/^deleteAppointment:\s*/, ""))
+          : e;
+      }
+    },
+    onSuccess: (_data, id) => {
+      // Сетка теряет блок вместе с тостом — как у прежнего удаления.
+      qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+        cur?.filter((a) => a.id !== id),
+      );
+      for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
+      void qc.invalidateQueries({ queryKey: deletedAppointmentsQueryKey(tenantId) });
     },
     meta: { errorHandled: true }, // call sites alert themselves
   });

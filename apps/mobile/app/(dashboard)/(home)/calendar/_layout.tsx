@@ -54,6 +54,10 @@ export default function CalendarSettingsLayout() {
   );
   const isIndex = pathname === "/calendar" || pathname === "/calendar/";
   if (isIndex) return stack;
+  // «УДАЛЁННЫЕ ЗАПИСИ» — не настройка, а ящик удалённого: его право —
+  // право удалять в календаре, а не «настройки календаря». Дверь-строку видит
+  // только тот, кто может удалять; что внутри показать, решает RLS ящика.
+  if (pathname.replace(/\/$/, "") === "/calendar/deleted") return stack;
   // Без команды в адресе ступень не спросить — такую ссылку ведёт общее
   // правило (владельцу открыто всё).
   if (pageBlock && teamParam && pageLevel !== "hidden") return stack;

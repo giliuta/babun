@@ -16,10 +16,12 @@ import { pct } from "@/features/calendar/grid-units";
 import {
   BlockGlass,
   DeckBadge,
-  DoneMark,
+  FadeTail,
   LiveTimeBadge,
+  moneyWords,
   OffLabelDot,
   ResizeHandles,
+  StatusRow,
 } from "./appointment-block/BlockDecor";
 import { blockLayout } from "./appointment-block/block-layout";
 import type { AppointmentBlockProps } from "./appointment-block/block-props";
@@ -74,11 +76,11 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     lineH,
     label,
     service,
-    address,
     offLabelColor,
     deckIndex,
     deckSize,
     editing,
+    overdue,
     reschedulable: !!onReschedule,
   });
   const {
@@ -98,7 +100,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     bw,
     markSize,
     topHandle,
+    bottomHandle,
     deckBadgeLow,
+    money,
+    showStatus,
+    fadeRows,
+    textW,
   } = layout;
   const drag = useBlockDrag({
     apt,
@@ -186,6 +193,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       ? fillIdle
       : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
   }));
+  // Заливка карточки без геометрии — для тающего хвоста строк.
+  const fillStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
+  }));
 
 
   return (
@@ -195,7 +206,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
         accessibilityRole="button"
         // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
         // высота, и гейты вёрстки для неё не существуют.
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}${cancelled ? ", отменена" : ""}${overdue ? ", не оплачена" : ""}${address ? `, ${address}` : ""}`}
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}${cancelled ? ", отменена" : ""}${completed ? ", выполнена" : ""}${moneyWords(money)}${overdue ? ", не оплачена" : ""}${address ? `, ${address}` : ""}`}
         accessibilityActions={
           onReschedule
             ? [
@@ -260,26 +271,40 @@ export const AppointmentBlock = memo(function AppointmentBlock({
           ]}
         >
           {canResize ? <ResizeHandles cardH={cardH} /> : null}
-          {cancelled ? null : <BlockGlass />}
-          {liveStart ? <LiveTimeBadge liveStart={liveStart} /> : null}
           {/* ЩИПОК ТЯНЕТ РАМКУ, НО НЕ БУКВЫ: обратный масштаб
               жеста от верхнего края — текст карточки держит форму. */}
           <Animated.View style={[{ transformOrigin: "top" }, unstretched]}>
             <BlockText
               layout={layout}
-              apt={apt}
+              label={label}
               service={service}
-              address={address}
               lineH={lineH}
               overdue={overdue}
               nameColor={nameColor}
               subColor={subColor}
             />
           </Animated.View>
+          <FadeTail
+            rows={fadeRows}
+            top={2 - (bw - 1) + topHandle}
+            lineH={lineH}
+            inset={pad - (bw - 1)}
+            fillStyle={fillStyle}
+          />
+          {cancelled ? null : <BlockGlass />}
+          {liveStart ? <LiveTimeBadge liveStart={liveStart} /> : null}
           {deckMore > 0 ? (
             <DeckBadge deckMore={deckMore} deckBadgeLow={deckBadgeLow} color={colors.solid} />
           ) : null}
-          {markSize > 0 && completed ? <DoneMark markSize={markSize} /> : null}
+          {showStatus && textW >= 24 ? (
+            <StatusRow
+              money={money}
+              completed={completed}
+              width={width}
+              left={pad - (bw - 1)}
+              bottom={3 + bottomHandle}
+            />
+          ) : null}
 
           {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
             <OffLabelDot color={offLabelColor} />

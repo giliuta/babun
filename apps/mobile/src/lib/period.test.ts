@@ -4,6 +4,7 @@ import {
   defaultPeriod,
   makePeriod,
   periodDates,
+  periodTitle,
   presetHint,
   presetRange,
 } from "./period";
@@ -128,5 +129,20 @@ describe("квартал — для VAT", () => {
     const feb = new Date(2026, 1, 10);
     assert.deepEqual(presetRange("quarter", feb), { from: "2026-01-01", to: "2026-03-31" });
     assert.deepEqual(presetRange("lastquarter", feb), { from: "2025-10-01", to: "2025-12-31" });
+  });
+});
+
+describe("свой период, совпавший с месяцем или годом, назван словами", () => {
+  test("целый месяц — «Ноябрь 2024»", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-11-01", to: "2024-11-30" }), "Ноябрь 2024");
+  });
+  test("февраль високосного года", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-02-01", to: "2024-02-29" }), "Февраль 2024");
+  });
+  test("целый год — «2024 год»", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-01-01", to: "2024-12-31" }), "2024 год");
+  });
+  test("произвольный отрезок остаётся «Свой период»", () => {
+    assert.equal(periodTitle({ preset: "custom", from: "2024-11-03", to: "2024-11-20" }), "Свой период");
   });
 });

@@ -113,9 +113,14 @@ export function RecordRowsPanel({
             ? t.success
             : t.sub;
     // ДЕНЬ — ПОДПИСЬЮ НАД ПЛАШКАМИ, а не серой полосой: как день над записями
-    // в «Истории» клиента.
+    // в «Истории» клиента. Шапка дня прилипает к верху при прокрутке: без
+    // своего фона строки проезжали сквозь неё, и подпись дня ложилась поверх
+    // чужого текста.
     return (
-      <View className="flex-row items-center justify-between px-4 pb-1.5 pt-3">
+      <View
+        className="flex-row items-center justify-between px-4 pb-1.5 pt-3"
+        style={{ backgroundColor: t.canvas }}
+      >
         <Text
           className="text-xs font-semibold uppercase tracking-wider"
           style={{ color: t.sub }}

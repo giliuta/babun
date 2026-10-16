@@ -4,6 +4,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
+import { DeletedAppointmentsDoor } from "@/features/calendar/DeletedAppointmentsDoor";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 
@@ -113,6 +114,9 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
           <SmsSettingsRow teamId={team?.id ?? null} />
         </SectionCard>
       ) : null}
+      {/* «УДАЛЁННЫЕ ЗАПИСИ» — ящик удалённого в этом календаре: 30 дней,
+          «Вернуть». Строку видит тот, кто может удалять. */}
+      {team ? <DeletedAppointmentsDoor teamId={team.id} /> : null}
     </>
   );
 }

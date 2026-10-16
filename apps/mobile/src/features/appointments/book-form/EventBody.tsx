@@ -44,7 +44,8 @@ export function EventBody({ form }: { form: BookModel }) {
     client,
     recordSmsContext,
     clientStats,
-    pickClientOrRefuse,
+    pickClientOrOpenCard,
+    moneyHoldsClient,
     openClientCard,
     setClientId,
     setLocationId,
@@ -159,7 +160,8 @@ export function EventBody({ form }: { form: BookModel }) {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  onPick={can.editClient ? pickClientOrRefuse : undefined}
+                  onPick={can.editClient ? pickClientOrOpenCard : undefined}
+                  pickOpensCard={moneyHoldsClient}
                   onOpenCard={openClientCard}
                   onClear={
                     can.editClient

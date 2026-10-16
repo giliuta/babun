@@ -92,12 +92,19 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(src, /team_id: isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\),/);
   });
 
-  test("отмена визита с деньгами — с вопросом, без «Отменить» и без «Восстановить»", () => {
+  test("отмена визита — одним тапом, без причины; с деньгами — вопрос и без «Отменить» в тосте", () => {
     const src = screen();
-    assert.match(src, /holdsMoney\(apt\)\s*\? void confirmAction\("Отменить визит с оплатой\?"/);
+    assert.doesNotMatch(src, /CANCEL_REASONS|"Причина отмены"|cancelWithReason/);
+    assert.match(src, /if \(!holdsMoney\(apt\)\) \{\s*setCancelled\(apt, true\);/);
+    assert.match(src, /confirmAction\("Отменить визит с оплатой\?"/);
     assert.match(src, /const undoable = to !== "cancelled" \|\| !holdsMoney\(apt\);/);
-    assert.match(src, /apt\.status !== "cancelled" \|\| apt\.payment_status !== "refunded";/);
-    assert.equal((src.match(/&& restorable\)|if \(restorable\)/g) ?? []).length, 2);
+  });
+  test("отменённую восстанавливают всегда; с возвращённой оплатой — с вопросом", () => {
+    const src = screen();
+    assert.doesNotMatch(src, /restorable/);
+    assert.equal((src.match(/label: "Восстановить", run: \(\) => restoreCancelled\(apt\)/g) ?? []).length, 2);
+    assert.match(src, /if \(apt\.payment_status !== "refunded"\) \{\s*setCancelled\(apt, false\);/);
+    assert.match(src, /confirmAction\("Вернуть запись\?"/);
   });
 
   test("кнопки сотрудника — только по его правам", () => {

@@ -6,6 +6,8 @@ export type WorkWash = {
   band: WorkBand | null;
   workStart: number;
   workEnd: number;
+  /** Working stretches of the day: the shift minus breaks, inside the window. */
+  workSegs: { from: number; to: number }[];
 };
 
 export function workWash({
@@ -47,5 +49,23 @@ export function workWash({
   // Ноль рабочего времени у выходного: полоса «после смены» начинается на
   // верхней кромке окна и кроет колонку целиком одним слоем.
   const workEnd = band ? clampWin(band.endMin) : winStartMin;
-  return { band, workStart, workEnd };
+
+  // Рабочие отрезки дня: смена минус перерывы, в границах окна. Только на
+  // них ложатся серый «прошло» и плёнка метки — нерабочее закрыто одним
+  // слоем и под ними не темнеет и не окрашивается.
+  const workSegs: { from: number; to: number }[] = [];
+  if (workEnd > workStart) {
+    const breaks = (band?.breaks ?? [])
+      .map((b) => ({ from: clampWin(b.startMin), to: clampWin(b.endMin) }))
+      .filter((b) => b.to > b.from)
+      .sort((a, b) => a.from - b.from);
+    let cur = workStart;
+    for (const b of breaks) {
+      if (cur >= workEnd) break;
+      if (b.from > cur) workSegs.push({ from: cur, to: Math.min(b.from, workEnd) });
+      cur = Math.max(cur, b.to);
+    }
+    if (cur < workEnd) workSegs.push({ from: cur, to: workEnd });
+  }
+  return { band, workStart, workEnd, workSegs };
 }

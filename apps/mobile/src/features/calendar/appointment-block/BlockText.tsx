@@ -1,38 +1,36 @@
 import { Text } from "react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
-import { nameShrinkFits, NAME_MIN_SCALE } from "@/features/calendar/block-geometry";
 import type { BlockLayout } from "./block-layout";
 
-// ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга → адрес. Имя первым, потому
-// что время уже названо рельсом слева и позицией блока, а имя не
-// выводится ниоткуда. Кегль 13 — типографический пол продукта;
-// девятка, которой неделя набиралась раньше, была нечитаема.
-// Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
-// при щипке глаз не должен терять якорь.
+// ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга. Имя первым, потому что время
+// уже названо рельсом слева и позицией блока, а имя не выводится ниоткуда.
+// Кегль 13 — типографический пол продукта. Лестница только ДОПИСЫВАЕТСЯ вниз
+// и никогда не переставляется: при щипке глаз не должен терять якорь.
+//
+// ОДИН КЕГЛЬ У ВСЕХ, ХВОСТ ТАЕТ. Подгонки кегля нет: короткие имена ужимались
+// до 11pt, длинные — нет, и соседние блоки недели писали имя разным размером.
+// Не влезающая строка режется по краю, а край прячет плёнка в цвет блока
+// (`FadeTail`). У отменённой заливка полупрозрачная, плёнке спрятать нечем —
+// ей многоточие.
 export function BlockText({
   layout,
-  apt,
+  label,
   service,
-  address,
   lineH,
   overdue,
   nameColor,
   subColor,
 }: {
   layout: BlockLayout;
-  apt: Appointment;
+  label: string;
   service: string | null;
-  address: string | null;
   lineH: number;
   overdue: boolean;
   nameColor: string;
   subColor: string;
 }) {
   const {
-    nameParts,
     textW,
     nameLineW,
-    markReserve,
     deckMore,
     deckBadgeLow,
     deckBadgeW,
@@ -41,54 +39,31 @@ export function BlockText({
     cancelled,
     showTime,
     showService,
-    showAddress,
+    timeText,
   } = layout;
+  const cut = cancelled ? "tail" : "clip";
   return (
     <>
-      {textW >= 24 && nameLineW >= 24
-        ? nameParts.map((part, i) => (
-            <Text
-              key={i}
-              style={{
-                color: nameColor,
-                fontSize: 13,
-                lineHeight: lineH,
-                fontWeight: "700",
-                marginRight: Math.max(
-                  i === 0 ? markReserve : 0,
-                  i === 0 && deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
-                  lastRow === "name" && i === nameParts.length - 1
-                    ? dotReserve
-                    : 0,
-                ),
-                textDecorationLine: cancelled ? "line-through" : "none",
-              }}
-              numberOfLines={1}
-              // УЗКАЯ КАРТОЧКА: КОРОТКОЕ ИМЯ СЖИМАЕТСЯ, А НЕ РЕЖЕТСЯ
-              // ПОПОЛАМ БУКВЫ. Обрезка по краю оставляла огрызок глифа
-              // («Андреі», «Перерı»); кегль до 11 (0.85 от 13 — пол шрифта
-              // продукта) вмещает «Андрей», «Встреча», «Перерыв» целиком.
-              // Режим «clip» подгонку кегля в iOS выключает, поэтому при
-              // сжатии — «tail» (текст и так влез). Длинное имя, которому
-              // и 11pt мало, режется по краю, как раньше: «Конс» говорит
-              // больше, чем «Ко…».
-              ellipsizeMode={
-                (i === 0 ? nameLineW : textW) >= 96 ||
-                nameShrinkFits(part, i === 0 ? nameLineW : textW)
-                  ? "tail"
-                  : "clip"
-              }
-              adjustsFontSizeToFit={
-                (i === 0 ? nameLineW : textW) < 96 &&
-                nameShrinkFits(part, i === 0 ? nameLineW : textW)
-              }
-              minimumFontScale={NAME_MIN_SCALE}
-              maxFontSizeMultiplier={1.3}
-            >
-              {part}
-            </Text>
-          ))
-        : null}
+      {textW >= 24 && nameLineW >= 24 ? (
+        <Text
+          style={{
+            color: nameColor,
+            fontSize: 13,
+            lineHeight: lineH,
+            fontWeight: "700",
+            marginRight: Math.max(
+              deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
+              lastRow === "name" ? dotReserve : 0,
+            ),
+            textDecorationLine: cancelled ? "line-through" : "none",
+          }}
+          numberOfLines={1}
+          ellipsizeMode={cut}
+          maxFontSizeMultiplier={1.3}
+        >
+          {label}
+        </Text>
+      ) : null}
       {showTime && textW >= 24 ? (
         <Text
           style={{
@@ -100,9 +75,12 @@ export function BlockText({
             fontVariant: ["tabular-nums"],
           }}
           numberOfLines={1}
+          // Жирное время просрочки в узкой колонке не влезало и рубилось
+          // многоточием («13:…») — теперь тает, как имя.
+          ellipsizeMode={cut}
           maxFontSizeMultiplier={1.3}
         >
-          {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
+          {timeText}
         </Text>
       ) : null}
       {showService && textW >= 24 ? (
@@ -114,25 +92,10 @@ export function BlockText({
             marginRight: lastRow === "service" ? dotReserve : 0,
           }}
           numberOfLines={1}
-          ellipsizeMode={textW < 96 ? "clip" : "tail"}
+          ellipsizeMode={cut}
           maxFontSizeMultiplier={1.3}
         >
           {service}
-        </Text>
-      ) : null}
-      {showAddress && textW >= 24 ? (
-        <Text
-          style={{
-            color: subColor,
-            fontSize: 13,
-            lineHeight: lineH,
-            marginRight: dotReserve,
-          }}
-          numberOfLines={1}
-          ellipsizeMode={textW < 96 ? "clip" : "tail"}
-          maxFontSizeMultiplier={1.3}
-        >
-          {address}
         </Text>
       ) : null}
     </>

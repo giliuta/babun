@@ -124,12 +124,13 @@ export const DayColumn = memo(function DayColumn({
       : null;
   // Сетка «как в Bumpix» (принцип «из чёрного, не серого»): линии и серый
   // нерабочих часов — альфа от ink поверх белого поля («прикрываем, не
-  // скрываем»), а не бледные отдельные серые. 20% — отчётливая линия часа,
-  // 12% — плоский, явно читаемый wash нерабочего времени.
+  // скрываем»), а не бледные отдельные серые. 20% — отчётливая линия часа.
   const gridLine = `${t.ink}33`;
-  const offHoursFill = `${t.ink}1f`;
+  // ВСЁ НЕРАБОЧЕЕ — ОДНИМ ЦВЕТОМ: часы до и после смены, перерыв и выходной
+  // закрыты одним тёмным слоем (36%), подобранным на выходном.
+  const offHoursFill = `${t.ink}5c`;
 
-  const { band, workStart, workEnd } = workWash({
+  const { band, workStart, workEnd, workSegs } = workWash({
     workBand,
     workStartHour,
     workEndHour,
@@ -163,6 +164,7 @@ export const DayColumn = memo(function DayColumn({
         band={band}
         workStart={workStart}
         workEnd={workEnd}
+        workSegs={workSegs}
         winStartMin={winStartMin}
         winEndMin={winEndMin}
         offHoursFill={offHoursFill}

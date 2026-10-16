@@ -45,7 +45,7 @@ export function WorkBody({ form }: { form: BookModel }) {
     recordSmsContext,
     client,
     clientStats,
-    pickClientOrRefuse,
+    pickClientOrOpenCard,
     openClientCard,
     clientNoteOn,
     clientNote,
@@ -174,7 +174,8 @@ export function WorkBody({ form }: { form: BookModel }) {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  onPick={can.editClient ? pickClientOrRefuse : undefined}
+                  onPick={can.editClient ? pickClientOrOpenCard : undefined}
+                  pickOpensCard={moneyHoldsClient}
                   onOpenCard={openClientCard}
                   note={
                     clientNoteOn ? (

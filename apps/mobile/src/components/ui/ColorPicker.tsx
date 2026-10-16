@@ -6,11 +6,12 @@ import {
 } from "@babun/shared/common/utils/colors";
 import { readableTextOnColor } from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
-import { PICKER_COLUMNS, PICKER_GAP, PICKER_RADIUS } from "./picker-grid";
+import { COLOR_COLUMNS, PICKER_GAP, PICKER_RADIUS } from "./picker-grid";
 
 // «Halo Cobalt» colour picker — ОДИН блок выбора цвета на весь продукт
 // (команды / метки / услуги / категории / типы событий / счета / теги / объекты).
-// Палитра — общие PRESET_COLORS, сорок цветов, ни одной похожей пары.
+// Палитра — общие PRESET_COLORS: двадцать четыре ярких цвета, каждый совсем
+// не похож на другие; шесть в ряду крупными квадратами, как в Bumpix.
 //
 // РЕШЁТКА КВАДРАТОВ, плотнее, разделитель — не волосина: сплошное поле плиток
 // с галкой на выбранной. Плитка во всю клетку, между плитками зазор 6pt,
@@ -92,7 +93,7 @@ export function ColorPicker({
             // ШИРИНА КЛЕТКИ — ДОЛЕЙ, А НЕ ЧИСЛОМ: шторка на разных корпусах
             // разной ширины, а плитки обязаны заполнять ряд без остатка.
             style={({ pressed }) => ({
-              width: `${100 / PICKER_COLUMNS}%`,
+              width: `${100 / COLOR_COLUMNS}%`,
               aspectRatio: 1,
               padding: PICKER_GAP / 2,
               opacity: pressed ? 0.7 : disabled ? 0.4 : 1,
@@ -110,7 +111,7 @@ export function ColorPicker({
             >
               {selected ? (
                 <Check
-                  size={20}
+                  size={26}
                   strokeWidth={3}
                   // Плитка в тоне блока несёт белый текст, как сам блок, —
                   // и галка на ней белая.

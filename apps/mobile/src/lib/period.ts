@@ -119,8 +119,29 @@ export function defaultPeriod(base?: Date): Period {
   return makePeriod("month", base);
 }
 
-/** Semantic name for the header's LEFT tap target («Текущий месяц»). */
+/** Свой период, совпавший с целым месяцем или годом: его имя словами. */
+function wholeMonthOrYear(p: Period): string | null {
+  const a = parseYmd(p.from);
+  const b = parseYmd(p.to);
+  const y = a.getFullYear();
+  if (p.from === ymd(new Date(y, 0, 1)) && p.to === ymd(new Date(y, 11, 31))) {
+    return `${y} год`;
+  }
+  const m = a.getMonth();
+  if (a.getDate() === 1 && b.getFullYear() === y && p.to === ymd(new Date(y, m + 1, 0))) {
+    const name = a
+      .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
+      .replace(/\s*[гр]\.?\s*$/i, "");
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  return null;
+}
+
+/** Semantic name for the header's LEFT tap target («Текущий месяц»). Свой
+ *  период, который ровно месяц или год, называется им («Ноябрь 2024»,
+ *  «2024 год»), а не безликим «Свой период». */
 export function periodTitle(p: Period): string {
+  if (p.preset === "custom") return wholeMonthOrYear(p) ?? PERIOD_LABELS.custom;
   return PERIOD_LABELS[p.preset];
 }
 

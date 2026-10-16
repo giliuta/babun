@@ -180,7 +180,6 @@ export const DayView = memo(function DayView({
               <DayHeader
                 dateYmd={d}
                 isToday={d === todayYmd}
-                isPast={d < todayYmd}
                 label={labelFor?.(d) ?? null}
                 dayOff={workBandFor?.(d) === null}
                 onLabelTap={off === 0 ? onDayLabelTap : undefined}

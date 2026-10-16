@@ -516,7 +516,7 @@
 | Метка записи и события | докет `TeamLabelRow` | `reference/LabelPickerSheet` | нет |
 | Метка дня | тап по числу в календаре | `calendar/DayLabelSheet` (обёртка над той же) | нет |
 | Метка клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`) | `reference/LabelPickerSheet` | нет |
-| Тег клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`) | `clients/TagPickerSheet` — тег один, тап выбирает и закрывает | нет |
+| Теги клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`): главный тег именем, остальные «+N» | `clients/TagPickerSheet` — тегов несколько, тап отмечает, «Применить» пишет набор | нет |
 | Категория операции | `finances/CategoryBlock` (в листе операции — плотная строка в общей карточке с суммой) | `ui/PickerSheet` | нет |
 | Тип события | `appointments/EventTypeBlock` — тот же `ReferenceBlock`, что у категории | `ui/PickerSheet`; тап по выбранной строке снимает тип | нет |
 | Счёт | `PaymentTiles` либо `ValueRow` | `ui/ValuePickerSheet` | нет |

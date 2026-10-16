@@ -87,6 +87,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "delete_invoice",
   // «Удалённые операции» (миграция 20261003224700, 016).
   "delete_operation",
+  // «Удалённые записи» (миграция 20261016170000).
+  "delete_appointment",
   "issue_invoice",
   "issue_receipt",
   "update_receipt",
@@ -117,6 +119,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "replace_day_extras",
   "reset_appointment_payment",
   "restore_deleted_operation",
+  "restore_deleted_appointment",
   "set_appointment_prepayment",
   "set_client_sms_opt_out",
   "set_client_team",

@@ -289,8 +289,12 @@ export function DocumentsPanel({
         // прописью, капсом, на цвете холста. Итога дня здесь нет намеренно —
         // инвойс и чек по одним деньгам сложились бы в двойную сумму.
         // День — подписью над плашками, как в «Истории» и «Файлах» клиента.
+        // Прилипает при прокрутке — фон холста закрывает строки под ней.
         renderSectionHeader={({ section }) => (
-          <View className="flex-row items-center px-4 pb-1.5 pt-3">
+          <View
+            className="flex-row items-center px-4 pb-1.5 pt-3"
+            style={{ backgroundColor: t.canvas }}
+          >
             <Text
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: t.sub }}

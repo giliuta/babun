@@ -1,7 +1,5 @@
 import type { Href } from "expo-router";
 import { Platform } from "react-native";
-import { Ban } from "lucide-react-native";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { haptics } from "@/lib/haptics";
@@ -9,7 +7,6 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import { money } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
-import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
 import { serverReason } from "@/features/calendar/server-reason";
 import {
   cancelAppointmentReminders,
@@ -25,7 +22,9 @@ import {
   useCreateAppointment,
   useDeleteAppointment,
   useMemberCopyAppointment,
+  useTrashAppointment,
 } from "@/features/calendar/mutations";
+import { useRestoreAppointment } from "@/features/calendar/deleted-appointments";
 import { holdsMoney } from "./appointment-rules";
 import { startOfDay } from "./dates";
 import type { CalendarRights } from "./use-calendar-rights";
@@ -43,7 +42,7 @@ type UseRecordActionsDeps =
   & Pick<CalendarRights, "canManageBookings" | "isCrew" | "canMutateAppointment">
   & Pick<CalendarSources, "toast" | "roleQuery" | "appts" | "updateAppt">
   & Pick<CalendarRoute, "pushBookOnce" | "tenantId">
-  & Pick<CalendarUiState, "setCrewViewing" | "setSheetMenu" | "reminderFor" | "setReminderFor">
+  & Pick<CalendarUiState, "setCrewViewing" | "reminderFor" | "setReminderFor">
   & Pick<RecordNaming, "clientName" | "appointmentTimeZone">
   & Pick<GridModes, "setMoving" | "setEditingApt" | "placedFromRef" | "setPick"
     | "setMovingKind">
@@ -55,7 +54,7 @@ type UseRecordActionsDeps =
 export function useRecordActions(deps: UseRecordActionsDeps) {
   const {
     activeActions, canManageBookings, isCrew, toast, roleQuery, pushBookOnce,
-    activeTeamId, appts, canMutateAppointment, setCrewViewing, updateAppt, setSheetMenu,
+    activeTeamId, appts, canMutateAppointment, setCrewViewing, updateAppt,
     clientName, setMoving, setEditingApt, mode, setMode, rememberView, setDay,
     placedFromRef, setPick, setNotice, setMovingKind, reminderFor, setReminderFor,
     appointmentTimeZone, tenantId,
@@ -63,6 +62,8 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   const createAppt = useCreateAppointment();
   const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
+  const trashAppt = useTrashAppointment();
+  const restoreAppt = useRestoreAppointment();
 
   // Тап по свободному слоту / действие из агенды / «Записать» с карточки открывает
   // ОТДЕЛЬНЫЙ экран /book (реальный маршрут, а не шит-модал поверх попапа):
@@ -127,16 +128,18 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     } as Href);
   };
 
-  /** Отмена и возврат в план — одна дорога с откатом из тоста. Причина
-   *  ложится в cancel_reason (список — cancel-reasons.ts) и стирается при
-   *  «Восстановить». */
-  const setCancelled = (apt: Appointment, reason: string | null) => {
-    const to: Appointment["status"] = reason ? "cancelled" : "scheduled";
+  /** Отмена и возврат в план — одна дорога с откатом из тоста. Причины
+   *  отмены нет: визит отменяется одним тапом, а прежняя причина у старой
+   *  записи стирается при «Восстановить». */
+  const setCancelled = (apt: Appointment, cancel: boolean) => {
+    const to: Appointment["status"] = cancel ? "cancelled" : "scheduled";
     const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
-    // Отмена с деньгами необратима (сервер вернул оплату) — откатывать нечем.
+    // У отмены с деньгами в тосте нет «Отменить»: сервер уже вернул оплату
+    // клиенту, и откат вернул бы визит неоплаченным — это решение человек
+    // принимает осознанно через «Восстановить» с вопросом, а не тапом по тосту.
     const undoable = to !== "cancelled" || !holdsMoney(apt);
     updateAppt.mutate(
-      { id: apt.id, patch: { status: to, cancel_reason: reason } },
+      { id: apt.id, patch: { status: to, cancel_reason: null } },
       {
         onSuccess: () => {
           haptics.success();
@@ -167,36 +170,37 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     );
   };
 
-  /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
-   *  отмена без причины в отчёте дня читается как «забыли». */
-  const cancelWithReason = (apt: Appointment) => {
-    // ОТМЕНА ВИЗИТА С ДЕНЬГАМИ — ЭТО ВОЗВРАТ Сервер
-    // при отмене сам возвращает клиенту всю полученную оплату: в кассе
-    // появляется возврат, и вернуть запись назад уже нельзя — «Возвращённую
-    // оплату нельзя изменить». Поэтому один тап по причине не годится, а тост с
-    // «Отменить» кончался бы отказом.
+  /** «Восстановить» отменённую. Если при отмене оплата вернулась клиенту,
+   *  визит вернётся неоплаченным — человек узнаёт это до, а не после. */
+  const restoreCancelled = (apt: Appointment) => {
+    if (apt.payment_status !== "refunded") {
+      setCancelled(apt, false);
+      return;
+    }
+    void confirmAction("Вернуть запись?", {
+      message:
+        "При отмене оплата вернулась клиенту. Запись вернётся неоплаченной — новую оплату примете как обычно.",
+      confirmLabel: "Вернуть запись",
+    }).then((ok) => {
+      if (ok) setCancelled(apt, false);
+    });
+  };
+
+  /** «Отменить визит» — сразу, без причины. Отмена визита с деньгами — это
+   *  возврат: сервер сам возвращает клиенту всю полученную оплату, поэтому о
+   *  ней — вопрос с суммой, а вернуть визит потом можно уже без оплаты. */
+  const cancelVisit = (apt: Appointment) => {
+    if (!holdsMoney(apt)) {
+      setCancelled(apt, true);
+      return;
+    }
     const paid = getPaidAmount(apt);
-    const cancel = (label: string) =>
-      holdsMoney(apt)
-        ? void confirmAction("Отменить визит с оплатой?", {
-            message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Вернуть запись после этого будет нельзя.`,
-            confirmLabel: "Отменить визит",
-            destructive: true,
-          }).then((ok) => {
-            if (ok) setCancelled(apt, label);
-          })
-        : setCancelled(apt, label);
-    // Та же наша шторка, что меню записи: подменю не имеет права выглядеть
-    // системным листом посреди нашего.
-    setSheetMenu({
-      title: "Причина отмены",
-      subtitle: clientName(apt) || apt.comment || undefined,
-      items: CANCEL_REASONS.map((label) => ({
-        label,
-        icon: Ban,
-        color: SETTINGS_TILE.yellow,
-        run: () => cancel(label),
-      })),
+    void confirmAction("Отменить визит с оплатой?", {
+      message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.`,
+      confirmLabel: "Отменить визит",
+      destructive: true,
+    }).then((ok) => {
+      if (ok) setCancelled(apt, true);
     });
   };
 
@@ -220,24 +224,46 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
       );
       return;
     }
+    // «УДАЛЁННЫЕ ЗАПИСИ»: удалённое 30 дней лежит в ящике шестерёнки
+    // календаря и возвращается оттуда или «Отменить» в тосте — вместе с фото.
+    // Серия — одна строка (повторы рисует правило), в ящик уходит целиком.
+    // Личное событие без календаря в ящик не идёт (у ящика, как у всего в
+    // компании, есть команда) — для него прежний вопрос «необратимо».
+    const toTrash = apt.team_id != null;
+    const event = isCalendarEvent(apt);
     void confirmAction(
-      repeating ? "Удалить всю серию?" : isCalendarEvent(apt) ? "Удалить событие?" : "Удалить запись?",
+      repeating ? "Удалить всю серию?" : event ? "Удалить событие?" : "Удалить запись?",
       {
-        message: repeating
-          ? "Удалится исходное событие и все его повторы. Действие необратимо."
-          : isCalendarEvent(apt)
-            ? "Действие необратимо."
-            : "Действие необратимо. Фото записи удалятся вместе с ней.",
+        message: !toTrash
+          ? "Действие необратимо."
+          : repeating
+            ? "Серия со всеми повторами будет в «Удалённых записях» 30 дней."
+            : event
+              ? "Событие будет в «Удалённых записях» 30 дней."
+              : "Запись будет в «Удалённых записях» 30 дней.",
         confirmLabel: repeating ? "Удалить серию" : "Удалить",
         destructive: true,
       },
     ).then((ok) => {
       if (!ok) return;
-      deleteAppt.mutate(apt.id, {
+      trashAppt.mutate(apt.id, {
         onSuccess: () => {
           void cancelAppointmentReminders(apt.id);
           haptics.warning();
-          toast(isCalendarEvent(apt) ? "Событие удалено" : "Запись удалена", "info");
+          const said = event ? "Событие удалено" : "Запись удалена";
+          toast(
+            said,
+            "info",
+            toTrash
+              ? {
+                  label: "Отменить",
+                  onPress: () =>
+                    restoreAppt.mutate(apt.id, {
+                      onError: (e) => toast(serverReason(e) ?? "Не удалось вернуть", "error"),
+                    }),
+                }
+              : undefined,
+          );
         },
         onError: (e) => toast(serverReason(e) ?? "Не удалось удалить", "error"),
       });
@@ -306,7 +332,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
 
   return {
     createAppt, memberCopy, deleteAppt, bookAt, openEdit, setCancelled,
-    cancelWithReason, deleteAppointmentConfirmed, startFreeMove, startMove,
+    restoreCancelled, cancelVisit, deleteAppointmentConfirmed, startFreeMove, startMove,
     openReminderMenu, pickReminderFor, recordRoute,
   };
 }
