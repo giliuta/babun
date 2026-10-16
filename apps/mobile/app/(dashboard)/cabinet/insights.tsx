@@ -4,7 +4,8 @@ import {
   AnalyticsScreen as InsightsScreen,
   type AnalyticsStart,
 } from "@/features/finances/analytics/AnalyticsScreen";
-import { makePeriod, type PeriodKind } from "@/lib/period";
+import { analyticsStartPeriod } from "@/features/finances/analytics/start-period";
+import { useBusinessClock } from "@/features/finances/home/use-business-clock";
 
 // «АНАЛИТИКА» (бывшая «Сводка») — экран живёт в `features/finances/analytics`
 // (разрезы по услугам, мастерам и месяцам). Этот файл — только адрес и ворота компании.
@@ -18,12 +19,8 @@ import { makePeriod, type PeriodKind } from "@/lib/period";
 //
 // «ФИНАНСЫ» ПЕРЕДАЮТ СВОЙ ПЕРИОД: `?period=` (и `from`/`to` у своего
 // периода) — аналитика открывается на том же периоде. Команду не передают:
-// аналитика всегда открывается на всей компании.
-const KINDS: readonly PeriodKind[] = [
-  "today", "yesterday", "week", "lastweek", "month", "lastmonth",
-  "quarter", "lastquarter", "year", "lastyear",
-];
-const YMD = /^\d{4}-\d{2}-\d{2}$/;
+// аналитика всегда открывается на всей компании. Пресет строится по часам
+// компании (`analyticsStartPeriod`).
 
 export default function InsightsRoute() {
   const { tenant, period, from, to } = useLocalSearchParams<{
@@ -32,13 +29,9 @@ export default function InsightsRoute() {
     from?: string;
     to?: string;
   }>();
+  const { businessNow } = useBusinessClock();
   const start: AnalyticsStart = {
-    period:
-      period === "custom" && from && to && YMD.test(from) && YMD.test(to) && from <= to
-        ? { preset: "custom", from, to }
-        : KINDS.includes(period as PeriodKind)
-          ? makePeriod(period as PeriodKind)
-          : null,
+    period: analyticsStartPeriod({ period, from, to }, businessNow),
   };
   if (!tenant) return <InsightsScreen start={start} />;
   return (

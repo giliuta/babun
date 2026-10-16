@@ -73,6 +73,7 @@ export function OperationTopBlocks({
           чем читают, — а компактность взята воздухом, а не слиянием. */}
       <CategoryBlock
         category={category}
+        budgetDate={date}
         onPress={() => {
           onOpenCategory();
           haptics.tap();

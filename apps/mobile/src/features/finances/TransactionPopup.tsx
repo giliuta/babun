@@ -19,6 +19,7 @@ import { useFeatureOn } from "@/features/settings/company-features";
 import type { Team } from "@/features/reference/queries";
 import { deleteOperationAlert, deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
+import { createRequestIntent } from "./request-intent";
 import { randomUuid } from "@babun/shared/sync";
 import { useRouter, type Href } from "expo-router";
 import { useReceipts } from "@/features/finances/receipts-queries";
@@ -84,9 +85,10 @@ export function TransactionPopup({
   const t = useThemeColors();
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
-  // Id попытки возврата — один на открытую форму: повтор после потерянного
-  // ответа упирается в тот же id и не проводит возврат второй раз.
-  const [refundRequestId, setRefundRequestId] = useState(randomUuid);
+  // Id попытки возврата — один на сумму в открытой форме: повтор после
+  // потерянного ответа упирается в тот же id и не проводит возврат второй раз,
+  // а поправленная перед повтором сумма — уже другой возврат (`request-intent.ts`).
+  const refundIntent = useRef(createRequestIntent(randomUuid)).current;
   const [busy, setBusy] = useState(false);
   // Синхронный гард поверх busy: state включается только после ре-рендера,
   // и сверхбыстрый двойной тап «Возврат» успевал записать возврат дважды —
@@ -254,7 +256,8 @@ export function TransactionPopup({
     savingRef.current = true;
     setBusy(true);
     try {
-      await onRefund(tx, refundNum, refundRequestId);
+      await onRefund(tx, refundNum, refundIntent.idFor(`${tx.id}|${refundNum}`));
+      refundIntent.done();
       haptics.success();
       onClose();
     } catch (e) {
@@ -305,7 +308,7 @@ export function TransactionPopup({
         }
         setShowRefundForm(true);
         setRefundAmount(String(refundRemaining));
-        setRefundRequestId(randomUuid());
+        refundIntent.done();
       },
     });
   }

@@ -27,6 +27,7 @@ export function CategoryBlock({
   title = "Категория",
   emptyLabel = "Выбрать категорию",
   emptyHint = "Открывает список категорий",
+  budgetDate,
   onPress,
 }: {
   /** Выбранная категория; `null` — ещё не выбрана. */
@@ -35,6 +36,8 @@ export function CategoryBlock({
   title?: string;
   emptyLabel?: string;
   emptyHint?: string;
+  /** День операции: строка бюджета считает месяц этого дня. */
+  budgetDate?: string | null;
   onPress: () => void;
 }) {
   // ЗНАЧОК — ТОЛЬКО ИЗ СЛОВАРЯ, БЕЗ ЭМОДЗИ (категории устроены так же, как события). В базе у категорий лежат
@@ -45,7 +48,7 @@ export function CategoryBlock({
   // БЮДЖЕТ — ПОД ИМЕНЕМ: набирая топливо, человек
   // сразу видит, сколько на него осталось в этом месяце. Только владельцу и
   // только у категории с бюджетом; остальным строка одна, как была.
-  const budgetLine = useCategoryBudgetLine(category);
+  const budgetLine = useCategoryBudgetLine(category, budgetDate);
 
   return (
     <ReferenceBlock

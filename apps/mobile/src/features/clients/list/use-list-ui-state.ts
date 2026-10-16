@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
+import {
+  getCurrentCyprusTime,
+  getCurrentTimeInZone,
+} from "@babun/shared/common/utils/date-utils";
 import { EMPTY_FILTER, type ClientsFilter } from "@/features/clients/filter";
 import { loadDayFilter, saveDayFilter } from "@/features/clients/filter-pref";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 
 /** Search, the day's filter set, which sheet is open and the bulk pick. */
 export function useListUiState(params: { openImport?: string; openContacts?: string }) {
   const [query, setQuery] = useState("");
   // Набор живёт до конца дня: звонок/SMS выбрасывают из приложения, и
   // собирать шесть условий заново каждый круг обзвона — потеря времени.
+  // Пресетный период набора — по часам компании, как у «Финансов».
+  const timezone = useCalendarSettings().data?.timezone;
   const [filter, setFilter] = useState<ClientsFilter>(
-    () => loadDayFilter() ?? EMPTY_FILTER,
+    () =>
+      loadDayFilter(timezone ? getCurrentTimeInZone(timezone) : getCurrentCyprusTime()) ??
+      EMPTY_FILTER,
   );
   useEffect(() => {
     saveDayFilter(filter);

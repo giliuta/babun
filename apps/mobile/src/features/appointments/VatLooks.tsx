@@ -5,6 +5,7 @@ import { formatEURExact } from "@babun/shared/common/utils/money";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { useThemeColors } from "@/theme/colors";
 import { COL_GAP, KEY_W, Key, RATE_W, Rate, Row, Sum, Unit, VAT_W } from "./vat-looks/parts";
+import { parseVatRate } from "./vat-looks/parse-rate";
 
 // ДВЕ ИТОГОВЫЕ СТРОКИ ДЕНЕЖНОГО ЛИСТА.
 //
@@ -32,13 +33,6 @@ const SPOKEN: Record<TxVatMode, string> = {
   exclusive: "налог сверху цены",
   inclusive: "налог внутри цены",
 };
-
-/** Ставка из набранного: запятая и точка одинаковы, два знака, 0…99.99. */
-export function parseVatRate(text: string): number | null {
-  const value = Number(text.replace(",", ".").trim());
-  if (!Number.isFinite(value) || value < 0 || value >= 100) return null;
-  return Math.round(value * 100) / 100;
-}
 
 /** Последняя строка перечня работ: сумма услуг, скидка и цена после неё. */
 export function ServicesRow({

@@ -11,8 +11,8 @@ import { useFinanceCategories, useTransactions } from "./queries";
 import { runBudgetAlerts } from "./budget-notify";
 import {
   budgetLeftLine,
+  budgetMonthFor,
   hasBudget,
-  monthOf,
   monthSpendByCategory,
 } from "./category-budget";
 
@@ -24,9 +24,10 @@ import {
 // Только ВЛАДЕЛЬЦУ: у сотрудника журнал урезан правами, и «осталось €70»
 // по его куску было бы неправдой.
 
-function useBudgetMonth(enabled: boolean) {
+/** `date` — день операции: бюджет меряется её месяцем; без дня — сегодняшним. */
+function useBudgetMonth(enabled: boolean, date?: string | null) {
   const settings = useCalendarSettings();
-  const month = monthOf(todayYmd(settings.data?.timezone ?? "Europe/Nicosia"));
+  const month = budgetMonthFor(date, todayYmd(settings.data?.timezone ?? "Europe/Nicosia"));
   const ledger = useTransactions(month.from, month.to, { enabled });
   const rows = ledger.isPlaceholderData ? undefined : ledger.data;
   const spend = useMemo(
@@ -44,10 +45,12 @@ export function useCategoryMonthSpend(enabled = true) {
 /** Строка под выбранной категорией в форме операции: «Бюджет: осталось …». */
 export function useCategoryBudgetLine(
   category: FinanceCategory | null | undefined,
+  /** День операции: «осталось» — в месяце этого дня. */
+  date?: string | null,
 ): string | null {
   const owner = useCurrentRole().data === "owner";
   const active = owner && !!category && hasBudget(category);
-  const { spend } = useBudgetMonth(active);
+  const { spend } = useBudgetMonth(active, date);
   const currency = useCurrency();
   if (!active || !spend || !category?.monthly_budget) return null;
   return budgetLeftLine(

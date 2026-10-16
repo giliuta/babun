@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { money } from "@babun/shared/common/utils/money";
 import { isOnline, randomUuid } from "@babun/shared/sync";
 import { tDynamic } from "@babun/shared/i18n/runtime";
@@ -12,6 +12,7 @@ import { OFFLINE_MID_FLIGHT, OFFLINE_REASON } from "./transfer-rules";
 /** Sending the transfer: an idempotent request id per intent, the undo
  *  toast, and a failure line instead of a closed sheet. */
 export function useTransferSend(s: {
+  visible: boolean;
   from: AccountWithBalance | null;
   to: AccountWithBalance | null;
   amountCents: number | null;
@@ -31,6 +32,12 @@ export function useTransferSend(s: {
    *  потерянного ответа; правка ЛЮБОГО из полей — уже другое намерение и
    *  другой ключ (почему в ключе даже день — см. transfer-intent.ts). */
   const intent = useRef(createTransferRequestIds(randomUuid)).current;
+  // Лист смонтирован и между открытиями: намерение, оставшееся от прошлого
+  // открытия с неудачей, иначе склеило бы новый такой же перевод со старым —
+  // «Перевод выполнен», а денег ушло один раз.
+  useEffect(() => {
+    if (s.visible) intent.done();
+  }, [s.visible, intent]);
 
   return async () => {
     const { from, to, amountCents, amountNum, occurredOn, note } = s;

@@ -37,6 +37,7 @@ export {
   useSetAccountHidden,
   useSoftCloseAccount,
   useTrashAccount,
+  useUndoAccountTrash,
   useUpdateAccount,
 } from "./accounts/mutations";
 

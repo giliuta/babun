@@ -226,9 +226,9 @@ export function useInsertTransaction() {
       insertTransaction(supabase, tenantId as string, draft),
     // Расход мог перевалить бюджет категории — владелец узнаёт сразу
     // (`budget-notify.ts`).
-    onSuccess: () => {
+    onSuccess: (tx) => {
       invalidateLedger(qc);
-      checkBudgetsAfterWrite(qc, tenantId);
+      checkBudgetsAfterWrite(qc, tenantId, tx.occurred_on);
     },
     meta: { errorHandled: true }, // call sites alert themselves
   });
@@ -239,11 +239,19 @@ export function useUpdateTransaction() {
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
-      updateTransaction(supabase, id, patch),
-    onSuccess: () => {
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<TransactionDraft>;
+      /** День операции после правки — бюджет проверяется его месяцем. Патч
+       *  несёт день, только если его меняли. */
+      occurredOn?: string;
+    }) => updateTransaction(supabase, id, patch),
+    onSuccess: (_void, { patch, occurredOn }) => {
       invalidateLedger(qc);
-      checkBudgetsAfterWrite(qc, tenantId);
+      checkBudgetsAfterWrite(qc, tenantId, patch.occurred_on ?? occurredOn);
     },
     meta: { errorHandled: true }, // call sites alert themselves
   });

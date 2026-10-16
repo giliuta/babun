@@ -5,12 +5,13 @@ import type {
 } from "@babun/shared/local/finance/transaction";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
-import { isOnline, randomUuid } from "@babun/shared/sync";
+import { isOnline } from "@babun/shared/sync";
 import type { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import type { useInsertTransaction, useUpdateTransaction } from "../queries";
 import { vatModeForDraft, vatSnapshotForDraft } from "../operation-vat";
+import { draftIntentKey, type createRequestIntent } from "../request-intent";
 import {
   operationPatchBaseline,
   operationTransactionPatch,
@@ -44,6 +45,8 @@ export interface OperationSaveInput {
   askEmployee: boolean;
   attachClient: boolean;
   vatMode: TxVatMode;
+  /** Режим, которым поле суммы становится суммой на счёте (`amountVatMode`). */
+  amountMode: TxVatMode;
   vatTouched: boolean;
   vatRetouched: boolean;
   vatSettingsKnown: boolean;
@@ -52,8 +55,7 @@ export interface OperationSaveInput {
   accountMismatch: boolean;
   belowRefunded: boolean;
   lowersWhileRefundsUnknown: boolean;
-  requestId: string;
-  setRequestId: (id: string) => void;
+  requestIntent: ReturnType<typeof createRequestIntent>;
   patchBaseline: MutableRefObject<OperationPatchBaseline | null>;
   insert: ReturnType<typeof useInsertTransaction>;
   update: ReturnType<typeof useUpdateTransaction>;
@@ -113,7 +115,7 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
     }
     savingRef.current = true;
     try {
-      const breakdown = applyTxVat(s.amountNum, s.vatMode, s.opVatRate);
+      const breakdown = applyTxVat(s.amountNum, s.amountMode, s.opVatRate);
       // РЕЖИМ НДС НАЗЫВАЕМ, ТОЛЬКО ЕСЛИ ЕГО ЗНАЕМ (`operation-vat.ts`): пустая
       // колонка значит «считай сам», а явное 'none' сервер уважает сильнее
       // настроек компании.
@@ -177,18 +179,24 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
           s.onClose();
           return;
         }
-        await s.update.mutateAsync({ id: s.transaction.id, patch });
+        await s.update.mutateAsync({ id: s.transaction.id, patch, occurredOn: s.date });
       } else {
-        // request_id стабилен на время попытки: ретрай после потерянного
-        // ответа не задваивает деньги (duplicate key = успех в репозитории).
-        await s.insert.mutateAsync({
+        const insertDraft = {
           type: s.type,
-          request_id: s.requestId,
           ...(s.fromCalendar ? { from_calendar: true } : {}),
           ...draft,
           ...(vatSnapshot ?? {}),
-        });
-        s.setRequestId(randomUuid());
+        };
+        // request_id стабилен, пока черновик тот же: ретрай после потерянного
+        // ответа не задваивает деньги (duplicate key = успех в репозитории), а
+        // правка любого поля перед ретраем — уже другая операция с новым id.
+        // «Сегодня бизнеса» — подсказка проверке, а не поле операции: смена
+        // суток между попытками не делает её другой.
+        const requestId = s.requestIntent.idFor(
+          draftIntentKey({ ...insertDraft, business_today: undefined }),
+        );
+        await s.insert.mutateAsync({ request_id: requestId, ...insertDraft });
+        s.requestIntent.done();
       }
       haptics.success();
       s.toast(s.isEdit ? "Сохранено" : "Операция добавлена");
