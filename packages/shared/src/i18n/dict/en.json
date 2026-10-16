@@ -5432,5 +5432,22 @@
  ", оплачена картой": ", paid by card",
  ", оплачена переводом": ", paid by transfer",
  ", оплачена": ", paid",
- ", выполнена": ", done"
+ ", выполнена": ", done",
+ "Удалённые записи": "Deleted appointments",
+ "Без сети не получится — удалённые записи живут на сервере.": "Not possible offline — deleted appointments live on the server.",
+ "{0} · повторяется": "{0} · repeats",
+ "Запись возвращена": "Appointment restored",
+ "Событие возвращено": "Event restored",
+ "Запись и её фото уже не вернуть.": "The appointment and its photos can't be restored afterwards.",
+ "Удалено насовсем": "Deleted permanently",
+ "Удалить {0} насовсем": "Delete {0} permanently",
+ "Серия со всеми повторами будет в «Удалённых записях» 30 дней.": "The series with all its repeats will stay in “Deleted appointments” for 30 days.",
+ "Событие будет в «Удалённых записях» 30 дней.": "The event will stay in “Deleted appointments” for 30 days.",
+ "Запись будет в «Удалённых записях» 30 дней.": "The appointment will stay in “Deleted appointments” for 30 days.",
+ "Запись недоступна или уже удалена": "The appointment is unavailable or already deleted",
+ "Записи нет в «Удалённых»": "The appointment is not in “Deleted”",
+ "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Changes to this appointment haven't reached the server yet — delete it after syncing",
+ "Календаря этой записи больше нет — вернуть её некуда": "This appointment's calendar no longer exists — there is nowhere to restore it",
+ "Событие может вернуть только его автор": "Only the event's author can restore it",
+ "Эта запись уже в календаре": "This appointment is already in the calendar"
 }

@@ -5432,5 +5432,22 @@
  ", оплачена картой": ", mit Karte bezahlt",
  ", оплачена переводом": ", per Überweisung bezahlt",
  ", оплачена": ", bezahlt",
- ", выполнена": ", erledigt"
+ ", выполнена": ", erledigt",
+ "Удалённые записи": "Gelöschte Termine",
+ "Без сети не получится — удалённые записи живут на сервере.": "Offline nicht möglich — gelöschte Termine liegen auf dem Server.",
+ "{0} · повторяется": "{0} · wiederholt sich",
+ "Запись возвращена": "Termin wiederhergestellt",
+ "Событие возвращено": "Ereignis wiederhergestellt",
+ "Запись и её фото уже не вернуть.": "Der Termin und seine Fotos lassen sich danach nicht wiederherstellen.",
+ "Удалено насовсем": "Endgültig gelöscht",
+ "Удалить {0} насовсем": "{0} endgültig löschen",
+ "Серия со всеми повторами будет в «Удалённых записях» 30 дней.": "Die Serie mit allen Wiederholungen bleibt 30 Tage in „Gelöschte Termine“.",
+ "Событие будет в «Удалённых записях» 30 дней.": "Das Ereignis bleibt 30 Tage in „Gelöschte Termine“.",
+ "Запись будет в «Удалённых записях» 30 дней.": "Der Termin bleibt 30 Tage in „Gelöschte Termine“.",
+ "Запись недоступна или уже удалена": "Der Termin ist nicht verfügbar oder bereits gelöscht",
+ "Записи нет в «Удалённых»": "Der Termin ist nicht unter „Gelöscht“",
+ "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Änderungen an diesem Termin sind noch nicht beim Server — löschen Sie ihn nach der Synchronisierung",
+ "Календаря этой записи больше нет — вернуть её некуда": "Der Kalender dieses Termins existiert nicht mehr — er kann nirgendwohin zurück",
+ "Событие может вернуть только его автор": "Nur der Ersteller des Ereignisses kann es wiederherstellen",
+ "Эта запись уже в календаре": "Dieser Termin ist bereits im Kalender"
 }

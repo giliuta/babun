@@ -56,6 +56,7 @@ import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { calendarSettingsRows } from "@/features/calendar/settings-rows";
+import { DeletedAppointmentsDoor } from "@/features/calendar/DeletedAppointmentsDoor";
 import {
   readGridZoom,
   readViewportH,
@@ -708,6 +709,9 @@ export default function CalendarSettingsScreen() {
               <SmsSettingsRow teamId={team?.id ?? null} />
             </SectionCard>
           ) : null}
+          {/* «УДАЛЁННЫЕ ЗАПИСИ» (16.10) — ящик удалённого в этом календаре:
+              30 дней, «Вернуть». Строку видит тот, кто может удалять. */}
+          {team ? <DeletedAppointmentsDoor teamId={team.id} /> : null}
 
           {/* ТУМБЛЕРОВ ВИДА ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 30.09): «Показывать доход
               и расход», «Метки дня» и «События» включены всегда

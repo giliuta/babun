@@ -1427,6 +1427,53 @@ export type Database = {
           },
         ]
       }
+      deleted_appointments: {
+        Row: {
+          appointment: Json
+          created_by: string | null
+          deleted_at: string
+          deleted_by: string | null
+          dependents: Json
+          id: string
+          kind: string
+          purge_at: string
+          team_id: string
+          tenant_id: string
+        }
+        Insert: {
+          appointment: Json
+          created_by?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          dependents?: Json
+          id: string
+          kind: string
+          purge_at: string
+          team_id: string
+          tenant_id: string
+        }
+        Update: {
+          appointment?: Json
+          created_by?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          dependents?: Json
+          id?: string
+          kind?: string
+          purge_at?: string
+          team_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_appointments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deleted_operations: {
         Row: {
           deleted_at: string
@@ -4611,6 +4658,7 @@ export type Database = {
         Args: { p_transfer_group_id: string }
         Returns: boolean
       }
+      delete_appointment: { Args: { p_id: string }; Returns: string }
       delete_operation: { Args: { p_id: string }; Returns: string }
       delete_sole_owned_tenants_for_account: {
         Args: { p_user_id: string }
@@ -4664,6 +4712,7 @@ export type Database = {
         Args: { p_appointment_id: string }
         Returns: undefined
       }
+      member_appointment_restore: { Args: { p_id: string }; Returns: string }
       member_appointment_update: {
         Args: { p_appointment_id: string; p_patch: Json }
         Returns: Json
@@ -4684,6 +4733,7 @@ export type Database = {
           seq: number
         }[]
       }
+      restore_deleted_appointment: { Args: { p_id: string }; Returns: string }
       restore_deleted_operation: { Args: { p_id: string }; Returns: string }
       set_default_company: {
         Args: { p_company_id: string }

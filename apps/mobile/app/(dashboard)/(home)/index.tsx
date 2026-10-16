@@ -183,7 +183,9 @@ import {
   useDeleteAppointment,
   useMemberCopyAppointment,
   useQuietUpdateAppointment,
+  useTrashAppointment,
 } from "@/features/calendar/mutations";
+import { useRestoreAppointment } from "@/features/calendar/deleted-appointments";
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
@@ -2008,11 +2010,13 @@ export default function CalendarTab() {
   // Web parity ActionMenuModal (dashboard/page.tsx:1752): «только действия,
   // которыми реально пользуются». Рисует канонический нижний лист через
   // chooseOption: ActionSheetIOS существует ТОЛЬКО на iOS, в браузере его
-  // вызов падал с TypeError и уносил всё меню записи. Необратимое удаление
-  // подтверждается отдельно.
+  // вызов падал с TypeError и уносил всё меню записи. Удаление (в «Удалённые
+  // записи») подтверждается отдельно.
   const createAppt = useCreateAppointment();
   const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
+  const trashAppt = useTrashAppointment();
+  const restoreAppt = useRestoreAppointment();
 
   /** Отмена и возврат в план — одна дорога с откатом из тоста. Причина
    *  ложится в cancel_reason (список — cancel-reasons.ts) и стирается при
@@ -2125,24 +2129,46 @@ export default function CalendarTab() {
       );
       return;
     }
+    // «УДАЛЁННЫЕ ЗАПИСИ»: удалённое 30 дней лежит в ящике шестерёнки
+    // календаря и возвращается оттуда или «Отменить» в тосте — вместе с фото.
+    // Серия — одна строка (повторы рисует правило), в ящик уходит целиком.
+    // Личное событие без календаря в ящик не идёт (у ящика, как у всего в
+    // компании, есть команда) — для него прежний вопрос «необратимо».
+    const toTrash = apt.team_id != null;
+    const event = isCalendarEvent(apt);
     void confirmAction(
-      repeating ? "Удалить всю серию?" : isCalendarEvent(apt) ? "Удалить событие?" : "Удалить запись?",
+      repeating ? "Удалить всю серию?" : event ? "Удалить событие?" : "Удалить запись?",
       {
-        message: repeating
-          ? "Удалится исходное событие и все его повторы. Действие необратимо."
-          : isCalendarEvent(apt)
-            ? "Действие необратимо."
-            : "Действие необратимо. Фото записи удалятся вместе с ней.",
+        message: !toTrash
+          ? "Действие необратимо."
+          : repeating
+            ? "Серия со всеми повторами будет в «Удалённых записях» 30 дней."
+            : event
+              ? "Событие будет в «Удалённых записях» 30 дней."
+              : "Запись будет в «Удалённых записях» 30 дней.",
         confirmLabel: repeating ? "Удалить серию" : "Удалить",
         destructive: true,
       },
     ).then((ok) => {
       if (!ok) return;
-      deleteAppt.mutate(apt.id, {
+      trashAppt.mutate(apt.id, {
         onSuccess: () => {
           void cancelAppointmentReminders(apt.id);
           haptics.warning();
-          toast(isCalendarEvent(apt) ? "Событие удалено" : "Запись удалена", "info");
+          const said = event ? "Событие удалено" : "Запись удалена";
+          toast(
+            said,
+            "info",
+            toTrash
+              ? {
+                  label: "Отменить",
+                  onPress: () =>
+                    restoreAppt.mutate(apt.id, {
+                      onError: (e) => toast(serverReason(e) ?? "Не удалось вернуть", "error"),
+                    }),
+                }
+              : undefined,
+          );
         },
         onError: (e) => toast(serverReason(e) ?? "Не удалось удалить", "error"),
       });

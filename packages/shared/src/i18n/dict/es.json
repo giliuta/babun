@@ -5432,5 +5432,22 @@
  ", оплачена картой": ", pagada con tarjeta",
  ", оплачена переводом": ", pagada por transferencia",
  ", оплачена": ", pagada",
- ", выполнена": ", hecha"
+ ", выполнена": ", hecha",
+ "Удалённые записи": "Citas eliminadas",
+ "Без сети не получится — удалённые записи живут на сервере.": "No es posible sin conexión: las citas eliminadas están en el servidor.",
+ "{0} · повторяется": "{0} · se repite",
+ "Запись возвращена": "Cita restaurada",
+ "Событие возвращено": "Evento restaurado",
+ "Запись и её фото уже не вернуть.": "La cita y sus fotos ya no se podrán recuperar.",
+ "Удалено насовсем": "Eliminado definitivamente",
+ "Удалить {0} насовсем": "Eliminar {0} definitivamente",
+ "Серия со всеми повторами будет в «Удалённых записях» 30 дней.": "La serie con todas sus repeticiones estará 30 días en «Citas eliminadas».",
+ "Событие будет в «Удалённых записях» 30 дней.": "El evento estará 30 días en «Citas eliminadas».",
+ "Запись будет в «Удалённых записях» 30 дней.": "La cita estará 30 días en «Citas eliminadas».",
+ "Запись недоступна или уже удалена": "La cita no está disponible o ya se eliminó",
+ "Записи нет в «Удалённых»": "La cita no está en «Eliminadas»",
+ "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Los cambios de esta cita aún no han llegado al servidor; elimínela después de sincronizar",
+ "Календаря этой записи больше нет — вернуть её некуда": "El calendario de esta cita ya no existe: no hay dónde restaurarla",
+ "Событие может вернуть только его автор": "Solo el autor del evento puede restaurarlo",
+ "Эта запись уже в календаре": "Esta cita ya está en el calendario"
 }

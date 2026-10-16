@@ -51,6 +51,7 @@ import {
   GoneAppointmentError,
   StaleAppointmentError,
 } from "../db/repositories/appointments";
+import { trashAppointment as repoTrashAppointment } from "../db/repositories/deleted-appointments";
 import type { Appointment } from "../local/appointments";
 import {
   cacheRead,
@@ -578,6 +579,28 @@ export async function deleteAppointment(
   // Offline — или за старыми правками: ATOMIC optimistic delete + enqueue.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "appointments", id);
   if (isOnline()) void kickReplayer({ supabase });
+}
+
+/** «УДАЛИТЬ» В «УДАЛЁННЫЕ ЗАПИСИ» (миграция 20261016170000). Снимок в ящик
+ *  кладёт сервер (`delete_appointment`), поэтому удаление — только с сетью,
+ *  без очереди: офлайн-удаление из очереди дошло бы обычным `delete` мимо
+ *  ящика, и «Вернуть» было бы нечего. Неотправленные правки этой записи
+ *  остаются впереди: удалённая под ними запись сделала бы их вечным отказом. */
+export async function trashAppointment(supabase: DbSupabase, id: string): Promise<void> {
+  assertWritesAllowed("deleteAppointment");
+  if (!isUuid(id)) {
+    // Местная строка, которой на сервере нет: удалять там нечего.
+    await cacheDelete("appointments", id);
+    return;
+  }
+  await refuseBehindStuckEdit(id, "deleteAppointment");
+  if (await hasQueuedOps("appointments", id)) {
+    throw new Error(
+      "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации",
+    );
+  }
+  await repoTrashAppointment(supabase, id);
+  await cacheDelete("appointments", id).catch(() => {});
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
