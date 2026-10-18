@@ -24,8 +24,14 @@ const income = { key: "finance.income", scope: "calendar" as const, levels: ["of
 
 describe("кем управляет директор", () => {
   test("обычным партнёром — да, без «его глазами»", () => {
-    const m = partnerManager(director, { userId: "x", map: map({}) });
+    const m = partnerManager(director, { userId: "x", map: map({}, { t1: {} }) });
     assert.deepEqual(m, { readOnly: null, canPreview: false, canRemove: true });
+  });
+
+  test("убрать — только партнёра своих команд", () => {
+    assert.equal(partnerManager(director, { userId: "x", map: map({}, { t1: {}, t2: {} }) }).canRemove, false);
+    assert.equal(partnerManager(director, { userId: "x", map: map({}) }).canRemove, false);
+    assert.equal(partnerManager(director, { userId: "x", map: undefined }).canRemove, false);
   });
 
   test("собой и другим директором — нет", () => {
