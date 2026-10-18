@@ -60,11 +60,6 @@ export function issuedDocument({
       || dict.sellerMissing
     : firstNonEmpty(tenant?.legal_name, tenant?.name) || dict.sellerMissing;
   const vatMode = invoiceVatMode(invoice);
-  // ЗНАК ПОЗИЦИЙ. У кредит-ноты строки инвойса записаны с минусом
-  // (`_issue_credit_note`, `_issue_receipt_credit_note`): работы — минусом,
-  // а строка скидки — плюсом. Работы и скидку различаем по знаку документа,
-  // иначе вся нота уходит в «Discount», а таблица остаётся пустой.
-  const sign = creditNote ? -1 : 1;
 
   return {
     title: creditNote ? dict.creditNote : dict.invoice,
@@ -123,13 +118,12 @@ export function issuedDocument({
     dueShort: invoice.due_on ? shortDate(invoice.due_on, dict.locale) : null,
     currency: invoice.currency,
     // СКИДКА — НЕ УСЛУГА.
-    // На сервере она строка с ценой против знака документа; на бумаге её
+    // На сервере она строка с отрицательной ценой; на бумаге её
     // строки в таблице нет — она стоит в итогах под «Subtotal».
     //
-    // КРЕДИТ-НОТА БЕЗ ПОЗИЦИЙ (частичная, частичный возврат по чеку, ноты
-    // старше копирования строк) несёт только суммы с минусом. Таблица говорит
-    // одной строкой, что отменено и на сколько, — а не «No lines yet» над
-    // итогом −€100.
+    // У ЧАСТИЧНОЙ КРЕДИТ-НОТЫ ПОЗИЦИЙ НЕТ: сервер пишет только суммы с
+    // минусом. Таблица говорит одной строкой, что отменено и на сколько, — а
+    // не «No lines yet» над итогом −€100. Полная нота несёт позиции инвойса.
     lines:
       creditNote && invoice.lines.length === 0
         ? [
@@ -146,7 +140,12 @@ export function issuedDocument({
               total: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
             },
           ]
-        : invoice.lines.filter((line) => sign * line.unit_price >= 0).map((line) => ({
+        : // ПОЛНАЯ НОТА НЕСЁТ ПОЗИЦИИ ИНВОЙСА С МИНУСОМ: цена каждой —
+          // отрицательная, а скидка инвойса стала строкой с плюсом. Фильтр
+          // «скидка — не услуга» выкидывал все позиции ноты: таблица пустела, а
+          // итоги печатали «Subtotal €0.00 / Discount −€100.00». У ноты строки
+          // печатаются как есть — их сумма и есть её итог.
+          (creditNote ? invoice.lines : invoice.lines.filter((line) => line.unit_price >= 0)).map((line) => ({
             title: line.title,
             description: line.description?.trim() || null,
             qty: formatQty(line.qty, line.unit, dict.locale),
@@ -162,7 +161,7 @@ export function issuedDocument({
       vatPercent: invoice.vat_percent,
       vatMode,
       total: invoice.total,
-      discount: signedDiscount(invoice.lines.map((line) => line.total), sign),
+      discount: creditNote ? null : splitDiscount(invoice.lines.map((line) => line.total)),
     }),
     // Кредит-ноту не оплачивают: реквизиты для оплаты на ней — приглашение
     // перевести деньги по документу, который их возвращает.
@@ -210,17 +209,6 @@ export function issuedDocument({
       ? dict.creditNoteFooter(invoice.number)
       : dict.footer(invoice.number, invoice.currency),
   };
-}
-
-/** Скидка документа при знаке его позиций: у кредит-ноты всё зеркально —
- *  работы минусом, скидка плюсом, и итоги печатаются так же зеркально
- *  («Subtotal −€100», «Discount €20», «Total −€80»). */
-function signedDiscount(
-  lineTotals: readonly number[],
-  sign: 1 | -1,
-): { services: number; amount: number } | null {
-  const discount = splitDiscount(lineTotals.map((total) => sign * total));
-  return discount && { services: sign * discount.services, amount: sign * discount.amount };
 }
 
 /**

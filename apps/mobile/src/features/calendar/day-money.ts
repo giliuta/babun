@@ -80,6 +80,9 @@ export function dayMoney(input: {
   extras?: readonly DayExtra[];
   businessToday: string;
   nowHm: string;
+  /** Записи под живым инвойсом (`invoicedAppointmentIds`): их деньги ждут
+   *  оплаты инвойсом, и в «Финансах» они не долг записи. Без набора — как было. */
+  invoiced?: ReadonlySet<string>;
 }): DayMoney {
   const { ymd } = input;
   const records = input.appointments.filter(
@@ -99,8 +102,14 @@ export function dayMoney(input: {
   const income = cents(incomeRows.reduce((sum, tx) => sum + signedAmount(tx), 0) + extras.income);
   const expense = cents(expenseRows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) + extras.expense);
 
-  const debtRecords = dayDebtRecords(records, input.businessToday, input.nowHm);
-  const plannedRecords = records
+  // Работа под инвойсом — не долг и не план записи: тот же набор исключают
+  // плитка «Долги» и список должников в «Финансах», иначе день календаря и
+  // «Финансы» называли разный долг за одни и те же деньги.
+  const unbilled = input.invoiced?.size
+    ? records.filter((a) => !input.invoiced?.has(a.id))
+    : records;
+  const debtRecords = dayDebtRecords(unbilled, input.businessToday, input.nowHm);
+  const plannedRecords = unbilled
     .filter(
       (a) =>
         isPlannedRecord(a) &&

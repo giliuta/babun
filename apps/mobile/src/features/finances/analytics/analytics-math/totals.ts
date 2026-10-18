@@ -11,6 +11,7 @@ import {
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
 import type { Service } from "@babun/shared/local/services";
+import type { ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
 import { cents, euros, inScope, ledgerInScope, recordMinutes, type Scope } from "./scope";
 
 export interface ServiceRow {
@@ -35,15 +36,17 @@ export function serviceBreakdown(
 ): ServiceRow[] {
   const by = new Map<string, { name: string; qty: number; recs: Set<string>; c: number }>();
   for (const a of records) {
-    for (const line of a.services ?? []) {
+    const lines = a.services ?? [];
+    const shares = recordLineShares(a, lines.map((line) => cents(lineTotal(line))));
+    lines.forEach((line, i) => {
       const id = line.serviceId;
       const name = line.serviceName?.trim() || catalog.get(id) || "Услуга удалена";
       const row = by.get(id) ?? { name, qty: 0, recs: new Set<string>(), c: 0 };
       row.qty += line.quantity ?? 1;
       row.recs.add(a.id);
-      row.c += cents(lineTotal(line));
+      row.c += shares[i] ?? 0;
       by.set(id, row);
-    }
+    });
   }
   return [...by.entries()]
     .map(([id, r]) => ({
@@ -54,6 +57,33 @@ export function serviceBreakdown(
       amount: euros(r.c),
     }))
     .sort((a, b) => b.amount - a.amount || b.quantity - a.quantity);
+}
+
+/**
+ * ДОЛИ СТРОК В СУММЕ ЗАПИСИ, в центах. Строки не знают общей скидки записи,
+ * ручного «Итого» и VAT, а «Работ на» — это `total_amount`: две услуги по €100
+ * со скидкой 10% давали в услугах 200 против «Работ на» 180, доли — 111%.
+ * Сумма записи раскладывается по строкам пропорционально, остаток центов — по
+ * наибольшим дробным частям, и строки сходятся с записью до цента. Полный
+ * возврат работу не оплачивает — у такой записи ноль, как в `workTotals`.
+ */
+function recordLineShares(a: Appointment, lineCents: readonly number[]): number[] {
+  const linesSum = lineCents.reduce((sum, c) => sum + c, 0);
+  const target =
+    a.payment_status === "refunded" ? 0 : a.total_amount == null ? linesSum : cents(a.total_amount);
+  if (linesSum <= 0 || target === linesSum) return [...lineCents];
+  const raw = lineCents.map((c) => (c * target) / linesSum);
+  const floors = raw.map((v) => Math.floor(v));
+  let rest = target - floors.reduce((sum, v) => sum + v, 0);
+  const order = raw
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((x, y) => y.frac - x.frac || x.i - y.i);
+  for (const { i } of order) {
+    if (rest <= 0) break;
+    floors[i] += 1;
+    rest -= 1;
+  }
+  return floors;
 }
 
 export interface MoneyTotals {
@@ -101,7 +131,11 @@ export interface WorkTotals {
 // скидкой 10% показывал «Не оплачено €10», хотя плитка «Долги» давала ноль.
 // Полный возврат работу не оплачивает и долга не
 // открывает — у такой записи ноль, как в `getRecognizedRevenue`.
-export function workTotals(records: readonly Appointment[]): WorkTotals {
+export function workTotals(
+  records: readonly Appointment[],
+  /** Работа под живым инвойсом должна остаток инвойса, как плитка «Долги». */
+  invoicing?: ClientInvoicing,
+): WorkTotals {
   let worked = 0;
   let paid = 0;
   let owed = 0;
@@ -109,7 +143,8 @@ export function workTotals(records: readonly Appointment[]): WorkTotals {
   for (const a of records) {
     if (a.payment_status !== "refunded") worked += cents(a.total_amount ?? 0);
     paid += cents(getPaidAmount(a));
-    owed += cents(getDebtAmount(a));
+    const invoiced = invoicing?.byAppointment.get(a.id);
+    owed += cents(invoiced !== undefined ? invoiced : getDebtAmount(a));
     minutes += recordMinutes(a);
   }
   const n = records.length;

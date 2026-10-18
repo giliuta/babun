@@ -5,6 +5,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { confirmThen } from "@/lib/confirm";
+import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
 import { useLastNonNull } from "@/lib/use-last-non-null";
@@ -46,6 +47,7 @@ export function useListRowActions({
 }) {
   // ── Long-press меню клиента (web v313 parity) — нижний лист
   // ClientActionsSheet; здесь только состояние и обработчики.
+  const toast = useToast();
   const [menuClient, setMenuClient] = useState<Client | null>(null);
 
   // Напоминание — ТОТ ЖЕ лист, что на карточке: одно действие не может
@@ -176,8 +178,23 @@ export function useListRowActions({
 
   // Правки по строке — в компанию строки: у работодателя — его клиентом
   // (`source`), у своей — источником экрана, как было.
-  const onToggleBlacklist = (c: Client) =>
-    updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted }, source: guestOf.get(c.id) });
+  // Чёрный список отменяется тем же тапом из тоста: пометка вслепую из
+  // меню строки иначе замечалась только по значку в списке.
+  const onToggleBlacklist = (c: Client) => {
+    const next = !c.blacklisted;
+    const source = guestOf.get(c.id);
+    updateById.mutate(
+      { id: c.id, patch: { blacklisted: next }, source },
+      {
+        onSuccess: () =>
+          toast(next ? "Клиент в чёрном списке" : "Клиент убран из чёрного списка", "info", {
+            label: "Отменить",
+            onPress: () =>
+              updateById.mutate({ id: c.id, patch: { blacklisted: !next }, source }),
+          }),
+      },
+    );
+  };
 
   // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
   // в нём — только когда их видно (иначе из списка они уходили бы всегда,

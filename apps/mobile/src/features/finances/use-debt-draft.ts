@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { debtRemainderCents } from "@babun/shared/local/finance/debt";
-import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { formatEURExact, moneyInputProblem, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { formatHM } from "@/features/appointments/helpers";
 import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
@@ -190,8 +190,10 @@ export function useDebtDraft({
   // переплата нигде не показывалась.
   const paidCents = Math.round(paid * 100);
   const belowPaid = !!debt && cents != null && cents > 0 && cents < paidCents;
+  // Будущая дата гасит кнопку сразу: сервер всё равно откажет, но уже после тапа.
+  const dateInFuture = date > todayYmd();
   const canSave =
-    online && !busy && !!debtTeamId && named && cents != null && cents > 0 && !belowPaid;
+    online && !busy && !!debtTeamId && named && cents != null && cents > 0 && !belowPaid && !dateInFuture;
 
   const reason = !online
     ? { text: OFFLINE, error: true }
@@ -200,10 +202,15 @@ export function useDebtDraft({
       : !named
         ? { text: "Выберите клиента", error: false }
         : cents == null || cents <= 0
-          ? { text: "Введите сумму долга", error: false }
+          ? // Введённая, но негодная сумма — настоящая причина, а не «введите».
+            moneyInputProblem(amount) != null
+            ? { text: moneyInputProblem(amount) as string, error: true }
+            : { text: "Введите сумму долга", error: false }
           : belowPaid
             ? { text: `Уже уплачено ${formatEURExact(paid)} — долг не меньше`, error: true }
-            : null;
+            : dateInFuture
+              ? { text: "Долг нельзя записать будущей датой", error: true }
+              : null;
 
   // Синхронный засов: `busy` включается только к следующему кадру, и
   // двойной тап успевал записать два одинаковых долга —

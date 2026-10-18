@@ -41,6 +41,7 @@ export {
   createAppointment,
   updateAppointment,
   deleteAppointment,
+  trashAppointment,
   PAID_CANCEL_OFFLINE,
   cancelsPaidVisit,
 } from "./appointmentsCached/write";

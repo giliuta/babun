@@ -4,8 +4,8 @@ import { Text, TextInput, View } from "react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { useThemeColors } from "@/theme/colors";
+import { parseVatRate } from "./vat-looks/parse-vat-rate";
 import { COL_GAP, KEY_W, Key, RATE_W, Rate, Row, Sum, Unit, VAT_W } from "./vat-looks/parts";
-import { parseVatRate } from "./vat-looks/parse-rate";
 
 // ДВЕ ИТОГОВЫЕ СТРОКИ ДЕНЕЖНОГО ЛИСТА.
 //

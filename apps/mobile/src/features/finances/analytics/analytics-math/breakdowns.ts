@@ -155,6 +155,10 @@ export function serviceProfit(
 ): ServiceProfitRow[] {
   const materials = new Map<string, number>();
   for (const a of records) {
+    // Материалы — только у выполненной и идущей работы, как у плитки
+    // «Расход» (`materialTotals`): прошедшая, но не закрытая запись иначе
+    // уменьшала прибыль услуги на материалы, которых «Расход» не знает.
+    if (a.status !== "completed" && a.status !== "in_progress") continue;
     for (const line of appointmentMaterialCostLines(a, costServices as Service[])) {
       materials.set(line.serviceId, (materials.get(line.serviceId) ?? 0) + cents(line.totalCost));
     }

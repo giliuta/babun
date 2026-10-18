@@ -62,6 +62,7 @@ export function DebtSheet({
     amount: number;
     clientId: string | null;
     direction: DebtDirection;
+    teamId: string | null;
   }) => void;
   /** Долги этого календаря человек только смотрит (этап 2 доступа): форма
    *  открыта целиком, «Сохранить» серая с причиной, а карточки «Ещё» с оплатой
@@ -306,6 +307,7 @@ export function DebtSheet({
                       amount: remainder,
                       clientId: debt.client_id,
                       direction: debt.direction,
+                      teamId: debt.team_id,
                     }),
                   )
                 }

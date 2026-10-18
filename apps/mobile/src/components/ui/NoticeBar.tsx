@@ -99,10 +99,12 @@ export function NoticeBar({
           gap: 8,
         }}
       >
+        {/* Две строки, а не одна: длинная ошибка сервера обрезалась
+            многоточием посреди слова, и причину отказа было не дочитать. */}
         <Text
-          numberOfLines={1}
+          numberOfLines={2}
           maxFontSizeMultiplier={1.2}
-          style={{ flex: 1, fontSize: 13, fontWeight: "600", color }}
+          style={{ flex: 1, fontSize: 13, lineHeight: 17, fontWeight: "600", color, paddingVertical: 6 }}
         >
           {message}
         </Text>

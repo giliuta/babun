@@ -40,6 +40,8 @@ import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
+import { persistInvoiceLanguage } from "@/features/finances/persist-invoice-language";
 import { useThemeColors } from "@/theme/colors";
 
 // КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК: сначала превью с
@@ -54,7 +56,14 @@ export default function CreditNoteScreen() {
   const t = useThemeColors();
   const router = useRouter();
   // `amount` — с «Вернуть» платежа инвойса: форма открывается на его сумме.
-  const { invoiceId, amount: amountParam } = useLocalSearchParams<{ invoiceId: string; amount?: string }>();
+  const { invoiceId, amount: amountParam, paymentId: paymentParam } = useLocalSearchParams<{
+    invoiceId: string;
+    amount?: string;
+    paymentId?: string;
+  }>();
+  // «Вернуть» на конкретном платеже: деньги уходят с него и его счёта, а не с
+  // самых новых платежей инвойса.
+  const paymentId = paymentParam && /^[0-9a-f-]{36}$/i.test(paymentParam) ? paymentParam : null;
   const original = useInvoice(invoiceId);
   const clients = useClients();
   const tenant = useTenant();
@@ -76,8 +85,12 @@ export default function CreditNoteScreen() {
   const issued = useRef<string | null>(null);
 
   const row = original.data ?? null;
+  // ГОД НОТЫ — ГОД СЕГОДНЯШНЕГО ДНЯ КОМПАНИИ, а не инвойса: сервер нумерует
+  // ноту по дате выпуска. Декабрьский инвойс, отменённый в январе, показывал
+  // в превью «CN-2025-…», а выходил «CN-2026-0001».
+  const noteYear = Number(businessToday.slice(0, 4));
   const series = useNextInvoiceSeries(
-    row?.year ?? new Date().getFullYear(),
+    noteYear,
     row?.company_id ?? null,
     !!row,
     "credit_note",
@@ -194,13 +207,22 @@ export default function CreditNoteScreen() {
             amount: value,
             reason: reason.trim() || null,
             language: paperLanguage,
+            paymentId,
           });
       // Язык — вторым шагом, как у инвойса: сервер копирует язык инвойса.
-      // Не записался — нота остаётся на языке инвойса и меняется в «⋯».
+      // Не записался — нота остаётся на языке инвойса, и человек узнаёт об
+      // этом сразу: документ уже выписан, а язык бумаги у кредит-ноты потом
+      // не меняется.
       if (paperLanguage !== row.language) {
-        await setInvoiceLanguage(supabase, note.id, paperLanguage).catch(
-          () => undefined,
+        const saved = await persistInvoiceLanguage(() =>
+          setInvoiceLanguage(supabase, note.id, paperLanguage),
         );
+        if (!saved) {
+          notify(
+            "Кредит-нота выписана, язык бумаги не сохранился",
+            "Документ остался на языке инвойса.",
+          );
+        }
       }
       haptics.success();
       issued.current = note.id;
@@ -230,7 +252,7 @@ export default function CreditNoteScreen() {
               row.company_id
                 ? {
                     companyId: row.company_id,
-                    year: row.year,
+                    year: noteYear,
                     next: series.data
                       ? { ...series.data, canSetStart: false }
                       : null,

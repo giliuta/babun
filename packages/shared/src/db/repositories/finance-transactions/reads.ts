@@ -24,6 +24,10 @@ export async function listTransactionsForRange(
   opts: ListRangeOptions = {},
 ): Promise<FinanceTransaction[]> {
   const rows: Row[] = [];
+  // Страницы — по смещению: строка, вставленная с другого телефона между
+  // страницами, сдвигает окно, и последняя строка страницы приходит второй
+  // раз. Плитки суммируют без проверки — один доход посчитался бы дважды.
+  const seen = new Set<string>();
   for (let offset = 0; ; offset += LEDGER_PAGE_SIZE) {
     let q = supabase
       .from("finance_transactions")
@@ -43,7 +47,11 @@ export async function listTransactionsForRange(
       .range(offset, offset + LEDGER_PAGE_SIZE - 1);
     if (error) throw new Error(`listTransactionsForRange: ${error.message}`);
     const page = (data ?? []) as Row[];
-    rows.push(...page);
+    for (const row of page) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      rows.push(row);
+    }
     if (page.length < LEDGER_PAGE_SIZE) break;
   }
   return rows.map(rowToTx);

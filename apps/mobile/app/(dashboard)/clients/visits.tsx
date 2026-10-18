@@ -21,6 +21,7 @@ import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { useClient } from "@/features/clients/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
@@ -89,9 +90,12 @@ function ClientVisitsScreen() {
   const today = todayYMD();
   // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`): тапнули по
   // €240 — список обязан дать €240.
+  // Работа под инвойсом должна остаток инвойса — тем же правилом, что
+  // «Долг» на карточке и плитка «Долги» в «Финансах».
+  const invoicing = useClientInvoicing();
   const unpaidList = useMemo(
-    () => unpaidVisits(appointments, today),
-    [appointments, today],
+    () => unpaidVisits(appointments, today, invoicing),
+    [appointments, today, invoicing],
   );
   const unpaidIds = useMemo(
     () => new Set(unpaidList.list.map((a) => a.id)),
@@ -127,14 +131,20 @@ function ClientVisitsScreen() {
   const spent = appointments
     .filter((a) => a.status !== "cancelled" && (a.kind ?? "work") === "work")
     .reduce((n, a) => n + Math.max(0, getPaidAmount(a)), 0);
+  // Инвойс без записи — тоже долг клиента (как на карточке), но строки
+  // визита у него нет: он входит в итог словами.
+  const invoiceOnly = invoicing?.unlinkedByClient.get(clientId ?? "") ?? 0;
+  const debtTotal = Math.round((unpaidList.total + invoiceOnly) * 100) / 100;
   const caption = unpaidOnly
     ? unpaidList.list.length > 0
-      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`
-      : "Неоплаченных записей нет."
+      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(debtTotal)}`
+      : invoiceOnly > 0
+        ? `Неоплаченных записей нет · по инвойсам ${formatEUR(invoiceOnly)}`
+        : "Неоплаченных записей нет."
     : done.length > 0
       ? showMoney
         ? `${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
-            unpaidList.total > 0 ? ` · долг ${formatEUR(unpaidList.total)}` : ""
+            debtTotal > 0 ? ` · долг ${formatEUR(debtTotal)}` : ""
           }`
         : `${done.length} ${visitsWord(done.length)}`
       : null;
@@ -212,7 +222,7 @@ function ClientVisitsScreen() {
           {caption ? (
             <RowCaption
               text={caption}
-              tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
+              tone={unpaidOnly || (showMoney && debtTotal > 0) ? "warning" : "quiet"}
             />
           ) : null}
           {/* День — заголовком над своими плашками, как в «Финансах»;
@@ -228,6 +238,7 @@ function ClientVisitsScreen() {
                     team={a.team_id ? teamsById.get(a.team_id) : undefined}
                     today={today}
                     showMoney={showMoney}
+                    invoicing={invoicing}
                     // Запись чужой (не открытой сейчас) компании страница
                     // записи не прочтёт — она читает активную; такая строка —
                     // показание, а не дверь в пустой экран.

@@ -170,6 +170,12 @@ export const deletedAccountsQueryKey = (tenantId: string | null) =>
 export const deletedOperationsQueryKey = (tenantId: string | null) =>
   ["transactions", tenantId, "deleted"] as const;
 
+/** «Удалённые записи». Свой первый сегмент, не под «appointments»:
+ *  мост синхронизации читает все списки под этим ключом как живые строки
+ *  календаря (`sync-bridge.ts`), а снимок из ящика — не живая запись. */
+export const deletedAppointmentsQueryKey = (tenantId: string | null) =>
+  ["deleted-appointments", tenantId] as const;
+
 export const accountBalancesQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "balances"] as const;
 

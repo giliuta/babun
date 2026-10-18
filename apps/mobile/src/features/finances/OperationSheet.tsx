@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReceiptSession } from "./receipt-upload";
+import { useReceiptLock } from "./operation-sheet/use-receipt-lock";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -53,6 +54,8 @@ export function OperationSheet({
   transaction,
   debtPayment,
   refundedTotal = 0,
+  refundsFailed: refundsFailedProp = false,
+  onRetryRefunds,
   canWrite: canWriteProp = true,
   canWriteType,
   fromCalendar = false,
@@ -123,7 +126,6 @@ export function OperationSheet({
 
   const amountCents = parseMoneyInputToCents(amount);
   const amountNum = (amountCents ?? 0) / 100;
-  // Строки VAT не видно — поле уже валовое, налог к нему не прибавляется.
   const amountMode = amountVatMode(vatMode, vatVisible && vatShown);
   const vatBreakdown = applyTxVat(amountNum, amountMode, opVatRate);
   const { refundsKnown, belowRefunded, refundHoldsAccount, lowersWhileRefundsUnknown } =
@@ -145,11 +147,22 @@ export function OperationSheet({
   // Фото прикладывает владелец: хранилище чеков владельческое, у сотрудника
   // блока файла нет — требовать от него то, что он приложить не может, нельзя.
   const receiptMissing = asks.receipt && isOwner && !receiptUrl;
+  // Сравнивается то, что ляжет в операцию: в поле у VAT «сверху» стоит нетто.
+  const grossCents = amountCents == null ? null : Math.round(vatBreakdown.gross * 100);
+  const receiptLocked = useReceiptLock({ visible, transaction, amountCents: grossCents, accountId, date });
   const gate: OperationGateInput = {
     online, accountsFailed, txAccountClosed, amount, amountCents, refundedTotal,
     belowRefunded, lowersWhileRefundsUnknown, dateInFuture, accountMismatch,
     teamId, teamAccountsCount: teamAccounts.length, accountId, categoryId,
     receiptMissing, categoryName: category?.name,
+    refundsFailed: !refundsKnown && refundsFailedProp,
+    // Категории заводит владелец (справочник владельческий): партнёру в команде
+    // без категорий выбирать нечего, и причина должна сказать, к кому идти.
+    noCategories: cats.length === 0,
+    canCreateCategory: isOwner,
+    debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
+    grossCents,
+    receiptLocked,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
   const isExpense = type === "expense";
@@ -177,7 +190,8 @@ export function OperationSheet({
     attachClient, vatMode, amountMode, vatTouched: draft.vatTouched,
     vatRetouched: draft.vatRetouched, vatSettingsKnown: vat.vatSettingsKnown,
     opVatRate, txAccountClosed, accountMismatch, belowRefunded,
-    lowersWhileRefundsUnknown, requestIntent: draft.requestIntent,
+    lowersWhileRefundsUnknown, refundsFailed: gate.refundsFailed === true,
+    requestIds: draft.requestIds,
     patchBaseline: draft.patchBaseline,
     insert, update, toast, onClose,
   });
@@ -187,7 +201,7 @@ export function OperationSheet({
   // (`features/finances/operation-delete.ts`), как счета и клиентов.
 
   const { askingClose, guardedClose, runAfterExit } = useOperationClose({
-    busy, onClose, onExited, draft,
+    busy, onClose, onExited, draft, vatRate: opVatRate,
   });
 
   const reason = operationReason(canWrite, operationInputReason(gate));
@@ -236,6 +250,7 @@ export function OperationSheet({
           onSave={save}
           canSave={canSave}
           busy={busy}
+          onRetry={onRetryRefunds}
         />
       }
     >
@@ -318,6 +333,7 @@ export function OperationSheet({
           busy={busy}
           refundHoldsAccount={refundHoldsAccount}
           refundsKnown={refundsKnown}
+          refundsFailed={gate.refundsFailed}
           txAccountId={transaction?.account_id}
           onPick={(id) => {
             setAccountTouched(true);

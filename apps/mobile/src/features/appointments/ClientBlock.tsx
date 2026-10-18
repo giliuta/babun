@@ -50,6 +50,7 @@ export function ClientBlock({
   client,
   stats,
   onPick,
+  pickOpensCard = false,
   onOpenCard,
   onClear,
   note,
@@ -62,6 +63,9 @@ export function ClientBlock({
    *  для всех, блок по праву). Звонок и карточка при этом остаются: это
    *  дорога к человеку, а не правка записи. */
   onPick?: () => void;
+  /** Тап открывает карточку, а не выбор: клиента держит оплата записи,
+   *  подменить его нельзя, править — можно. Меняет только подсказку. */
+  pickOpensCard?: boolean;
   /** Удержание строки — карточка клиента. Нет — карточку человеку не открыть. */
   onOpenCard?: () => void;
   /** «X» — снять выбранного. Нет обработчика — нет и кнопки: у записи клиента
@@ -119,7 +123,9 @@ export function ClientBlock({
               .filter(Boolean)
               .join(". ")}
             accessibilityHint={
-              onPick && onOpenCard
+              onPick && pickOpensCard
+                ? "Открывает карточку клиента"
+                : onPick && onOpenCard
                 ? "Открывает выбор клиента; удерживайте — карточка клиента"
                 : onPick
                   ? "Открывает выбор клиента"

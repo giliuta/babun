@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { operationTransactionPatch, type OperationPatchBaseline } from "../operation-patch";
-import { amountVatMode, hydratedAmountText, txVatMode, vatRowVisible } from "./vat-frame";
+import { amountVatMode, hydratedAmountText, txVatMode } from "./vat-frame";
 
 // Операция «налог сверху»: назначили 100, на счёт легло 119 при 19 %.
 const exclusiveTx = { amount: 119, vat_mode: "exclusive" as const, vat_amount: 19, vat_rate: 19 };
@@ -18,19 +18,6 @@ function grossFromField(text: string, rowOnScreen: boolean): number {
   const amountNum = (parseMoneyInputToCents(text) ?? 0) / 100;
   return applyTxVat(amountNum, amountVatMode(exclusiveTx.vat_mode, rowOnScreen), 19).gross;
 }
-
-describe("строка VAT не исчезает посреди набора ставки", () => {
-  test("открытая строка держится при ставке 0", () => {
-    assert.equal(vatRowVisible({ isOwner: true, rate: 0, vatShown: true }), true);
-  });
-  test("закрытая при ставке 0 — клавиш нет, считать нечем", () => {
-    assert.equal(vatRowVisible({ isOwner: true, rate: 0, vatShown: false }), false);
-    assert.equal(vatRowVisible({ isOwner: true, rate: 19, vatShown: false }), true);
-  });
-  test("тому, кто не видит настроек налога, строки нет", () => {
-    assert.equal(vatRowVisible({ isOwner: false, rate: 19, vatShown: true }), false);
-  });
-});
 
 describe("правка «налог сверху», когда строки VAT не видно", () => {
   test("поле показывает сумму на счёте, а не без налога", () => {

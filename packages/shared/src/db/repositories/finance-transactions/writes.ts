@@ -6,6 +6,7 @@ import type {
   TransactionType,
   PaymentMethod,
 } from "../../../local/finance/transaction";
+import { REQUEST_ID_REUSED, sameLedgerContent } from "./duplicate";
 import {
   assertLedgerAmount,
   assertPositiveMoneyAmount,
@@ -17,6 +18,9 @@ import {
   type Row,
   type Update,
 } from "./shared";
+
+/** Правка упёрлась в строку, которой уже нет. */
+export const OPERATION_GONE = "Операцию уже удалили на другом устройстве";
 
 export interface TransactionDraft {
   type: Exclude<TransactionType, "transfer">; // transfers use a separate helper
@@ -108,7 +112,11 @@ export async function insertTransaction(
     if (readError || !existing) {
       throw new Error(readError?.message ?? "Не удалось сохранить финансовую операцию");
     }
-    return rowToTx(existing as Row);
+    const stored = rowToTx(existing as Row);
+    // Тот же id, но другое содержимое — это не повтор, а новая попытка поверх
+    // записанной: честная ошибка вместо «успеха» с чужой суммой.
+    if (!sameLedgerContent(stored, draft)) throw new Error(REQUEST_ID_REUSED);
+    return stored;
   }
   if (error || !data) {
     throw new Error(error?.message ?? "Не удалось сохранить финансовую операцию");
@@ -157,9 +165,17 @@ export async function updateTransaction(
     .is("invoice_id", null)
     .select("id")
     .maybeSingle();
-  if (error || !data) {
+  if (error) throw new Error(error.message);
+  if (!data) {
+    // Ноль строк — либо операции уже нет (её удалили на другом устройстве),
+    // либо она есть, но правке закрыта (инвойс, не ручная). Различает чтение.
+    const { data: still, error: readError } = await supabase
+      .from("finance_transactions")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
     throw new Error(
-      error?.message ?? "Операция недоступна или связана с инвойсом",
+      !readError && !still ? OPERATION_GONE : "Операция недоступна или связана с инвойсом",
     );
   }
 }
@@ -175,9 +191,25 @@ export async function deleteTransaction(
   id: string,
 ): Promise<void> {
   const { data, error } = await supabase.rpc("delete_operation", { p_id: id });
+  if (error && isNotFound(error)) {
+    // «Не найдена» после повтора — не отказ: прошлая попытка дошла до сервера,
+    // а ответ потерялся (таймаут). Если строки в журнале больше нет, она
+    // удалена — цель достигнута. Есть, но удалению закрыта (инвойс) — отказ.
+    const { data: still, error: readError } = await supabase
+      .from("finance_transactions")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!readError && !still) return;
+  }
   if (error || !data) {
     throw new Error(
       error?.message || "Операция недоступна или связана с инвойсом",
     );
   }
+}
+
+/** Серверная «не найдена»: `raise exception … errcode 'P0002'`. */
+function isNotFound(error: { code?: string; hint?: string | null }): boolean {
+  return error.code === "P0002" || (error.hint ?? "").includes("operation:not_found");
 }

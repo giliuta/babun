@@ -131,6 +131,14 @@ export function previousPeriod(
 
 /** Изменение в процентах; прошлое ноль — сравнивать не с чем (`null`). */
 export function changePct(current: number, previous: number): number | null {
-  if (Math.round(previous * 100) === 0) return null;
+  // Прошлое меньше одного евро — сравнивать не с чем: €0,40 → €500 печаталось
+  // как «↑ 124900%», и цифра пугала вместо того, чтобы объяснять.
+  if (Math.abs(Math.round(previous * 100)) < 100) return null;
   return Math.round(((current - previous) / Math.abs(previous)) * 100);
+}
+
+/** «↑ 12%», «↓ 40%»; рост больше 999% — «↑ > 999%». */
+export function changeText(pct: number): string {
+  const abs = Math.abs(pct);
+  return `${pct > 0 ? "↑" : "↓"} ${abs > 999 ? "> 999" : abs}%`;
 }

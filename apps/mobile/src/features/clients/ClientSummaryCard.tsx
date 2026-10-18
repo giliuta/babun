@@ -5,6 +5,7 @@ import { todayYMD } from "@/features/clients/filter";
 import { useClientsCapabilities } from "@/session/company-scope";
 import { useTeams } from "@/features/reference/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 
 import { useThemeColors } from "@/theme/colors";
 
@@ -45,6 +46,8 @@ export function ClientSummaryCard({
   // ДЕНЬГИ КЛИЕНТА — ТОЛЬКО ТОМУ, КОМУ ОНИ ОТКРЫТЫ (STORY-088, волна 4).
   const capsMoney = useClientsCapabilities().money;
   const money = showMoney ?? capsMoney;
+  // Долг записи под инвойсом — остаток инвойса, как в «Истории».
+  const invoicing = useClientInvoicing();
 
   if (!lastRecord) {
     // Записей нет — словами, без кнопки.
@@ -67,6 +70,7 @@ export function ClientSummaryCard({
         today={todayYMD()}
         showMoney={money}
         onPress={onOpenHistory}
+        invoicing={invoicing}
       />
       </View>
     </>

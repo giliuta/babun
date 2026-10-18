@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/AppearanceSheet";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useThemeColors } from "@/theme/colors";
-import type { AccountWithBalance } from "../accounts";
+import { balanceText, type AccountWithBalance } from "../accounts";
 import { accountIcon } from "../account-ui";
 
 /** Высота строки: ею `ReorderList` меряет шаг перетаскивания. Та же, что у
@@ -51,7 +51,7 @@ export function AccountRow({
 }: {
   account: Pick<
     AccountWithBalance,
-    "name" | "color" | "icon" | "kind" | "balance"
+    "name" | "color" | "icon" | "kind" | "balance" | "balance_known"
   >;
   /** Тихое слово перед суммой (`accountRowMark`): «Основной», «Не в оплате».
    *  Место ему уступает имя (единственная тянущаяся колонка строки): длинное
@@ -74,8 +74,9 @@ export function AccountRow({
   closed?: { onReopen: () => void } | null;
 }) {
   const t = useThemeColors();
-  const sign = moneySign(account.balance);
-  const amount = money(account.balance);
+  // Остаток не назван сервером — прочерк, а не «€0» и не красный минус.
+  const sign = account.balance_known ? moneySign(account.balance) : 0;
+  const amount = balanceText(account, money);
   return (
     <SwipeRow
       // СКРЫТЬ — НА ЛЕВОЙ КРОМКЕ (AGENTS 9: удалить

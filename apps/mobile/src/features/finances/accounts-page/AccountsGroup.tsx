@@ -3,10 +3,9 @@ import { money } from "@babun/shared/common/utils/money";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { RowGroupHeader } from "@/components/ui/card-rows";
 import { GUTTER } from "@/components/ui/tokens";
-import type { AccountWithBalance } from "../accounts";
-import { sumAccountBalances } from "../accounts-sections";
+import { UNKNOWN_BALANCE_TEXT, type AccountWithBalance } from "../accounts";
 import { ACCOUNT_ROW_H, AccountRow } from "./AccountRow";
-import { accountRowMark } from "./page-rules";
+import { accountRowMark, groupBalanceTotal } from "./page-rules";
 
 // ГРУППА СЧЕТОВ ОДНОЙ КОМАНДЫ НА СТРАНИЦЕ «СЧЕТА» — вынесена из
 // `app/accounts/settings.tsx`: у страницы есть режим «Только видит», и она выросла за 400 строк.
@@ -34,6 +33,7 @@ export function AccountsGroup({
   onDelete: (account: AccountWithBalance) => void;
   onReopen: (account: AccountWithBalance) => void;
 }) {
+  const total = groupBalanceTotal(accounts);
   return (
     <View style={{ marginTop: 12 }}>
       {/* ПОДЫТОГ СТОИТ НАД ГРУППОЙ, А НЕ ПОД НЕЙ: это заголовок раздела с
@@ -42,10 +42,9 @@ export function AccountsGroup({
           читается как чей-то остаток. */}
       <RowGroupHeader
         title={title ?? "На счетах"}
-        value={money(
-          // Скрытый счёт в сумму не входит — как на плитке «Счета».
-          sumAccountBalances(accounts.filter((account) => account.is_active && !account.is_hidden)),
-        )}
+        // Скрытый счёт в сумму не входит — как на плитке «Счета»; без остатка
+        // хоть одного счёта подытога нет — прочерк.
+        value={total === null ? UNKNOWN_BALANCE_TEXT : money(total)}
       />
       {/* ПОРЯДОК — РУЧКОЙ, КАК ВЕЗДЕ (шесть точек справа для передвижения). Каждая группа — свой
           список: `position` нумеруется внутри команды, и строка чужой команды

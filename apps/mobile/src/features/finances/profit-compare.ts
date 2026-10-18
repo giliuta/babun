@@ -3,7 +3,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { Appointment } from "@babun/shared/local/appointments";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
 import type { Service } from "@/features/services/queries";
-import { changePct } from "./analytics/analytics-math";
+import { changePct, changeText } from "./analytics/analytics-math";
 import { inTeamScope } from "./team-scope";
 
 // «ПРИБЫЛЬ» К ПРОШЛОМУ ПЕРИОДУ: такая аналитика — только в прибыли.
@@ -82,5 +82,5 @@ export function changeOf(
   const pct = changePct(now, before);
   if (pct === null || pct === 0) return null;
   const up = pct > 0;
-  return { text: `${up ? "↑" : "↓"} ${Math.abs(pct)}%`, good: up === goodUp };
+  return { text: changeText(pct), good: up === goodUp };
 }

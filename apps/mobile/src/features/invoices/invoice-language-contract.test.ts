@@ -21,7 +21,21 @@ const read = (path: string) => readFileSync(resolve(here, path), "utf8");
 describe("язык бумаги инвойса", () => {
   test("запись языка после выставления — вторая попытка, документ несёт записанный язык", () => {
     const queries = read("../finances/invoices-queries.ts");
-    assert.match(queries, /for \(let attempt = 0; attempt < 2; attempt\+\+\) \{\s*try \{\s*await setInvoiceLanguage\(supabase, invoice\.id, language\);\s*return \{ \.\.\.invoice, language \};/);
+    assert.match(queries, /const saved = await persistInvoiceLanguage\(\(\) =>\s*setInvoiceLanguage\(supabase, invoice\.id, language\),\s*\);\s*if \(saved\) return \{ \.\.\.invoice, language \};/);
+    // Правка выставленного — тот же шаг и тот же ответ.
+    assert.match(queries, /const saved = await persistInvoiceLanguage\(\(\) => setInvoiceLanguage\(supabase, id, language\)\);\s*if \(saved\) return \{ \.\.\.invoice, language \};/);
+  });
+
+  test("кредит-нота не глотает ошибку записи языка — говорит об этом", () => {
+    const note = read("../../../app/invoices/credit-note.tsx");
+    assert.doesNotMatch(note, /\.catch\(\s*\(\) => undefined/);
+    assert.match(note, /const saved = await persistInvoiceLanguage\(\(\) =>\s*setInvoiceLanguage\(supabase, note\.id, paperLanguage\),\s*\);\s*if \(!saved\) \{\s*notify\(\s*"Кредит-нота выписана, язык бумаги не сохранился"/);
+  });
+
+  test("запись языка сверяет строку: .select() и совпадение языка", () => {
+    const repo = readModuleSource(resolve(here, "../../../../../packages/shared/src/db/repositories/invoices.ts"));
+    assert.match(repo, /\.update\(\{ language \}\)\s*\.eq\("id", id\)\s*\.select\("id, language"\)/);
+    assert.match(repo, /row\.language !== language/);
   });
 
   test("не записался — экран выставления говорит об этом", () => {

@@ -4,8 +4,7 @@ import {
   AnalyticsScreen as InsightsScreen,
   type AnalyticsStart,
 } from "@/features/finances/analytics/AnalyticsScreen";
-import { analyticsStartPeriod } from "@/features/finances/analytics/start-period";
-import { useBusinessClock } from "@/features/finances/home/use-business-clock";
+import { makePeriod, type PeriodKind } from "@/lib/period";
 
 // «АНАЛИТИКА» (бывшая «Сводка») — экран живёт в `features/finances/analytics`
 // (разрезы по услугам, мастерам и месяцам). Этот файл — только адрес и ворота компании.
@@ -19,8 +18,12 @@ import { useBusinessClock } from "@/features/finances/home/use-business-clock";
 //
 // «ФИНАНСЫ» ПЕРЕДАЮТ СВОЙ ПЕРИОД: `?period=` (и `from`/`to` у своего
 // периода) — аналитика открывается на том же периоде. Команду не передают:
-// аналитика всегда открывается на всей компании. Пресет строится по часам
-// компании (`analyticsStartPeriod`).
+// аналитика всегда открывается на всей компании.
+const KINDS: readonly PeriodKind[] = [
+  "today", "yesterday", "week", "lastweek", "month", "lastmonth",
+  "quarter", "lastquarter", "year", "lastyear",
+];
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function InsightsRoute() {
   const { tenant, period, from, to } = useLocalSearchParams<{
@@ -29,9 +32,19 @@ export default function InsightsRoute() {
     from?: string;
     to?: string;
   }>();
-  const { businessNow } = useBusinessClock();
+  // Границы, переданные «Финансами», берутся всегда, а не только у своего
+  // периода: «Финансы» считают пресет по часам компании, а пересчёт здесь шёл
+  // по часам телефона — телефон в другом поясе открывал соседний месяц.
+  const bounds = !!from && !!to && YMD.test(from) && YMD.test(to) && from <= to;
   const start: AnalyticsStart = {
-    period: analyticsStartPeriod({ period, from, to }, businessNow),
+    period:
+      period === "custom" && bounds
+        ? { preset: "custom", from: from as string, to: to as string }
+        : KINDS.includes(period as PeriodKind)
+          ? bounds
+            ? { preset: period as PeriodKind, from: from as string, to: to as string }
+            : makePeriod(period as PeriodKind)
+          : null,
   };
   if (!tenant) return <InsightsScreen start={start} />;
   return (

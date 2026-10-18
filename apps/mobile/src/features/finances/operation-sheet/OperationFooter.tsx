@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Button } from "@/components/ui/Button";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -12,29 +12,38 @@ export function OperationFooter({
   onSave,
   canSave,
   busy,
+  onRetry,
 }: {
   reason: OperationReason;
   label: string;
   onSave: () => void;
   canSave: boolean;
   busy: boolean;
+  /** Тап по причине с `retry` — перечитать то, что не загрузилось. */
+  onRetry?: () => void;
 }) {
   const th = useThemeColors();
   return (
     <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
       {reason ? (
-        <Text
-          accessibilityLiveRegion="polite"
-          maxFontSizeMultiplier={1.3}
-          style={{
-            fontSize: 13,
-            lineHeight: 18,
-            textAlign: "center",
-            color: reason.error ? th.danger : th.sub,
-          }}
+        <Pressable
+          disabled={!reason.retry || !onRetry}
+          onPress={onRetry}
+          accessibilityRole={reason.retry && onRetry ? "button" : undefined}
         >
-          {reason.text}
-        </Text>
+          <Text
+            accessibilityLiveRegion="polite"
+            maxFontSizeMultiplier={1.3}
+            style={{
+              fontSize: 13,
+              lineHeight: 18,
+              textAlign: "center",
+              color: reason.error ? th.danger : th.sub,
+            }}
+          >
+            {reason.text}
+          </Text>
+        </Pressable>
       ) : null}
       <Button
         label={label}

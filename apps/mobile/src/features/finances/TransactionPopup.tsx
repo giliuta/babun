@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import {
   TX_TYPE_LABEL,
@@ -19,8 +19,8 @@ import { useFeatureOn } from "@/features/settings/company-features";
 import type { Team } from "@/features/reference/queries";
 import { deleteOperationAlert, deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
-import { createRequestIntent } from "./request-intent";
 import { randomUuid } from "@babun/shared/sync";
+import { createRefundRequestIds } from "./operation-sheet/request-ids";
 import { useRouter, type Href } from "expo-router";
 import { useReceipts } from "@/features/finances/receipts-queries";
 import { MetaRow, PopupAmount, RefundForm } from "./transaction-popup/PopupParts";
@@ -49,6 +49,7 @@ export function TransactionPopup({
   alreadyRefunded = 0,
   refundTotalsLoading = false,
   refundTotalsError = false,
+  onRetryRefundTotals,
   onClose,
   onInvoice,
   onClientOpen,
@@ -72,6 +73,8 @@ export function TransactionPopup({
   refundTotalsLoading?: boolean;
   /** Запрос Σ возвратов упал: та же консервативная защита, другое слово. */
   refundTotalsError?: boolean;
+  /** Перечитать Σ возвратов: подпись об ошибке тапается. */
+  onRetryRefundTotals?: () => void;
   onClose: () => void;
   onInvoice: (tx: FinanceTransaction) => void;
   onClientOpen: (clientId: string) => void;
@@ -85,10 +88,9 @@ export function TransactionPopup({
   const t = useThemeColors();
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
-  // Id попытки возврата — один на сумму в открытой форме: повтор после
-  // потерянного ответа упирается в тот же id и не проводит возврат второй раз,
-  // а поправленная перед повтором сумма — уже другой возврат (`request-intent.ts`).
-  const refundIntent = useRef(createRequestIntent(randomUuid)).current;
+  // Id возврата привязан к НАМЕРЕНИЮ (операция + сумма): повтор без правок не
+  // проводит возврат второй раз, исправленная сумма получает новый id.
+  const refundIds = useRef(createRefundRequestIds(randomUuid)).current;
   const [busy, setBusy] = useState(false);
   // Синхронный гард поверх busy: state включается только после ре-рендера,
   // и сверхбыстрый двойной тап «Возврат» успевал записать возврат дважды —
@@ -191,7 +193,7 @@ export function TransactionPopup({
       ? refundTotalsLoading
         ? "Считаем, сколько уже возвращено…"
         : refundTotalsError
-          ? "Не удалось проверить прошлые возвраты — возврат недоступен."
+          ? "Не удалось проверить прошлые возвраты — нажмите сюда, чтобы повторить."
           : null
       : null;
   // Перевод УДАЛЯЕТСЯ, но не правится и не возвращается: сервер запрещает
@@ -256,8 +258,8 @@ export function TransactionPopup({
     savingRef.current = true;
     setBusy(true);
     try {
-      await onRefund(tx, refundNum, refundIntent.idFor(`${tx.id}|${refundNum}`));
-      refundIntent.done();
+      await onRefund(tx, refundNum, refundIds.idFor({ txId: tx.id, cents: refundCents ?? 0 }));
+      refundIds.done();
       haptics.success();
       onClose();
     } catch (e) {
@@ -308,7 +310,7 @@ export function TransactionPopup({
         }
         setShowRefundForm(true);
         setRefundAmount(String(refundRemaining));
-        refundIntent.done();
+        refundIds.done();
       },
     });
   }
@@ -355,12 +357,14 @@ export function TransactionPopup({
             строки пустое место рядом с доходом читалось бы как «возврата тут
             не бывает». */}
         {refundStatusCaption ? (
-          <Text
-            className="px-5 pb-1 pt-3 text-center text-[13px]"
-            style={{ color: refundTotalsError ? t.danger : t.sub }}
-          >
-            {refundStatusCaption}
-          </Text>
+          <Pressable disabled={!refundTotalsError} onPress={onRetryRefundTotals}>
+            <Text
+              className="px-5 pb-1 pt-3 text-center text-[13px]"
+              style={{ color: refundTotalsError ? t.danger : t.sub }}
+            >
+              {refundStatusCaption}
+            </Text>
+          </Pressable>
         ) : null}
 
         {!showRefundForm ? (

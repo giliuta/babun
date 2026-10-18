@@ -3,13 +3,14 @@ import { Pressable, TextInput } from "react-native";
 import type { useInlineNote } from "@/components/blocks/use-inline-note";
 import { useThemeColors } from "@/theme/colors";
 
-// МИНИ-БЛОК ЗАМЕТКИ ВНУТРИ КАРТОЧКИ: маленькая строчка, мини-блочок внутри
-// блока — не бросается в глаза, красиво смотрится и не занимает много места.
+// ЗАМЕТКА — САМОЕ ВАЖНОЕ, ЧТО ПРОЧИТАЮТ ПЕРЕД ВЫЕЗДОМ: код ворот, «звонить
+// жене», «собака». Серая плашка 13pt сливалась с полями ввода и читалась
+// мелким примечанием. Поэтому у заметки своя бумага: тёплая подложка
+// `noteFill`, полоса `noteEdge` слева, чёрный текст основным кеглем 15/20.
+// Без тени: заметка — часть блока, а не карточка над ним. Ни ярлыка, ни
+// значка: чья заметка, говорит подсказка в поле, а карточка — о ком она.
 //
-// Подложка `t.fill` со скруглением карточки — тот же материал, что у
-// композера заметок на карточке клиента; в покое одна строка Subhead 13/18,
-// пока печатают — до четырёх. Ни ярлыка, ни значка: чья заметка, говорит
-// подсказка в поле, а карточка — о ком она.
+// Одна и та же у записи, события, клиента и объекта.
 //
 // ОДИН РАЗМЕР НА ПРОДУКТ: заметки в событиях такие же, как в клиентах. Проп
 // `tall` (четыре строки в покое вместо одной) снят: довод «в событиях заметка и
@@ -64,9 +65,11 @@ export function InlineNoteField({
         marginTop: 2,
         marginBottom: 8,
         paddingHorizontal: 12,
-        paddingVertical: 7,
+        paddingVertical: 9,
         borderRadius: t.radius.input,
-        backgroundColor: t.fill,
+        borderLeftWidth: 3,
+        borderLeftColor: t.noteEdge,
+        backgroundColor: t.noteFill,
       }}
     >
       <TextInput
@@ -86,13 +89,13 @@ export function InlineNoteField({
         contextMenuHidden={noCopy}
         maxFontSizeMultiplier={1.3}
         style={{
-          minHeight: rows * 18,
-          maxHeight: Math.max(72, (rows + 5) * 18),
+          minHeight: rows * 20,
+          maxHeight: Math.max(80, (rows + 5) * 20),
           textAlignVertical: "top",
           paddingTop: 0,
           paddingBottom: 0,
-          fontSize: 13,
-          lineHeight: 18,
+          fontSize: 15,
+          lineHeight: 20,
           color: t.ink,
         }}
       />

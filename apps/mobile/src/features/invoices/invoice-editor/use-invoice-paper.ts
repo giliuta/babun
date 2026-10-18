@@ -32,7 +32,7 @@ export function useInvoicePaper({
   draft: ReturnType<typeof useInvoiceDraft>;
 }) {
   const {
-    language, issuedOn, dueOn, clientId, setClientId, locationId, setLocationId,
+    language, issuedOn, dueOn, issuedTouched, dueTouched, clientId, setClientId, locationId, setLocationId,
     clientRequisitesId, setClientRequisitesId, appointmentId, teamId, vatMode,
     rateOverride, documentRate, companyId, accountId, notes, discountKind,
     discountValue, lines,
@@ -54,9 +54,11 @@ export function useInvoicePaper({
 
   // ЧЕРНОВИК НЕ ПРОПАДАЕТ МОЛЧА. Форма сравнивает себя с той, какой родилась:
   // перечислять «тронутые» поля по одному — способ однажды забыть новое.
+  // Даты — только тронутые руками: сдвиг нетронутой даты вслед за часами
+  // бизнеса правкой человека не считается.
   const shape = JSON.stringify({
-    issuedOn,
-    dueOn,
+    issuedOn: issuedTouched.current ? issuedOn : null,
+    dueOn: dueTouched.current ? dueOn : null,
     clientId,
     locationId,
     clientRequisitesId,

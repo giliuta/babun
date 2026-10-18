@@ -126,7 +126,7 @@ export function PaymentHistorySheet({
             }}
           >
             <Text className="text-[15px] font-semibold" style={{ color: t.ink }}>
-              Осталось по записи
+              Получено по записи
             </Text>
             <Text
               className="text-[17px] font-bold"

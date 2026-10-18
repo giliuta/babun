@@ -10,6 +10,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
 import { useAppointments } from "@/features/calendar/queries";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import type { DiscountKind } from "@/features/appointments/TotalSheet";
@@ -159,9 +160,11 @@ export function InvoiceBlocks({
   // карточку. Та же карта сводок кормит и шторку. Заметки клиента в инвойсе нет —
   // она здесь не нужна.
   const appointments = useAppointments();
+  // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
+  const invoicing = useClientInvoicing();
   const statsById = useMemo(
-    () => buildStatsMap(clients, appointments.data ?? []),
-    [clients, appointments.data],
+    () => buildStatsMap(clients, appointments.data ?? [], invoicing),
+    [clients, appointments.data, invoicing],
   );
   const clientStats = client ? statsById.get(client.id) : undefined;
   // ПРАЙС — КОМАНДЫ, А НЕ ВСЕЙ КОМПАНИИ: услуги подтягиваются с команды. Правило

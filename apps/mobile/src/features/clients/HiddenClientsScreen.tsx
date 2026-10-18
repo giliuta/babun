@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -85,9 +86,11 @@ export function HiddenClientsScreen({
   // Деньги и визиты считаются ТЕМ ЖЕ селектором, что в рабочем списке:
   // удалённый клиент не перестаёт быть должником, и цифра под его именем
   // обязана совпадать с той, что была вчера.
+  // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
+  const invoicing = useClientInvoicing();
   const statsMap = useMemo(
-    () => buildStatsMap(clients, appointments),
-    [clients, appointments],
+    () => buildStatsMap(clients, appointments, invoicing),
+    [clients, appointments, invoicing],
   );
 
   const run = async (client: Client, label: string, action: () => Promise<void>) => {

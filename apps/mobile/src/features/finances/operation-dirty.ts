@@ -25,6 +25,14 @@ export interface OperationDraftFields {
   /** День и время, если их меняли руками (`WhenSheet`); иначе `null` — время
    *  «сейчас», подставленное формой, правкой не считается. */
   when?: string | null;
+  /** Налог операции — `vatDirtyKey`. Режим и ставка тоже набранное: правка
+   *  одного VAT меняет сумму документа, и закрытие свайпом обязано спросить. */
+  vat?: string | null;
+}
+
+/** Налог одним значением для сравнения: без налога ставка не значит ничего. */
+export function vatDirtyKey(mode: "none" | "inclusive" | "exclusive", rate: number): string {
+  return mode === "none" ? "none" : `${mode}:${Number(rate) || 0}`;
 }
 
 export function operationDraftKey(f: OperationDraftFields): string {
@@ -38,6 +46,7 @@ export function operationDraftKey(f: OperationDraftFields): string {
     f.masterId ?? null,
     f.clientId ?? null,
     f.when ?? null,
+    f.vat ?? "none",
   ]);
 }
 

@@ -46,6 +46,11 @@ describe("долг по незакрытой работе", () => {
     } as never;
   }
 
+  test("долг в центах: копейки не пропадают и не округляются до евро", () => {
+    assert.equal(buildStats(CLIENT, [apt({ total_amount: 0.4 })]).debt, 0.4);
+    assert.equal(buildStats(CLIENT, [apt({ total_amount: 12.6 })]).debt, 12.6);
+  });
+
   test("прошедшая незакрытая запись считается долгом", () => {
     assert.equal(buildStats(CLIENT, [apt({})]).debt, 100);
   });

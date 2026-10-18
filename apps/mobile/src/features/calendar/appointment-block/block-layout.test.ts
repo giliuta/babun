@@ -17,9 +17,9 @@ const base = {
   lineH: 16,
   label: "Анна Петрова",
   service: "Чистка",
-  address: "Лимассол",
   offLabelColor: null,
   editing: false,
+  overdue: false,
   reschedulable: true,
 };
 
@@ -28,10 +28,8 @@ describe("blockLayout", () => {
     const l = blockLayout({ ...base, placed: one("10:00", "11:00") });
     assert.equal(l.cardH, 58);
     assert.equal(l.pad, 6);
-    assert.equal(l.markSize, 14);
-    assert.equal(l.markReserve, 0, "only a completed record reserves the mark");
-    assert.equal(l.textW, l.width - 2 * 6 - 2);
-    assert.deepEqual(l.nameParts, ["Анна Петрова"]);
+    assert.equal(l.markSize, 8);
+    assert.equal(l.textW, l.width - 2 * 6 - 2, "no corner mark eats the text width");
     assert.equal(l.showTime, true);
     assert.equal(l.showService, true);
     assert.equal(l.rowsFit, 3);
@@ -45,11 +43,22 @@ describe("blockLayout", () => {
     assert.equal(l.totalMin, 16 * 60);
   });
 
-  test("completed reserves the mark; an off label gets the dot", () => {
-    const l = blockLayout({ ...base, offLabelColor: "#f00", placed: one("10:00", "11:00", "completed") });
-    assert.equal(l.markReserve, 18);
+  test("completed: status row below the ladder; an off label gets the dot", () => {
+    const l = blockLayout({ ...base, offLabelColor: "#f00", placed: one("10:00", "12:00", "completed") });
     assert.equal(l.dotReserve, 12);
     assert.equal(l.completed, true);
+    assert.equal(l.showStatus, true);
+    assert.equal(l.textW, l.width - 2 * 6 - 2);
+  });
+
+  test("a cancelled record shows no status row and no fading tail", () => {
+    const l = blockLayout({
+      ...base,
+      label: "Константин Константинопольский",
+      placed: one("10:00", "12:00", "cancelled"),
+    });
+    assert.equal(l.showStatus, false);
+    assert.deepEqual(l.fadeRows, []);
   });
 
   test("resize handles only in edit mode of a movable, live record", () => {
@@ -64,10 +73,11 @@ describe("blockLayout", () => {
     assert.equal(cancelled.cancelled, true);
   });
 
-  test("narrow week column: two-word name on two rows, narrow padding", () => {
+  test("narrow week column: one name row that fades, narrow padding", () => {
     const l = blockLayout({ ...base, laneW: 50, placed: one("10:00", "12:00") });
     assert.equal(l.pad, 3);
-    assert.deepEqual(l.nameParts, ["Анна", "Петрова"]);
+    assert.equal(l.showTime, true);
+    assert.ok(l.fadeRows.includes(0), "a long name fades instead of wrapping");
   });
 
   test("top card of a deck carries «+N»; low card puts it on the name row", () => {

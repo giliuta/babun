@@ -17,6 +17,7 @@ import { makePeriod, type Period } from "@/lib/period";
 import { useBusinessClock } from "../home/use-business-clock";
 import { useBusinessPeriod } from "../use-business-period";
 import { useFinanceCategories, useTransactions } from "../queries";
+import { useClientInvoicing } from "../client-invoicing";
 import { awaitingAnswer } from "../ledger-select";
 import {
   accountBreakdown,
@@ -168,7 +169,10 @@ export function useAnalytics(start: AnalyticsStart) {
     [period.from, period.to, today, teamId, accountTeam, nowHm],
   );
   const records = useMemo(() => performedRecords(appointments, scope), [appointments, scope]);
-  const work = useMemo(() => workTotals(records), [records]);
+  // «Не оплачено» — правилом плитки «Долги»: работа под инвойсом должна
+  // остаток инвойса, а не недоплату записи после кредит-ноты.
+  const invoicing = useClientInvoicing();
+  const work = useMemo(() => workTotals(records, invoicing), [records, invoicing]);
   const money = useMemo(
     () => moneyTotals(txs, appointments, financeServices, scope),
     [txs, appointments, financeServices, scope],
@@ -188,8 +192,8 @@ export function useAnalytics(start: AnalyticsStart) {
     [scope, prev.from, prev.to],
   );
   const workPrev = useMemo(
-    () => workTotals(performedRecords(appointments, prevScope)),
-    [appointments, prevScope],
+    () => workTotals(performedRecords(appointments, prevScope), invoicing),
+    [appointments, prevScope, invoicing],
   );
   const moneyPrev = useMemo(
     () => moneyTotals(txs, appointments, financeServices, prevScope),
@@ -227,7 +231,7 @@ export function useAnalytics(start: AnalyticsStart) {
   const weekdays = useMemo(() => weekdayLoad(records), [records]);
   // ПРОГНОЗ: записи, которые ещё впереди в периоде, и их сумма работ.
   const upcoming = useMemo(() => upcomingRecords(appointments, scope), [appointments, scope]);
-  const upcomingWork = useMemo(() => workTotals(upcoming), [upcoming]);
+  const upcomingWork = useMemo(() => workTotals(upcoming, invoicing), [upcoming, invoicing]);
   // VAT ЗА ПЕРИОД — тем же расчётом, что страница VAT (`summarizeVat`), по
   // операциям среза: команда и период уже отобраны.
   const vat = useMemo(() => summarizeVat(periodTxs), [periodTxs]);

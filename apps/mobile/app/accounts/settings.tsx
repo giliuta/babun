@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { useClosedAccountActions } from "@/features/finances/accounts-page/use-closed-account-actions";
 import { money, moneySign } from "@babun/shared/common/utils/money";
-import { useIsOnline } from "@babun/shared/sync";
+import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -17,7 +17,11 @@ import { RowCaption } from "@/components/ui/card-rows";
 import { notify } from "@/lib/notify";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { AccountsGroup } from "@/features/finances/accounts-page/AccountsGroup";
-import { accountEditParam, presetTeamFor } from "@/features/finances/accounts-page/page-rules";
+import {
+  accountEditParam,
+  clearSettledMoves,
+  presetTeamFor,
+} from "@/features/finances/accounts-page/page-rules";
 import { useHideAccount } from "@/features/finances/accounts-page/use-hide-account";
 import {
   useAccountsWithBalances,
@@ -75,6 +79,10 @@ export default function AccountsScreen() {
   // там, куда её положили, а не прыгнуть обратно на те 300 мс, пока сервер
   // подтверждает запись. Ключ — id счёта, значение — новая позиция.
   const [moved, setMoved] = useState<Record<string, number>>({});
+  // Номер последнего переноса каждого счёта: ответ на ранний перенос не должен
+  // снимать позицию, которую человек уже переставил заново.
+  const moveSeq = useRef(0);
+  const lastMove = useRef(new Map<string, number>());
 
   // ШТОРКА ПРАВКИ ПО АДРЕСУ `?edit=<uuid>`: старый `/accounts/<id>/settings` и
   // лист операции приводят сюда уже с открытым счётом. Читается при входе и
@@ -178,8 +186,10 @@ export default function AccountsScreen() {
 
   /** Новый порядок строк группы: пишем позиции 0, 1, 2… по списку id. */
   const applyOrder = (ids: string[]) => {
-    // Снимать оптимистичный порядок после успеха не нужно: он совпадает с
-    // тем, что вернёт рефетч, и снятие дало бы лишний кадр старого порядка.
+    const seq = (moveSeq.current += 1);
+    ids.forEach((id) => lastMove.current.set(id, seq));
+    // Позиции держатся, пока сервер не ответил и список не перечитан: иначе
+    // строка прыгнула бы обратно на те 300 мс подтверждения.
     setMoved((current) => {
       const next = { ...current };
       ids.forEach((id, index) => {
@@ -190,17 +200,29 @@ export default function AccountsScreen() {
     // `mutateAsync`, а не `mutate(…, { onError })`: второй перенос до ответа
     // на первый отцеплял бы колбэки первого, и его отказ прошёл бы молча (та же
     // ловушка react-query 5, что в `accountSaver`).
-    void reorder.mutateAsync(ids).catch((e: unknown) => {
-      // Сервер не принял — снимаем оптимистичный порядок целиком: показывать
-      // порядок, которого нет в базе, значит соврать при следующем входе.
-      setMoved({});
-      notify(
-        "Не удалось сохранить порядок",
-        online && e instanceof Error
-          ? e.message
-          : "Без сети порядок не сохранится — он живёт на сервере.",
-      );
-    });
+    void reorder
+      .mutateAsync(ids)
+      .then(
+        () => undefined,
+        (e: unknown) => {
+          // Частичный отказ: часть позиций записана, часть нет — ниже список
+          // перечитывается и показывает то, что лежит в базе.
+          notify(
+            "Не удалось сохранить порядок",
+            online && e instanceof Error
+              ? e.message
+              : "Без сети порядок не сохранится — он живёт на сервере.",
+          );
+        },
+      )
+      // При ЛЮБОМ исходе: перечитать, и только потом снять оптимистичные
+      // позиции — после успеха они перекрыли бы свежие с сервера, после отказа
+      // показывали бы порядок, которого в базе нет.
+      // Без сети перечитывать нечем (запрос встал бы в паузу и держал бы
+      // оптимистичные позиции вечно) — тогда снимаем их сразу.
+      .then(() => (isOnline() ? accountsQuery.refetch() : undefined))
+      .catch(() => undefined)
+      .then(() => setMoved((current) => clearSettledMoves(current, ids, lastMove.current, seq)));
   };
 
   // ВЕТВЛЕНИЕ ПО «ДАННЫХ НЕТ», А НЕ ПО isPending (§8): без сети запрос стоит

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "./client-invoicing";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 
@@ -28,9 +29,11 @@ export function useClientChoice() {
 
   // Карта на весь список строится ОДИН раз: `buildStats` на строку превратил
   // бы выбор клиента в квадрат по числу записей (тот же довод, что в записи).
+  // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
+  const invoicing = useClientInvoicing();
   const statsById = useMemo(
-    () => buildStatsMap(clients, appointments),
-    [clients, appointments],
+    () => buildStatsMap(clients, appointments, invoicing),
+    [clients, appointments, invoicing],
   );
 
   const recentIds = useMemo(() => {

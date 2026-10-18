@@ -22,6 +22,7 @@ import { DayColumn } from "./day-view/DayColumn";
 import { DayHeader } from "./day-view/DayHeader";
 import { TimeRail } from "./day-view/TimeRail";
 import type { FreeSlotRange, WorkBand } from "./day-view/types";
+import { recordComment } from "@/features/calendar/record-title";
 
 // The day grid's parts live in `day-view/`; this file stays the public entry.
 export { RAIL_W } from "@/features/calendar/grid-units";
@@ -276,7 +277,7 @@ export const DayView = memo(function DayView({
         onClose={() => setAllDayList(null)}
         items={(allDayList ?? []).map((a) => ({
           id: a.id,
-          label: clientName(a) || a.comment || "Событие",
+          label: clientName(a) || recordComment(a) || "Событие",
           icon: CalendarClock,
           color: allDayColors(a).solid,
           onPress: () => onEdit(a),

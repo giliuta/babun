@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, type Href } from "expo-router";
 import { RotateCcw, Trash2 } from "lucide-react-native";
@@ -25,6 +25,7 @@ import {
   useRestoreOperation,
 } from "./deleted-operations";
 import { useFinanceCategories } from "./queries";
+import { createRowGuard, trashAlreadyGone } from "./trash-actions";
 import { useFinanceSettingLevel } from "./use-finance-settings";
 import { useSession } from "@/providers/SessionProvider";
 import { useCurrentRole } from "@/session/tenant";
@@ -133,22 +134,43 @@ export function DeletedOperationsScreen() {
     return [...byDay.entries()];
   }, [rows]);
 
-  const giveBack = (item: TrashRow) =>
-    restore.mutate(item.id, {
-      onSuccess: () => toast("Операция возвращена"),
-      onError: (e) => toast(isOnline() ? e.message : OFFLINE, "error"),
-    });
+  // Действие по строке идёт — второй тап по ней (двойной свайп, повтор после
+  // таймаута) ничего не запускает: снимок из ящика забирается один раз.
+  const guard = useRef(createRowGuard()).current;
+  const failed = (e: unknown) =>
+    toast(isOnline() ? (e instanceof Error ? e.message : String(e)) : OFFLINE, "error");
+  // «Уже нет в ящике» — не поломка: прошлая попытка дошла до сервера, а ответ
+  // потерялся. Ящик перечитывается, человеку — спокойное слово.
+  const alreadyGone = () => {
+    void deleted.refetch();
+    toast("Операции уже нет в «Удалённых»");
+  };
+
+  const giveBack = (item: TrashRow) => {
+    if (!guard.enter(item.id)) return;
+    restore
+      .mutateAsync(item.id)
+      .then(
+        () => toast("Операция возвращена"),
+        (e: unknown) => (trashAlreadyGone(e) ? alreadyGone() : failed(e)),
+      )
+      .finally(() => guard.leave(item.id));
+  };
 
   const eraseForever = (item: TrashRow) =>
     confirmThen(
       "Удалить насовсем?",
       { message: "Операцию уже не вернуть.", confirmLabel: "Удалить", destructive: true },
-      () =>
-        erase.mutateAsync(item.id).then(
-          () => toast("Операция удалена насовсем"),
-          (e: unknown) =>
-            toast(isOnline() ? (e instanceof Error ? e.message : String(e)) : OFFLINE, "error"),
-        ),
+      () => {
+        if (!guard.enter(item.id)) return;
+        return erase
+          .mutateAsync(item.id)
+          .then(
+            () => toast("Операция удалена насовсем"),
+            (e: unknown) => (trashAlreadyGone(e) ? alreadyGone() : failed(e)),
+          )
+          .finally(() => guard.leave(item.id));
+      },
     );
 
   return (

@@ -18,22 +18,6 @@ export function txVatMode(tx: TxVatSnapshot): TxVatMode {
   return tx.vat_mode ?? (tx.vat_amount ? "inclusive" : "none");
 }
 
-/** Строка VAT на экране. Ставка 0 прячет клавиши у операции, где налог не
- *  открыт, — считать нечем. Открытую строку ставка не прячет: стёртое или
- *  нулевое поле ставки посреди набора убирало бы строку из-под пальца, а у
- *  старой операции с налогом есть своя ставка-снимок. */
-export function vatRowVisible({
-  isOwner,
-  rate,
-  vatShown,
-}: {
-  isOwner: boolean;
-  rate: number;
-  vatShown: boolean;
-}): boolean {
-  return isOwner && (rate > 0 || vatShown);
-}
-
 /** Текст поля суммы, с которым открывается правка. `vatRowAllowed` — этому
  *  человеку строка VAT вообще показывается (у операции с налогом она
  *  открывается сразу); нет — в поле валовая сумма, как на счёте. */

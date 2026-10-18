@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import type { AppointmentService } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
@@ -90,7 +91,11 @@ export function ReceiptComposer({
   const t = useThemeColors();
   const clients = useClients();
   const services = useServices();
-  const accounts = useAccountsWithBalances();
+  // Чек на оплату показывает счёт ПРОВОДКИ, даже скрытый или закрытый после
+  // оплаты: в живом списке его нет, и блок «Счёт» пустовал бы.
+  const accounts = useAccountsWithBalances(
+    forPayment ? { includeInactive: true, includeHidden: true, includeDeleted: true } : undefined,
+  );
   const appointments = useAppointments();
   const tileWidth = useTileWidth();
   const router = useRouter();
@@ -110,9 +115,11 @@ export function ReceiptComposer({
   const client = (clients.data ?? []).find((c) => c.id === draft.clientId) ?? null;
   // Вводная о человеке считается один раз на весь список, а не по клиенту на
   // строку — та же карта, что строит список выбора.
+  // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
+  const invoicing = useClientInvoicing();
   const statsById = useMemo(
-    () => buildStatsMap(clients.data ?? [], appointments.data ?? []),
-    [appointments.data, clients.data],
+    () => buildStatsMap(clients.data ?? [], appointments.data ?? [], invoicing),
+    [appointments.data, clients.data, invoicing],
   );
   const catalog = useMemo(
     () => new Map((services.data ?? []).map((s) => [s.id, s])),
@@ -292,7 +299,9 @@ export function ReceiptComposer({
             </View>
           ) : (
             <Text className="px-4 py-3 text-sm" style={{ color: t.faint }}>
-              {draft.teamId
+              {forPayment
+                ? "Счёт этой оплаты недоступен — на чек это не влияет: деньги уже записаны."
+                : draft.teamId
                 ? "У этой команды нет счёта — заведите его в «Счетах», иначе деньги некуда записать."
                 : "Кассы принадлежат командам. Выберите команду чипом на «Финансах» и откройте чек заново."}
             </Text>

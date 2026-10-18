@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import { ScrollView, View } from "react-native";
 import type { Href } from "expo-router";
 import {
@@ -17,6 +16,9 @@ import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEd
 import { ActionMenuSheet } from "@/components/blocks/ActionMenuSheet";
 import { accessGate } from "@/session/my-access";
 import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
+import { receiptRefusal } from "@/lib/receipt-eligibility";
+import { usePageAction } from "@/lib/use-page-action";
+import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { buildInvoiceDocument } from "@/lib/paper/document";
 import { formatInvoiceMoney } from "@/lib/paper/format";
@@ -64,7 +66,7 @@ export function InvoiceDetailScreen() {
     paymentAccounts,
     accountById,
     receipts,
-    paymentsWithoutReceipt,
+    receiptTransactionIds,
     issueReceipts,
     sharePdf,
   } = useInvoiceDetail();
@@ -79,35 +81,14 @@ export function InvoiceDetailScreen() {
     tenantQuery.isLoading ||
     calendarSettingsQuery.isLoading;
 
-  // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА — ЭФФЕКТОМ ПОСЛЕ ОТРИСОВКИ, А НЕ В ТЕЛЕ: в теле, ниже
-  // ранних возвратов, блок
-  // правил ref и ставил таймер во время отрисовки, а замыкание читало
-  // `docWrite` и `awaitsPayment`, объявленные ещё ниже.
-  //
-  // ДЕЙСТВИЕ ЖИВЁТ В АДРЕСЕ И СТИРАЕТСЯ, КАК ТОЛЬКО ВЗЯТО. «Взведённое» один раз
-  // при открытии страницы, оно не сработало бы: ссылка с `?action=share` на
-  // уже открытый инвойс меняет параметр той же страницы, а она молчала бы.
-  // Стёртый параметр не повторит действие при возврате на страницу, а новая
-  // ссылка снова его взведёт. Таймер не снимается повторным запуском эффекта
-  // (стирание само его перезапускает) — только уходом со страницы; само
-  // действие берётся из `runActionRef` в миг срабатывания, со свежими
-  // правами и остатком.
-  const pageReady = !loading && !!invoice.data && !!settlement && receiptsQuery.isSuccess;
-  const runActionRef = useRef<((next: string) => void) | null>(null);
-  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (actionTimer.current) clearTimeout(actionTimer.current);
-    },
-    [],
-  );
-  useEffect(() => {
-    if (!pageReady || !action || !runActionRef.current) return;
-    const next = action;
-    router.setParams({ action: undefined });
-    // Пауза — дать странице встать, прежде чем поверх поднимется лист.
-    actionTimer.current = setTimeout(() => runActionRef.current?.(next), 450);
-  }, [pageReady, action, router]);
+  // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА — `usePageAction`: эффектом после отрисовки,
+  // стирается из адреса, таймер снимается только уходом со страницы.
+  // «Выписать чек» ждёт ответа списка чеков, но не вечно: упавший запрос — тоже
+  // ответ, и действие скажет об этом словами (ниже), а не зависнет молча.
+  const receiptsSettled = receiptsQuery.isSuccess || receiptsQuery.isError;
+  const pageReady =
+    !loading && !!invoice.data && !!settlement && (action !== "receipt" || receiptsSettled);
+  const runActionRef = usePageAction(action, pageReady);
 
   if (loading) {
     return (
@@ -231,12 +212,17 @@ export function InvoiceDetailScreen() {
       scope: "calendar",
       teamId: row.brigade_id,
     }) === "write");
-  // Действие из меню списка (эффект выше). Присваивание без побочных
+  // Действие из меню списка (`usePageAction`). Присваивание без побочных
   // эффектов: таймер ставит эффект, после отрисовки.
   runActionRef.current = (next) => {
     if (next === "share" && docWrite) void sharePdf();
     else if (next === "pay" && docWrite && awaitsPayment) openPayment();
-    else if (next === "receipt" && docWrite) issueReceipts();
+    else if (next === "receipt" && docWrite) {
+      if (receiptsQuery.isSuccess) issueReceipts();
+      else {
+        notify("Не удалось проверить чеки", "Нет связи с сервером — откройте страницу ещё раз.");
+      }
+    }
   };
   // «⋯» — ДЕЙСТВИЯ С ДОКУМЕНТОМ, те же, что долгим нажатием в «Документах»
   // (`useInvoiceMenu`). Языка и «Поделиться» в меню нет.
@@ -249,7 +235,10 @@ export function InvoiceDetailScreen() {
       else router.replace("/finances?view=documents" as Href);
     },
   };
-  const hasMenu = invoiceMenu.actionsFor(row, menuContext).length > 0;
+  const menuActions = invoiceMenu.actionsFor(row, menuContext);
+  const hasMenu = menuActions.length > 0;
+  // «Изменить инвойс» есть в меню — значит, документ ещё можно поправить.
+  const canEditInvoice = menuActions.some((action) => action.key === "edit");
   const openMenu = () => setSheetMenu(invoiceMenu.menuFor(row, menuContext));
 
   return (
@@ -284,11 +273,16 @@ export function InvoiceDetailScreen() {
         />
 
         {unassigned ? (
-          /* ВЫСТАВЛЕННЫЙ ДОКУМЕНТ НЕ ПРАВИТСЯ: привязка
-             клиента была бы той же правкой и стирала бы реквизиты и счёт. */
+          /* ЧТО СКАЗАНО, ТО И В МЕНЮ: инвойс правится, пока в нём нет оплаты,
+             чека и кредит-ноты, — тогда клиента выбирают в «Изменить инвойс»;
+             иначе документ не меняется, и нужен другой получатель. */
           <NoticeBar
             tone="info"
-            message="Документ ни к кому не привязан. Выставленный инвойс не меняется — нужен другой получатель: отмените его и выставьте новый."
+            message={
+              canEditInvoice
+                ? "Документ ни к кому не привязан. Выберите клиента в «Изменить инвойс» — пока в нём нет оплаты, чека и кредит-ноты, он правится."
+                : "Документ ни к кому не привязан. Инвойс с оплатой, чеком или кредит-нотой не меняется — нужен другой получатель: отмените его и выставьте новый."
+            }
           />
         ) : null}
 
@@ -339,7 +333,7 @@ export function InvoiceDetailScreen() {
                       docWrite && refundDestination === "invoice" && refundable > 0
                         ? () =>
                             router.push(
-                              `/invoices/credit-note?invoiceId=${row.id}&amount=${creditNoteAmountForRefund(refundable, settlement)}` as Href,
+                              `/invoices/credit-note?invoiceId=${row.id}&amount=${creditNoteAmountForRefund(refundable, settlement)}&paymentId=${payment.id}` as Href,
                             )
                         : undefined
                     }
@@ -357,10 +351,8 @@ export function InvoiceDetailScreen() {
         docWrite={docWrite}
         canIssueReceipt={
           !isCreditNote &&
-          row.status !== "void" &&
-          row.status !== "cancelled" &&
           receiptsQuery.isSuccess &&
-          paymentsWithoutReceipt.length > 0
+          receiptRefusal({ invoice: row, payments, receiptTransactionIds }) === null
         }
         paymentLabel={`${settlement.paid > 0 ? "Добавить платёж" : "Принять оплату"} · ${formatInvoiceMoney(settlement.remaining, row.currency)}`}
         pdfBusy={pdfBusy}

@@ -12,8 +12,6 @@
 // Модуль нарочно без зависимостей: генератор id передаётся снаружи, и логика
 // «правка — новое намерение» проверяется тестом без окружения RN.
 
-import { createRequestIntent } from "./request-intent";
-
 /** Всё, что различает намерения перевода. */
 export interface TransferIntentFields {
   fromAccountId: string;
@@ -36,16 +34,23 @@ export function transferIntentKey(fields: TransferIntentFields): string {
   ].join("|");
 }
 
-/** Память «ключ → id» намерения перевода (`request-intent.ts`): повтор без
- *  правок — тот же id и серверный дедуп, правка любого поля — новый ключ и
- *  новый id. */
+/** Память «ключ → id» на время жизни листа: повтор без правок — тот же id и
+ *  серверный дедуп, правка любого поля — новый ключ и новый id. */
 export function createTransferRequestIds(uuid: () => string): {
   idFor(fields: TransferIntentFields): string;
   done(): void;
 } {
-  const intent = createRequestIntent(uuid);
+  let current: { key: string; id: string } | null = null;
   return {
-    idFor: (fields) => intent.idFor(transferIntentKey(fields)),
-    done: intent.done,
+    idFor(fields) {
+      const key = transferIntentKey(fields);
+      if (current?.key !== key) current = { key, id: uuid() };
+      return current.id;
+    },
+    /** Перевод записан — намерение закрыто: следующий получит свежий id даже
+     *  с теми же полями. */
+    done() {
+      current = null;
+    },
   };
 }

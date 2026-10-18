@@ -7,7 +7,10 @@ import { useAppointmentInvoicePay } from "../use-appointment-invoice-pay";
 import { useToast } from "@/components/ui/Toast";
 import { useAppointmentReceipt } from "../use-appointment-receipt";
 import { useCreditNoteLinks, useInvoices } from "@/features/finances/invoices-queries";
-import { liveAppointmentInvoices } from "@/features/finances/appointment-invoices";
+import {
+  appointmentPayableInvoice,
+  liveAppointmentInvoices,
+} from "@/features/finances/appointment-invoices";
 import { usePlanAllows, useTenant } from "@/session/tenant";
 import { useBusinessNow } from "../business-now";
 import { useTeamPaymentAccounts } from "../payment-accounts";
@@ -92,11 +95,13 @@ export function usePaymentBlock({
 
   const invoice = useMemo(
     () =>
-      liveAppointmentInvoices(
-        invoicesQuery.data ?? [],
-        appointment?.id,
-        creditLinks.data?.originalByNoteId ?? new Map(),
-      )[0] ?? null,
+      appointmentPayableInvoice(
+        liveAppointmentInvoices(
+          invoicesQuery.data ?? [],
+          appointment?.id,
+          creditLinks.data?.originalByNoteId ?? new Map(),
+        ),
+      ),
     [appointment?.id, invoicesQuery.data, creditLinks.data],
   );
   // ВЫСТАВЛЕН ИНВОЙС — ДЕНЬГИ В НЕГО: к оплате — его остаток,

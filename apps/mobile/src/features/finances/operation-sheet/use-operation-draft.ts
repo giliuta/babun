@@ -9,8 +9,8 @@ import {
   operationPatchBaseline,
   type OperationPatchBaseline,
 } from "../operation-patch";
-import { operationDraftKey } from "../operation-dirty";
-import { createRequestIntent } from "../request-intent";
+import { operationDraftKey, vatDirtyKey } from "../operation-dirty";
+import { createOperationRequestIds } from "./request-ids";
 import type { OperationDebtPayment, OperationType } from "./types";
 import { hydratedAmountText, txVatMode } from "./vat-frame";
 
@@ -91,9 +91,9 @@ export function useOperationDraft({
   // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
   // счёт следует за командой операции (счета строго per-team).
   const [accountTouched, setAccountTouched] = useState(false);
-  // Идемпотентность вставки: клиентский PK держится, пока черновик тот же
-  // (`request-intent.ts`); каждое открытие листа — новое намерение.
-  const requestIntent = useRef(createRequestIntent(randomUuid)).current;
+  // Идемпотентность вставки: клиентский PK по содержимому формы, новый после
+  // каждого успеха и при каждом открытии (`request-ids.ts`).
+  const requestIds = useRef(createOperationRequestIds(randomUuid)).current;
 
   // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
   // в полночь или фоновый рефетч не должны стирать заполняемую форму.
@@ -115,7 +115,7 @@ export function useOperationDraft({
       transaction?.id ?? (debtPayment ? `debt:${debtPayment.debtId}` : "new");
     if (hydratedFor.current === key) return;
     hydratedFor.current = key;
-    requestIntent.done();
+    requestIds.done();
     setAccountTouched(false);
     setVatRetouched(false);
     patchBaseline.current = transaction ? operationPatchBaseline(transaction) : null;
@@ -146,6 +146,7 @@ export function useOperationDraft({
         pickedAccountId: null,
         masterId: transaction.master_id ?? null,
         clientId: transaction.client_id ?? null,
+        vat: vatDirtyKey(txVat, Number(transaction.vat_rate ?? 0)),
       });
     } else {
       setType(startType);
@@ -237,7 +238,7 @@ export function useOperationDraft({
     setVatShown,
     accountTouched,
     setAccountTouched,
-    requestIntent,
+    requestIds,
     initialDraftKey,
     patchBaseline,
   };

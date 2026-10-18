@@ -185,25 +185,28 @@ export function useRecordPicks({
   // карточкой, «назад» возвращает ровно в неё.
   // «Карточка из записи» как права нет: запись можно открывать всегда, если её
   // видишь, — дверь открыта всем.
-  // КЛИЕНТ ЗАПИСИ С ОПЛАТОЙ НЕ МЕНЯЕТСЯ (оплатил один клиент, а запись
-  // переставили на другого — странно). Тап по
-  // клиенту не открывает выбор, а говорит почему; снятая оплата клиента не
-  // держит. То же правило у сервера (`protect_paid_appointment_finance`).
+  // КЛИЕНТА ЗАПИСИ С ОПЛАТОЙ НЕ ПОДМЕНЯЮТ — НО ПРАВЯТ. Деньги записаны на
+  // этого клиента, и сервер (`protect_paid_appointment_finance`) не даст
+  // поставить другого. Самого клиента — телефон, имя, объекты — править можно
+  // всегда: тап открывает его карточку, а не выбор, который всё равно
+  // кончился бы отказом. Без оплаты тап, как везде, открывает выбор.
+  // Как у сервера: возвращённая оплата клиента уже не держит.
   const moneyHoldsClient =
-    !!editing && ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
-  const pickClientOrRefuse = () => {
-    if (moneyHoldsClient) {
-      haptics.warning();
-      toast("Клиента не сменить: по записи есть оплата. Сначала снимите оплату", "info");
-      return;
-    }
-    setClientPickerOpen(true);
-  };
+    !!editing &&
+    editing.payment_status !== "refunded" &&
+    ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
 
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
     router.push({ pathname: "/client", params: { id: clientId } });
+  };
+  const pickClientOrOpenCard = () => {
+    if (moneyHoldsClient) {
+      openClientCard();
+      return;
+    }
+    setClientPickerOpen(true);
   };
 
   const pickLocation = (id: string) => {
@@ -269,7 +272,7 @@ export function useRecordPicks({
     setChainStep,
     pickClient,
     moneyHoldsClient,
-    pickClientOrRefuse,
+    pickClientOrOpenCard,
     openClientCard,
     pickLocation,
     openEventObjectAdd,

@@ -188,8 +188,9 @@ describe("библиотека блоков указывает на живой �
 
     const note = readFileSync(resolve(APP, "src/components/blocks/InlineNoteField.tsx"), "utf8");
     assert.match(note, /marginHorizontal: 12,/);
-    assert.match(note, /paddingVertical: 7,/);
-    assert.match(note, /fontSize: 13,/);
+    assert.match(note, /paddingVertical: 9,/);
+    assert.match(note, /fontSize: 15,/);
+    assert.match(note, /backgroundColor: t\.noteFill,/);
 
     const rows = readFileSync(resolve(APP, "src/components/ui/select-rows.tsx"), "utf8");
     assert.match(rows, /minHeight: 52,/, "строка шторки больше не 52pt");

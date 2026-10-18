@@ -143,13 +143,16 @@ export function formatMoneyForInput(amount: number): string {
 // вырезается ЦЕЛИКОМ («zł», «R$», «kr»), а не по буквам: побуквенный класс
 // съедал бы латиницу вообще, и «12abc» проходило бы как 12. Длинные — первыми,
 // чтобы «R$» не распался на «R» и «$».
-const CURRENCY_TOKENS = new RegExp(
-  [...new Set(ALL_CURRENCIES.map((c) => c.symbol))]
-    .sort((a, b) => b.length - a.length)
-    .map((sym) => sym.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
-    .join("|"),
-  "g",
-);
+//
+// ТОЛЬКО С КРАЁВ: символ стоит перед суммой или после неё («€12», «12 zł»,
+// «−€12»). Вырезанный из середины, он склеивал цифры: «1E3» (E — символ
+// свазилендского лилангени) давало 1 300, «12m» — 1 200.
+const CURRENCY_ALTERNATION = [...new Set(ALL_CURRENCIES.map((c) => c.symbol))]
+  .sort((a, b) => b.length - a.length)
+  .map((sym) => sym.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
+  .join("|");
+const LEADING_CURRENCY = new RegExp(`^(-?)(?:${CURRENCY_ALTERNATION})`);
+const TRAILING_CURRENCY = new RegExp(`(?:${CURRENCY_ALTERNATION})$`);
 
 // Европейская группировка точками распознаётся только целиком — точки
 // строго по три цифры И запятая с копейками. Без запятой «1.005» остаётся
@@ -167,8 +170,9 @@ const EUROPEAN_GROUPED = /^-?\d{1,3}(?:\.\d{3})+,\d{1,2}$/;
 function normalizeMoneyInput(value: string): string {
   const cleaned = value
     .replace(/\s/g, "") // \s покрывает NBSP и узкие пробелы разрядов
-    .replace(CURRENCY_TOKENS, "")
-    .replace(/[−–]/g, "-");
+    .replace(/[−–]/g, "-")
+    .replace(LEADING_CURRENCY, "$1")
+    .replace(TRAILING_CURRENCY, "");
   const degrouped = EUROPEAN_GROUPED.test(cleaned)
     ? cleaned.replace(/\./g, "")
     : cleaned;
@@ -202,6 +206,34 @@ export function parseMoneyInputToCents(
   const signedCents = negative ? -cents : cents;
   if (!options.allowZero && signedCents === 0) return null;
   return signedCents;
+}
+
+/**
+ * Почему введённая сумма не принята — одной фразой для причины под кнопкой.
+ * `null` — поле пустое или сумма годится. Общая фраза «больше нуля и не больше
+ * двух знаков» вводила в заблуждение: на сумме больше предела человек видел
+ * её при целом положительном числе и не понимал, что исправить.
+ */
+export function moneyInputProblem(
+  value: string,
+  options: MoneyInputOptions = {},
+): string | null {
+  if (value.trim() === "") return null;
+  if (parseMoneyInputToCents(value, options) != null) return null;
+  const normalized = normalizeMoneyInput(value);
+  if (!options.allowNegative && normalized.startsWith("-")) {
+    return "Сумма не может быть отрицательной";
+  }
+  const unsigned = normalized.replace(/^-/, "");
+  if (!/^\d+(?:\.\d+)?$/.test(unsigned)) {
+    return "Введите сумму цифрами, например 12,50";
+  }
+  const [whole, fraction = ""] = unsigned.split(".");
+  if (fraction.length > 2) return "Не больше двух знаков после запятой";
+  if (Number(whole) * 100 + Number(fraction.padEnd(2, "0")) === 0) {
+    return "Сумма должна быть больше нуля";
+  }
+  return `Сумма слишком большая: не больше ${formatEURExact(MAX_MONEY_CENTS / 100)}`;
 }
 
 /** Convert a programmatic amount to cents only when it is exactly representable. */

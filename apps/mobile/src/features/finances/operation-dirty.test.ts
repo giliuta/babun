@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
   operationDraftKey,
   operationIsDirty,
+  vatDirtyKey,
   type OperationDraftFields,
 } from "./operation-dirty";
 
@@ -57,3 +58,26 @@ describe("день и время — набранное, только если �
   });
 });
 
+
+describe("налог — тоже набранное", () => {
+  const base = {
+    type: "income" as const,
+    amount: "100",
+    categoryId: "c",
+    notes: "",
+    receiptUrl: null,
+    pickedAccountId: null,
+  };
+  test("поменяли только режим или ставку VAT — есть что терять", () => {
+    const initial = operationDraftKey({ ...base, vat: vatDirtyKey("inclusive", 19) });
+    assert.equal(operationIsDirty(initial, { ...base, vat: vatDirtyKey("inclusive", 19) }), false);
+    assert.equal(operationIsDirty(initial, { ...base, vat: vatDirtyKey("exclusive", 19) }), true);
+    assert.equal(operationIsDirty(initial, { ...base, vat: vatDirtyKey("inclusive", 5) }), true);
+    assert.equal(operationIsDirty(initial, { ...base, vat: vatDirtyKey("none", 19) }), true);
+  });
+  test("без налога ставка ничего не значит; форма без поля vat читается как «без налога»", () => {
+    assert.equal(vatDirtyKey("none", 19), vatDirtyKey("none", 5));
+    assert.equal(operationIsDirty(operationDraftKey(base), { ...base, vat: vatDirtyKey("none", 19) }), false);
+    assert.equal(operationIsDirty(operationDraftKey(base), { ...base, vat: vatDirtyKey("exclusive", 19) }), true);
+  });
+});

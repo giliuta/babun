@@ -9,6 +9,8 @@ export interface DebtPayment {
   amount: number;
   clientId: string | null;
   direction: DebtDirection;
+  /** Команда долга: платёж ложится на её счёт, какой бы чип ни был выбран. */
+  teamId: string | null;
 }
 
 /** Open-state of the screen's sheets and the two panel switches whose value

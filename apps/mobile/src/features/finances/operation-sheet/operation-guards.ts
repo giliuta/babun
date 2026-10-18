@@ -2,7 +2,7 @@
 // live, and the one reason printed under it. No React here — the sheet feeds
 // plain values and gets plain answers back.
 
-import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR, MAX_MONEY_CENTS, moneyInputProblem } from "@babun/shared/common/utils/money";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -103,6 +103,46 @@ export interface OperationGateInput {
   categoryId: string | null;
   receiptMissing: boolean;
   categoryName: string | undefined;
+  /** Остаток долга в центах, если это оплата долга; иначе не задан. */
+  debtRemainderCents?: number | null;
+  /** Сколько ляжет в операцию, в центах: введённое плюс VAT «сверху». Не
+   *  задано — то же, что введено. */
+  grossCents?: number | null;
+  /** Σ возвратов не пришла из-за ОШИБКИ запроса, а не из-за того, что едет. */
+  refundsFailed?: boolean;
+  /** В выборе нет ни одной категории этой стороны денег у команды. */
+  noCategories?: boolean;
+  /** Человек может завести категорию сам (справочник владельческий). */
+  canCreateCategory?: boolean;
+  /** Номер выданного чека, если правка меняет деньги дохода с чеком. */
+  receiptLocked?: string | null;
+}
+
+/** Выбрать нечего и завести нечем: совет «выберите категорию» невыполним,
+ *  поэтому причина называет настоящий выход. */
+export const NO_CATEGORIES_REASON =
+  "В команде нет категорий — попросите владельца добавить";
+
+/** Причина, когда возвраты не удалось узнать: ждать бессмысленно — только
+ *  повторить. */
+export const REFUNDS_FAILED_REASON =
+  "Не удалось проверить возвраты по доходу — нажмите сюда, чтобы повторить";
+export const REFUNDS_LOADING_REASON =
+  "Возвраты по доходу ещё загружаются — уменьшить сумму можно после";
+
+/** Оплата долга больше его остатка: деньги ушли бы в доход, а долг — в минус. */
+export function overpaysDebt(
+  g: Pick<OperationGateInput, "amountCents" | "debtRemainderCents" | "grossCents">,
+): boolean {
+  // Долг гасит то, что ляжет в операцию: с VAT «сверху» 550 становятся 654,50.
+  const cents = g.grossCents ?? g.amountCents;
+  return g.debtRemainderCents != null && cents != null && cents > g.debtRemainderCents;
+}
+
+/** VAT «сверху» поднял сумму за предел колонки: введённое прошло, а
+ *  записать нечего — сервер ответил бы ошибкой про знаки после запятой. */
+export function grossTooLarge(g: Pick<OperationGateInput, "grossCents">): boolean {
+  return g.grossCents != null && g.grossCents > MAX_MONEY_CENTS;
 }
 
 export function operationCanSave(
@@ -121,6 +161,9 @@ export function operationCanSave(
     !!g.accountId &&
     !g.accountMismatch &&
     !g.dateInFuture &&
+    !overpaysDebt(g) &&
+    !grossTooLarge(g) &&
+    !g.receiptLocked &&
     !g.belowRefunded &&
     !g.lowersWhileRefundsUnknown &&
     !g.txAccountClosed &&
@@ -132,7 +175,8 @@ export function operationCanSave(
   );
 }
 
-export type OperationReason = { text: string; error: boolean } | null;
+/** `retry` — причину можно тапнуть, чтобы повторить неудавшееся чтение. */
+export type OperationReason = { text: string; error: boolean; retry?: boolean } | null;
 
 /** Причина погашенной кнопки — ровно одна и самая важная. Офлайн и
  *  закрытый счёт — закрытые двери (нейтральный цвет), остальное — ошибки
@@ -149,19 +193,35 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
         ? { text: CLOSED_ACCOUNT_REASON, error: false }
         : g.amount.length > 0 && g.amountCents == null
           ? {
-              text: "Введите сумму больше нуля и не больше двух знаков после запятой",
+              text:
+                moneyInputProblem(g.amount) ??
+                "Введите сумму больше нуля и не больше двух знаков после запятой",
               error: true,
             }
+          : grossTooLarge(g)
+            ? {
+                text: `Сумма с VAT слишком большая: не больше ${formatEUR(MAX_MONEY_CENTS / 100)}`,
+                error: true,
+              }
+          : g.receiptLocked
+            ? {
+                text: `По доходу выдан чек ${g.receiptLocked} — сумму, счёт и дату не изменить: сначала оформите кредит-ноту`,
+                error: true,
+              }
+          : overpaysDebt(g)
+            ? {
+                text: `По долгу осталось ${formatEUR((g.debtRemainderCents ?? 0) / 100)} — больше не принять`,
+                error: true,
+              }
           : g.belowRefunded
             ? {
                 text: `По этому доходу уже возвращено ${formatEUR(g.refundedTotal)} — сумма не может стать меньше возвращённого`,
                 error: true,
               }
             : g.lowersWhileRefundsUnknown
-              ? {
-                  text: "Возвраты по доходу ещё загружаются — уменьшить сумму можно после",
-                  error: false,
-                }
+              ? g.refundsFailed
+                ? { text: REFUNDS_FAILED_REASON, error: true, retry: true }
+                : { text: REFUNDS_LOADING_REASON, error: false }
             : g.dateInFuture
               ? {
                   text: "Финансовую операцию нельзя записать будущей датой",
@@ -195,7 +255,10 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
                         }
                       : g.amountCents != null && !g.categoryId
                         ? {
-                            text: "Выберите категорию операции",
+                            text:
+                              g.noCategories && !g.canCreateCategory
+                                ? NO_CATEGORIES_REASON
+                                : "Выберите категорию операции",
                             error: true,
                           }
                         : g.receiptMissing

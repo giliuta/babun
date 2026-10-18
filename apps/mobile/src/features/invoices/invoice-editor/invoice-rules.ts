@@ -12,6 +12,7 @@ import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { companyFilled } from "@/features/companies/company-rules";
 import type { Company } from "@/features/companies/queries";
 import {
+  addDaysYmd,
   type EditableInvoiceLine,
   formatInvoiceMoney,
   invoiceVatMode,
@@ -183,4 +184,38 @@ export function invoiceReason({
                     error: false,
                   }
                 : null;
+}
+
+function daysBetweenYmd(from: string, to: string): number {
+  const a = Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1, +from.slice(8, 10));
+  const b = Date.UTC(+to.slice(0, 4), +to.slice(5, 7) - 1, +to.slice(8, 10));
+  return Math.round((b - a) / 86_400_000);
+}
+
+/** ДАТА ВЫСТАВЛЕНИЯ НОВОГО ДОКУМЕНТА — НЕ РАНЬШЕ СЕГОДНЯ. Будущий день визита
+ *  остаётся своей датой; прошлый уступает сегодняшнему. */
+export function firstIssuedOnFor(sourceIssuedOn: string | null | undefined, today: string): string {
+  return sourceIssuedOn && sourceIssuedOn > today ? sourceIssuedOn : today;
+}
+
+/** ДАТА, КОТОРУЮ ЧЕЛОВЕК НЕ ТРОГАЛ, ЕДЕТ ЗА ЧАСАМИ. Форму открыли 31.12 в
+ *  23:50, «Выставить» нажали в 00:10 — без пересчёта документ вышел бы вчерашним
+ *  днём, с номером старого года. Тронутая руками дата остаётся как выбрана.
+ *  Срок оплаты, если его не трогали, держит тот же отступ от даты выставления;
+ *  выбранный руками остаётся, но не раньше самой даты. */
+export function rolledIssueDates(input: {
+  issuedOn: string;
+  dueOn: string | null;
+  issuedTouched: boolean;
+  dueTouched: boolean;
+  sourceIssuedOn: string | null | undefined;
+  today: string;
+}): { issuedOn: string; dueOn: string | null } {
+  const { issuedOn, dueOn } = input;
+  if (input.issuedTouched) return { issuedOn, dueOn };
+  const next = firstIssuedOnFor(input.sourceIssuedOn, input.today);
+  if (next === issuedOn) return { issuedOn, dueOn };
+  if (!dueOn) return { issuedOn: next, dueOn };
+  if (input.dueTouched) return { issuedOn: next, dueOn: dueOn < next ? next : dueOn };
+  return { issuedOn: next, dueOn: addDaysYmd(next, Math.max(0, daysBetweenYmd(issuedOn, dueOn))) };
 }

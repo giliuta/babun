@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
 import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 import { dayMonthLabel } from "./day-month-label";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 
 // ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ.
 //
@@ -30,7 +31,8 @@ import { dayMonthLabel } from "./day-month-label";
 // Web-parity date jumper (web MiniCalendar, trimmed): tap the «Месяц Год ⌄»
 // header title → this popover; pick any day to jump the calendar there.
 // Dot under a day = it has non-cancelled appointments. «Сегодня» at the
-// bottom returns home. (Long-press preview + year grid stay web-only.)
+// bottom returns home. Тап по заголовку месяца ставит вместо сетки барабан даты
+// продукта: к записи двухлетней давности — год и «Перейти», без свайпов.
 export function MiniCalendar({
   visible,
   currentDate,
@@ -55,6 +57,9 @@ export function MiniCalendar({
   const insets = useSafeAreaInsets();
   const [viewYear, setViewYear] = useState(currentDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(currentDate.getMonth());
+  // Режим барабана: тот же поповер, вместо сетки дней — барабан даты.
+  const [picking, setPicking] = useState(false);
+  const [wheelDate, setWheelDate] = useState(currentDate);
 
   // Re-anchor to the calendar's date every time the popover opens.
   const [anchorKey, setAnchorKey] = useState("");
@@ -63,6 +68,8 @@ export function MiniCalendar({
     setAnchorKey(openKey);
     setViewYear(currentDate.getFullYear());
     setViewMonth(currentDate.getMonth());
+    setPicking(false);
+    setWheelDate(currentDate);
   }
   // Зеркальная ветка: без сброса якоря повторное открытие на ТОЙ ЖЕ дате
   // показывало бы пролистанный в прошлый раз месяц.
@@ -99,14 +106,15 @@ export function MiniCalendar({
     onCommit: (dir) => (dir === 1 ? nextMonth() : prevMonth()),
   });
 
-  const monthTitle = new Date(viewYear, viewMonth, 1)
+  // На барабане заголовок следует за колесом: видно, куда уведёт «Перейти».
+  const titleDate = picking ? wheelDate : new Date(viewYear, viewMonth, 1);
+  const monthTitle = titleDate
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
     // «г.» (русский, болгарский) и «р.» (украинский) после года — лишние.
     .replace(/\s*[гр]\.?\s*$/i, "");
 
-  // 44 — минимальная тап-мишень HIG. Но на экране 320 (iPhone SE
-  // первого поколения, «Увеличенный» вид экрана) окно 7×44 + поля уходит
-  // за правый край: обрезаются «Вс» и стрелка следующего месяца. Там ячейка ужимается ровно настолько, чтобы окно влезло.
+  // 44 — минимальная тап-мишень HIG. На экране 320 (iPhone SE, «Увеличенный»
+  // вид) окно 7×44 + поля ушло бы за край — там ячейка ужимается.
   const { width: screenW } = useWindowDimensions();
   const CELL = Math.min(44, Math.floor((screenW - 24 - 26 - 2) / 7));
   // Шесть рядов всегда: в месяце бывает 5 или 6 недель, и без фиксации
@@ -116,8 +124,7 @@ export function MiniCalendar({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       {/* Modal — отдельное окно: без своего GestureHandlerRootView жест
-          листания месяцев на Android не доходит вовсе, работают только
-          стрелки (13.10; то же правило у BottomSheet). */}
+          листания месяцев на Android не доходит, работают только стрелки. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
         {/* accessible={false} на скриме и карточке: иначе VoiceOver схлопывает
             весь поповер в один безымянный «button» и дни недостижимы. */}
@@ -158,6 +165,7 @@ export function MiniCalendar({
             >
               <Pressable
                 onPress={prevMonth}
+                disabled={picking}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Предыдущий месяц"
@@ -170,16 +178,50 @@ export function MiniCalendar({
                   backgroundColor: pressed ? t.pressed : "transparent",
                 })}
               >
-                <ChevronLeft color={t.sub} size={16} strokeWidth={2.5} />
+                {picking ? null : <ChevronLeft color={t.sub} size={16} strokeWidth={2.5} />}
               </Pressable>
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{ fontSize: 15, fontWeight: "600", color: t.ink, textTransform: "capitalize" }}
+              <Pressable
+                onPress={() => {
+                  if (picking) {
+                    // Назад к дням — на месяц барабана: прокрученное не пропадает.
+                    setViewYear(wheelDate.getFullYear());
+                    setViewMonth(wheelDate.getMonth());
+                  } else {
+                    // Барабан — на открытый день в его месяце, иначе на 1-е число.
+                    const sameMonth =
+                      currentDate.getFullYear() === viewYear && currentDate.getMonth() === viewMonth;
+                    setWheelDate(sameMonth ? currentDate : new Date(viewYear, viewMonth, 1));
+                  }
+                  setPicking(!picking);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={picking ? "Вернуться к дням" : "Выбрать дату барабаном"}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 8,
+                  height: 32,
+                  borderRadius: t.radius.card,
+                  backgroundColor: pressed ? t.pressed : "transparent",
+                })}
               >
-                {monthTitle}
-              </Text>
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{ fontSize: 15, fontWeight: "600", color: t.ink, textTransform: "capitalize" }}
+                >
+                  {monthTitle}
+                </Text>
+                {picking ? (
+                  <ChevronUp color={t.sub} size={14} strokeWidth={2.5} />
+                ) : (
+                  <ChevronDown color={t.sub} size={14} strokeWidth={2.5} />
+                )}
+              </Pressable>
               <Pressable
                 onPress={nextMonth}
+                disabled={picking}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Следующий месяц"
@@ -192,10 +234,19 @@ export function MiniCalendar({
                   backgroundColor: pressed ? t.pressed : "transparent",
                 })}
               >
-                <ChevronRight color={t.sub} size={16} strokeWidth={2.5} />
+                {picking ? null : <ChevronRight color={t.sub} size={16} strokeWidth={2.5} />}
               </Pressable>
             </View>
 
+            {picking ? (
+              // Та же высота, что у дней с подписями недели: поповер не прыгает
+              // при переключении.
+              <View style={{ height: GRID_H + 22, alignItems: "center", justifyContent: "center" }}>
+                {/* Барабан продукта: у него свой двойник под каждую платформу. */}
+                <DateSpinner value={wheelDate} onChange={setWheelDate} />
+              </View>
+            ) : (
+              <>
             <View style={{ flexDirection: "row" }}>
               {DAY_HEADERS.map((d) => (
                 <Text
@@ -231,11 +282,6 @@ export function MiniCalendar({
                     const lead = weekdayIndex(anchor.getDay());
                     const total = new Date(y, m + 1, 0).getDate();
                     return (
-                      // ШИРИНА — РОВНО СЕМЬ ЯЧЕЕК. Страница ленты
-                      // меряется на Android с округлением пикселей (44 dp при
-                      // плотности 2.625 — 115,5 px), и ей недоставало доли
-                      // пикселя: перенос уносил седьмую ячейку, воскресенье
-                      // пустело, и все даты вставали под чужой день недели.
                       <View style={{ flexDirection: "row", flexWrap: "wrap", width: 7 * CELL }}>
                         {Array.from({ length: lead }).map((_, i) => (
                           <View key={`e-${i}`} style={{ width: CELL, height: CELL }} />
@@ -313,13 +359,20 @@ export function MiniCalendar({
               </View>
             </GestureDetector>
 
+              </>
+            )}
+
             <Pressable
               onPress={() => {
+                if (picking) {
+                  onSelectDate(wheelDate);
+                  return;
+                }
                 const [y, m, d] = todayYmd.split("-").map(Number);
                 onSelectDate(new Date(y, (m || 1) - 1, d || 1));
               }}
               accessibilityRole="button"
-              accessibilityLabel="Перейти к сегодняшней дате"
+              accessibilityLabel={picking ? "Перейти к выбранной дате" : "Перейти к сегодняшней дате"}
               // 44 — минимальная высота нажимаемой области HIG; радиус 14 = input.
               style={({ pressed }) => ({
                 marginTop: 8,
@@ -335,7 +388,7 @@ export function MiniCalendar({
                 maxFontSizeMultiplier={1.2}
                 style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
               >
-                Сегодня
+                {picking ? "Перейти" : "Сегодня"}
               </Text>
             </Pressable>
           </Pressable>

@@ -40,6 +40,7 @@ import {
 import { isUuid, randomUuid } from "../uuid";
 import { isTransientNetworkError } from "../transient-error";
 import { OnlineOnlyWriteError } from "../cache-errors";
+import { trashAppointment as repoTrashAppointment } from "../../db/repositories/deleted-appointments";
 import { readCachedAppointment } from "./read";
 import { makeCachedRow, makeServerRow, patchToRow, toDomain } from "./rows";
 
@@ -316,6 +317,28 @@ export async function deleteAppointment(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+/** «УДАЛИТЬ» В «УДАЛЁННЫЕ ЗАПИСИ» (миграция 20261016170000). Снимок в ящик
+ *  кладёт сервер (`delete_appointment`), поэтому удаление — только с сетью,
+ *  без очереди: офлайн-удаление из очереди дошло бы обычным `delete` мимо
+ *  ящика, и «Вернуть» было бы нечего. Неотправленные правки этой записи
+ *  остаются впереди: удалённая под ними запись сделала бы их вечным отказом. */
+export async function trashAppointment(supabase: DbSupabase, id: string): Promise<void> {
+  assertWritesAllowed("deleteAppointment");
+  if (!isUuid(id)) {
+    // Местная строка, которой на сервере нет: удалять там нечего.
+    await cacheDelete("appointments", id);
+    return;
+  }
+  await refuseBehindStuckEdit(id, "deleteAppointment");
+  if (await hasQueuedOps("appointments", id)) {
+    throw new Error(
+      "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации",
+    );
+  }
+  await repoTrashAppointment(supabase, id);
+  await cacheDelete("appointments", id).catch(() => {});
+}
 
 /** ЗА НАВСЕГДА УПАВШЕЙ ПРАВКОЙ НОВАЯ НЕ ПРЯЧЕТСЯ. Правки одной
  *  записи уходят по порядку, и за правкой, которую сервер окончательно

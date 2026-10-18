@@ -8,8 +8,8 @@ import {
   useVatSettings,
 } from "../vat-queries";
 import { defaultOperationVatMode } from "../operation-vat";
+import { vatControlsVisible } from "./vat-controls";
 import type { OperationDraft } from "./use-operation-draft";
-import { vatRowVisible } from "./vat-frame";
 
 /** The tax of this operation: settings in force, the remembered rate, the
  *  «+ VAT» / «Без VAT» switch and the rate the sum is counted by. */
@@ -29,22 +29,15 @@ export function useOperationVat({
     | "teamId"
     | "type"
     | "vatRetouched"
-    | "vatShown"
     | "setVatMode"
     | "setVatShown"
     | "setVatTouched"
     | "setVatRetouched"
+    | "vatShown"
   >;
 }) {
   const {
-    teamId,
-    type,
-    vatRetouched,
-    vatShown,
-    setVatMode,
-    setVatShown,
-    setVatTouched,
-    setVatRetouched,
+    teamId, type, vatRetouched, vatShown, setVatMode, setVatShown, setVatTouched, setVatRetouched,
   } = draft;
   // ДЕЙСТВУЮЩИЙ НАЛОГ ЭТОЙ ОПЕРАЦИИ: счёт → команда → компания.
   const vatSettingsQuery = useVatSettings();
@@ -58,7 +51,11 @@ export function useOperationVat({
   // страницы VAT нет): написанная последней на
   // этом телефоне, а пока не писали — ставка команды из прежних настроек.
   const rememberedVat = useRememberedVatRate(settingsVat.rate);
-  const vat = { ...settingsVat, rate: rememberedVat.rate };
+  // ЗАПОМНЕННЫЙ НОЛЬ СТАВКУ КОМАНДЫ НЕ ГАСИТ. «0» в поле ставки запоминался
+  // на телефон, и у каждой новой операции пропадала клавиша «+ VAT»
+  // (`vatControlsVisible` ждёт ставку больше нуля) — 19 % команды больше не
+  // предлагались. Операция без налога — это «Без VAT», а не ставка 0.
+  const vat = { ...settingsVat, rate: rememberedVat.rate > 0 ? rememberedVat.rate : settingsVat.rate };
   // КЛАВИШИ ГАСИТ ТОЛЬКО ТУМБЛЕР КОМПАНИИ, А НЕ ПИН СЧЁТА.
   //
   // ТУМБЛЕРА VAT У КОМПАНИИ НЕТ (всё включено): клавиши видны, как только известна ставка — её пишут в
@@ -77,8 +74,10 @@ export function useOperationVat({
   // КЛАВИШИ — ТОЛЬКО ТОМУ, КТО ВИДИТ НАСТРОЙКУ НАЛОГА. Сотруднику настройки
   // НДС не отдаются: «Без НДС» у него вышло бы не выбором, а последствием
   // отказа чтения — и молча уносило бы налог из операции компании.
-  // Открытую строку ставка не прячет (`vat-frame.ts`).
-  const vatVisible = vatRowVisible({ isOwner, rate: vat.rate, vatShown });
+  //
+  // Открытая строка VAT не пропадает от того, что в поле ставки сейчас ноль:
+  // иначе набранный «0» уносил бы и саму строку, и клавишу «Без VAT».
+  const vatVisible = vatControlsVisible({ isOwner, rate: vat.rate, shown: vatShown });
   // Настройки компании И переопределения команд доехали — только тогда режим
   // формы что-то значит для сервера (`operation-vat.ts`).
   const vatSettingsKnown =

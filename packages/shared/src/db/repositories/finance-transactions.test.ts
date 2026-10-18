@@ -112,6 +112,21 @@ describe("finance transaction repository paging", () => {
     ]);
   });
 
+  it("a row repeated across pages (window shifted by an insert) is counted once", async () => {
+    const unique = Array.from({ length: 1001 }, (_, i) => ledgerRow(i + 1));
+    // Вставка с другого телефона сдвинула окно: последняя строка первой
+    // страницы приходит и первой строкой второй.
+    const source = [...unique.slice(0, 1000), unique[999], unique[1000]];
+    const rows = await listTransactionsForRange(
+      pagedSupabase(source, [], []) as never,
+      "tenant-1",
+      "2026-07-01",
+      "2026-07-31",
+    );
+    expect(rows).toHaveLength(1001);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(1001);
+  });
+
   it("counts refunds outside the visible period past 1000 rows", async () => {
     const source = Array.from({ length: 1001 }, (_, i) =>
       ledgerRow(i + 1, {

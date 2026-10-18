@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import { financesFrom, resolveReturnTo, returnToParam } from "./return-to";
 
 const ACCOUNT = "7f0e2c1a-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
+const INVOICE = "0b9d5a52-6c3e-4f7a-9d1e-2a8c4e6f0b13";
 
 describe("resolveReturnTo", () => {
   test("без метки дороги нет — остаёмся там, куда привела навигация", () => {
@@ -15,7 +16,14 @@ describe("resolveReturnTo", () => {
   });
 
   test("страница инвойса несёт свой id", () => {
-    assert.equal(resolveReturnTo("invoice:abc-123"), "/invoices/abc-123");
+    assert.equal(resolveReturnTo(`invoice:${INVOICE}`), `/invoices/${INVOICE}`);
+  });
+
+  test("id инвойса из адреса проверяется — не uuid никуда не ведёт", () => {
+    assert.equal(resolveReturnTo("invoice:abc-123"), null);
+    assert.equal(resolveReturnTo("invoice:../cabinet"), null);
+    assert.equal(resolveReturnTo(`invoice:${INVOICE}/../x`), null);
+    assert.equal(resolveReturnTo(`invoice:${INVOICE}?x=1`), null);
   });
 
   test("инвойс без id не уводит на несуществующий маршрут", () => {

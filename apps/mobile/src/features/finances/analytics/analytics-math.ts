@@ -32,6 +32,7 @@ export {
 } from "./analytics-math/totals";
 export {
   changePct,
+  changeText,
   monthTable,
   previousPeriod,
   yearMonths,

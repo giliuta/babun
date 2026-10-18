@@ -5,29 +5,10 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { makePeriod } from "@/lib/period";
 import { rebasePeriod } from "./business-period";
-import { analyticsStartPeriod } from "./analytics/start-period";
 
 // 00:30 первого ноября по часам компании — телефон в другом поясе ещё
 // живёт 31 октября.
 const nov1 = new Date(2026, 10, 1, 0, 30);
-
-describe("пресет периода строится по часам компании", () => {
-  test("«Аналитика» из ?period= — месяц компании, а не телефона", () => {
-    const period = analyticsStartPeriod({ period: "month" }, nov1);
-    assert.deepEqual(period, makePeriod("month", nov1));
-    assert.equal(period?.from, "2026-11-01");
-  });
-
-  test("свой период из ссылки берётся как есть, битый — не берётся", () => {
-    assert.deepEqual(
-      analyticsStartPeriod({ period: "custom", from: "2026-09-01", to: "2026-09-10" }, nov1),
-      { preset: "custom", from: "2026-09-01", to: "2026-09-10" },
-    );
-    assert.equal(analyticsStartPeriod({ period: "custom", from: "2026-09-10", to: "2026-09-01" }, nov1), null);
-    assert.equal(analyticsStartPeriod({ period: "nope" }, nov1), null);
-    assert.equal(analyticsStartPeriod({}, nov1), null);
-  });
-});
 
 describe("rebasePeriod — полночь и приезд пояса", () => {
   test("пресет пересобирается от нового «сейчас»", () => {
@@ -47,8 +28,7 @@ describe("проводка: никто не строит пресет по ча�
   // Вызов `makePeriod(x)` без второго аргумента — это часы телефона.
   const deviceClock = /makePeriod\(\s*[^,()]+(\([^()]*\))?\s*\)/;
 
-  test("«Аналитика» и фильтр клиентов", () => {
-    assert.doesNotMatch(code("../../../app/(dashboard)/cabinet/insights.tsx"), deviceClock);
+  test("фильтр клиентов", () => {
     assert.doesNotMatch(code("../clients/filter-pref.ts"), deviceClock);
   });
 

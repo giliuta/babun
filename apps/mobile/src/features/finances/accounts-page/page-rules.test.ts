@@ -1,15 +1,22 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 import type { ClosableAccount } from "../close-decision";
 import {
   accountEditParam,
   accountRowMark,
+  clearSettledMoves,
+  groupBalanceTotal,
   hideDecision,
   hideDecisionAfterTransfer,
   presetTeamFor,
   trashDecision,
   trashDecisionAfterTransfer,
 } from "./page-rules";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 type Row = ClosableAccount & { name: string };
 
@@ -132,5 +139,62 @@ describe("«Удалить» на странице «Счета» (владел�
     const before = account({ id: "kasa", balance: 445 });
     const next = trashDecisionAfterTransfer(before, [account({ id: "kasa", balance: 0 }), account({ id: "bank", balance: 445 })]);
     assert.deepEqual(next?.decision, { kind: "trash" });
+  });
+});
+
+describe("подытог группы счетов", () => {
+  const row = (balance: number, patch: Partial<{ balance_known: boolean; is_active: boolean; is_hidden: boolean }> = {}) => ({
+    balance,
+    balance_known: true,
+    is_active: true,
+    is_hidden: false,
+    ...patch,
+  });
+
+  test("сумма открытых и видимых счетов — в копейках", () => {
+    assert.equal(groupBalanceTotal([row(0.1), row(0.2), row(50, { is_hidden: true }), row(9, { is_active: false })]), 0.3);
+  });
+
+  test("остаток хоть одного счёта неизвестен — подытога нет, а не «€0»", () => {
+    assert.equal(groupBalanceTotal([row(10), row(0, { balance_known: false })]), null);
+  });
+
+  test("неизвестный остаток закрытого или скрытого счёта подытог не ломает", () => {
+    assert.equal(
+      groupBalanceTotal([row(10), row(0, { balance_known: false, is_hidden: true })]),
+      10,
+    );
+  });
+});
+
+describe("оптимистичный порядок счетов после ответа", () => {
+  test("после ответа позиции снимаются: свежие с сервера не перекрыты старыми", () => {
+    const latest = new Map([["a", 1], ["b", 1]]);
+    assert.deepEqual(clearSettledMoves({ a: 0, b: 1 }, ["a", "b"], latest, 1), {});
+  });
+
+  test("счёт, переставленный заново, пока шёл первый запрос, свою позицию сохраняет", () => {
+    const latest = new Map([["a", 2], ["b", 1]]);
+    assert.deepEqual(clearSettledMoves({ a: 1, b: 0 }, ["a", "b"], latest, 1), { a: 1 });
+  });
+
+  test("чужие счета не затрагиваются", () => {
+    const latest = new Map([["a", 1]]);
+    assert.deepEqual(clearSettledMoves({ a: 0, z: 5 }, ["a"], latest, 1), { z: 5 });
+  });
+});
+
+describe("страница «Счета»: порядок записывается до конца и перечитывается", () => {
+  const read = (path: string) => readFileSync(resolve(here, path), "utf8");
+  test("мутация ждёт все записи и перечитывает при любом исходе", () => {
+    const code = read("../accounts/mutations.ts");
+    assert.match(code, /Promise\.allSettled\(/);
+    assert.match(code, /onSettled: \(\) => invalidateAccounts\(qc\)/);
+  });
+  test("экран снимает позиции после перечитывания, а не вслепую", () => {
+    const code = read("../../../../app/accounts/settings.tsx");
+    assert.match(code, /accountsQuery\.refetch\(\)/);
+    assert.match(code, /clearSettledMoves\(/);
+    assert.ok(!/setMoved\(\{\}\)/.test(code), "сброс всех позиций разом снова не нужен");
   });
 });

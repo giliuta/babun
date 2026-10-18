@@ -1,5 +1,6 @@
 import { blockFrame, type BlockFrame, type PlacedAppt } from "@/features/calendar/layout";
-import { blockLadder, rowsThatFit } from "@/features/calendar/block-geometry";
+import { blockLadder, rowsThatFit, textOverflows } from "@/features/calendar/block-geometry";
+import { blockMoney, type BlockMoney } from "@/features/calendar/block-status";
 import { GAP, MIN_H } from "@/features/calendar/grid-units";
 
 /** Everything the block draws that is plain arithmetic of its size. */
@@ -20,15 +21,18 @@ export type BlockLayout = {
   pad: number;
   bw: number;
   markSize: number;
-  markReserve: number;
   textW: number;
   topHandle: number;
   bottomHandle: number;
   rowsFit: number;
-  nameParts: string[];
+  /** Деньги записи для значка внизу; `null` — платить нечего. */
+  money: BlockMoney;
+  timeText: string;
   showTime: boolean;
   showService: boolean;
-  showAddress: boolean;
+  showStatus: boolean;
+  /** Строки (0 имя, 1 время, 2 услуга), чей край тает: не влезают. */
+  fadeRows: number[];
   lastRow: ReturnType<typeof blockLadder>["lastRow"];
   deckBadgeLow: boolean;
   nameLineW: number;
@@ -44,9 +48,9 @@ export function blockLayout({
   lineH,
   label,
   service,
-  address,
   offLabelColor,
   deckIndex,
+  overdue,
   deckSize,
   editing,
   reschedulable,
@@ -59,11 +63,12 @@ export function blockLayout({
   lineH: number;
   label: string;
   service: string | null;
-  address: string | null;
   offLabelColor: string | null;
   deckIndex?: number;
   deckSize?: number;
   editing: boolean;
+  /** Не закрыта в срок — время жирное, и шире. */
+  overdue: boolean;
   /** The block has a reschedule handler (not crew read-only). */
   reschedulable: boolean;
 }): BlockLayout {
@@ -112,14 +117,14 @@ export function blockLayout({
   // канта просрочки нет (некрасиво) — незакрытая
   // запись говорит жирным временем.
   const bw = 1.5;
-  const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
-  // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
-  // Пока его резервировала и она, просроченный блок недели на экране 393pt
-  // давал textW 22.3 при гейте 24 — то есть был НЕМЫМ, без имени клиента.
-  const markReserve = markSize > 0 && completed ? markSize + 4 : 0;
+  // Гейт точки чужой метки: в колонке уже 40pt ей места нет.
+  const markSize = width >= 40 ? 8 : 0;
+  // УГЛОВОГО ЗНАКА «ВЫПОЛНЕНО» НЕТ: в колонке недели галка не помещалась, и
+  // оставалась немая полупрозрачная точка, похожая на случайную. «Выполнено»
+  // живёт в строке значков внизу — галкой, рядом с оплатой.
   // Внутренняя ширина НЕ зависит от толщины канта: компенсация паддинга ниже
   // (`pad - (bw - 1)`) гасит лишний кант ровно, поэтому вычитаем 2, а не 2·bw.
-  const textW = width - 2 * pad - 2 - markReserve;
+  const textW = width - 2 * pad - 2;
   // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
   // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
   // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
@@ -140,23 +145,17 @@ export function blockLayout({
   // того названо рельсом слева и позицией блока — потому имя и стоит первым.
   // Единица снизу остаётся: у самого низкого блока имя пытается напечататься
   // всегда, как было.
-  // ЛЕСТНИЦА — ЧИСТОЙ ФУНКЦИЕЙ ПОД ТЕСТОМ (`blockLadder`): имя (в узком блоке
-  // — имя и фамилия двумя строками), время, услуга, адрес — сколько влезает.
-  // Потолка в три строки и гейта ширины 120pt у услуги с адресом больше нет:
-  // в блок должно влезать как можно больше.
-  const nameWords = label.trim().split(/\s+/);
+  // ЛЕСТНИЦА — ЧИСТОЙ ФУНКЦИЕЙ ПОД ТЕСТОМ (`blockLadder`): имя, время,
+  // услуга — сколько влезает, и строка значков внизу. Адреса на блоке нет:
+  // имени, времени и услуги хватает, чтобы узнать визит, а адрес съедал
+  // строку у значков.
+  const money = blockMoney(apt);
   const ladder = blockLadder({
     rowsFit,
-    textW,
-    nameWords: nameWords.length,
     hasService: !!service,
-    hasAddress: !!address,
+    hasStatus: !cancelled && (money !== null || completed),
   });
-  const nameParts =
-    ladder.nameRows === 2
-      ? [nameWords[0], nameWords.slice(1).join(" ")]
-      : [label];
-  const { showService, showAddress, lastRow } = ladder;
+  const { showService, showStatus, lastRow } = ladder;
   // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
   // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
   // адрес, и на карточке, где последней осталась услуга (или время), её хвост
@@ -167,10 +166,24 @@ export function blockLayout({
   // ШИРИНА ПЕРВОЙ СТРОКИ ИМЕНИ — после значка «+N» сверху. Значок резервировался
   // уже ПОСЛЕ гейта 24pt: у верхней карточки стопки в Неделе (две короткие
   // записи в одно время) имени оставалось ~14pt — «А…». Гейт меряет то, что останется имени на самом деле.
-  const nameLineW =
-    textW + markReserve - Math.max(markReserve, deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
+  const nameLineW = textW - (deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
+  // Строки, чей край тает: только те, что не влезают. Плёнка по всей кромке
+  // гасила бы и короткое время «10:00» в узкой колонке недели.
+  const timeText = textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start;
+  const fadeRows: number[] = [];
+  if (!cancelled && textW >= 24) {
+    const nameW = nameLineW - (lastRow === "name" ? dotReserve : 0);
+    if (nameLineW >= 24 && textOverflows(label, nameW, { bold: true })) fadeRows.push(0);
+    if (
+      ladder.showTime &&
+      textOverflows(timeText, textW - (lastRow === "time" ? dotReserve : 0), { bold: overdue })
+    )
+      fadeRows.push(1);
+    if (showService && service && textOverflows(service, textW - (lastRow === "service" ? dotReserve : 0)))
+      fadeRows.push(2);
+  }
   return {
     winStart,
     winEnd,
@@ -188,15 +201,16 @@ export function blockLayout({
     pad,
     bw,
     markSize,
-    markReserve,
     textW,
     topHandle,
     bottomHandle,
     rowsFit,
-    nameParts,
+    money,
+    timeText,
     showTime: ladder.showTime,
     showService,
-    showAddress,
+    showStatus,
+    fadeRows,
     lastRow,
     deckBadgeLow,
     nameLineW,

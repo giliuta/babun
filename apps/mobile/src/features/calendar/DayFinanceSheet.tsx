@@ -13,7 +13,7 @@ import {
 } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { OperationSheet } from "@/features/finances/OperationSheet";
-import { useFinanceCategories } from "@/features/finances/queries";
+import { useFinanceCategories, useRefundTotals } from "@/features/finances/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { accessGate, moneyKey } from "@/session/my-access";
@@ -114,6 +114,13 @@ export function DayFinanceSheet({
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
   const me = useSession().session?.user.id ?? null;
+  // СУММЫ ВОЗВРАТОВ — ТЕ ЖЕ, ЧТО У ФОРМЫ НА «ФИНАНСАХ». Без них форма
+  // считала, что возвратов нет: давала опустить сумму дохода ниже
+  // возвращённого и сменить его счёт, а сервер (`guard_income_with_refunds`)
+  // отвечал отказом уже после «Сохранить». Пока суммы едут — Infinity, как там.
+  const refundTotalsQuery = useRefundTotals();
+  const refundTotalsFailed =
+    refundTotalsQuery.data === undefined && refundTotalsQuery.error != null;
   const canWriteDayMoney = dayMoneyGate({ role, map: myAccess, teamId }) === "write";
   const canWriteIncome = canWriteDayMoney;
   const canWriteExpense = canWriteDayMoney;
@@ -337,6 +344,15 @@ export function DayFinanceSheet({
         businessToday={businessToday}
         transaction={editingTx}
         fromCalendar
+        refundedTotal={
+          editingTx
+            ? refundTotalsQuery.data
+              ? refundTotalsQuery.data.get(editingTx.id) ?? 0
+              : Number.POSITIVE_INFINITY
+            : 0
+        }
+        refundsFailed={refundTotalsFailed}
+        onRetryRefunds={() => void refundTotalsQuery.refetch()}
       />
     </>
   );

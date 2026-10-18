@@ -27,6 +27,7 @@ import { useReceiptMenu } from "@/features/finances/receipt-menu";
 import { useDocumentWriter } from "@/session/document-rights";
 import { invoiceDeleteBlock } from "@/features/finances/invoice-delete";
 import { useInvoiceMenu } from "@/features/finances/invoice-menu";
+import { receiptRefusal } from "@/lib/receipt-eligibility";
 import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
@@ -72,8 +73,13 @@ export function DocumentsPanel({
   onFilterChange,
   onOpen,
   refreshControl,
+  seriesInvoices,
 }: {
   invoices: InvoiceLedger[];
+  /** Все инвойсы компании — для «последнего в серии». В «Финансах клиента»
+   *  `invoices` — только его, и удаление предлагалось у номера, за которым в
+   *  серии стоят чужие: сервер отказывал уже после нажатия. */
+  seriesInvoices?: InvoiceLedger[];
   /** Проводки по инвойсам, ключ — invoice_id. */
   payments: Record<string, InvoicePaymentLedger[]>;
   appointments: Appointment[];
@@ -206,15 +212,16 @@ export function DocumentsPanel({
   // правой кромки нет.
   const invoiceById = new Map(invoices.map((item) => [item.id, item]));
   const receiptById = new Map((receipts ?? []).map((item) => [item.id, item]));
+  const series = seriesInvoices ?? invoices;
   const menuContext = (invoice: InvoiceLedger) => ({
-    all: invoices,
+    all: series,
     payments: payments[invoice.id] ?? [],
     hasReceipt: (receipts ?? []).some((receipt) => receipt.invoice_id === invoice.id),
   });
   const deleteAction = (doc: FinanceDocument) => {
     if (doc.kind !== "invoice") return null;
     const invoice = invoiceById.get(doc.id);
-    if (!invoice || invoiceDeleteBlock(invoice, invoices, false) !== null) return null;
+    if (!invoice || invoiceDeleteBlock(invoice, series, false) !== null) return null;
     return invoiceMenu.actionsFor(invoice, menuContext(invoice)).find((a) => a.key === "delete") ?? null;
   };
   // ПОЛНЫЙ СПИСОК, КАК У ЗАПИСИ В КАЛЕНДАРЕ: по удержанию вылезает список —
@@ -233,9 +240,15 @@ export function DocumentsPanel({
       const settlement = calculateInvoiceSettlement(invoice, own);
       const isInvoice = (invoice.kind ?? "invoice") === "invoice";
       const awaits = isInvoice && invoice.status === "issued" && settlement.remaining > 0;
-      const withReceipt = new Set((receipts ?? []).map((r) => r.transaction_id));
+      const withReceipt = new Set(
+        (receipts ?? []).flatMap((r) => (r.transaction_id ? [r.transaction_id] : [])),
+      );
+      // «Выписать чек» — только там, где сервер его выпустит: клиент есть,
+      // оплата не возвращена целиком (`receiptRefusal`, одно правило с
+      // кнопкой страницы инвойса).
       const needsReceipt =
-        isInvoice && own.some((p) => p.type === "income" && !withReceipt.has(p.id));
+        isInvoice &&
+        receiptRefusal({ invoice, payments: own, receiptTransactionIds: withReceipt }) === null;
       setSheetMenu(
         invoiceMenu.menuFor(invoice, menuContext(invoice), [
           { ...open, run: () => onOpen(path) },
@@ -276,8 +289,12 @@ export function DocumentsPanel({
         // прописью, капсом, на цвете холста. Итога дня здесь нет намеренно —
         // инвойс и чек по одним деньгам сложились бы в двойную сумму.
         // День — подписью над плашками, как в «Истории» и «Файлах» клиента.
+        // Прилипает при прокрутке — фон холста закрывает строки под ней.
         renderSectionHeader={({ section }) => (
-          <View className="flex-row items-center px-4 pb-1.5 pt-3">
+          <View
+            className="flex-row items-center px-4 pb-1.5 pt-3"
+            style={{ backgroundColor: t.canvas }}
+          >
             <Text
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: t.sub }}

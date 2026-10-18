@@ -197,11 +197,20 @@ export async function setInvoiceLanguage(
   id: string,
   language: UiLocale,
 ): Promise<void> {
-  const { error } = await supabase
+  // `.select()` — чтобы увидеть, сколько строк ушло под запись: политика строк
+  // отвечает на недоступный документ «0 обновлено» без ошибки, и без сверки
+  // вызывающий считал бы язык записанным.
+  const { data, error } = await supabase
     .from("invoices")
     .update({ language })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id, language");
   if (error) throw new Error(`setInvoiceLanguage: ${error.message}`);
+  const row = (data ?? [])[0] as { language?: string | null } | undefined;
+  if (!row) throw new Error("setInvoiceLanguage: invoice is not writable");
+  if (row.language !== language) {
+    throw new Error("setInvoiceLanguage: language was not saved");
+  }
 }
 
 export async function setInvoicePdfUrl(

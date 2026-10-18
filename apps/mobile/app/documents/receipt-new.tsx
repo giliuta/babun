@@ -25,7 +25,8 @@ import {
 } from "@/features/finances/receipts-queries";
 import { useReceiptSource } from "@/features/documents/use-receipt-source";
 import { useReceiptDraftPaper } from "@/features/documents/use-receipt-draft-paper";
-import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
+import { useInvoicePayments, useNextInvoiceSeries } from "@/features/finances/invoices-queries";
+import { paymentFullyRefunded } from "@/lib/receipt-eligibility";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
@@ -73,7 +74,13 @@ export default function NewReceiptScreen() {
   const paymentTx = source.tx;
   const editing = source.mode === "edit";
   const forPayment = source.mode !== "new";
-  const accounts = useAccountsWithBalances();
+  // ЧЕК НА ОПЛАТУ БЕРЁТ СЧЁТ ИЗ САМОЙ ПРОВОДКИ, а деньги могли прийти на счёт,
+  // который потом скрыли или закрыли: живой список его не знает, и чек вставал
+  // бы на «Выберите счёт» без выхода. Свободный чек выбирает только из живых.
+  const accounts = useAccountsWithBalances(
+    forPayment ? { includeInactive: true, includeHidden: true, includeDeleted: true } : undefined,
+  );
+  const invoicePayments = useInvoicePayments();
   const services = useServices();
   const tenant = useTenant();
   const tenantIdForVat = useTenantId();
@@ -114,11 +121,23 @@ export default function NewReceiptScreen() {
     : typed;
   const paperVatRate = paymentTx ? (paymentTx.vat_rate ?? 0) : vatRate;
   const currency = tenant.data?.currency || "EUR";
+  // КЛИЕНТ ЧЕКА НА ОПЛАТУ — КЛИЕНТ ЕЁ ПРОВОДКИ: выбор в составителе отключён, а
+  // сервер выпускает чек только на оплату человека.
+  const clientId = forPayment ? (paymentTx?.client_id ?? null) : draft.clientId;
+  const refunded =
+    source.mode === "payment" &&
+    !!paymentTx?.invoice_id &&
+    paymentFullyRefunded(paymentTx.id, invoicePayments.data?.[paymentTx.invoice_id]);
+  // Счёт чека на оплату известен проводке; от списка счетов он не зависит.
   const problem = forPayment && !source.ready
     ? "Загружаем оплату…"
-    : !draft.clientId
+    : forPayment && !clientId
+    ? "У оплаты нет клиента — чек выписывается на человека, поэтому на эту оплату его не выписать"
+    : refunded
+    ? "Оплата возвращена целиком — чек на неё не выписывается"
+    : !clientId
     ? "Выберите клиента — чек выписывается на человека"
-    : !account
+    : !forPayment && !account
       ? "Выберите счёт — деньги всегда куда-то приходят"
       : !(money.gross > 0)
         ? "Добавьте услуги — чек на ноль не выписывается"
@@ -138,7 +157,7 @@ export default function NewReceiptScreen() {
   });
 
   const issue = async () => {
-    if (problem || !account) return;
+    if (problem) return;
     const lines = receiptLinesForServer(draft, nameFor);
     try {
       const receipt = source.editing
@@ -158,6 +177,8 @@ export default function NewReceiptScreen() {
             locationId: draft.locationId,
             clientRequisitesId: draft.clientRequisitesId,
           })
+        : !account
+        ? null
         : await compose.mutateAsync({
         requestId: composeRequestId,
         // Перечень замораживается в чеке сервером: выданный документ больше
@@ -183,6 +204,7 @@ export default function NewReceiptScreen() {
           business_today: businessToday,
         },
       });
+      if (!receipt) return;
       if (!source.editing && !paymentTx) setComposeRequestId(randomUuid());
       setPreviewOpen(false);
       toast(editing ? `Чек ${receipt.number} сохранён` : `Чек ${receipt.number} выписан`, "success");

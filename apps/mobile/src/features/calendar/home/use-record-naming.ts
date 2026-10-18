@@ -6,6 +6,7 @@ import { serviceSummary } from "./record-text";
 import type { CalendarSources } from "./use-calendar-sources";
 import type { GridModes } from "./use-grid-modes";
 import type { ReminderReconcile } from "./use-reminder-reconcile";
+import { eventTitleIsNote } from "@/features/calendar/record-title";
 
 type UseRecordNamingDeps =
   Pick<CalendarSources, "clients" | "teams" | "calSettings">
@@ -85,7 +86,10 @@ export function useRecordNaming(deps: UseRecordNamingDeps) {
         // Заголовок блока уже печатает тип события — третья строка не
         // повторяет слово, а называет клиента или первую строку заметки.
         const who = a.client_id ? nameById.get(a.client_id) ?? "" : "";
-        const note = (a.event_notes ?? "").trim().split("\n")[0]?.trim() ?? "";
+        // Заметка уже стала заголовком — второй раз её не печатаем.
+        const note = eventTitleIsNote(a)
+          ? ""
+          : (a.event_notes ?? "").trim().split("\n")[0]?.trim() ?? "";
         return who || note || null;
       }
       return serviceSummaryFor(a) || a.comment || null;

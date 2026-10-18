@@ -52,7 +52,9 @@ describe("шторка «Финансы дня»", () => {
   });
 
   test("операция из листа помечена «из календаря»", () => {
-    has(sheet, `transaction={editingTx} fromCalendar />`, "признак");
+    has(sheet, `transaction={editingTx} fromCalendar refundedTotal={`, "признак");
+    // Возвраты — те же, что у формы на «Финансах».
+    has(sheet, `refundsFailed={refundTotalsFailed} onRetryRefunds={() => void refundTotalsQuery.refetch()} />`, "возвраты");
   });
 
   test("«Смотрит»: кнопка на месте, серая, с причиной — по стороне плитки", () => {

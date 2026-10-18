@@ -15,6 +15,7 @@ import {
 } from "lucide-react-native";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -118,9 +119,11 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
   // Долг для выгрузки считается тем же селектором, что везде.
   const { data: appointmentsForStats = [] } = useAppointments();
+  // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
+  const invoicing = useClientInvoicing();
   const statsMap = useMemo(
-    () => buildStatsMap(clients, appointmentsForStats),
-    [clients, appointmentsForStats],
+    () => buildStatsMap(clients, appointmentsForStats, invoicing),
+    [clients, appointmentsForStats, invoicing],
   );
   const tags = useMemo(() => tagsQuery.data ?? [], [tagsQuery.data]);
   // Теги — у команды: счётчик строки — теги выбранной команды.

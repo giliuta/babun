@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import type { CardAccess } from "@/features/clients/card-access";
 import type { ClientsScope } from "@/session/clients-company";
@@ -24,9 +25,12 @@ export function useCardSms({
   // Shared selectors — memoized so unrelated state changes don't re-scan
   // every appointment. Hooks must run unconditionally, hence the guards
   // before the early returns of `ClientDetailScreen`.
+  // Долг — тем же правилом, что «Финансы»: работа под инвойсом должна
+  // остаток инвойса, а инвойс без записи — сам.
+  const invoicing = useClientInvoicing();
   const stats = useMemo(
-    () => (c ? buildStats(c, appointments) : undefined),
-    [c, appointments],
+    () => (c ? buildStats(c, appointments, invoicing) : undefined),
+    [c, appointments, invoicing],
   );
 
   // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись

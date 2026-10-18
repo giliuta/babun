@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 import type { InvoiceLineDraft } from "@babun/shared/local/finance/invoice-ledger";
 import type { EditableInvoiceLine } from "@/lib/paper/format";
@@ -6,10 +9,14 @@ import {
   appointmentVatOf,
   discountAmountOf,
   existingDiscountOf,
+  firstIssuedOnFor,
   incomeAmountOf,
   initialInvoiceVatMode,
   invoiceReason,
+  rolledIssueDates,
 } from "./invoice-rules";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 describe("what the source visit and income bring", () => {
   test("only a visit with an inclusive/exclusive rate passes its tax on", () => {
@@ -152,5 +159,72 @@ describe("invoiceReason", () => {
     assert.equal(invoiceReason({ ...ready, pickedCompany: noVat })?.error, false);
     assert.equal(invoiceReason({ ...ready, pickedCompany: noVat, vatMode: "off" }), null);
     assert.equal(invoiceReason({ ...ready, pickedCompany: noVat, rate: 0 }), null);
+  });
+});
+
+// ДАТА ВЫСТАВЛЕНИЯ ЕДЕТ ЗА ЧАСАМИ, ПОКА ЕЁ НЕ ТРОГАЛИ РУКАМИ: форму открыли
+// 31.12 в 23:50, «Выставить» — в 00:10.
+describe("дата выставления в миг выставления", () => {
+  const base = {
+    issuedOn: "2026-12-31",
+    dueOn: "2027-01-07",
+    issuedTouched: false,
+    dueTouched: false,
+    sourceIssuedOn: null,
+  };
+
+  test("первая дата — не раньше сегодня; будущий визит остаётся своей датой", () => {
+    assert.equal(firstIssuedOnFor("2026-12-01", "2026-12-31"), "2026-12-31");
+    assert.equal(firstIssuedOnFor("2027-02-01", "2026-12-31"), "2027-02-01");
+    assert.equal(firstIssuedOnFor(null, "2026-12-31"), "2026-12-31");
+  });
+
+  test("не трогали — после полуночи документ выходит новым днём и годом, срок держит отступ", () => {
+    assert.deepEqual(rolledIssueDates({ ...base, today: "2027-01-01" }), {
+      issuedOn: "2027-01-01",
+      dueOn: "2027-01-08",
+    });
+  });
+
+  test("тот же день — ничего не меняется", () => {
+    assert.deepEqual(rolledIssueDates({ ...base, today: "2026-12-31" }), {
+      issuedOn: "2026-12-31",
+      dueOn: "2027-01-07",
+    });
+  });
+
+  test("дату выбрали руками — остаётся выбранной, хоть полночь прошла", () => {
+    assert.deepEqual(
+      rolledIssueDates({ ...base, issuedTouched: true, issuedOn: "2026-12-30", today: "2027-01-01" }),
+      { issuedOn: "2026-12-30", dueOn: "2027-01-07" },
+    );
+  });
+
+  test("срок выбрали руками — остаётся, но не раньше новой даты", () => {
+    assert.deepEqual(
+      rolledIssueDates({ ...base, dueTouched: true, dueOn: "2027-01-15", today: "2027-01-01" }),
+      { issuedOn: "2027-01-01", dueOn: "2027-01-15" },
+    );
+    assert.deepEqual(
+      rolledIssueDates({ ...base, dueTouched: true, dueOn: "2027-01-01", today: "2027-01-03" }),
+      { issuedOn: "2027-01-03", dueOn: "2027-01-03" },
+    );
+  });
+
+  test("будущий визит не двигается часами", () => {
+    assert.deepEqual(
+      rolledIssueDates({ ...base, issuedOn: "2027-02-01", dueOn: null, sourceIssuedOn: "2027-02-01", today: "2027-01-01" }),
+      { issuedOn: "2027-02-01", dueOn: null },
+    );
+  });
+
+  test("редактор берёт даты на момент выставления, а черновик не считает сдвиг правкой", () => {
+    const editor = readFileSync(resolve(here, "../InvoiceEditor.tsx"), "utf8");
+    assert.match(editor, /const dates = datesAt\(currentBusinessToday\?\.\(\) \?\? businessToday\);/);
+    assert.match(editor, /issued_on: dates\.issuedOn,\s*due_on: dates\.dueOn,/);
+    const paper = readFileSync(resolve(here, "use-invoice-paper.ts"), "utf8");
+    assert.match(paper, /issuedOn: issuedTouched\.current \? issuedOn : null,/);
+    const page = readFileSync(resolve(here, "../../../../app/invoices/new.tsx"), "utf8");
+    assert.match(page, /currentBusinessToday=\{\(\) =>/);
   });
 });

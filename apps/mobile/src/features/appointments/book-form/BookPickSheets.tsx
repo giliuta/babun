@@ -43,6 +43,7 @@ export function BookPickSheets({ form }: { form: BookModel }) {
     setObjectPicker,
     kind,
     eventLocationPool,
+    eventPickPool,
     clientLocations,
     pickLocation,
     clientObjectsWritable,
@@ -142,14 +143,13 @@ export function BookPickSheets({ form }: { form: BookModel }) {
         />
       ) : null}
       {/* Выбор/замена объекта; «Добавить объект» в его футере открывает лист
-          добавления, когда этот уже уехал. У записи список — объекты её
-          клиента; у события — объекты ВСЕХ клиентов, и чей объект, сказано
-          третьей строкой. */}
+          добавления, когда этот уже уехал. И у записи, и у события список —
+          объекты её клиента. */}
       <ObjectPickerSheet
         visible={objectPicker}
         locations={
           kind === "event"
-            ? eventLocationPool.map((row) => row.loc)
+            ? eventPickPool.map((row) => row.loc)
             : clientLocations
         }
         selectedId={locationId}

@@ -27,6 +27,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
     setAccountId,
     documentsReadable,
     scopedInvoices,
+    invoices,
     invoicePayments,
     scopedAppointments,
     accounts,
@@ -73,6 +74,8 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         canOpenSettings={access.settings}
         // Настройки — на счетах выбранной команды.
         teamId={scope}
+        canDeleteRow={canDeleteRow}
+        onDeleteRow={deleteRow}
       />
     );
   }
@@ -84,6 +87,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         canIssue={access.documents}
         readable={documentsReadable}
         invoices={scopedInvoices}
+        seriesInvoices={invoices}
         payments={invoicePayments}
         appointments={scopedAppointments}
         accounts={accounts}

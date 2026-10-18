@@ -6,9 +6,15 @@ import type { AccountBalanceRow } from "@babun/shared/db/repositories/finance-tr
 import type { Account } from "@babun/shared/local/finance/account";
 
 export type AccountWithBalance = Account & {
-  /** opening_balance + серверная дельта журнала. */
+  /** opening_balance + серверная дельта журнала. Пока `balance_known` нет —
+   *  заглушка, в суммы и решения не идёт. */
   balance: number;
-  /** Была ли по счёту хоть одна операция. */
+  /** Сервер назвал остаток этого счёта. Не назвал — у человека нет права
+   *  «Счета» на деньги этой команды (`account_balances` отдаёт ему только
+   *  видимые счета): остаток неизвестен, а не «€0». */
+  balance_known: boolean;
+  /** Была ли по счёту хоть одна операция. Историю не знаем — считается, что
+   *  была: «истории нет» разрешило бы сменить вид счёта и удалить его. */
   has_history: boolean;
   /** Даты для подписей строки счёта (YYYY-MM-DD, null — движений не было). */
   last_outflow_on: string | null;
@@ -40,11 +46,24 @@ export function mergeAccountBalances(
     const b = byAccount.get(a.id);
     return {
       ...a,
-      balance: a.opening_balance + (b?.delta ?? 0),
-      has_history: b?.has_history ?? false,
+      balance: b ? a.opening_balance + b.delta : 0,
+      balance_known: !!b,
+      has_history: b ? b.has_history : true,
       last_outflow_on: b?.last_outflow_on ?? null,
       last_tx_on: b?.last_tx_on ?? null,
       first_tx_on: b?.first_tx_on ?? null,
     };
   });
+}
+
+/** Прочерк на месте остатка, которого человеку не показывают. */
+export const UNKNOWN_BALANCE_TEXT = "—";
+
+/** Остаток словами: число, пока его назвал сервер, иначе прочерк. «€0» вместо
+ *  неизвестного остатка был бы враньём про деньги. */
+export function balanceText(
+  account: Pick<AccountWithBalance, "balance" | "balance_known">,
+  format: (amount: number) => string,
+): string {
+  return account.balance_known ? format(account.balance) : UNKNOWN_BALANCE_TEXT;
 }

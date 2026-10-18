@@ -1,9 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import {
-  calculateInvoicePaymentRefundable,
-  calculateInvoiceSettlement,
-} from "@babun/shared/local/finance/invoice-ledger";
+  paymentsAwaitingReceipt,
+  receiptRefusal,
+  receiptRefusalText,
+} from "@/lib/receipt-eligibility";
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import type { ActionMenu } from "@/components/blocks/ActionMenuSheet";
 import { useAppointments } from "@/features/calendar/queries";
@@ -119,15 +121,14 @@ export function useInvoiceDetail() {
   const receipts = useMemo(() => receiptsQuery.data ?? [], [receiptsQuery.data]);
   // Платежи, по которым чек ещё не выписан. Возвращённый целиком чека не
   // получает — сервер откажет («оформлен полный возврат»).
-  const paymentsWithoutReceipt = useMemo(() => {
-    const withReceipt = new Set(receipts.map((r) => r.transaction_id));
-    return payments.filter(
-      (p) =>
-        p.type === "income" &&
-        !withReceipt.has(p.id) &&
-        calculateInvoicePaymentRefundable(p, payments) > 0,
-    );
-  }, [payments, receipts]);
+  const receiptTransactionIds = useMemo(
+    () => new Set(receipts.flatMap((r) => (r.transaction_id ? [r.transaction_id] : []))),
+    [receipts],
+  );
+  const paymentsWithoutReceipt = useMemo(
+    () => paymentsAwaitingReceipt(payments, receiptTransactionIds),
+    [payments, receiptTransactionIds],
+  );
 
   // «ВЫПИСАТЬ ЧЕК» ОТКРЫВАЕТ ЧЕК, А НЕ ВЫДАЁТ ЕГО СРАЗУ: человек проверяет, как он
   // будет выглядеть, при нужде правит, и только тогда выставляет. Составитель
@@ -135,6 +136,15 @@ export function useInvoiceDetail() {
   // несколько (доплаты) — по одному, первым самый ранний; вернулся — кнопка
   // ведёт к следующему.
   const issueReceipts = () => {
+    // Кнопка и меню не предлагают чек там, где его не выпустить; сюда можно
+    // прийти только ссылкой, и тогда человеку называют причину, а не молчат.
+    const refusal = invoice.data
+      ? receiptRefusal({ invoice: invoice.data, payments, receiptTransactionIds })
+      : null;
+    if (refusal) {
+      notify("Чек не выписывается", receiptRefusalText(refusal));
+      return;
+    }
     const payment = earliestPayment(paymentsWithoutReceipt);
     if (!payment) return;
     router.push({
@@ -217,6 +227,7 @@ export function useInvoiceDetail() {
     accountById,
     receipts,
     paymentsWithoutReceipt,
+    receiptTransactionIds,
     issueReceipts,
     sharePdf,
   };

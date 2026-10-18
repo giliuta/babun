@@ -158,3 +158,43 @@ describe("operationInputReason", () => {
     assert.equal(operationReason(true, null), null);
   });
 });
+
+describe("оплата долга не больше остатка", () => {
+  test("больше остатка — кнопка погашена и причина названа", () => {
+    const g = { ...ready, amount: "700", amountCents: 70000, debtRemainderCents: 60000 };
+    assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), false);
+    assert.match(operationInputReason(g)?.text ?? "", /^По долгу осталось /);
+  });
+  test("ровно остаток — можно", () => {
+    const g = { ...ready, amount: "600", amountCents: 60000, debtRemainderCents: 60000 };
+    assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), true);
+  });
+});
+
+describe("доход с выданным чеком", () => {
+  test("правка денег гасит кнопку и называет чек", () => {
+    const g = { ...ready, receiptLocked: "REC-2026-0001" };
+    assert.equal(operationCanSave({ ...g, canWrite: true, busy: false }), false);
+    assert.match(operationInputReason(g)?.text ?? "", /^По доходу выдан чек REC-2026-0001 — /);
+  });
+});
+
+describe("оплата долга с VAT «сверху» (16.10)", () => {
+  test("долг гасит сумму с налогом, а не введённое нетто", async () => {
+    const { overpaysDebt } = await import("./operation-guards");
+    // Остаток 600, введено 550 + 19% сверху = 654,50 — больше остатка.
+    assert.equal(overpaysDebt({ amountCents: 55000, grossCents: 65450, debtRemainderCents: 60000 }), true);
+    assert.equal(overpaysDebt({ amountCents: 50000, grossCents: 59500, debtRemainderCents: 60000 }), false);
+    // Без VAT — по введённому.
+    assert.equal(overpaysDebt({ amountCents: 60001, debtRemainderCents: 60000 }), true);
+  });
+});
+
+describe("сумма с VAT за пределом (16.10)", () => {
+  test("введённое в пределе, а с налогом — нет: кнопка гаснет с причиной", async () => {
+    const { grossTooLarge } = await import("./operation-guards");
+    assert.equal(grossTooLarge({ grossCents: 999_999_999_999 }), false);
+    assert.equal(grossTooLarge({ grossCents: 1_189_999_999_999 }), true);
+    assert.equal(grossTooLarge({ grossCents: null }), false);
+  });
+});

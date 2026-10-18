@@ -22,7 +22,9 @@ import { mergeAccountBalances, type AccountWithBalance } from "./accounts/shared
 export type { Account } from "@babun/shared/local/finance/account";
 export {
   NEVER_PAUSE,
+  balanceText,
   mergeAccountBalances,
+  UNKNOWN_BALANCE_TEXT,
   type AccountWithBalance,
 } from "./accounts/shared";
 export {

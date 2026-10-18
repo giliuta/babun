@@ -1,6 +1,7 @@
 import { Text, View, useWindowDimensions } from "react-native";
 import { CalendarCheck, CalendarClock, CalendarX2, type LucideIcon } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
+import type { ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
 import { SelectRow } from "@/components/ui/select-rows";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
@@ -72,6 +73,7 @@ export function VisitRow({
   today,
   showMoney,
   onPress,
+  invoicing,
 }: {
   appointment: Appointment;
   /** Команда записи из справочника с архивом; нет — без подписи команды. */
@@ -81,10 +83,12 @@ export function VisitRow({
   showMoney: boolean;
   /** Нет — плашка показание (запись открыть нельзя). */
   onPress?: () => void;
+  /** Работа под инвойсом: её долг — остаток инвойса (`client-invoicing.ts`). */
+  invoicing?: ClientInvoicing;
 }) {
   const t = useThemeColors();
   const { fontScale } = useWindowDimensions();
-  const status = visitStatus(a, today, showMoney);
+  const status = visitStatus(a, today, showMoney, invoicing);
   const hue = useRecordColor(a, team?.color, today) || t.accent;
   const teamName = team ? (team.is_active ? team.name : `${team.name} · в архиве`) : "";
   const time = a.time_start ? a.time_start.slice(0, 5) : "";

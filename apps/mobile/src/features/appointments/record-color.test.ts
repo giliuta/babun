@@ -115,6 +115,28 @@ describe("recordFilled", () => {
     // Бесплатный визит — не долг.
     assert.equal(recordFilled({ total_amount: 0, date: "2026-09-20" }, "2026-09-25").paid, true);
   });
+
+  test("сегодняшняя запись — долг, как только кончилось её время", () => {
+    const today = {
+      total_amount: 100,
+      payment_status: "unpaid",
+      prepaid_amount: 0,
+      date: "2026-10-16",
+      time_start: "10:00",
+      time_end: "12:30",
+    };
+    // Идёт ещё — не долг.
+    assert.equal(recordFilled(today, "2026-10-16", 12 * 60).paid, true);
+    // Время вышло — долг, не дожидаясь завтра.
+    assert.equal(recordFilled(today, "2026-10-16", 12 * 60 + 30).paid, false);
+    assert.equal(recordFilled(today, "2026-10-16", 14 * 60 + 13).paid, false);
+    // Без часов про сегодня не знаем — как раньше, только по дню.
+    assert.equal(recordFilled(today, "2026-10-16").paid, true);
+    // Нулевая запись кончается не раньше 15 минут от начала.
+    const zero = { ...today, time_end: "10:00" };
+    assert.equal(recordFilled(zero, "2026-10-16", 10 * 60 + 10).paid, true);
+    assert.equal(recordFilled(zero, "2026-10-16", 10 * 60 + 15).paid, false);
+  });
 });
 
 describe("resolveRecordSituation", () => {

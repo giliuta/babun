@@ -6,6 +6,7 @@ import { CalendarNotice } from "@/features/calendar/CalendarNotice";
 import { ModePlaque } from "@/features/calendar/ModePlaque";
 import { NOTICE_LIFETIME_MS } from "./use-slot-notice";
 import type { CalendarController } from "./use-calendar-controller";
+import { recordComment } from "@/features/calendar/record-title";
 
 /** Header with the notice, the mode plaque, the calendars ribbon and the
  *  background refresh bar. */
@@ -65,7 +66,7 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
         />
       ) : editingApt ? (
         <ModePlaque
-          title={`Перемещение: ${clientName(editingApt) || editingApt.comment || "Запись"}`}
+          title={`Перемещение: ${clientName(editingApt) || recordComment(editingApt) || "Запись"}`}
           // В другую команду — «Перенести» в меню записи (кубики по сетке
           // выбранной команды); здесь только палец и «готово» тапом.
           subtitle="Тяните запись · тап по пустому месту — готово"
@@ -74,7 +75,7 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
         />
       ) : moving ? (
         <ModePlaque
-          title={`${movingKind === "copy" ? "Копировать" : "Перенести"}: ${clientName(moving) || moving.comment || "Запись"}`}
+          title={`${movingKind === "copy" ? "Копировать" : "Перенести"}: ${clientName(moving) || recordComment(moving) || "Запись"}`}
           subtitle={
             teams.length > 1 && !isCrew
               ? `Зелёное время · ${moveWindowMin} мин · команда — ниже`

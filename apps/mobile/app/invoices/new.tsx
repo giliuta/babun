@@ -233,6 +233,9 @@ export default function NewInvoiceScreen() {
           }}
           teams={issueTeams}
           businessToday={businessToday}
+          currentBusinessToday={() =>
+            todayYmd(calendarSettings.data?.timezone ?? "Europe/Nicosia")
+          }
           tenant={tenant.data}
           submitting={issue.isPending || update.isPending}
           onSubmit={submit}

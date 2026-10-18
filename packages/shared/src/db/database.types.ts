@@ -1532,6 +1532,53 @@ export type Database = {
           },
         ]
       }
+      deleted_appointments: {
+        Row: {
+          appointment: Json
+          created_by: string | null
+          deleted_at: string
+          deleted_by: string | null
+          dependents: Json
+          id: string
+          kind: string
+          purge_at: string
+          team_id: string
+          tenant_id: string
+        }
+        Insert: {
+          appointment: Json
+          created_by?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          dependents?: Json
+          id: string
+          kind: string
+          purge_at: string
+          team_id: string
+          tenant_id: string
+        }
+        Update: {
+          appointment?: Json
+          created_by?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          dependents?: Json
+          id?: string
+          kind?: string
+          purge_at?: string
+          team_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_appointments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deleted_operations: {
         Row: {
           deleted_at: string
@@ -5431,6 +5478,7 @@ export type Database = {
       delete_calendar: { Args: { p_team_id: string }; Returns: Json }
       delete_credit_note: { Args: { p_note_id: string }; Returns: undefined }
       delete_invoice: { Args: { p_invoice_id: string }; Returns: undefined }
+      delete_appointment: { Args: { p_id: string }; Returns: string }
       delete_operation: { Args: { p_id: string }; Returns: string }
       delete_receipt: { Args: { p_receipt_id: string }; Returns: undefined }
       delete_sole_owned_tenants_for_account: {
@@ -5583,6 +5631,7 @@ export type Database = {
           p_amount: number
           p_invoice_id: string
           p_language?: string
+          p_payment_id?: string
           p_reason?: string
           p_request_id: string
         }
@@ -5809,6 +5858,7 @@ export type Database = {
         Args: { p_appointment_id: string }
         Returns: undefined
       }
+      member_appointment_restore: { Args: { p_id: string }; Returns: string }
       member_appointment_update: {
         Args: { p_appointment_id: string; p_patch: Json }
         Returns: Json
@@ -6414,6 +6464,7 @@ export type Database = {
         Args: { p_company_id: string }
         Returns: string
       }
+      restore_deleted_appointment: { Args: { p_id: string }; Returns: string }
       restore_deleted_operation: { Args: { p_id: string }; Returns: string }
       seed_client_sources: {
         Args: { p_team: string; p_tenant: string }

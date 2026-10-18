@@ -33,6 +33,7 @@ import { useFinanceCategories, useInsertCategory, useUpdateCategory } from "./qu
 import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { useCategoryMonthSpend } from "./use-category-budget";
+import { fanoutSummary, teamsMissingCategory } from "./category-fanout";
 
 // ШТОРКА КАТЕГОРИИ — ОДНА НА СТРАНИЦУ КАТЕГОРИЙ И НА ШЕСТЕРЁНКУ «ФИНАНСОВ»
 // (в шестерёнке у доходов, расходов и долгов свои блоки с
@@ -232,16 +233,41 @@ export function CategoryEditorSheet({
         // только выбранной. Команды без своей копии не остаётся ни одной.
         const targets = allTeams ? teams.map((t) => t.id) : teamId ? [teamId] : [];
         if (targets.length === 0) return;
-        for (const team of targets) {
-          await insert.mutateAsync({
-            team_id: team,
-            name: name.trim(),
-            type: kind,
-            color,
-            icon,
-            ...asksPayload,
-          });
+        // «Во всех командах»: повтор после обрыва безопасен — где категория уже
+        // есть, пропускаем. Одной команде заводим ровно то, о чём просили.
+        const todo = allTeams
+          ? teamsMissingCategory(allCategories, targets, kind, name.trim())
+          : targets;
+        let created = 0;
+        let failure: unknown = null;
+        for (const team of todo) {
+          try {
+            await insert.mutateAsync({
+              team_id: team,
+              name: name.trim(),
+              type: kind,
+              color,
+              icon,
+              ...asksPayload,
+            });
+            created += 1;
+          } catch (e) {
+            failure = e;
+            break;
+          }
         }
+        const summary = fanoutSummary({
+          created,
+          skipped: targets.length - todo.length,
+          total: targets.length,
+          failed: failure !== null,
+        });
+        if (failure !== null) {
+          // Лист остаётся открытым: «Создать категорию» ещё раз дозавершит.
+          notify(summary?.title ?? "Ошибка", `${summary?.message ?? ""}\n${(failure as Error).message}`.trim());
+          return;
+        }
+        if (summary) notify(summary.title, summary.message);
       }
       onClose();
       // Разрешение на уведомления спрашиваем, когда бюджет только что

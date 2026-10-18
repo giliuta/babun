@@ -24,6 +24,7 @@ import { FreeSlotCubes } from "./FreeSlotCubes";
 import { HourCells } from "./HourCells";
 import { NowLine } from "./NowLine";
 import { workWash } from "./work-wash";
+import { recordComment } from "@/features/calendar/record-title";
 
 // ZOOM GEOMETRY. Pinch-to-zoom animates ONE value — the grid row height in
 // ZoomableTimeGrid — on the UI thread. Everything inside a column is
@@ -230,7 +231,7 @@ export const DayColumn = memo(function DayColumn({
               stepMinutes={Math.max(5, Math.min(60, stepMinutes))}
               colors={blockColors(p.apt)}
               offLabelColor={offLabelColorFor ? offLabelColorFor(p.apt) : null}
-              label={clientName(p.apt) || p.apt.comment || "Запись"}
+              label={clientName(p.apt) || recordComment(p.apt) || "Запись"}
               service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
               address={addressFor ? addressFor(p.apt) : null}
               lineH={lineH}
@@ -263,7 +264,7 @@ export const DayColumn = memo(function DayColumn({
         onClose={() => setDeckOpen(null)}
         items={(deckOpen ?? []).map((p) => ({
           id: p.apt.id,
-          label: clientName(p.apt) || p.apt.comment || "Запись",
+          label: clientName(p.apt) || recordComment(p.apt) || "Запись",
           hint: `${p.apt.time_start}–${p.apt.time_end}`,
           icon: CalendarClock,
           color: blockColors(p.apt).solid,
