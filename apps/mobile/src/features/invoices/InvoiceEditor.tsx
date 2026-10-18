@@ -101,8 +101,10 @@ export function InvoiceEditor({
         // понимал как «юрлицо команды», а команды хранят юрлицо, бывшее
         // основным в день миграции STORY-101: сделал владелец основным B и
         // скрыл A — превью показывало B и «INV-2026-0001», а выпуск шёл от
-        // скрытого A его серией и реквизитами.
-        company_id: owner ? (companyId ?? pickedCompany?.id ?? null) : null,
+        // скрытого A его серией и реквизитами. Выбранный набор скрыли посреди
+        // черновика — его id ещё лежит в форме, но превью уже печатает
+        // основные (`pickedCompany` берёт только живые), значит и уходят они.
+        company_id: owner ? (pickedCompany?.id ?? null) : null,
         account_id: accountId,
         issued_on: dates.issuedOn,
         due_on: dates.dueOn,
@@ -166,6 +168,7 @@ export function InvoiceEditor({
             onClientRequisitesChange={setClientRequisitesId}
             issuedOn={issuedOn}
             dueOn={dueOn}
+            today={businessToday}
             onIssuedOnChange={changeIssuedOn}
             onDueOnChange={setDueOn}
             companyId={companyId}

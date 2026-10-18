@@ -88,15 +88,33 @@ export async function listInvoices(
   return rows.map(rowToInvoice);
 }
 
-/** Atomically allocate a number, create the invoice and optionally link income. */
+/** ДОКУМЕНТ ЭТОГО ЗАПРОСА УЖЕ ВЫСТАВЛЕН — прошлой попыткой, ответ на которую
+ *  потерялся. `invoice` — он сам: экран ведёт на него, а не показывает
+ *  ошибку и не рождает второй счёт. */
+export class InvoiceAlreadyIssuedError extends Error {
+  constructor(readonly invoice: InvoiceLedgerWithLines) {
+    super("Инвойс уже выставлен");
+    this.name = "InvoiceAlreadyIssuedError";
+  }
+}
+
+/** Atomically allocate a number, create the invoice and optionally link income.
+ *  `repeat` — этот id запроса уже уходил на сервер: сначала проверяется, не
+ *  создан ли документ им. Сервер на повтор отдал бы прежний счёт, и правки,
+ *  сделанные между попытками, роняли бы контрольное чтение на каждом нажатии. */
 export async function issueInvoice(
   supabase: DbSupabase,
   tenantId: string,
   draft: IssueInvoiceDraft,
+  opts: { repeat?: boolean } = {},
 ): Promise<InvoiceLedgerWithLines> {
   const lines = validateInvoiceDraft(draft);
   const totals = calculateInvoiceTotals(lines, draft.vat_mode, draft.vat_percent);
   assertInvoiceTotal(totals.total);
+  if (opts.repeat) {
+    const already = await getInvoice(supabase, draft.request_id);
+    if (already) throw new InvoiceAlreadyIssuedError(already);
+  }
   const { data, error } = await supabase.rpc(
     "issue_invoice",
     rpcArgs<"issue_invoice">({
@@ -134,7 +152,8 @@ export async function issueInvoice(
     }),
   );
   if (error || !data || data.id !== draft.request_id || data.tenant_id !== tenantId) {
-    throw new Error(`issueInvoice: ${error?.message ?? "создание не подтверждено сервером"}`);
+    // Текст отказа читает человек под кнопкой — без имени функции.
+    throw new Error(error?.message ?? "Создание инвойса не подтверждено сервером");
   }
   if (draft.link_to_tx_id && data.status !== "paid") {
     throw new Error("Инвойс создан, но оплата доходом не подтверждена");

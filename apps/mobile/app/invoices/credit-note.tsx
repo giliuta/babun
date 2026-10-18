@@ -13,7 +13,7 @@ import {
 import { tDynamic } from "@babun/shared/i18n/runtime";
 import { formatMoneyForInput } from "@babun/shared/common/utils/money";
 import { randomUuid } from "@babun/shared/sync";
-import { setInvoiceLanguage } from "@babun/shared/db/repositories/invoices";
+import { getInvoice, setInvoiceLanguage } from "@babun/shared/db/repositories/invoices";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FieldRow } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -77,6 +77,8 @@ export default function CreditNoteScreen() {
   const partial = useIssuePartialCreditNote(invoiceId ?? "");
   const paymentRows = useInvoicePayments();
   const requestId = useRef(randomUuid()).current;
+  /** Этот id уже уходил на сервер: ответ мог потеряться, а нота — выписаться. */
+  const sentRef = useRef(false);
   const [amountText, setAmountText] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [language, setLanguage] = useState<InvoiceLanguage | null>(null);
@@ -199,8 +201,22 @@ export default function CreditNoteScreen() {
   const issue = async () => {
     setError(null);
     try {
+      // ПРОШЛАЯ ПОПЫТКА УЖЕ ВЫПИСАЛА НОТУ (ответ на неё потерялся): показываем
+      // её. Иначе поправленная сумма ушла бы новой нотой — после пересчёта
+      // остатка даже полной отменой — и инвойс сторнировался бы дважды.
+      if (sentRef.current) {
+        const already = await getInvoice(supabase, requestId);
+        if (already?.kind === "credit_note" && already.credit_note_of_id === row.id) {
+          notify("Кредит-нота уже выписана", "Прошлая попытка её выписала — откроется выписанный документ.");
+          issued.current = already.id;
+          setPreviewOpen(false);
+          return;
+        }
+      }
       // Вся сумма без денег — прежняя отмена; с деньгами — нота вернёт их сама.
-      const note = whole && paid <= 0
+      const byRequest = !(whole && paid <= 0);
+      if (byRequest) sentRef.current = true;
+      const note = !byRequest
         ? await cancel.mutateAsync(reason.trim() || undefined)
         : await partial.mutateAsync({
             requestId,

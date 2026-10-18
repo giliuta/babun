@@ -49,6 +49,7 @@ export function InvoiceDetailScreen() {
     noteReceipt,
     creditNote,
     pay,
+    submitPayment,
     invoiceMenu,
     sheetMenu,
     setSheetMenu,
@@ -374,9 +375,7 @@ export function InvoiceDetailScreen() {
         accounts={paymentAccounts}
         preferredAccountId={row.account_id ?? null}
         submitting={pay.isPending}
-        onSubmit={async (value) => {
-          await pay.mutateAsync(value);
-        }}
+        onSubmit={submitPayment}
         onClose={() => setPaymentOpen(false)}
       />
       <AccountEditorSheet

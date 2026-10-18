@@ -57,7 +57,7 @@ describe("язык бумаги инвойса", () => {
   // «Изменить инвойс». Отсюда — только то, что выставление и запись языка
   // принимают любой язык приложения, а не «ru» | «en».
   test("выставление и запись языка принимают любой язык приложения", () => {
-    assert.match(read("../finances/invoices-queries.ts"), /\}: IssueInvoiceDraft & \{ language\?: InvoiceLanguage \}\) => \{/);
+    assert.match(read("../finances/invoices-queries.ts"), /\}: IssueInvoiceDraft & \{ language\?: InvoiceLanguage; repeat\?: boolean \}\) => \{/);
     assert.match(readModuleSource(resolve(here, "../../../../../packages/shared/src/db/repositories/invoices.ts")), /language: UiLocale,\n\): Promise<void>/);
   });
 

@@ -12,8 +12,12 @@ import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { formatInvoiceMoney } from "@/lib/paper/format";
-import { invoiceDeleteBlock } from "./invoice-delete";
-import { useDeleteCreditNote, useDeleteInvoice } from "@/features/finances/invoices-queries";
+import { deleteFreesNumber, invoiceDeleteBlock } from "./invoice-delete";
+import {
+  peekNextDocumentNumber,
+  useDeleteCreditNote,
+  useDeleteInvoice,
+} from "@/features/finances/invoices-queries";
 
 // ДЕЙСТВИЯ С ИНВОЙСОМ — ОДНИ НА «⋯» СТРАНИЦЫ И НА ДОЛГОЕ НАЖАТИЕ В
 // «ДОКУМЕНТАХ»: «⋯» — не «поделиться» и прочее лишнее, а настройки (изменить,
@@ -101,7 +105,7 @@ export function useInvoiceMenu() {
     // инвойс остаётся в силе. По оплаченному форма сама скажет, что на всю
     // сумму сначала возврат, а часть вернёт клиенту тем же движением.
     const cancel = () => router.push(`/invoices/credit-note?invoiceId=${invoice.id}` as Href);
-    const del = () => {
+    const confirmDelete = async () => {
       if (invoiceDeleteBlock(invoice, ctx.all, false) === "not-last") {
         notify(
           "Удалить нельзя",
@@ -109,10 +113,17 @@ export function useInvoiceMenu() {
         );
         return;
       }
+      // НОМЕР ОБЕЩАЕМ, ТОЛЬКО КОГДА ОН ВЕРНЁТСЯ (`deleteFreesNumber`): счётчик
+      // серии мог уйти дальше. Не узнали серию — молчим о номере.
+      const next = invoice.company_id
+        ? await peekNextDocumentNumber(invoice.year, invoice.company_id).catch(() => null)
+        : null;
       confirmThen(
         `Удалить ${invoice.number}?`,
         {
-          message: "Инвойс исчезнет совсем, а его номер достанется следующему инвойсу. Отправленный клиенту лучше отменить кредит-нотой.",
+          message: deleteFreesNumber(invoice, next)
+            ? "Инвойс исчезнет совсем, а его номер достанется следующему инвойсу. Отправленный клиенту лучше отменить кредит-нотой."
+            : "Инвойс исчезнет совсем. Отправленный клиенту лучше отменить кредит-нотой.",
           confirmLabel: "Удалить",
           destructive: true,
         },
@@ -126,6 +137,7 @@ export function useInvoiceMenu() {
           }),
       );
     };
+    const del = () => void confirmDelete();
 
     return [
       ...(untouched

@@ -40,11 +40,14 @@ type Field = "issued" | "due";
 export function InvoiceDatesBlock({
   issuedOn,
   dueOn,
+  today,
   onIssuedOnChange,
   onDueOnChange,
 }: {
   issuedOn: string;
   dueOn: string | null;
+  /** Сегодня бизнеса: позже него документ не выставить — сервер откажет. */
+  today: string;
   onIssuedOnChange: (ymd: string | null) => void;
   onDueOnChange: (ymd: string | null) => void;
 }) {
@@ -116,6 +119,7 @@ export function InvoiceDatesBlock({
             {field === "issued" ? (
               <DateSpinner
                 value={parseYMD(draftIssued)}
+                maximumDate={parseYMD(today)}
                 onChange={(next) => setDraftIssued(formatYMD(next))}
               />
             ) : (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  InvoicePaymentAlreadyRecordedError,
   recordInvoicePayment,
   refundInvoicePayment,
 } from "./invoice-payments";
@@ -152,5 +153,52 @@ describe("invoice payment repository", () => {
       p_occurred_on: "2026-07-20",
       p_notes: "Partial",
     });
+  });
+
+  // ОТВЕТ СЕРВЕРА ЧИТАЕТ ЧЕЛОВЕК: служебное имя функции перед текстом
+  // («recordInvoicePayment: …») он видел под кнопкой как есть.
+  it("shows the server's refusal without the function name", async () => {
+    const refusing = { rpc: async () => ({ data: null, error: { message: "Сумма платежа слишком большая", code: "P0001" } }) };
+    const draft = {
+      request_id: "request-1",
+      amount: 10,
+      account_id: "account-1",
+      payment_method: "cash" as const,
+      occurred_on: "2026-07-20",
+      business_today: "2026-07-20",
+    };
+    const error = await recordInvoicePayment(refusing as never, "invoice-1", draft).catch((e: Error) => e);
+    expect((error as Error).message).toBe("Сумма платежа слишком большая");
+    const refund = await refundInvoicePayment(refusing as never, "invoice-1", "payment-1", {
+      request_id: "refund-1",
+      amount: 5,
+      occurred_on: "2026-07-20",
+      business_today: "2026-07-20",
+      original_occurred_on: "2026-07-20",
+    }).catch((e: Error) => e);
+    expect((refund as Error).message).toBe("Сумма платежа слишком большая");
+  });
+
+  // ОТВЕТ ПОТЕРЯН, СУММУ ПОПРАВИЛИ, ПОВТОРИЛИ ТЕМ ЖЕ id: сервер отвечает
+  // «уже использован с другими данными» — значит, первый платёж ЗАПИСАН.
+  // Человеку — что он записан, экрану — знак сменить id.
+  it("tells a reused payment id apart: the first payment is recorded", async () => {
+    const reused = {
+      rpc: async () => ({
+        data: null,
+        error: { message: "Идентификатор платежа уже использован с другими данными", code: "P0001" },
+      }),
+    };
+    const error = await recordInvoicePayment(reused as never, "invoice-1", {
+      request_id: "request-1",
+      amount: 12,
+      account_id: "account-1",
+      payment_method: "cash",
+      occurred_on: "2026-07-20",
+      business_today: "2026-07-20",
+    }).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(InvoicePaymentAlreadyRecordedError);
+    expect((error as Error).message).not.toContain("Идентификатор");
+    expect((error as Error).message).not.toContain("recordInvoicePayment");
   });
 });
