@@ -17,7 +17,8 @@ import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { acceptSmsInput, fillTemplate, MAX_SMS_PARTS } from "./sms-compose";
+import { acceptSmsInput, fillTemplate, fitsSmsLimit, MAX_SMS_PARTS } from "./sms-compose";
+import { firstName } from "@/lib/sms-name";
 import {
   smsErrorText,
   useAppointmentLink,
@@ -98,7 +99,7 @@ export function SmsSendSheet({
   const rows = useMemo(() => {
     const vars = { ...context.vars, ...(link ? { Link: link } : null) };
     if (name !== undefined) {
-      const first = (name ?? "").trim().split(/\s+/)[0] ?? "";
+      const first = firstName({ full_name: name ?? "" });
       if (first) vars.Name = first;
       else delete vars.Name;
     }
@@ -127,7 +128,9 @@ export function SmsSendSheet({
   }
 
   const chosen = rows.find((row) => row.template.id === picked && row.text) ?? null;
-  const body = chosen ? text.trim() : "";
+  // Длиннее 3 SMS не уходит ни с телефона, ни через сервис: поле пускает
+  // такой текст (шаблон с длинным адресом, стирание сверх предела).
+  const body = chosen && fitsSmsLimit(text) ? text.trim() : "";
   const encoding = analyzeSmsEncoding(text);
   const url = smsUrl(phone);
   const viaService = service.available;
@@ -343,7 +346,7 @@ export function SmsSendSheet({
               fontVariant: ["tabular-nums"],
             }}
           >
-            {body
+            {text.trim()
               ? `${formatCountRu(encoding.length, ["знак", "знака", "знаков"])} · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
               : "Текст пустой"}
           </Text>

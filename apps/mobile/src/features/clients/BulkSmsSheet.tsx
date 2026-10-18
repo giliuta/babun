@@ -35,7 +35,7 @@ import { Chip } from "@/components/ui/Chip";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/session/tenant";
+import { useCurrentRole, useTenant } from "@/session/tenant";
 import {
   smsErrorText,
   uniqueByBody,
@@ -52,6 +52,8 @@ import {
   buildBlastSms,
   buildSequentialSms,
   bulkBodyFor,
+  bulkFillable,
+  bulkProblem,
   smsDigits,
 } from "./bulk-sms";
 
@@ -96,15 +98,21 @@ export function BulkSmsSheet({
   );
   const noPhone = recipients.length - withPhone.length;
 
+  // [Компания] — имя своей компании: от её команды идёт и рассылка.
+  const company = useTenant().data?.name ?? null;
+
+  // Шаблоны с полями записи или долгом рассылке заполнить нечем — их нет в
+  // списке (тем же правилом, что лист SMS у номера гасит незаполняемые).
   const usableTemplates = useMemo(
-    () => uniqueByBody(templates.filter((tpl) => tpl.enabled && tpl.body.trim())),
+    () => uniqueByBody(templates.filter((tpl) => tpl.enabled && tpl.body.trim() && bulkFillable(tpl.body))),
     [templates],
   );
 
   const hasName = bodyHasNameToken(body);
+  const problem = visible ? bulkProblem(body, withPhone, company) : null;
   const seqPlan = useMemo(
-    () => (visible ? buildSequentialSms(body, withPhone) : []),
-    [visible, body, withPhone],
+    () => (visible ? buildSequentialSms(body, withPhone, company, Platform.OS) : []),
+    [visible, body, withPhone, company],
   );
 
   const reset = () => {
@@ -116,8 +124,12 @@ export function BulkSmsSheet({
   // Платное и необратимое — только после вопроса. Сумма — только в вебе:
   // в iOS-приложении о цене молчим (правило App Store).
   const sendViaService = () => {
-    if (!fromTeam || !body.trim() || withPhone.length === 0) return;
-    const items = withPhone.map((c) => ({ clientId: c.id, body: bulkBodyFor(body, c) }));
+    if (!fromTeam || !body.trim() || withPhone.length === 0 || problem) return;
+    const items = withPhone.flatMap((c) => {
+      const text = bulkBodyFor(body, c, company);
+      return text ? [{ clientId: c.id, body: text }] : [];
+    });
+    if (items.length === 0) return;
     const cost = euro(items.length * (account?.priceCents ?? 12));
     confirmThen(
       `Отправить ${items.length} ${countWordRu(items.length, "SMS", "SMS", "SMS")} через сервис?`,
@@ -154,7 +166,8 @@ export function BulkSmsSheet({
 
   // «Всем сразу» — one composer, all numbers, neutral body.
   const sendBlast = async () => {
-    const blast = buildBlastSms(body, withPhone);
+    if (problem) return;
+    const blast = buildBlastSms(body, withPhone, company, Platform.OS);
     if (!blast) return;
     try {
       await Linking.openURL(blast.url);
@@ -169,7 +182,7 @@ export function BulkSmsSheet({
   // taps «Дальше» to advance. State-machine so we never fire a burst of
   // openURL the OS would collapse into one.
   const startSequential = async () => {
-    if (seqPlan.length === 0) return;
+    if (seqPlan.length === 0 || problem) return;
     setSeqIdx(0);
     await openSeq(0);
   };
@@ -327,12 +340,17 @@ export function BulkSmsSheet({
               className="min-h-[92px] rounded-[10px] px-3 py-2.5 text-base"
               style={{ backgroundColor: t.fill, color: t.ink, textAlignVertical: "top" }}
             />
+            {problem ? (
+              <Text className="mt-2 text-[11px] leading-snug" style={{ color: t.faint }}>
+                {problem}
+              </Text>
+            ) : null}
             {viaService ? (
               <View className="mt-4">
                 <Button
                   label={`Отправить · ${withPhone.length}`}
                   onPress={sendViaService}
-                  disabled={!body.trim() || withPhone.length === 0 || !fromTeam || bulk.isPending}
+                  disabled={!body.trim() || withPhone.length === 0 || !fromTeam || !!problem || bulk.isPending}
                   loading={bulk.isPending}
                 />
               </View>
@@ -348,13 +366,13 @@ export function BulkSmsSheet({
               <Button
                 label={`Каждому по имени · ${seqPlan.length}`}
                 onPress={startSequential}
-                disabled={!body.trim() || seqPlan.length === 0}
+                disabled={!body.trim() || seqPlan.length === 0 || !!problem}
               />
               <Button
                 label={`Всем сразу · ${withPhone.length}`}
                 variant="secondary"
                 onPress={sendBlast}
-                disabled={!body.trim() || withPhone.length === 0 || hasName}
+                disabled={!body.trim() || withPhone.length === 0 || hasName || !!problem}
               />
               {hasName ? (
                 <Text className="text-[11px]" style={{ color: t.faint }}>

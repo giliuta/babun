@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { SmsTemplate } from "@babun/shared/local/sms-templates";
-import { acceptSmsInput, fillTemplate, MAX_SMS_PARTS, smsOptions, smsPartsOf, smsUrlWithBody, smsVars, stripEmoji } from "./sms-compose";
+import { acceptSmsInput, fillTemplate, fitsSmsLimit, MAX_SMS_PARTS, smsOptions, smsPartsOf, smsUrlWithBody, smsVars, stripEmoji } from "./sms-compose";
 
 const tpl = (id: string, body: string, enabled = true): SmsTemplate => ({
   id,
@@ -110,6 +110,14 @@ describe("лимит сообщения и без эмодзи (владелец
     assert.equal(acceptSmsInput("я".repeat(249), over), "я".repeat(249), "лишнее стирается");
     assert.equal(smsPartsOf("я".repeat(70)), 1);
     assert.equal(smsPartsOf("я".repeat(134)), 2);
+  });
+
+  test("длиннее 3 SMS не отправляется: стёртый наполовину текст тоже", () => {
+    // Поле пускает стирание сверх предела, поэтому текст длиннее 3 SMS
+    // может в нём стоять — отправка его гасит, а не уносит на сервер.
+    assert.equal(fitsSmsLimit("я".repeat(201)), true);
+    assert.equal(fitsSmsLimit("я".repeat(202)), false);
+    assert.equal(fitsSmsLimit(""), false, "пустой — нечего отправлять");
   });
 
   test("шаблон меряется с подставленными полями", () => {
