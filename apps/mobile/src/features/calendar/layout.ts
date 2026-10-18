@@ -106,6 +106,10 @@ export function layoutDay(appts: Appointment[]): PlacedAppt[] {
 export const SIDE_BY_SIDE_MIN_W = 140;
 /** Уже этого блок «рядом» не ставится — только «веером» поверх. */
 export const MIN_BESIDE_W = 6;
+/** Ширина верхней карточки «веера», при которой на ней читается имя. */
+export const FAN_TOP_MIN_W = 36;
+/** Полоса нижней карточки «веера» — не уже этого: цвет соседки виден. */
+export const FAN_STRIP_MIN_W = 8;
 
 export type BlockFrame = {
   left: number;
@@ -161,7 +165,12 @@ export function blockFrame(
   }
   // «Веер»: начавшаяся позже ложится поверх со сдвигом, почти во всю
   // ширину; верх соседки с её именем открыт целиком.
-  const step = Math.min(22, (laneW * 0.4) / (p.colCount - 1));
+  // ВЕРХНЕЙ ОСТАЁТСЯ МЕСТО ПОД ИМЯ. При сдвиге 40 % колонки Недели (~50pt)
+  // верхняя карточка сужалась до ~27pt: имя не помещалось ни у одной из
+  // двух записей, и накладка читалась как два безымянных бруска. Полосе
+  // соседки хватает цвета — её имя и так видно выше чужого начала.
+  const roomForTop = (laneW - gap - FAN_TOP_MIN_W) / (p.colCount - 1);
+  const step = Math.min(22, (laneW * 0.4) / (p.colCount - 1), Math.max(FAN_STRIP_MIN_W, roomForTop));
   return {
     left: 1 + p.colIndex * step,
     width: laneW - gap - p.colIndex * step,
@@ -171,6 +180,30 @@ export function blockFrame(
 }
 
 export type Deck = { index: number; size: number; members: PlacedAppt[] };
+
+const touched = (p: PlacedAppt): number => {
+  const at = Date.parse(p.apt.updated_at ?? "");
+  return Number.isFinite(at) ? at : 0;
+};
+
+const isWork = (p: PlacedAppt): boolean =>
+  (p.apt.kind ?? "work") === "work" && p.apt.status !== "cancelled";
+
+/** НАКЛАДКА — ДВЕ РАБОЧИЕ ЗАПИСИ НА ОДНО ВРЕМЯ. Для каждой такой записи —
+ *  сколько других рабочих записей идёт одновременно с ней. События и
+ *  отменённые накладкой не считаются: так же решает `findOverlap`. */
+export function clashCounts(placements: readonly PlacedAppt[]): Map<string, number> {
+  const out = new Map<string, number>();
+  const work = placements.filter(isWork);
+  for (const p of work) {
+    let n = 0;
+    for (const q of work) {
+      if (q !== p && p.startMin < q.endMin && q.startMin < p.endMin) n += 1;
+    }
+    if (n > 0) out.set(p.apt.id, n);
+  }
+  return out;
+}
 
 /** СТОПКИ УЗКОЙ КОЛОНКИ. Две полоски по 24pt без текста не читаются никак, поэтому в
  *  колонке уже `SIDE_BY_SIDE_MIN_W` записи одной кучки, начавшиеся почти
@@ -187,12 +220,49 @@ export function decksFor(placements: PlacedAppt[], laneW: number): Map<string, D
   }
   for (const members of byCluster.values()) {
     if (members.length < 2) continue;
-    // Наверх — самая длинная: у неё есть высота под имя и «+N»; короткие
-    // под ней видны краем.
-    members.sort((a, b) => a.endMin - a.startMin - (b.endMin - b.startMin) || a.startMin - b.startMin);
+    // НАВЕРХ — ПОСЛЕДНЯЯ ТРОНУТАЯ. Перенесённая на занятое время короче
+    // соседки уходила ПОД неё, и перенос выглядел откатом: запись пропадала
+    // с того места, куда её только что положили. При равенстве — самая
+    // длинная: у неё есть высота под имя и «+N»; короткие под ней видны краем.
+    members.sort(
+      (a, b) =>
+        touched(a) - touched(b) ||
+        a.endMin - a.startMin - (b.endMin - b.startMin) ||
+        a.startMin - b.startMin,
+    );
     members.forEach((p, index) =>
       out.set(p.apt.id, { index, size: members.length, members }),
     );
+  }
+  return out;
+}
+
+/** КТО НЕСЁТ ЗНАЧОК НАКЛАДКИ. Значок один на группу — на карточке, что лежит
+ *  сверху: в стопке это верхняя (её «+N» становится красным), вне стопки —
+ *  та, что поверх соседок (правее в «веере», последняя в ряду в Дне). Число —
+ *  сколько записей под значком: у стопки весь её состав, иначе накладки. */
+export function clashBadgeHolders(
+  placements: readonly PlacedAppt[],
+  decks: ReadonlyMap<string, Deck>,
+): Map<string, number> {
+  const clash = clashCounts(placements);
+  const out = new Map<string, number>();
+  for (const deck of new Set(decks.values())) {
+    if (!deck.members.some((m) => clash.has(m.apt.id))) continue;
+    const top = deck.members[deck.size - 1];
+    out.set(top.apt.id, deck.size - 1);
+  }
+  const work = placements.filter(isWork);
+  for (const p of work) {
+    if (!clash.has(p.apt.id) || decks.has(p.apt.id)) continue;
+    const covers = work.every(
+      (q) =>
+        q === p ||
+        !(p.startMin < q.endMin && q.startMin < p.endMin) ||
+        decks.has(q.apt.id) ||
+        q.colIndex < p.colIndex,
+    );
+    if (covers) out.set(p.apt.id, clash.get(p.apt.id) ?? 0);
   }
   return out;
 }

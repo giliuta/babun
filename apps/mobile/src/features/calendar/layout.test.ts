@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createBlankAppointment } from "@babun/shared/local/appointments";
-import { blockFrame, decksFor, layoutDay, SIDE_BY_SIDE_MIN_W } from "./layout";
+import {
+  blockFrame,
+  clashBadgeHolders,
+  clashCounts,
+  decksFor,
+  FAN_STRIP_MIN_W,
+  FAN_TOP_MIN_W,
+  layoutDay,
+  SIDE_BY_SIDE_MIN_W,
+} from "./layout";
 
-const apt = (id: string, time_start: string, time_end: string) =>
-  createBlankAppointment({ id, date: "2026-09-25", time_start, time_end });
+const apt = (id: string, time_start: string, time_end: string, updated_at = "2026-09-25T08:00:00Z") => ({
+  ...createBlankAppointment({ id, date: "2026-09-25", time_start, time_end }),
+  updated_at,
+});
 
 const byId = (placed: ReturnType<typeof layoutDay>) =>
   Object.fromEntries(placed.map((p) => [p.apt.id, p]));
@@ -75,8 +86,53 @@ describe("раскладка пересекающихся записей", () =>
     assert.equal(nd.overlapped, true);
     assert.ok(nd.z > nc.z, "поздняя лежит поверх");
     assert.ok(nd.width > narrow / 2, `ширина поздней ${nd.width}`);
-    assert.ok(nd.left - nc.left >= 18, "у ранней видна полоса слева");
+    assert.ok(nd.left - nc.left >= FAN_STRIP_MIN_W, "у ранней видна полоса слева");
+    assert.ok(nd.width >= FAN_TOP_MIN_W, `у поздней место под имя: ${nd.width}`);
     // В Дне — всегда рядом.
     assert.equal(blockFrame(d, wide, 3).overlapped, false);
+  });
+});
+
+describe("накладка записей", () => {
+  const narrow = SIDE_BY_SIDE_MIN_W - 90;
+  test("перенесённая на занятое время ложится сверху стопки, а не под соседку", () => {
+    const placed = layoutDay([
+      apt("LONG", "13:00", "14:00", "2026-09-25T08:00:00Z"),
+      apt("MOVED", "13:00", "13:30", "2026-09-25T09:00:00Z"),
+    ]);
+    const decks = decksFor(placed, narrow);
+    assert.equal(decks.get("MOVED")?.index, 1);
+    assert.equal(decks.get("LONG")?.index, 0);
+  });
+
+  test("накладку считают только рабочие записи, не события и не отменённые", () => {
+    const event = { ...apt("EV", "10:00", "11:00"), kind: "event" as const };
+    const cancelled = { ...apt("X", "10:00", "11:00"), status: "cancelled" as const };
+    const clash = clashCounts(
+      layoutDay([apt("A", "10:00", "11:00"), apt("B", "10:30", "11:30"), apt("C", "12:00", "13:00"), event, cancelled]),
+    );
+    assert.equal(clash.get("A"), 1);
+    assert.equal(clash.get("B"), 1);
+    assert.equal(clash.has("C"), false);
+    assert.equal(clash.has("EV"), false);
+    assert.equal(clash.has("X"), false);
+  });
+});
+
+describe("значок накладки", () => {
+  test("в стопке — у верхней карточки, числом всей стопки", () => {
+    const placed = layoutDay([apt("A", "10:00", "11:00"), apt("B", "10:00", "11:00", "2026-09-25T09:00:00Z")]);
+    const decks = decksFor(placed, SIDE_BY_SIDE_MIN_W - 90);
+    const holders = clashBadgeHolders(placed, decks);
+    assert.deepEqual([...holders], [["B", 1]]);
+  });
+  test("вне стопки — у той, что поверх соседки", () => {
+    const placed = layoutDay([apt("A", "10:00", "12:00"), apt("B", "11:00", "12:00")]);
+    const holders = clashBadgeHolders(placed, decksFor(placed, SIDE_BY_SIDE_MIN_W - 90));
+    assert.deepEqual([...holders], [["B", 1]]);
+  });
+  test("событие поверх записи — не накладка", () => {
+    const placed = layoutDay([apt("A", "10:00", "11:00"), { ...apt("E", "10:00", "11:00"), kind: "event" as const }]);
+    assert.equal(clashBadgeHolders(placed, decksFor(placed, SIDE_BY_SIDE_MIN_W - 90)).size, 0);
   });
 });
