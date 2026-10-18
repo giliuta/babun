@@ -3,6 +3,7 @@ import type { Href, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "@react-navigation/native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { chooseOption } from "@/lib/choose";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { resolveReturnTo } from "@/features/appointments/return-to";
 import { draftDirty, type DraftDirtyInput } from "./book-dirty";
 
@@ -131,6 +132,7 @@ export function useLeaveGuard({
 
   // Back-свайп и аппаратная «назад» теряли заполненную запись без спроса —
   // теперь перехватываем POP тем же вопросом, что и стрелка «назад».
+  useBeforeUnloadWhileDirty(dirty && !leaving);
   usePreventRemove(dirty && !leaving, ({ data }) => {
     confirmDiscard(() => navigation.dispatch(data.action));
   });

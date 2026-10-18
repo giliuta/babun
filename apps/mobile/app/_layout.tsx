@@ -2,8 +2,9 @@ import "@/bootstrap"; // MUST be first — polyfills + storage seam + sentry.
 import "../global.css"; // NativeWind base styles.
 
 import { useEffect } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { router, Stack, type ErrorBoundaryProps } from "expo-router";
+import Head from "expo-router/head";
 import * as SplashScreen from "expo-splash-screen";
 import { BootSplash } from "@/features/boot/BootSplash";
 import { applyUpdateOnStart } from "@/features/boot/apply-update-on-start";
@@ -119,6 +120,13 @@ function RootNavigator() {
 
   return (
     <>
+    {/* Заголовок вкладки по умолчанию: без него после ухода со страницы со
+        своим заголовком (политика, оценка, адрес) вкладка сохраняла её имя. */}
+    {Platform.OS === "web" ? (
+      <Head>
+        <title>Babun</title>
+      </Head>
+    ) : null}
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(dashboard)" />
