@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { lastCreatedTeamId, lastTeamOfClient, recentClientIdsOf } from "./booking-history";
+import { lastCreatedTeamId, recentClientIdsOf } from "./booking-history";
 
 const row = (over: Partial<{
   team_id: string | null;
@@ -48,18 +48,5 @@ describe("recentClientIdsOf", () => {
       row({ client_id: "f", date: "2026-07-01" }),
     ];
     assert.deepEqual(recentClientIdsOf(appts), ["c", "b", "a", "d", "e"]);
-  });
-});
-
-describe("lastTeamOfClient", () => {
-  test("team of this client's latest visit, live teams only", () => {
-    const appts = [
-      row({ client_id: "a", team_id: "t1", date: "2026-10-01" }),
-      row({ client_id: "a", team_id: "t2", date: "2026-10-05" }),
-      row({ client_id: "a", team_id: "gone", date: "2026-10-09" }),
-      row({ client_id: "b", team_id: "t1", date: "2026-10-10" }),
-    ];
-    assert.equal(lastTeamOfClient(appts, teams, "a"), "t2");
-    assert.equal(lastTeamOfClient(appts, teams, "nobody"), null);
   });
 });

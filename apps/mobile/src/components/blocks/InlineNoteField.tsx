@@ -3,12 +3,11 @@ import { Pressable, TextInput } from "react-native";
 import type { useInlineNote } from "@/components/blocks/use-inline-note";
 import { useThemeColors } from "@/theme/colors";
 
-// ЗАМЕТКА — САМОЕ ВАЖНОЕ, ЧТО ПРОЧИТАЮТ ПЕРЕД ВЫЕЗДОМ: код ворот, «звонить
-// жене», «собака». Серая плашка 13pt сливалась с полями ввода и читалась
-// мелким примечанием. Поэтому у заметки своя бумага: тёплая подложка
-// `noteFill`, полоса `noteEdge` слева, чёрный текст основным кеглем 15/20.
-// Без тени: заметка — часть блока, а не карточка над ним. Ни ярлыка, ни
-// значка: чья заметка, говорит подсказка в поле, а карточка — о ком она.
+// ЗАМЕТКА — ЧИСТЫЙ ЛИСТ ДЛЯ ПИСЬМА. Серая плашка 13pt читалась мелким
+// примечанием, а цветная бумага кричала громче самой записи. Поэтому —
+// белое поле в тонкой светлой рамке, как лист, в который пишут: чёрный текст
+// основным кеглем 15/20, без цвета и без тени. Ни ярлыка, ни значка: чья
+// заметка, говорит подсказка в поле, а карточка — о ком она.
 //
 // Одна и та же у записи, события, клиента и объекта.
 //
@@ -67,9 +66,9 @@ export function InlineNoteField({
         paddingHorizontal: 12,
         paddingVertical: 9,
         borderRadius: t.radius.input,
-        borderLeftWidth: 3,
-        borderLeftColor: t.noteEdge,
-        backgroundColor: t.noteFill,
+        borderWidth: 1,
+        borderColor: t.separator,
+        backgroundColor: t.surface,
       }}
     >
       <TextInput

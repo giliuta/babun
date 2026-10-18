@@ -36,11 +36,6 @@ export type ThemeColors = {
   warning: string;
   // seams + depth
   fill: string; // idle chip / segmented track / inset input fill
-  /** ЗАМЕТКА — тёплая бумага: то, что важно прочитать перед выездом, не
-   *  должно сливаться с серыми полями ввода. */
-  noteFill: string;
-  /** Полоса слева у заметки — тот же тёплый тон, глубже. */
-  noteEdge: string;
   separator: string;
   /** ЧЕРТА ПОДВЕДЕНИЯ, а не шов: линия над итогом колонки. Плотнее обычного
    *  разделителя ровно настолько, чтобы читаться как «здесь складывают». */
@@ -126,8 +121,6 @@ export const light: ThemeColors = {
   // Also clears AA on its own 10% semantic tint (used by warning cards).
   warning: "#955f00",
   fill: "#eef1f5",
-  noteFill: "#fff6dc",
-  noteEdge: "#f0b429",
   // ШВА ДОЛЖНО БЫТЬ ВИДНО. `#e7ebf0` на белом даёт контраст
   // 1.067:1 — у iOS-разделителя 1.70:1, то есть линии в продукте физически не
   // существовало: карточка выглядела сплошным белым полем, а строки в ней —

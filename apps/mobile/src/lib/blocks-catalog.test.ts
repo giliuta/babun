@@ -190,7 +190,7 @@ describe("библиотека блоков указывает на живой �
     assert.match(note, /marginHorizontal: 12,/);
     assert.match(note, /paddingVertical: 9,/);
     assert.match(note, /fontSize: 15,/);
-    assert.match(note, /backgroundColor: t\.noteFill,/);
+    assert.match(note, /backgroundColor: t\.surface,/);
 
     const rows = readFileSync(resolve(APP, "src/components/ui/select-rows.tsx"), "utf8");
     assert.match(rows, /minHeight: 52,/, "строка шторки больше не 52pt");
