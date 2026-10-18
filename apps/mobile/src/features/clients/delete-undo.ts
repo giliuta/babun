@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { Client } from "@babun/shared/local/clients";
 import { useToast } from "@/components/ui/Toast";
+import { pluralPhraseRu } from "@babun/shared/common/utils/plural-ru";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import {
   useArchiveClients,
@@ -92,7 +93,11 @@ export function useDeleteWithUndo() {
               toast(
                 why
                   ? `Не удалось вернуть: ${why}`
-                  : `Не удалось вернуть ${lost} ${countWordRu(lost, "клиента", "клиентов", "клиентов")} — они в удалённых, верните вручную`,
+                  : pluralPhraseRu(
+                      lost,
+                      `Не удалось вернуть ${lost} клиента — они в удалённых, верните вручную`,
+                      `Не удалось вернуть ${lost} ${countWordRu(lost, "клиента", "клиентов", "клиентов")} — они в удалённых, верните вручную`,
+                    ),
                 "error",
               );
             })();

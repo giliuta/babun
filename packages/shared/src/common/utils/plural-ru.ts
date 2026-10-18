@@ -60,6 +60,22 @@ export function formatCountRu(count: number, forms: PluralFormsRu): string {
   return `${count} ${pluralRu(count, forms)}`;
 }
 
+/**
+ * A WHOLE PHRASE FOR THE ONE COUNT, another for the rest — for a count whose
+ * Russian ONE word is also its FEW word: «Удалить 1 клиента?», «Удалить 2
+ * клиента?», «стоит в 1 записи». The dictionary key is the Russian word, and
+ * one key cannot read singular after 1 and plural after 2 («Delete 1
+ * clients?»). So the ONE case is written as a whole phrase with its own key:
+ *
+ *   pluralPhraseRu(n, `Удалить ${n} клиента?`, `Удалить ${n} ${word}?`)
+ *
+ * Russian and Ukrainian take the ONE phrase for 21, 31 … as well; one/other
+ * languages only for exactly 1.
+ */
+export function pluralPhraseRu(count: number, one: string, other: string): string {
+  return pluralRu(count, [one, other, other]);
+}
+
 // ─── Preset form sets for the nouns used in production ───────
 
 export const FORMS_USLUGA: PluralFormsRu = ["услуга", "услуги", "услуг"];

@@ -6,6 +6,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -88,11 +89,15 @@ export function HiddenClientsScreen({
   // обязана совпадать с той, что была вчера.
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsMap = useMemo(
-    () => buildStatsMap(clients, appointments, invoicing),
-    [clients, appointments, invoicing],
+    () => buildStatsMap(clients, appointments, invoicing, today),
+    [clients, appointments, invoicing, today],
   );
 
+  // Заголовок и глагол вставляются в фразу в кавычках, как есть: к этому
+  // времени они уже переведены, и `toLowerCase()` ломал бы немецкие
+  // существительные («gelöschte kunden»).
   const run = async (client: Client, label: string, action: () => Promise<void>) => {
     if (busyId) return;
     setBusyId(client.id);
@@ -100,7 +105,7 @@ export function HiddenClientsScreen({
       await action();
     } catch (error) {
       notify(
-        `Не удалось: ${label.toLowerCase()}`,
+        `Не удалось выполнить «${label}»`,
         (error as Error).message || "Проверьте соединение и повторите.",
       );
     } finally {
@@ -113,12 +118,12 @@ export function HiddenClientsScreen({
       <ScreenHeader title={title} />
       {query.isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <Spinner size={28} label={`Загрузка: ${title.toLowerCase()}`} />
+          <Spinner size={28} label={`Загружаем «${title}»`} />
         </View>
       ) : query.isError ? (
         <ClientDataNotice
           fullScreen
-          title={`Не удалось загрузить: ${title.toLowerCase()}`}
+          title={`Не удалось загрузить «${title}»`}
           message={query.error.message}
           onRetry={() => void query.refetch()}
           retrying={query.isRefetching}
