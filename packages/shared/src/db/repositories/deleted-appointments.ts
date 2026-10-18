@@ -9,11 +9,31 @@ import { rowToAppointment } from "./appointments";
 // (с фото, ссылкой клиента и отвязанными SMS) 30 дней лежит в
 // `deleted_appointments`. Сетка, слоты, напоминания и история клиента ящик не
 // читают — для них записи нет. Отсюда её возвращают («Вернуть» — та же строка
-// с тем же id) или стирают насовсем. Кто что видит, решает RLS ящика:
-// владелец — всё, остальные — своё удалённое там, где и сейчас могут удалять.
+// с тем же id) или стирают насовсем. Кто что видит, решает сервер теми же
+// условиями, что RLS ящика: владелец — всё, остальные — своё удалённое там,
+// где и сейчас могут удалять.
+//
+// Снимок читается только функцией `list_deleted_appointments`: колонки
+// `appointment` и `dependents` приложению закрыты. В снимке цена, клиент,
+// адрес и токены ссылки клиента и оценки мастера; сотруднику функция отдаёт
+// запись через ту же маску блоков, что и его календарь, а из `dependents` —
+// только пути фото.
 
 type DbSupabase = SupabaseClient<Database>;
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
+
+/** Строка ответа `list_deleted_appointments`. */
+interface DeletedAppointmentJson {
+  id: string;
+  team_id: string;
+  kind: string;
+  created_by: string | null;
+  deleted_at: string;
+  purge_at: string;
+  deleted_by: string | null;
+  photo_paths: unknown;
+  appointment: AppointmentRow;
+}
 
 export interface DeletedAppointment {
   id: string;
@@ -31,28 +51,23 @@ export interface DeletedAppointment {
   appointment: Appointment;
 }
 
-function photoPaths(dependents: unknown): string[] {
-  const photos = (dependents as { photos?: unknown } | null)?.photos;
-  if (!Array.isArray(photos)) return [];
-  return photos
-    .map((p) => (p as { storage_path?: unknown }).storage_path)
-    .filter((path): path is string => typeof path === "string" && path.length > 0);
+function photoPaths(paths: unknown): string[] {
+  if (!Array.isArray(paths)) return [];
+  return paths.filter((path): path is string => typeof path === "string" && path.length > 0);
 }
 
-/** Ящик компании, свежие сверху; с `teamId` — только этот календарь. */
+/** Ящик компании (её задаёт сессия), свежие сверху; с `teamId` — только
+ *  этот календарь. */
 export async function listDeletedAppointments(
   supabase: DbSupabase,
-  tenantId: string,
   teamId?: string | null,
 ): Promise<DeletedAppointment[]> {
-  let q = supabase
-    .from("deleted_appointments")
-    .select("id, team_id, kind, created_by, deleted_at, purge_at, deleted_by, appointment, dependents")
-    .eq("tenant_id", tenantId);
-  if (teamId) q = q.eq("team_id", teamId);
-  const { data, error } = await q.order("deleted_at", { ascending: false });
+  const { data, error } = await supabase.rpc(
+    "list_deleted_appointments",
+    teamId ? { p_team_id: teamId } : {},
+  );
   if (error) throw new Error(`listDeletedAppointments: ${error.message}`);
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as unknown as DeletedAppointmentJson[]).map((row) => ({
     id: row.id,
     teamId: row.team_id,
     kind: row.kind,
@@ -60,9 +75,10 @@ export async function listDeletedAppointments(
     deletedAt: row.deleted_at,
     purgeAt: row.purge_at,
     deletedBy: row.deleted_by,
-    photoPaths: photoPaths(row.dependents),
-    // Снимок — `to_jsonb` строки записей: те же поля, что у живой строки.
-    appointment: rowToAppointment(row.appointment as unknown as AppointmentRow),
+    photoPaths: photoPaths(row.photo_paths),
+    // Снимок — строка записей (у сотрудника — с маской его календаря): те же
+    // поля, что у живой строки.
+    appointment: rowToAppointment(row.appointment),
   }));
 }
 

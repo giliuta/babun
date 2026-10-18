@@ -22,7 +22,8 @@ export function useDeletedAppointments() {
   return useQuery({
     queryKey: deletedAppointmentsQueryKey(tenantId),
     enabled: !!tenantId,
-    queryFn: () => listDeletedAppointments(supabase, tenantId as string),
+    // Компанию задаёт сессия запроса; `tenantId` держит ключ кэша.
+    queryFn: () => listDeletedAppointments(supabase),
   });
 }
 
