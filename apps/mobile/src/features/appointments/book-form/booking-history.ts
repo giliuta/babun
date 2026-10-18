@@ -47,25 +47,3 @@ export function recentClientIdsOf(allAppts: readonly HistoryRow[]): string[] {
   }
   return out;
 }
-
-/** Team of this client's latest visit (by date, then start), live teams only. */
-export function lastTeamOfClient(
-  allAppts: readonly HistoryRow[],
-  teams: readonly TeamRef[],
-  clientId: string,
-): string | null {
-  return (
-    [...allAppts]
-      .filter(
-        (a) =>
-          a.client_id === clientId &&
-          a.team_id &&
-          teams.some((tm) => tm.id === a.team_id),
-      )
-      .sort((a, b) =>
-        a.date !== b.date
-          ? b.date.localeCompare(a.date)
-          : b.time_start.localeCompare(a.time_start),
-      )[0]?.team_id ?? null
-  );
-}

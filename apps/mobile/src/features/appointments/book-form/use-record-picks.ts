@@ -7,7 +7,7 @@ import {
   type Location,
 } from "@babun/shared/local/clients";
 import type { Service } from "@/features/services/queries";
-import type { Master, Team } from "@/features/reference/queries";
+import type { Master } from "@/features/reference/queries";
 import type { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { resolveBookingClientPrefill } from "@/features/appointments/booking-prefill";
@@ -17,7 +17,6 @@ import {
 } from "@/features/appointments/booking-selection";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import type { ServiceOverride } from "@/features/appointments/helpers";
-import { lastTeamOfClient } from "./booking-history";
 import type { EventLocationRow } from "./event-locations";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
@@ -28,8 +27,6 @@ export interface RecordPicksInput {
   kind: "work" | "event";
   isEdit: boolean;
   editing: Appointment | null;
-  allAppts: Appointment[];
-  teams: Team[];
   services: Service[];
   masters: Master[];
   clients: Client[];
@@ -61,8 +58,6 @@ export function useRecordPicks({
   kind,
   isEdit,
   editing,
-  allAppts,
-  teams,
   services,
   masters,
   clients,
@@ -134,21 +129,12 @@ export function useRecordPicks({
       return;
     }
     const prefill = resolveBookingClientPrefill(c);
-    // Continuity: команда по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
-    // Иначе любимый мастер клиента отсеивается как «не из той команды».
-    //
-    // ТОЛЬКО У НОВОЙ ЗАПИСИ. У сохранённой сменить клиента значит сменить
-    // клиента: иначе запись молча переезжала бы в команду последнего визита
-    // нового клиента — услуги прежней команды выпадали бы («Итого» 0,
-    // «Сохранить» серый), счета оплаты становились бы чужими, — а его
-    // «любимый» мастер подменял бы мастера записи в обход права менять команду.
-    const lastTeamForClient = isEdit
-      ? null
-      : lastTeamOfClient(allAppts, teams, c.id);
-    const targetTeam = lastTeamForClient ?? teamId;
-    if (lastTeamForClient && lastTeamForClient !== teamId) {
-      selectTeam(lastTeamForClient);
-    }
+    // КЛИЕНТ НЕ УВОДИТ ЗАПИСЬ В СВОЮ КОМАНДУ. Запись заводят в календаре,
+    // который открыт: старого клиента записывают в новую команду, и команда
+    // записи остаётся той, что выбрана. Прежде выбор клиента переносил запись в
+    // команду его последнего визита — услуги выбранной команды пропадали, а
+    // записать клиента в другую команду было нельзя вовсе.
+    const targetTeam = teamId;
     setClientId(prefill.clientId);
     setLocationId(prefill.locationId);
     setAddress(prefill.address);
