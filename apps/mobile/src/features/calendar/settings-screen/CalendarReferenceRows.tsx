@@ -7,6 +7,7 @@ import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
 import { DeletedAppointmentsDoor } from "@/features/calendar/DeletedAppointmentsDoor";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 /** Doors of the calendar: «Записи», «Услуги», «Метки» and the team's SMS. */
 export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsState }) {
@@ -23,6 +24,7 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
           в отличие от «Услуг» и «Меток», не передаём. */}
       {rows.booking ? (
         <SectionCard>
+          <TourTarget id="settings.records">
           <SettingsRow
             tile={SETTINGS_TILE.blue}
             icon={ClipboardList}
@@ -40,6 +42,7 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
               } as Href)
             }
           />
+          </TourTarget>
         </SectionCard>
       ) : null}
 
@@ -55,6 +58,7 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
             (настройки «Длительность» на календаре больше нет). Тот же
             экран, что в Кабинете, второй дверью внутри стека /calendar:
             наружу этот стек не ведёт (закон навигации). */}
+        <TourTarget id="settings.services">
         <TariffLocked locked={rows.servicesLocked}>
         <SettingsRow
           tile={SETTINGS_TILE.blue}
@@ -75,10 +79,12 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
           }
         />
         </TariffLocked>
+        </TourTarget>
       </SectionCard>
       ) : null}
       {rows.labels ? (
         <SectionCard>
+          <TourTarget id="settings.labels">
           <SettingsRow
             tile={SETTINGS_TILE.purple}
             icon={Tags}
@@ -104,6 +110,7 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
               )
             }
           />
+          </TourTarget>
         </SectionCard>
       ) : null}
       {/* SMS КОМАНДЫ (STORY-089). Шаблоны, отправка и история
@@ -111,7 +118,9 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
           SMS. Шаблоны правит владелец — строка только ему. */}
       {isOwner ? (
         <SectionCard>
-          <SmsSettingsRow teamId={team?.id ?? null} />
+          <TourTarget id="settings.sms">
+            <SmsSettingsRow teamId={team?.id ?? null} />
+          </TourTarget>
         </SectionCard>
       ) : null}
       {/* «УДАЛЁННЫЕ ЗАПИСИ» — ящик удалённого в этом календаре: 30 дней,

@@ -30,13 +30,12 @@ export function useCalendarUiState() {
   // записи: одно правило «себе» на телефоне, пуш пересчитан
   // от даты и времени записи в поясе её команды.
   const [reminderFor, setReminderFor] = useState<Appointment | null>(null);
-  const [firstCalendarFailed, setFirstCalendarFailed] = useState(false);
 
   return {
     smsApt, setSmsApt, smsOpen, setSmsOpen, miniCalOpen, setMiniCalOpen, crewViewing,
     setCrewViewing, recolor, setRecolor, sheetMenu, setSheetMenu, cityPickerYmd,
     setCityPickerYmd, slotDraft, setSlotDraft, finModalYmd, setFinModalYmd, reminderFor,
-    setReminderFor, firstCalendarFailed, setFirstCalendarFailed,
+    setReminderFor,
   };
 }
 

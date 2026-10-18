@@ -7,6 +7,7 @@ import { ModePlaque } from "@/features/calendar/ModePlaque";
 import { NOTICE_LIFETIME_MS } from "./use-slot-notice";
 import type { CalendarController } from "./use-calendar-controller";
 import { recordComment } from "@/features/calendar/record-title";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 /** Header with the notice, the mode plaque, the calendars ribbon and the
  *  background refresh bar. */
@@ -86,14 +87,20 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
         />
       ) : null}
 
-      <ScopeChips
-        items={chipItems}
-        // Пока идёт переход, подсвечен ТОТ чип, в который тапнули: экран
-        // отвечает на касание сразу, а данные догоняют под скелетом. Для
-        // своего календаря то же даёт оптимистичный `chipTeamId` (onPickOwn).
-        activeId={pendingChipId ?? chipTeamId}
-        onSelect={pickCalendar}
-      />
+      {/* Лента без чипов не рисуется — и обучению подсвечивать нечего:
+          обёртка только вокруг живой ленты. */}
+      {chipItems.length > 0 ? (
+        <TourTarget id="calendar.chips">
+          <ScopeChips
+            items={chipItems}
+            // Пока идёт переход, подсвечен ТОТ чип, в который тапнули: экран
+            // отвечает на касание сразу, а данные догоняют под скелетом. Для
+            // своего календаря то же даёт оптимистичный `chipTeamId` (onPickOwn).
+            activeId={pendingChipId ?? chipTeamId}
+            onSelect={pickCalendar}
+          />
+        </TourTarget>
+      ) : null}
 
       {/* Фоновое дообновление календаря: полоса под шапкой вместо контрола,
           который сам выезжал и сдвигал ленту. */}

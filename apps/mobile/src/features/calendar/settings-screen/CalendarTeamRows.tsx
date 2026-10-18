@@ -6,6 +6,7 @@ import { formatHm } from "@/features/calendar/window";
 import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
 import { zoneCities } from "@/features/calendar/zone-label";
 import { CalendarIdentityCard } from "./CalendarIdentityCard";
+import { TourTarget } from "@/components/tour/TourTarget";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 
 type Team = NonNullable<CalendarSettingsState["team"]>;
@@ -25,7 +26,9 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
       ) : rows.rename ? (
         // «Название и цвет: Только видит» — имя с цветом, без правки.
         <SectionCard>
-          <SettingsRow appearance={{ color: team.color }} title={team.name} sub="Название и цвет" />
+          <TourTarget id="settings.name">
+            <SettingsRow appearance={{ color: team.color }} title={team.name} sub="Название и цвет" />
+          </TourTarget>
         </SectionCard>
       ) : null}
       {/* ЧАСОВОЙ ПОЯС — СРАЗУ ПОД ИМЕНЕМ КАЛЕНДАРЯ. Он задаёт, что для этого
@@ -36,6 +39,7 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
           другой стране (колонка `teams.timezone`). */}
       {rows.timezone ? (
         <SectionCard>
+          <TourTarget id="settings.timezone">
           <SettingsRow
             // ЦВЕТНАЯ ПЛИТКА, КАК У ВСЕХ ДВЕРЕЙ ЭТОЙ СТРАНИЦЫ:
             // «neutral» — материал денежных экранов (канон SettingsRow),
@@ -59,6 +63,7 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
             sub={`${zoneCities(timezone)} · ${utcLabel(timezone)} · ${zoneClock(timezone)}`}
             onPress={rows.timezoneEdit ? () => setPicker("tz") : undefined}
           />
+          </TourTarget>
         </SectionCard>
       ) : null}
       {/* ВАЛЮТЫ ЗДЕСЬ НЕТ: она одна на
@@ -87,34 +92,40 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
           строку «Масштаб» с той же шторкой. */}
       <SectionCard className="mt-4">
         {rows.hours ? (
-          <SettingsRow
-            tile={SETTINGS_TILE.teal}
-            icon={CalendarRange}
-            title="Часы календаря"
-            sub={`${formatHm(window.start)}–${formatHm(window.end)} · масштаб ${zoomPct}%`}
-            onPress={() => setPicker("view")}
-          />
+          <TourTarget id="settings.hours">
+            <SettingsRow
+              tile={SETTINGS_TILE.teal}
+              icon={CalendarRange}
+              title="Часы календаря"
+              sub={`${formatHm(window.start)}–${formatHm(window.end)} · масштаб ${zoomPct}%`}
+              onPress={() => setPicker("view")}
+            />
+          </TourTarget>
         ) : (
-          <SettingsRow
-            tile={SETTINGS_TILE.indigo}
-            icon={ZoomIn}
-            title="Масштаб"
-            sub={`${zoomPct}%`}
-            onPress={() => setPicker("zoom")}
-          />
+          <TourTarget id="settings.zoom">
+            <SettingsRow
+              tile={SETTINGS_TILE.indigo}
+              icon={ZoomIn}
+              title="Масштаб"
+              sub={`${zoomPct}%`}
+              onPress={() => setPicker("zoom")}
+            />
+          </TourTarget>
         )}
       </SectionCard>
       {rows.schedule ? (
         <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={CalendarClock}
-            title="График команды"
-            sub={schedText}
-            // «Только видит» — строка без двери: график показан,
-            // правки нет.
-            onPress={rows.scheduleEdit ? () => setScheduleOpen(true) : undefined}
-          />
+          <TourTarget id="settings.schedule">
+            <SettingsRow
+              tile={SETTINGS_TILE.blue}
+              icon={CalendarClock}
+              title="График команды"
+              sub={schedText}
+              // «Только видит» — строка без двери: график показан,
+              // правки нет.
+              onPress={rows.scheduleEdit ? () => setScheduleOpen(true) : undefined}
+            />
+          </TourTarget>
         </SectionCard>
       ) : null}
     </>

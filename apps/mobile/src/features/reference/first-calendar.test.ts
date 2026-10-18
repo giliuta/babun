@@ -24,12 +24,33 @@ describe("ответ «завести первый календарь»", () => 
 });
 
 describe("первый календарь заводит база, а не список на устройстве", () => {
-  test("экран календаря зовёт create_first_calendar, а не прямую вставку", () => {
+  test("экран календаря открывает шторку первого календаря, а не заводит его сам", () => {
     const screen = calendarScreenSource();
-    assert.match(screen, /useCreateFirstCalendar\(\)/);
+    assert.match(screen, /<CalendarCreateSheet\s+first\b/);
     assert.doesNotMatch(screen, /useCreateTeam\(\)/);
-    // «Создавать нечего» — только перечитать список, без счетов и выбора.
-    assert.match(screen, /if \(!team\) \{\s*void refetchTeams\(\);\s*return;\s*\}/);
+    assert.doesNotMatch(screen, /useCreateFirstCalendar\(\)/);
+    // Календарь без имени не заводится: ни эффекта, ни вызова без шторки.
+    assert.doesNotMatch(screen, /createFirstCalendar\(\)/);
+    // «Создавать нечего» — только перечитать список.
+    assert.match(screen, /const onFirstCalendarExisting = \(\) => \{\s*void refetchTeams\(\);\s*tourEvent\("calendar-created"\);\s*\}/);
+  });
+
+  test("шторка первого календаря зовёт create_first_calendar", () => {
+    const sheet = readFileSync(resolve(here, "../calendar/CalendarCreateSheet.tsx"), "utf8");
+    assert.match(sheet, /const made = await createFirst\.mutateAsync\(input\);/);
+    assert.match(sheet, /if \(!made\) \{\s*onExisting\?\.\(\);/);
+  });
+
+  test("регистрация больше не заводит календарь сама", () => {
+    const sql = readFileSync(
+      resolve(here, "../../../../../supabase/migrations/20261018100000_signup_without_calendar.sql"),
+      "utf8",
+    );
+    assert.match(sql, /pg_get_functiondef\('public\.ensure_personal_space\(uuid\)'::regprocedure\)/);
+    assert.match(sql, /insert into public\.teams \(id, tenant_id, name, payout_percentage\)/);
+    // Вместо календаря регистрация заводит обучение с нуля.
+    assert.match(sql, /v_def := replace\(v_def, v_old, \$q\$  insert into public\.onboarding_progress \(user_id, tenant_id\)/);
+    assert.match(sql, /якорь вставки календаря не найден/);
   });
 
   test("функция базы проверяет живые календари под замком компании", () => {

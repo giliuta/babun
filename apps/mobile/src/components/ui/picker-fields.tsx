@@ -6,6 +6,7 @@ import { AppearanceSheet, AppearanceTile } from "./AppearanceSheet";
 import { FieldLabel } from "./Field";
 import { type IconPreset } from "./icon-set";
 import { ICON } from "./tokens";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 /** СТРОКА «ВИД» — образец и одна шторка на цвет и значок. Вопрос у них один,
  *  поэтому один блок с переключателем внутри, а не два поля, каждое со своей
@@ -178,6 +179,7 @@ export function NameColorField({
   trailing,
   minHeight,
   colorReadOnly,
+  tourIds,
 }: {
   name: string;
   onNameChange: (value: string) => void;
@@ -226,6 +228,9 @@ export function NameColorField({
    *  здесь (приглашение по существующей карточке — её правят в самой
    *  карточке). Имя при этом правится как обычно. */
   colorReadOnly?: boolean;
+  /** Имена для обучения: поле имени и плитку цвета можно подсветить
+   *  отдельно («придумайте имя», «выберите цвет»). */
+  tourIds?: { name?: string; color?: string };
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -270,6 +275,7 @@ export function NameColorField({
         {/* ОБРАЗЕЦ СЛЕВА — ТАМ ЖЕ, ГДЕ В СПИСКЕ: в списке плитка слева, и в
             настройках слева, чтобы глазу было проще. Плитка показывает ответ
             целиком: цвет заливкой, значок внутри неё. */}
+        <MaybeTour id={tourIds?.color}>
         <Pressable
           onPress={colorReadOnly ? undefined : () => setOpen(true)}
           disabled={colorReadOnly}
@@ -291,6 +297,8 @@ export function NameColorField({
             size={28}
           />
         </Pressable>
+        </MaybeTour>
+        <MaybeTour id={tourIds?.name} flex>
         <TextInput
           ref={inputRef}
           value={name}
@@ -320,6 +328,7 @@ export function NameColorField({
             color: t.ink,
           }}
         />
+        </MaybeTour>
         {trailing ? <View style={{ paddingRight: 16 }}>{trailing}</View> : null}
       </View>
 
@@ -335,5 +344,17 @@ export function NameColorField({
         />
       )}
     </View>
+  );
+}
+
+/** Обёртка обучения только там, где её попросили: лишний View в каждой
+ *  строке формы не нужен. */
+function MaybeTour({ id, flex, children }: { id?: string; flex?: boolean; children: ReactNode }) {
+  return id ? (
+    <TourTarget id={id} flex={flex}>
+      {children}
+    </TourTarget>
+  ) : (
+    <>{children}</>
   );
 }
