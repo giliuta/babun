@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { eventSpan, resolveTimeZone, utcStamp, wallTimeToInstant } from "./ics-time.ts";
+
 // ЛЕНТА КАЛЕНДАРЯ — ПО ОТЗЫВНОМУ ТОКЕНУ, НЕ ПО user_id (13.10). Функция без
 // входа (`verify_jwt = false`), поэтому адрес и есть секрет: user_id мастер
 // видел в `created_by` каждой записи и забирал календарь компании.
@@ -26,4 +28,52 @@ test("строки ленты: только сервисный ключ, мас�
   assert.match(sql, /list_master_appointments_safe\(v_page \* 1000, 1000\)/);
   assert.match(sql, /references public\.tenant_members \(tenant_id, user_id\) on delete cascade/);
   assert.match(sql, /a\.kind = 'work'/);
+});
+
+// ВРЕМЯ СОБЫТИЙ — В UTC ИЗ ЗОНЫ КОМПАНИИ. «Плавающее» время с подсказкой
+// X-WR-TIMEZONE часть календарей читала в своей зоне — визит съезжал.
+
+test("лента пишет DTSTART/DTEND в UTC из зоны компании, а не плавающее время", () => {
+  assert.match(fn, /eventSpan\(apt\.date, apt\.time_start, apt\.time_end, timeZone\)/);
+  assert.match(fn, /\.from\("calendar_settings"\)\s*\.select\("timezone"\)/);
+  assert.doesNotMatch(fn, /X-WR-TIMEZONE:Europe\/Nicosia/);
+  assert.doesNotMatch(fn, /function stamp\(/);
+});
+
+test("Никосия: летом UTC+3, зимой UTC+2", () => {
+  assert.equal(utcStamp(wallTimeToInstant("2026-07-15", "10:00", "Europe/Nicosia")), "20260715T070000Z");
+  assert.equal(utcStamp(wallTimeToInstant("2026-01-15", "10:00", "Europe/Nicosia")), "20260115T080000Z");
+});
+
+test("другая зона компании даёт другой момент", () => {
+  assert.equal(utcStamp(wallTimeToInstant("2026-07-15", "10:00", "Europe/Minsk")), "20260715T070000Z");
+  assert.equal(utcStamp(wallTimeToInstant("2026-07-15", "10:00", "America/New_York")), "20260715T140000Z");
+  assert.equal(utcStamp(wallTimeToInstant("2026-07-15", "10:00", "Asia/Kolkata")), "20260715T043000Z");
+});
+
+test("переходы часов: весенний пропуск — вперёд, осенний повтор — ранний момент", () => {
+  // 29.03.2026 в Никосии 03:00 → 04:00.
+  assert.equal(utcStamp(wallTimeToInstant("2026-03-29", "03:30", "Europe/Nicosia")), "20260329T013000Z");
+  // 25.10.2026 в Никосии 04:00 → 03:00: 03:30 бывает дважды.
+  assert.equal(utcStamp(wallTimeToInstant("2026-10-25", "03:30", "Europe/Nicosia")), "20261025T003000Z");
+});
+
+test("конец 24:00, запись через полночь и мусор", () => {
+  assert.deepEqual(eventSpan("2026-07-15", "22:00", "24:00", "Europe/Nicosia"), {
+    start: "20260715T190000Z",
+    end: "20260715T210000Z",
+  });
+  assert.deepEqual(eventSpan("2026-07-15", "23:00", "01:00", "Europe/Nicosia"), {
+    start: "20260715T200000Z",
+    end: "20260715T220000Z",
+  });
+  assert.equal(eventSpan("2026-07-15", "ab", "11:00", "Europe/Nicosia"), null);
+  assert.equal(eventSpan("2026-02-30", "10:00", "11:00", "Europe/Nicosia"), null);
+});
+
+test("пустая или неизвестная зона — Europe/Nicosia", () => {
+  assert.equal(resolveTimeZone(null), "Europe/Nicosia");
+  assert.equal(resolveTimeZone("  "), "Europe/Nicosia");
+  assert.equal(resolveTimeZone("Mars/Olympus"), "Europe/Nicosia");
+  assert.equal(resolveTimeZone("Europe/Minsk"), "Europe/Minsk");
 });
