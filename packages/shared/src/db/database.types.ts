@@ -1787,6 +1787,44 @@ export type Database = {
           },
         ]
       }
+      erased_appointment_blobs: {
+        Row: {
+          appointment_id: string
+          created_by: string | null
+          erased_at: string
+          erased_by: string | null
+          kind: string
+          team_id: string
+          tenant_id: string
+        }
+        Insert: {
+          appointment_id: string
+          created_by?: string | null
+          erased_at?: string
+          erased_by?: string | null
+          kind: string
+          team_id: string
+          tenant_id: string
+        }
+        Update: {
+          appointment_id?: string
+          created_by?: string | null
+          erased_at?: string
+          erased_by?: string | null
+          kind?: string
+          team_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "erased_appointment_blobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_templates: {
         Row: {
           color: string
@@ -5378,6 +5416,16 @@ export type Database = {
         Returns: Json
       }
       change_log_item_label: { Args: { p_item: Json }; Returns: string }
+      change_log_partner_view: {
+        Args: {
+          p_changes: Json
+          p_entity: string
+          p_label: string
+          p_meta: Json
+          p_open: Json
+        }
+        Returns: Json
+      }
       change_log_person_name: {
         Args: { p_tenant: string; p_user: string }
         Returns: string
@@ -5535,6 +5583,10 @@ export type Database = {
         Args: { p_appointment_id: string }
         Returns: boolean
       }
+      current_user_erased_appointment_blob: {
+        Args: { p_appointment_id: string }
+        Returns: boolean
+      }
       current_user_has_calendar_grants: { Args: never; Returns: boolean }
       current_user_master_id: { Args: never; Returns: string }
       current_user_role: { Args: never; Returns: string }
@@ -5557,9 +5609,44 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      deleted_appointment_for_restore: {
+        Args: { p_id: string }
+        Returns: {
+          appointment: Json
+          created_by: string | null
+          deleted_at: string
+          deleted_by: string | null
+          dependents: Json
+          id: string
+          kind: string
+          purge_at: string
+          team_id: string
+          tenant_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "deleted_appointments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      deleted_appointment_member_view: {
+        Args: {
+          p_appointment: Database["public"]["Tables"]["appointments"]["Row"]
+        }
+        Returns: Json
+      }
       deleted_appointment_ready: {
         Args: { p_appointment: Json }
         Returns: Json
+      }
+      deleted_appointment_snapshot_open: {
+        Args: { d: Database["public"]["Tables"]["deleted_appointments"]["Row"] }
+        Returns: boolean
+      }
+      deleted_appointment_visible: {
+        Args: { d: Database["public"]["Tables"]["deleted_appointments"]["Row"] }
+        Returns: boolean
       }
       deleted_operation_ready: { Args: { p_operation: Json }; Returns: Json }
       document_prefix: {
@@ -5840,7 +5927,33 @@ export type Database = {
         Args: { p_team_id: string; p_tenant_id: string }
         Returns: string
       }
+      list_change_log: {
+        Args: {
+          p_actor?: string
+          p_before?: number
+          p_from?: string
+          p_limit?: number
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          actor_id: string
+          actor_name: string
+          changes: Json
+          created_at: string
+          entity: string
+          entity_id: string
+          id: number
+          label: string
+          meta: Json
+          team_id: string
+        }[]
+      }
       list_client_members: { Args: { p_group_id: string }; Returns: Json[] }
+      list_deleted_appointments: {
+        Args: { p_team_id?: string }
+        Returns: Json[]
+      }
       list_dispatcher_services_safe: { Args: never; Returns: Json[] }
       list_master_appointments_safe: {
         Args: { p_limit?: number; p_offset?: number }
@@ -6871,6 +6984,7 @@ export type Database = {
         Args: { p_enabled: boolean; p_id: string }
         Returns: boolean
       }
+      sms_strip_emoji: { Args: { p_text: string }; Returns: string }
       sms_stripe_dispute: {
         Args: {
           p_amount: number
