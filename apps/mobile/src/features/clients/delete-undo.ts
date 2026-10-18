@@ -8,6 +8,7 @@ import {
   type ArchiveClientsResult,
 } from "@/features/clients/queries";
 import { haptics } from "@/lib/haptics";
+import { restoreRefusalWords } from "@/features/clients/restore-refusal";
 
 // УДАЛЕНИЕ С ОТМЕНОЙ НА МЕСТЕ.
 //
@@ -83,8 +84,15 @@ export function useDeleteWithUndo() {
               }
               haptics.warning();
               const lost = done.length - back;
+              // Причину отказа называем: «номер занят» лечится иначе, чем
+              // обрыв сети, а общая фраза заставляла гадать.
+              const why = restoreRefusalWords(
+                settled.flatMap((s) => (s.status === "rejected" ? [s.reason] : [])),
+              );
               toast(
-                `Не удалось вернуть ${lost} ${countWordRu(lost, "клиента", "клиентов", "клиентов")} — они в удалённых, верните вручную`,
+                why
+                  ? `Не удалось вернуть: ${why}`
+                  : `Не удалось вернуть ${lost} ${countWordRu(lost, "клиента", "клиентов", "клиентов")} — они в удалённых, верните вручную`,
                 "error",
               );
             })();

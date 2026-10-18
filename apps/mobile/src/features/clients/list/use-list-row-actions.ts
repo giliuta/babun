@@ -183,17 +183,21 @@ export function useListRowActions({
   const onToggleBlacklist = (c: Client) => {
     const next = !c.blacklisted;
     const source = guestOf.get(c.id);
-    updateById.mutate(
-      { id: c.id, patch: { blacklisted: next }, source },
-      {
-        onSuccess: () =>
-          toast(next ? "Клиент в чёрном списке" : "Клиент убран из чёрного списка", "info", {
-            label: "Отменить",
-            onPress: () =>
-              updateById.mutate({ id: c.id, patch: { blacklisted: !next }, source }),
-          }),
-      },
-    );
+    // `mutateAsync`, а не `mutate(..., { onSuccess })`: колбэки второго
+    // аргумента TanStack зовёт только у ПОСЛЕДНЕГО вызова, и два быстрых
+    // тапа по разным строкам оставляли первую без тоста и без «Отменить».
+    // Отказ уже показала сама мутация (`onError`), поэтому здесь ловим его
+    // молча — только чтобы не было необработанного отклонения.
+    updateById
+      .mutateAsync({ id: c.id, patch: { blacklisted: next }, source })
+      .then(() =>
+        toast(next ? "Клиент в чёрном списке" : "Клиент убран из чёрного списка", "info", {
+          label: "Отменить",
+          onPress: () =>
+            updateById.mutate({ id: c.id, patch: { blacklisted: !next }, source }),
+        }),
+      )
+      .catch(() => {});
   };
 
   // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты

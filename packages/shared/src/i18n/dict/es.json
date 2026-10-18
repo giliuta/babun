@@ -5014,5 +5014,8 @@
  "Запись ещё не создана.": "La cita aún no está creada.",
  "Действия с событием": "Acciones del evento",
  "Действия с записью": "Acciones de la cita",
- "Копия создана — поменяйте дату и время": "Copia creada — cambie la fecha y la hora"
+ "Копия создана — поменяйте дату и время": "Copia creada — cambie la fecha y la hora",
+ "Услуги записи — из прайса её команды. Команду меняют на странице записи": "Los servicios de la cita son de la lista de precios de su equipo. Cambie el equipo en la página de la cita",
+ "Изменения не сохранятся.": "Los cambios no se guardarán.",
+ "Не удалось вернуть: {0}": "No se pudo restaurar: {0}"
 }

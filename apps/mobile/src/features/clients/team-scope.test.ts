@@ -8,6 +8,7 @@ import {
   liveTeamChoice,
   teamForNewClient,
   toggleTeamChoice,
+  withNewClientTeam,
 } from "./team-scope";
 
 const teams = ["team-1", "team-3"];
@@ -59,5 +60,13 @@ describe("лента команд во вкладке «Клиенты»", () =>
     assert.equal(teamForNewClient(ALL_TEAMS, teams), "team-1");
     assert.equal(teamForNewClient("team-9", teams), "team-1");
     assert.equal(teamForNewClient(ALL_TEAMS, []), null);
+  });
+});
+
+describe("ссылка «Создать клиента» несёт команду чипа", () => {
+  const href = { pathname: "/clients/[id]" as const, params: { id: "new", tenant: "t1" } };
+  test("конкретная команда уходит параметром, «Все» — нет", () => {
+    assert.deepEqual(withNewClientTeam(href, "team-7").params, { id: "new", tenant: "t1", team: "team-7" });
+    assert.equal(withNewClientTeam(href, ALL_TEAMS), href);
   });
 });

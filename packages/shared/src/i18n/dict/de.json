@@ -5014,5 +5014,8 @@
  "Запись ещё не создана.": "Der Termin ist noch nicht angelegt.",
  "Действия с событием": "Aktionen für Ereignis",
  "Действия с записью": "Aktionen für Termin",
- "Копия создана — поменяйте дату и время": "Kopie erstellt — Datum und Uhrzeit ändern"
+ "Копия создана — поменяйте дату и время": "Kopie erstellt — Datum und Uhrzeit ändern",
+ "Услуги записи — из прайса её команды. Команду меняют на странице записи": "Die Leistungen des Termins stammen aus der Preisliste seines Teams. Das Team ändert man auf der Terminseite",
+ "Изменения не сохранятся.": "Änderungen werden nicht gespeichert.",
+ "Не удалось вернуть: {0}": "Wiederherstellen nicht möglich: {0}"
 }

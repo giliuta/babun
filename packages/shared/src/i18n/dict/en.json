@@ -5014,5 +5014,8 @@
  "Запись ещё не создана.": "The appointment isn't created yet.",
  "Действия с событием": "Event actions",
  "Действия с записью": "Booking actions",
- "Копия создана — поменяйте дату и время": "Copy created — change the date and time"
+ "Копия создана — поменяйте дату и время": "Copy created — change the date and time",
+ "Услуги записи — из прайса её команды. Команду меняют на странице записи": "The booking's services are from its team's price list. Change the team on the booking page",
+ "Изменения не сохранятся.": "Changes won't be saved.",
+ "Не удалось вернуть: {0}": "Couldn't restore: {0}"
 }

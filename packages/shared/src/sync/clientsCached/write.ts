@@ -181,7 +181,11 @@ export async function updateClient(
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }
-      if (refuseQueueing(opts)) {
+      // ТЕГИ В ОЧЕРЕДЬ НЕ ЛОЖАТСЯ: их нет в сыром `updateOp.payload`, а
+      // локальная строка и ответ уже несут новые теги. Так правка выглядела
+      // сохранённой, а после обновления с сервера теги возвращались
+      // прежними. Возвращаем кэш и отдаём ошибку — экран покажет свой отказ.
+      if (refuseQueueing(opts) || scrubbedPatch.tag_ids !== undefined) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }

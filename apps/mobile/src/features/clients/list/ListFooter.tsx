@@ -2,6 +2,7 @@ import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { BulkActionBar } from "@/features/clients/BulkActionBar";
 import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
+import { withNewClientTeam } from "@/features/clients/team-scope";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { ClientsList } from "./use-clients-list";
 
@@ -20,6 +21,7 @@ export function ListFooter({ list }: { list: ClientsList }) {
     clientsInPlan,
     chipGuest,
     createHere,
+    teamChoice,
   } = list;
   return (
     <>
@@ -56,9 +58,12 @@ export function ListFooter({ list }: { list: ClientsList }) {
               label="Создать клиента"
               onPress={() =>
                 router.push(
-                  chipGuest
-                    ? clientCardHref("new", chipGuest.scope.tenantId)
-                    : ownClientCardHref("new", scope),
+                  withNewClientTeam(
+                    chipGuest
+                      ? clientCardHref("new", chipGuest.scope.tenantId)
+                      : ownClientCardHref("new", scope),
+                    teamChoice,
+                  ),
                 )
               }
               disabled={!createHere}
