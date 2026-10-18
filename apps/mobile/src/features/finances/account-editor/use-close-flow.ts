@@ -7,7 +7,7 @@ import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import {
-  useRestoreAccount,
+  useUndoAccountTrash,
   useTrashAccount,
   type AccountWithBalance,
 } from "../accounts";
@@ -87,7 +87,7 @@ export function useCloseFlow({
   const qc = useQueryClient();
   const tenantId = useTenantId();
   const trashAcc = useTrashAccount();
-  const restoreAcc = useRestoreAccount();
+  const undoTrash = useUndoAccountTrash();
   // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА: свайп «Скрыть»
   // говорил «Счёт скрыт», а кнопка листа то же действие делала молча.
   const toast = useToast();
@@ -154,7 +154,7 @@ export function useCloseFlow({
           toast(`Счёт «${target.name}» удалён`, "success", {
             label: "Отменить",
             onPress: () =>
-              restoreAcc.mutate(target.id, {
+              undoTrash.mutate(target, {
                 onError: (e) => toast(`Не удалось вернуть счёт: ${e.message}`, "error"),
               }),
           });

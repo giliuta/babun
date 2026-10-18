@@ -514,12 +514,16 @@ async function syncCalendarsBeforeInvoice(
   const sub = await stripe.subscriptions.retrieve(subId);
   const item = sub.items?.data?.[0];
   if (!item || !/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return;
-  const { count } = await sbs
+  const { count, error } = await sbs
     .from("teams")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
-  const live = Math.max(1, typeof count === "number" ? count : 1);
+  // Не прочли календари — 5xx и повтор от Stripe, а не счёт за один.
+  if (error || typeof count !== "number") {
+    throw new Error(`live calendars unreadable: ${error?.code ?? "no count"}`);
+  }
+  const live = Math.max(1, count);
   if (item.quantity === live) return;
   await stripe.subscriptions.update(subId, {
     items: [{ id: item.id, quantity: live }],

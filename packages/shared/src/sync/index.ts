@@ -52,6 +52,7 @@ export {
   markOpPermanentlyFailedAndEmit,
   resetOpAttemptsAndEmit,
   useQueueDepth,
+  countQueuedOps,
 } from "./queue-events";
 
 export {

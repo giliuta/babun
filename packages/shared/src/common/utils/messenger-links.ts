@@ -18,9 +18,22 @@ export function dialableDigits(phone: string | null | undefined): string {
   return raw.startsWith("+") ? `+${digits}` : digits;
 }
 
-function stripAt(handle: string | null | undefined): string {
-  return (handle ?? "").replace(/^@+/, "").trim();
+/** Ник из того, что вписали в поле: «@ник», «ник» или ссылка на профиль.
+ *  «Поделиться профилем» в Instagram и Telegram отдаёт ссылку, и записанная
+ *  как ник она давала адрес «instagram.com/https://…». Снимаем адрес сайта,
+ *  хвост «?…» и завершающий «/», затем «@». */
+export function normalizeHandle(handle: string | null | undefined): string {
+  return (handle ?? "")
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|t\.me|telegram\.me)\//i, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "")
+    .replace(/^@+/, "")
+    .trim();
 }
+
+const stripAt = normalizeHandle;
 
 export function whatsappUrl(phone: string | null | undefined): string | null {
   const digits = phoneDigits(phone);

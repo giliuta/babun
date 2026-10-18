@@ -259,6 +259,18 @@ describe("слияние: теги складываются, реквизиты 
     );
     assert.equal(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["x"] }), allowed).tag_ids, undefined);
   });
+  test("теги дубля добавляются к основным без повторов, основные первыми", () => {
+    assert.deepEqual(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["b"] })).tag_ids, ["a", "b"]);
+    assert.deepEqual(mergeClientPatch(base({ tag_ids: [] }), base({ tag_ids: ["b", "c"] })).tag_ids, ["b", "c"]);
+    assert.deepEqual(
+      mergeClientPatch(base({ tag_ids: ["a", "b"] }), base({ tag_ids: ["b", "c", "a"] })).tag_ids,
+      ["a", "b", "c"],
+    );
+  });
+  test("у дубля нет новых тегов — набор не трогаем", () => {
+    assert.equal(mergeClientPatch(base({ tag_ids: ["a", "b"] }), base({ tag_ids: ["b"] })).tag_ids, undefined);
+    assert.equal(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: [] })).tag_ids, undefined);
+  });
   test("наборы реквизитов дубля переезжают без повторов, основной остаётся", () => {
     const set = (id: string, legal: string, vat: string, def: boolean) => ({
       id, legal_name: legal, vat_number: vat, reg_number: null, billing_address: null, is_default: def,

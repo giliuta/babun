@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -144,8 +144,14 @@ export function SmsSendSheet({
     setTimeout(onClose, SHEET_EXIT_MS);
   };
 
+  // Шторка уезжает ~260 мс, и её футер всё это время нажимается: без флага
+  // второй тап отправил бы вторую платную SMS. Ref, а не `isPending`, —
+  // состояние мутации доходит до кнопки только следующим рендером.
+  const sendingRef = useRef(false);
   const sendFromCompany = () => {
     if (!body) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     haptics.tap();
     closeAll();
     send.mutate(
@@ -160,6 +166,9 @@ export function SmsSendSheet({
       {
         onSuccess: () => toast("SMS отправляется", "success"),
         onError: (e) => notify("SMS не отправлена", smsErrorText(e)),
+        onSettled: () => {
+          sendingRef.current = false;
+        },
       },
     );
   };
@@ -291,7 +300,7 @@ export function SmsSendSheet({
               <Button
                 label={senderName ? `Отправить от ${senderName}` : "Отправить"}
                 onPress={sendFromCompany}
-                disabled={!body}
+                disabled={!body || send.isPending}
               />
             ) : null}
           </View>

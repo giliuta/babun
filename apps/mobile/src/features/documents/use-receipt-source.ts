@@ -7,7 +7,7 @@ import { useInvoice } from "@/features/finances/invoices-queries";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { ReceiptDraftState } from "./ReceiptComposer";
-import { paymentReceiptLines } from "@/features/finances/receipt-for-payment";
+import { paymentReceiptDiscount, paymentReceiptLines } from "@/features/finances/receipt-for-payment";
 import {
   useReceipt,
   useReceiptAppointment,
@@ -83,6 +83,8 @@ export function useReceiptSource(
         { invoiceLines: invoiceRow?.lines ?? null, appointment: appointment.data ?? null },
         invoiceNumber ? `Оплата по инвойсу ${invoiceNumber}` : "Оплата",
       ),
+      // Скидка инвойса — в «Итого» чека, а не потерянной строкой.
+      ...paymentReceiptDiscount(invoiceRow?.lines ?? null),
     });
   }, [mode, ready, tx, editing, invoiceRow, invoiceNumber, invoiceCompanyId, appointment.data, change]);
 

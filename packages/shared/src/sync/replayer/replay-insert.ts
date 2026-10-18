@@ -3,16 +3,19 @@
 import { cacheDelete, type QueuedOp } from "../../db/cache/sql";
 import { isUuid } from "../uuid";
 import { relayClient, type DbSupabase, type ReplayTable } from "./relay";
+import type { AppliedFn } from "./sentinel";
 import { insertDuplicateMessage, prepareInsert } from "./table-rules";
 
 export async function replayInsert(
   supabase: DbSupabase,
   op: QueuedOp,
   tableName: ReplayTable,
+  /** Вставка через функцию сервера встала со своей версией строки. */
+  onApplied?: AppliedFn,
 ): Promise<false> {
   const prepared = prepareInsert(op);
   if (prepared.aggregate) {
-    await prepared.aggregate(supabase);
+    await prepared.aggregate(supabase, onApplied);
     return false;
   }
   let payload = prepared.payload;

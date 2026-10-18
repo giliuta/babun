@@ -140,15 +140,20 @@ async function priceFor(key: string, period: Period): Promise<string> {
   return price.id as string;
 }
 
-/** Живые календари аккаунта — столько и в подписке (не меньше одного). */
+/** Живые календари аккаунта — столько и в подписке (не меньше одного).
+ *  Ошибка чтения — исключение, а не «один календарь»: молчаливая единица
+ *  выставила бы счёт за один календарь при пяти живых. */
 // deno-lint-ignore no-explicit-any
 async function liveCalendars(service: any, tenantId: string): Promise<number> {
-  const { count } = await service
+  const { count, error } = await service
     .from("teams")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
-  return Math.max(1, typeof count === "number" ? count : 1);
+  if (error || typeof count !== "number") {
+    throw new Error(`live calendars unreadable: ${error?.code ?? "no count"}`);
+  }
+  return Math.max(1, count);
 }
 
 Deno.serve(async (request: Request) => {

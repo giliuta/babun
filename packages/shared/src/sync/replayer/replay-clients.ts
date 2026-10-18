@@ -12,6 +12,7 @@ import {
 import { rowToClient } from "../../db/repositories/clients";
 import { isUuid } from "../uuid";
 import type { DbSupabase, PreparedInsert } from "./relay";
+import { carrySentinel, type AppliedFn } from "./sentinel";
 
 /** Strip the queue-only `__tag_ids` and decide how the client insert
  *  replays: the aggregate RPC, or the generic direct INSERT. */
@@ -44,8 +45,8 @@ export function prepareClientInsert(op: QueuedOp): PreparedInsert {
     const aggregatePayload = payload;
     return {
       payload,
-      aggregate: (supabase) =>
-        replayClientAggregate(supabase, op, aggregatePayload, queuedClientTagIds),
+      aggregate: (supabase, onApplied) =>
+        replayClientAggregate(supabase, op, aggregatePayload, queuedClientTagIds, onApplied),
     };
   }
   return { payload, aggregate: null };
@@ -56,6 +57,7 @@ async function replayClientAggregate(
   op: QueuedOp,
   payload: Record<string, unknown>,
   queuedClientTagIds: string[],
+  onApplied?: AppliedFn,
 ): Promise<void> {
   if (!isUuid(op.row_id)) {
     throw new Error(
@@ -109,7 +111,10 @@ async function replayClientAggregate(
         .select("id")
         .eq("id", op.row_id)
         .maybeSingle();
-      if (probe.data) return;
+      if (probe.data) {
+        await adoptServerStamp(supabase, op, payload, onApplied);
+        return;
+      }
       throw new Error(
         "Клиент с таким номером уже заведён — откройте его карточку, а этот черновик удалите",
       );
@@ -138,6 +143,36 @@ async function replayClientAggregate(
     if (repairError) {
       throw new Error(`replay client aggregate repair: ${repairError.message}`);
     }
+  }
+  await adoptServerStamp(supabase, op, payload, onApplied);
+}
+
+/** ВЕРСИЮ НОВОЙ СТРОКИ СТАВИТ СЕРВЕР. `create_client_with_tags` пишет своё
+ *  `now()`, а оптимистичная строка и правки, вставшие за ней в очередь, несут
+ *  время телефона. Без передачи версии первая же такая правка находила ноль
+ *  строк: ложный «Конфликт синхронизации» и силовая запись. Сбой чтения
+ *  вставку не отменяет — она уже на сервере; худшее — прежний ложный
+ *  «конфликт». */
+async function adoptServerStamp(
+  supabase: DbSupabase,
+  op: QueuedOp,
+  payload: Record<string, unknown>,
+  onApplied?: AppliedFn,
+): Promise<void> {
+  const localStamp = payload.updated_at;
+  if (typeof localStamp !== "string" || localStamp.length === 0) return;
+  try {
+    const { data } = await supabase
+      .from("clients")
+      .select("updated_at")
+      .eq("id", op.row_id)
+      .maybeSingle();
+    const serverStamp = (data as { updated_at?: unknown } | null)?.updated_at;
+    if (typeof serverStamp !== "string" || serverStamp === localStamp) return;
+    await carrySentinel(op, localStamp, serverStamp);
+    onApplied?.(serverStamp, localStamp);
+  } catch {
+    /* см. выше */
   }
 }
 

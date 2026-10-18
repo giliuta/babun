@@ -38,6 +38,7 @@ import { OverlayLayers } from "@/components/ui/bottom-sheet/OverlayLayers";
 import { SheetFooter } from "@/components/ui/bottom-sheet/SheetFooter";
 import { SheetHeader } from "@/components/ui/bottom-sheet/SheetHeader";
 import { useSheetMotion } from "@/components/ui/bottom-sheet/use-sheet-motion";
+import { TourWindow } from "@/components/tour/TourWindow";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
 // ЕДИНСТВЕННЫЙ способ показать выезжающую снизу панель. Заменяет собой
@@ -293,7 +294,11 @@ export function BottomSheet({
           {shown.children}
         </ScrollView>
       ) : padded ? (
-        <View style={{ paddingHorizontal: GUTTER }}>{shown.children}</View>
+        // СЖИМАЕТСЯ ТЕЛО, А НЕ ПОДВАЛ. Без flexShrink содержимое выше потолка
+        // выталкивало подвал, и панель (`overflow: hidden`) срезала кнопку.
+        // minHeight: 0 — иначе браузер не даёт flex-ребёнку стать ниже
+        // содержимого.
+        <View style={{ paddingHorizontal: GUTTER, flexShrink: 1, minHeight: 0 }}>{shown.children}</View>
       ) : (
         shown.children
       )}
@@ -381,7 +386,7 @@ export function BottomSheet({
           перетаскивания грабера не долетает (RN Modal — отдельное окно).
           style, не className: NativeWind v5 не красит компоненты-обёртки. */}
       <GestureHandlerRootView style={{ flex: 1, justifyContent: "flex-end" }}>
-        {layers}
+        <TourWindow id={sheetId}>{layers}</TourWindow>
         {/* Место для вопроса или выбора поверх этого листа. */}
         <SheetOverlayOutlet id={sheetId} />
       </GestureHandlerRootView>

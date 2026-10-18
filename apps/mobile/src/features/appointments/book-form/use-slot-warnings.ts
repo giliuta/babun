@@ -10,6 +10,8 @@ import { scheduleWarning } from "./schedule-warning";
 export interface SlotWarningsInput {
   allAppts: Appointment[];
   editId: string | null;
+  /** Жанр формы: событие сверяется и с событиями своей команды. */
+  kind: "work" | "event";
   teamId: string | null;
   date: string;
   timeStart: string;
@@ -23,6 +25,7 @@ export interface SlotWarningsInput {
 export function useSlotWarnings({
   allAppts,
   editId,
+  kind,
   teamId,
   date,
   timeStart,
@@ -40,14 +43,16 @@ export function useSlotWarnings({
   // проверки на `kind === "work"`, командное событие — «выезд в офис»
   // бригадой — не предупредит ни о двойном бронировании, ни о нерабочем дне: те же люди в то же время, но форма молчала. Личное
   // событие молчит по-прежнему: у него нет команды, с чьим днём столкнуться,
-  // и `teamId` там null.
+  // и `teamId` там null. Командное событие сверяется и с событиями своей
+  // команды — те же люди в то же время; работа их по-прежнему не видит.
   const overlap = useMemo(() => {
     if (!teamId) return null;
     return findOverlap(
       draftSlot({ editId, teamId, date, timeStart, timeEnd }),
       dayTeamAppts,
+      { withTeamEvents: kind === "event" },
     );
-  }, [editId, teamId, date, timeStart, timeEnd, dayTeamAppts]);
+  }, [editId, kind, teamId, date, timeStart, timeEnd, dayTeamAppts]);
   const timeWarning = useMemo(
     () =>
       scheduleWarning({

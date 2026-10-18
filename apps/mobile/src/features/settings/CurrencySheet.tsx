@@ -110,6 +110,11 @@ export function CurrencySheet({
       onClose={onClose}
       title="Валюта"
       maxHeightRatio={SELECT_SHEET_RATIO}
+      // Барабан на семь строк сжать нельзя, а с поиском и кнопкой он выше
+      // потолка в полэкрана: тело листается, «Применить» всегда видна.
+      scroll
+      // Поиск — ввод: без подъёма результаты уходили под клавиатуру.
+      avoidKeyboard
       footer={
         <View className="px-5">
           <Button

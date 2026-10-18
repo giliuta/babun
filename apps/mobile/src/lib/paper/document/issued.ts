@@ -202,14 +202,30 @@ export function issuedDocument({
     // на бумаге её уже говорят шапка и строка таблицы на языке документа.
     // Своя причина, набранная человеком, печатается как есть.
     notes:
-      creditNote &&
-      /^(Отмена инвойса|Частичная отмена инвойса|Возврат по чеку) \S+$/.test(clean(invoice.notes))
+      creditNote && isDefaultReason(clean(invoice.notes), original)
         ? ""
         : clean(invoice.notes),
     footer: creditNote
       ? dict.creditNoteFooter(invoice.number)
       : dict.footer(invoice.number, invoice.currency),
   };
+}
+
+/**
+ * ПРИЧИНА ПО УМОЛЧАНИЮ — НА ЛЮБОМ ЯЗЫКЕ. Сервер пишет её по-русски, и её
+ * ловит регулярка (RegExp i18n-плагин не трогает). Превью ноты подставляет её
+ * само тем же шаблоном, что здесь, — а шаблон плагин переводит при сборке на
+ * язык интерфейса; поэтому и сравнение здесь — с шаблоном, переведённым так
+ * же: с одной регуляркой английский интерфейс печатает причину в примечаниях.
+ */
+function isDefaultReason(notes: string, number: string | null): boolean {
+  if (/^(Отмена инвойса|Частичная отмена инвойса|Возврат по чеку) \S+$/.test(notes)) return true;
+  if (!number) return false;
+  return [
+    `Отмена инвойса ${number}`,
+    `Частичная отмена инвойса ${number}`,
+    `Возврат по чеку ${number}`,
+  ].includes(notes);
 }
 
 /** Способ платежа НА ЯЗЫКЕ БУМАГИ. Общий `paymentMethodLabel` остаётся для

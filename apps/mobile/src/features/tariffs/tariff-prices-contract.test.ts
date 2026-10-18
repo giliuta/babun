@@ -66,3 +66,17 @@ describe("цена за календарь: страница и Stripe", () => {
     assert.match(WEBHOOK, /STRIPE_PRICE_BUSINESS"\)\) return "max"/);
   });
 });
+
+// КОЛИЧЕСТВО = ЖИВЫЕ КАЛЕНДАРИ, А НЕ «ОДИН ПРИ ОШИБКЕ». Подсчёт, который при
+// отказе чтения молча возвращает 1, выставляет счёт за один календарь при
+// пяти живых: ошибка должна дойти до 5xx (оплата) и до повтора Stripe
+// (вебхук перед счётом).
+describe("подсчёт календарей для подписки", () => {
+  test("ошибка чтения календарей — исключение, а не один календарь", () => {
+    for (const [name, source] of [["tariff-checkout", FN], ["stripe-webhook", WEBHOOK]] as const) {
+      assert.match(source, /const \{ count, error \} = await \w+\s*\.from\("teams"\)/, `${name}: ошибка чтения teams не проверяется`);
+      assert.match(source, /if \(error \|\| typeof count !== "number"\) \{\s*throw new Error/, `${name}: сбой подсчёта превращается в 1`);
+      assert.doesNotMatch(source, /typeof count === "number" \? count : 1/, `${name}: остался молчаливый откат на 1`);
+    }
+  });
+});

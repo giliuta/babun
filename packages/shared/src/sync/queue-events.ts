@@ -19,6 +19,7 @@
 import { useEffect, useState } from "react";
 import {
   queueDepth,
+  dequeueAll,
   enqueueOp,
   enqueueOpWithCacheUpsert,
   enqueueOpWithCacheDelete,
@@ -137,16 +138,28 @@ export async function resetOpAttemptsAndEmit(id: number): Promise<void> {
 
 const POLL_INTERVAL_MS = 5_000;
 
-/** React hook — returns the current sync queue depth. Resubscribes on
- *  emit, plus a 5 s safety poll. Returns 0 before the first read. */
-export function useQueueDepth(): number {
+/** Сколько операций ждёт отправки — все или только те, что проходят
+ *  фильтр. Очередь одна на телефон, а экран «Синхронизация» показывает лишь
+ *  операции открытой компании: цифра, посчитанная по всей очереди, обещала
+ *  бы то, чего за тапом нет. */
+export async function countQueuedOps(
+  visible?: (op: QueuedOp) => boolean,
+): Promise<number> {
+  if (!visible) return queueDepth();
+  return (await dequeueAll()).filter(visible).length;
+}
+
+/** React hook — returns the current sync queue depth (optionally only the
+ *  ops `visible` keeps; pass a stable callback). Resubscribes on emit, plus
+ *  a 5 s safety poll. Returns 0 before the first read. */
+export function useQueueDepth(visible?: (op: QueuedOp) => boolean): number {
   const [depth, setDepth] = useState<number>(0);
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
       try {
-        const n = await queueDepth();
+        const n = await countQueuedOps(visible);
         if (!cancelled) setDepth(n);
       } catch {
         // Cache not available yet (bootstrap race) — leave at 0.
@@ -160,7 +173,7 @@ export function useQueueDepth(): number {
       unsub();
       clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   return depth;
 }

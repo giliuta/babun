@@ -29,10 +29,14 @@
 //   • выход только с этого устройства.
 // Новую настройку раздела сюда не добавлять — её место за шестерёнкой.
 
+import { useCallback } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { RefreshCw, Shield } from "lucide-react-native";
 import { useQueueDepth } from "@babun/shared/sync";
+import type { QueuedOp } from "@babun/shared/db/cache/sql";
+import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
+import { useTenantId } from "@/lib/tenant";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
@@ -56,7 +60,15 @@ export default function CabinetHome() {
   const t = useThemeColors();
   const router = useRouter();
   const { data: role } = useCurrentRole();
-  const syncDepth = useQueueDepth();
+  // Цифра — тем же фильтром компании, что список на экране «Синхронизация»:
+  // очередь одна на телефон, а за тапом видны только операции открытой
+  // компании.
+  const tenantId = useTenantId();
+  const visibleOp = useCallback(
+    (op: QueuedOp) => isQueuedOpVisibleForTenant(op, tenantId),
+    [tenantId],
+  );
+  const syncDepth = useQueueDepth(visibleOp);
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
 

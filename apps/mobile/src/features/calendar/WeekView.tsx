@@ -20,6 +20,7 @@ import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
 import { dayMonthLabel } from "./day-month-label";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -163,6 +164,7 @@ export const WeekView = memo(function WeekView({
       {/* Полоса шапок дат — страницы недель едут в локстепе с колонками;
           линия сетки живёт на обёртке и не скользит. Граница волосяная:
           шапка должна читаться продолжением сетки, а не отдельной плитой. */}
+      <TourTarget id="calendar.days">
       <View
         style={{
           flexDirection: "row",
@@ -187,6 +189,7 @@ export const WeekView = memo(function WeekView({
           )}
         />
       </View>
+      </TourTarget>
 
       {/* СОБЫТИЯ «ВЕСЬ ДЕНЬ» — чипы в закреплённой полосе, тот же пейджер, что
           у шапок и колонок: полоса обязана ехать с ними в локстепе. */}
@@ -227,6 +230,7 @@ export const WeekView = memo(function WeekView({
       ) : null}
 
       {/* grid */}
+      <TourTarget id="calendar.grid" flex>
       <ZoomableTimeGrid
         view="week"
         hourHSv={hourHSv}
@@ -291,6 +295,7 @@ export const WeekView = memo(function WeekView({
           )}
         />
       </ZoomableTimeGrid>
+      </TourTarget>
     </View>
   );
 });

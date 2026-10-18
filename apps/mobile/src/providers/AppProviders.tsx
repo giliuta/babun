@@ -16,7 +16,7 @@ import {
   REWARM_EVERY_MS,
   warmOtherCompanies,
 } from "@/lib/tenant-prefetch";
-import { useCurrentRole } from "@/session/tenant";
+import { useActiveCurrency, useCurrentRole } from "@/session/tenant";
 import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
 import type { MemberAccessMap } from "@/session/access-map";
 import { isNewerAccess } from "@/session/my-access";
@@ -60,6 +60,14 @@ function SyncBridgeMount() {
     }
     return startSyncBridge(tenantId);
   }, [role, tenantId]);
+  return null;
+}
+
+/** Валюта сумм — активной компании, на всё время жизни приложения: экраны,
+ *  которые читают профиль, приходят и уходят, а прогретый профиль после
+ *  перехода сам не перечитывается (`useActiveCurrency`). */
+function ActiveCurrencyMount() {
+  useActiveCurrency();
   return null;
 }
 
@@ -164,6 +172,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <SyncRuntimeMount />
             <SyncBridgeMount />
             <WarmCompaniesMount />
+            <ActiveCurrencyMount />
             <AccessSignalsMount />
             <StatusBar style="dark" />
             {children}

@@ -4,13 +4,14 @@ import {
   useTemplatePicking,
   type TemplateItem,
 } from "@/components/ui/TemplatePicker";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Keyboard, ScrollView, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Bell, CalendarCheck, CalendarClock, CalendarPlus, CalendarSync, CalendarX, Hand, Repeat } from "lucide-react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NameColorField } from "@/components/ui/picker-fields";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
@@ -178,6 +179,19 @@ export function SmsTemplateSheet({
   }
   const [whenOpen, setWhenOpen] = useState(false);
   const [term, setTerm] = useState<SmsTermKind | null>(null);
+  // ЧТО МЕШАЕТ СОХРАНИТЬ — ПЛАШКОЙ ЛИСТА, А НЕ ТОСТОМ: тост живёт в
+  // провайдере приложения, а лист — отдельное окно, и подсказка всплывала
+  // под ним. Держится столько же, сколько тост.
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showHint = (text: string) => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    setHint(text);
+    hintTimer.current = setTimeout(() => setHint(null), 2200);
+  };
+  useEffect(() => () => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+  }, []);
 
   const set = (patch: Partial<TemplateDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const problem = draftProblem(draft);
@@ -232,6 +246,7 @@ export function SmsTemplateSheet({
       padded={false}
       maxHeightRatio={0.92}
       avoidKeyboard
+      banner={hint ? <NoticeBar tone="info" message={hint} /> : undefined}
       footer={picking ? undefined : (<View
           style={{
             paddingHorizontal: GUTTER,
@@ -250,7 +265,7 @@ export function SmsTemplateSheet({
               problem
                 ? () => {
                     haptics.warning();
-                    toast(problem, "info");
+                    showHint(problem);
                   }
                 : undefined
             }

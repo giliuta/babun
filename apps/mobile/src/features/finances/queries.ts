@@ -258,7 +258,7 @@ export function useInsertTransaction() {
     // записать строку, а «проверьте, записалась ли» без свежей ленты
     // приглашает ввести её второй раз.
     onSettled: () => invalidateLedger(qc),
-    onSuccess: () => checkBudgetsAfterWrite(qc, tenantId),
+    onSuccess: (tx) => checkBudgetsAfterWrite(qc, tenantId, tx.occurred_on),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
@@ -268,13 +268,22 @@ export function useUpdateTransaction() {
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
-      updateTransaction(supabase, id, patch),
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<TransactionDraft>;
+      /** День операции после правки — бюджет проверяется его месяцем. Патч
+       *  несёт день, только если его меняли. */
+      occurredOn?: string;
+    }) => updateTransaction(supabase, id, patch),
     // Лента перечитывается и после отказа: оборванный ответ мог уже
     // записать строку, а «проверьте, записалась ли» без свежей ленты
     // приглашает ввести её второй раз.
     onSettled: () => invalidateLedger(qc),
-    onSuccess: () => checkBudgetsAfterWrite(qc, tenantId),
+    onSuccess: (_void, { patch, occurredOn }) =>
+      checkBudgetsAfterWrite(qc, tenantId, patch.occurred_on ?? occurredOn),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

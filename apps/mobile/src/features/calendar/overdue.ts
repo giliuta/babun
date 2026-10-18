@@ -1,4 +1,5 @@
 import type { Appointment } from "@babun/shared/local/appointments";
+import { getDebtAmount } from "@babun/shared/local/appointments";
 import { toMin } from "@/features/calendar/layout";
 
 // ПРОСРОЧЕННАЯ РАБОТА — ЗАПЛАНИРОВАННАЯ РАБОТА, ВРЕМЯ КОТОРОЙ ПРОШЛО.
@@ -10,6 +11,10 @@ import { toMin } from "@/features/calendar/layout";
 //
 // «В работе» просрочкой НЕ СЧИТАЕТСЯ: её уже начали, диспетчер знает.
 // Событие (kind !== "work") — тоже: закрывать нечего.
+// Работа БЕЗ ДОЛГА — тоже: оплаченная вперёд целиком или с нулевой суммой
+// ждёт не денег, а ничего; иначе «Не оплачена» висела бы на ней вечно, хотя
+// цвет записи (`record-color`) уже называет её оплаченной. Правило денег то
+// же: статус «оплачено» либо остаток долга ноль.
 
 /** Конец записи в минутах — ТОТ ЖЕ, что считает раскладка (`layoutDay` даёт
  *  минимум 15 минут), иначе сетка и счётчик разойдутся на нулевых записях. */
@@ -28,6 +33,7 @@ export function isOverdue(
 ): boolean {
   if (!todayYmd) return false;
   if (apt.status !== "scheduled" || apt.kind !== "work") return false;
+  if (apt.payment_status === "paid" || getDebtAmount(apt) <= 0) return false;
   if (apt.date < todayYmd) return true;
   if (apt.date > todayYmd) return false;
   return nowMinutes != null && endMinutesOf(apt) < nowMinutes;

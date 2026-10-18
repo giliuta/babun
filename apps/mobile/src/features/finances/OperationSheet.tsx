@@ -39,6 +39,7 @@ import { useOperationClose } from "./operation-sheet/use-operation-close";
 import { useOperationDraft } from "./operation-sheet/use-operation-draft";
 import { useOperationSave } from "./operation-sheet/use-operation-save";
 import { useOperationVat } from "./operation-sheet/use-operation-vat";
+import { amountVatMode } from "./operation-sheet/vat-frame";
 
 export type { OperationSheetProps } from "./operation-sheet/types";
 
@@ -76,7 +77,7 @@ export function OperationSheet({
 
   const draft = useOperationDraft({
     visible, transaction, debtPayment, defaultTeamId, defaultType, defaultDate,
-    businessToday, canWriteType, categories,
+    businessToday, canWriteType, categories, vatRowAllowed: isOwner,
   });
   const {
     businessNow, typeWritable,
@@ -125,7 +126,8 @@ export function OperationSheet({
 
   const amountCents = parseMoneyInputToCents(amount);
   const amountNum = (amountCents ?? 0) / 100;
-  const vatBreakdown = applyTxVat(amountNum, vatMode, opVatRate);
+  const amountMode = amountVatMode(vatMode, vatVisible && vatShown);
+  const vatBreakdown = applyTxVat(amountNum, amountMode, opVatRate);
   const { refundsKnown, belowRefunded, refundHoldsAccount, lowersWhileRefundsUnknown } =
     refundGuards({
       isEdit, type, amountCents, gross: vatBreakdown.gross, refundedTotal,
@@ -185,7 +187,7 @@ export function OperationSheet({
     isEdit, isOwner, transaction, debtPayment, fromCalendar, businessToday,
     refundedTotal, type, amountCents, amountNum, categoryId, teamId, accountId,
     payment, masterId, clientId, notes, date, time, receiptUrl, askEmployee,
-    attachClient, vatMode, vatTouched: draft.vatTouched,
+    attachClient, vatMode, amountMode, vatTouched: draft.vatTouched,
     vatRetouched: draft.vatRetouched, vatSettingsKnown: vat.vatSettingsKnown,
     opVatRate, txAccountClosed, accountMismatch, belowRefunded,
     lowersWhileRefundsUnknown, refundsFailed: gate.refundsFailed === true,

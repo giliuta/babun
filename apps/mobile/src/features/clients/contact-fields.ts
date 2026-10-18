@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import {
   instagramUrl,
+  normalizeHandle,
   telegramUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
@@ -59,8 +60,9 @@ export interface ContactFieldDef {
   url: (value: string) => string | null;
 }
 
-/** @username хранится без «собачки»: её рисует поле, а не данные. */
-const stripAt = (v: string): string => v.trim().replace(/^@+/, "");
+/** @username хранится без «собачки»: её рисует поле, а не данные. Вставленная
+ *  ссылка на профиль сводится к нику (`normalizeHandle`). */
+const stripAt = (v: string): string => normalizeHandle(v);
 
 /** Порядок = порядок строк на карточке и пунктов в листе «Добавить». */
 export const CONTACT_FIELDS: ContactFieldDef[] = [

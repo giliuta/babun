@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
-import { inputFromGross, type TxVatMode } from "@babun/shared/local/finance/vat";
+import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { randomUuid } from "@babun/shared/sync";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import { categoryInTeam } from "../category-asks";
@@ -12,6 +12,7 @@ import {
 import { operationDraftKey, vatDirtyKey } from "../operation-dirty";
 import { createOperationRequestIds } from "./request-ids";
 import type { OperationDebtPayment, OperationType } from "./types";
+import { hydratedAmountText, txVatMode } from "./vat-frame";
 
 /** The operation form's own state: every field the person fills, the
  *  «touched» flags that steer defaults, and the hydration on open. */
@@ -25,6 +26,7 @@ export function useOperationDraft({
   businessToday,
   canWriteType,
   categories,
+  vatRowAllowed,
 }: {
   visible: boolean;
   transaction: FinanceTransaction | null | undefined;
@@ -35,6 +37,9 @@ export function useOperationDraft({
   businessToday: string;
   canWriteType: ((type: OperationType) => boolean) | undefined;
   categories: FinanceCategory[];
+  /** Строка VAT этому человеку показывается — тогда поле суммы правки
+   *  «как назначили цену», иначе валовое (`vat-frame.ts`). */
+  vatRowAllowed: boolean;
 }) {
   // No free-form «Возврат» here — a real refund is created from the
   // tx-detail popup («Создать возврат»): negative amount + refund_of_id
@@ -116,20 +121,12 @@ export function useOperationDraft({
     patchBaseline.current = transaction ? operationPatchBaseline(transaction) : null;
     if (transaction) {
       setType(transaction.type === "income" ? "income" : "expense");
-      const txVat: TxVatMode =
-        transaction.vat_mode ?? (transaction.vat_amount ? "inclusive" : "none");
+      const txVat = txVatMode(transaction);
+      const amountText = hydratedAmountText(transaction, vatRowAllowed);
       setVatMode(txVat);
       setVatTouched(true);
       setVatShown(txVat !== "none");
-      setAmount(
-        String(
-          inputFromGross(
-            transaction.amount,
-            txVat,
-            Number(transaction.vat_rate ?? 0),
-          ),
-        ),
-      );
+      setAmount(amountText);
       setCategoryId(transaction.category_id ?? null);
       setMasterId(transaction.master_id ?? null);
       setWhenTouched(false);
@@ -142,9 +139,7 @@ export function useOperationDraft({
       setReceiptUrl(transaction.receipt_url ?? null);
       initialDraftKey.current = operationDraftKey({
         type: transaction.type === "income" ? "income" : "expense",
-        amount: String(
-          inputFromGross(transaction.amount, txVat, Number(transaction.vat_rate ?? 0)),
-        ),
+        amount: amountText,
         categoryId: transaction.category_id ?? null,
         notes: transaction.notes ?? "",
         receiptUrl: transaction.receipt_url ?? null,

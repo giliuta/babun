@@ -161,6 +161,7 @@ export function TransferSheet({
   });
 
   const send = useTransferSend({
+    visible,
     from,
     to,
     amountCents,

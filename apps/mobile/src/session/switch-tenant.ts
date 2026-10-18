@@ -10,7 +10,9 @@ import {
   abandonSwitchRevalidation,
   beginSwitchRevalidation,
 } from "@/lib/switch-revalidate";
-import { currentRoleQueryKey } from "@/session/tenant";
+import { currentRoleQueryKey, type Tenant } from "@/session/tenant";
+import { tenantQueryKey } from "@/lib/company-query-keys";
+import { getDefaultCurrency, setDefaultCurrency } from "@babun/shared/common/utils/money";
 import { myCalendarsQueryKey } from "./my-calendars-key";
 import type { UserRole } from "@/session/role-policy";
 
@@ -140,6 +142,16 @@ export async function switchTenant(
   // Пауза снимает подписку и гасит будущие выгрузки; на УСПЕХЕ старая не
   // возобновляется — тенант-скоупный эффект в `AppProviders` поднимет новую с
   // новым id. Возобновляем только если переход не состоялся.
+  // ВАЛЮТА — ТОЖЕ ДО СМЕНЫ, если профиль компании уже прогрет. Эффект
+  // `useActiveCurrency` поставил бы её только после кадра, а суммы этого
+  // кадра остались бы в валюте прежней компании, пока экран не перерисуется.
+  const roleThere = opts.role ?? queryClient.getQueryData<UserRole | null>(currentRoleQueryKey(tenantId));
+  const warmedProfile = roleThere
+    ? queryClient.getQueryData<Tenant>(tenantQueryKey(tenantId, roleThere))
+    : undefined;
+  const currencyBefore = getDefaultCurrency();
+  if (warmedProfile) setDefaultCurrency(warmedProfile.currency);
+
   const resumeRuntime = pauseSyncRuntimeForTenantSwitch();
   let switched = false;
   try {
@@ -184,6 +196,8 @@ export async function switchTenant(
     if (!switched) resumeRuntime();
     // И длинный порог свежести снимается с компании, куда не перешли.
     if (!switched) abandonSwitchRevalidation(tenantId);
+    // И валюта возвращается к компании, где остались.
+    if (!switched) setDefaultCurrency(currencyBefore);
   }
 
   // ДОГОНЯЮЩАЯ ПОЛОВИНА — В ФОНЕ, КАК ДОЛГ, А НЕ КАК ПОПЫТКА. Экран её не

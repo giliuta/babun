@@ -1,3 +1,4 @@
+import { View } from "react-native";
 import { Tabs } from "expo-router";
 import { StackActions } from "@react-navigation/native";
 import {
@@ -16,6 +17,9 @@ import { MESSAGING_ENABLED, can } from "@/session/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { TeamActivityNotifier } from "@/features/cabinet/TeamActivityNotifier";
+import { TourWindow } from "@/components/tour/TourWindow";
+import { OnboardingRunner } from "@/features/onboarding/OnboardingRunner";
+import { useTabLocks } from "@/features/onboarding/tab-locks";
 
 export default function DashboardLayout() {
   const t = useThemeColors();
@@ -52,6 +56,10 @@ export default function DashboardLayout() {
   const { data: invitations = [] } = useMyInvitations();
   const invitationCount = invitations.length;
 
+  // Бледные вкладки до первого календаря и до пройденных глав обучения —
+  // `features/onboarding/tab-locks.tsx`.
+  const locks = useTabLocks(invitationCount);
+
   // Гварды сессии/тенанта живут в DashboardGate — тем же компонентом их
   // переиспользует стек /calendar, который лежит НАД табами.
   return (
@@ -59,6 +67,11 @@ export default function DashboardLayout() {
       {/* Уведомления о делах команды из истории изменений — пока
           приложение открыто; без интерфейса. */}
       <TeamActivityNotifier />
+      <OnboardingRunner />
+      {/* ОКНО ОБУЧЕНИЯ — НАД ТАБ-БАРОМ: пока идёт шаг, нажать можно только
+          подсвеченное, и вкладки тоже закрыты. */}
+      <View style={{ flex: 1 }}>
+      <TourWindow id="root">
       <RoleCapabilityBoundary capability="view-cabinet" title="Babun">
         <Tabs
           // ПОВТОРНЫЙ ТАП ПО СВОЕЙ ЖЕ ВКЛАДКЕ ВОЗВРАЩАЕТ К ЕЁ НАЧАЛУ.
@@ -119,11 +132,11 @@ export default function DashboardLayout() {
         />
         <Tabs.Screen
           name="clients"
+          listeners={locks.listeners("clients")}
           options={{
             title: "Клиенты",
-            tabBarIcon: ({ color, size, focused }) => (
-              <Users color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
-            ),
+            ...locks.options("clients"),
+            tabBarIcon: locks.icon("clients", Users),
           }}
         />
         <Tabs.Screen
@@ -145,17 +158,19 @@ export default function DashboardLayout() {
         />
         <Tabs.Screen
           name="finances"
+          listeners={locks.listeners("finances")}
           options={{
             title: "Финансы",
-            tabBarIcon: ({ color, size, focused }) => (
-              <Wallet color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
-            ),
+            ...locks.options("finances"),
+            tabBarIcon: locks.icon("finances", Wallet),
           }}
         />
         <Tabs.Screen
           name="cabinet"
+          listeners={locks.listeners("cabinet")}
           options={{
             title: "Кабинет",
+            ...locks.options("cabinet"),
             tabBarBadge: invitationCount > 0 ? invitationCount : undefined,
             tabBarBadgeStyle: {
               backgroundColor: t.danger,
@@ -163,13 +178,13 @@ export default function DashboardLayout() {
               fontSize: 11,
               fontWeight: "600",
             },
-            tabBarIcon: ({ color, size, focused }) => (
-              <LayoutGrid color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
-            ),
+            tabBarIcon: locks.icon("cabinet", LayoutGrid),
           }}
         />
         </Tabs>
       </RoleCapabilityBoundary>
+      </TourWindow>
+      </View>
     </DashboardGate>
   );
 }

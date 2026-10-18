@@ -26,6 +26,7 @@ import {
   type AccountSeed,
 } from "../account-seeds";
 import { NEVER_PAUSE, invalidateAccounts } from "./shared";
+import { undoAccountTrash } from "./undo-trash";
 
 export function useReopenAccount() {
   const qc = useQueryClient();
@@ -79,6 +80,23 @@ export function useRestoreAccount() {
     ...NEVER_PAUSE,
     mutationFn: (id: string) => restoreAccount(supabase, id),
     onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** «Отменить» в тосте удаления — счёт возвращается таким, каким его удалили
+ *  (`undo-trash.ts`): закрытый остаётся закрытым. */
+export function useUndoAccountTrash() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (target: { id: string; is_active: boolean }) =>
+      undoAccountTrash(target, {
+        restore: (id) => restoreAccount(supabase, id),
+        close: (id) => softCloseAccount(supabase, id),
+      }),
+    // И на отказе второго шага: счёт уже вернулся, список обязан это показать.
+    onSettled: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

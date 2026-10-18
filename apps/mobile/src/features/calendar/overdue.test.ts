@@ -11,6 +11,10 @@ const apt = (over: Partial<Appointment>): Appointment =>
     time_end: "10:00",
     status: "scheduled",
     kind: "work",
+    total_amount: 100,
+    prepaid_amount: 0,
+    payments: [],
+    payment_status: "unpaid",
     ...over,
   }) as Appointment;
 
@@ -55,6 +59,26 @@ describe("isOverdue", () => {
     assert.equal(endMinutesOf(zero), 9 * 60 + 15);
     assert.equal(isOverdue(zero, TODAY, 9 * 60 + 10), false);
     assert.equal(isOverdue(zero, TODAY, 9 * 60 + 20), true);
+  });
+});
+
+describe("isOverdue — деньги", () => {
+  test("оплаченная вперёд целиком прошлая запись не просрочена", () => {
+    const prepaid = apt({ total_amount: 300, prepaid_amount: 300, payment_status: "paid" });
+    assert.equal(isOverdue(prepaid, TODAY, 700), false);
+  });
+
+  test("статус «оплачено» закрывает долг, как в цвете записи", () => {
+    assert.equal(isOverdue(apt({ payment_status: "paid" }), TODAY, 700), false);
+  });
+
+  test("запись с суммой 0 не просрочена: получать нечего", () => {
+    assert.equal(isOverdue(apt({ total_amount: 0 }), TODAY, 700), false);
+  });
+
+  test("частичный аванс — долг есть, запись просрочена", () => {
+    const partial = apt({ total_amount: 300, prepaid_amount: 100 });
+    assert.equal(isOverdue(partial, TODAY, 700), true);
   });
 });
 

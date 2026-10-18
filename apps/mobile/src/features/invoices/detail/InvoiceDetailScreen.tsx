@@ -26,6 +26,8 @@ import { InvoicePaper } from "../InvoicePaper";
 import { InvoicePaymentSheet } from "../InvoicePaymentSheet";
 import { InvoiceDetailFooter, InvoiceHeaderActions, InvoiceStatusLine } from "./InvoiceDetailChrome";
 import { PaymentHistoryRow } from "./PaymentHistoryRow";
+import { creditNoteAmountForRefund } from "../credit-note-amounts";
+import { invoiceFacts } from "./invoice-facts";
 import { useInvoiceDetail } from "./use-invoice-detail";
 
 export function InvoiceDetailScreen() {
@@ -135,33 +137,18 @@ export function InvoiceDetailScreen() {
   }
 
   const row = invoice.data;
-  // Кредит-нота — не инвойс: не оплачивается, не редактируется и не
-  // отменяется, а честно называет себя и ссылается на сторнированный документ.
-  const stornoOfId = creditLinks.data?.originalByNoteId.get(row.id) ?? null;
-  const isCreditNote = stornoOfId != null || row.kind === "credit_note";
-  const invoiceById = (target: string | null) =>
-    target ? ((invoicesQuery.data ?? []).find((item) => item.id === target) ?? null) : null;
-  const stornoOfInvoice = invoiceById(stornoOfId);
-  // Все ноты инвойса — частичные и полная, плашками в «Документах».
-  const creditNotes = (invoicesQuery.data ?? []).filter(
-    (item) => item.kind === "credit_note" && item.credit_note_of_id === row.id,
-  );
+  const { isCreditNote, stornoOfInvoice, creditNotes, awaitsPayment, isOverdue, unassigned } = invoiceFacts({
+    row,
+    all: invoicesQuery.data ?? [],
+    stornoOfId: creditLinks.data?.originalByNoteId.get(row.id) ?? null,
+    remaining: settlement.remaining,
+    businessToday,
+  });
   const clientIsArchived = client
     ? client.deleted_at != null
     : row.client_snapshot?.archived === true
       || (clientsQuery.isSuccess && !!row.client_id);
   const status = invoiceDisplayStatus(row, businessToday, settlement);
-  // Отменённый (сторнированный) инвойс и кредит-нота денег не ждут.
-  const awaitsPayment =
-    row.status !== "void" &&
-    row.status !== "cancelled" &&
-    !isCreditNote &&
-    settlement.remaining > 0;
-  const isOverdue =
-    awaitsPayment &&
-    !!row.due_on &&
-    row.due_on < businessToday;
-  const unassigned = !row.client_id && !isCreditNote;
   const openPayment = () => {
     if (paymentAccounts.length > 0) {
       setPaymentOpen(true);
@@ -346,7 +333,7 @@ export function InvoiceDetailScreen() {
                       docWrite && refundDestination === "invoice" && refundable > 0
                         ? () =>
                             router.push(
-                              `/invoices/credit-note?invoiceId=${row.id}&amount=${refundable}&paymentId=${payment.id}` as Href,
+                              `/invoices/credit-note?invoiceId=${row.id}&amount=${creditNoteAmountForRefund(refundable, settlement)}&paymentId=${payment.id}` as Href,
                             )
                         : undefined
                     }

@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../db/database.types";
+import type { AppliedFn } from "./sentinel";
 
 export type DbSupabase = SupabaseClient<Database>;
 
@@ -20,7 +21,7 @@ export type ReplayTable = "clients" | "appointments" | "client_tags";
  *  replays the insert itself and the generic relay must not touch it. */
 export interface PreparedInsert {
   payload: Record<string, unknown>;
-  aggregate: ((supabase: DbSupabase) => Promise<void>) | null;
+  aggregate: ((supabase: DbSupabase, onApplied?: AppliedFn) => Promise<void>) | null;
 }
 
 /** НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только чтение видимости: строки не

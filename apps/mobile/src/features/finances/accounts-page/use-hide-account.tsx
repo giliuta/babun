@@ -8,7 +8,7 @@ import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import type { Team } from "@/features/reference/queries";
 import {
-  useRestoreAccount,
+  useUndoAccountTrash,
   useSetAccountHidden,
   useTrashAccount,
   type AccountWithBalance,
@@ -77,7 +77,7 @@ export function useHideAccount({
   const toast = useToast();
   const setHidden = useSetAccountHidden();
   const trashAcc = useTrashAccount();
-  const restoreAcc = useRestoreAccount();
+  const undoTrash = useUndoAccountTrash();
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [preset, setPreset] = useState<TransferPreset>({
@@ -136,7 +136,7 @@ export function useHideAccount({
         toast(`Счёт «${target.name}» удалён`, "success", {
           label: "Отменить",
           onPress: () =>
-            restoreAcc.mutate(target.id, {
+            undoTrash.mutate(target, {
               onError: (e) => toast(`Не удалось вернуть счёт: ${e.message}`, "error"),
             }),
         }),

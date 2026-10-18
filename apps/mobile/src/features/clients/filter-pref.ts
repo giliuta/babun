@@ -21,8 +21,9 @@ interface Stored {
 }
 
 /** Набор сегодняшнего дня или null. Никогда не бросает: настройка — не
- *  повод ронять экран. */
-export function loadDayFilter(): ClientsFilter | null {
+ *  повод ронять экран. `now` — «сейчас» в поясе компании: от него
+ *  пересобирается пресетный период. */
+export function loadDayFilter(now: Date): ClientsFilter | null {
   try {
     const raw = getStorage().get<Stored>(KEY);
     if (!raw || raw.ymd !== todayYMD()) return null;
@@ -30,9 +31,9 @@ export function loadDayFilter(): ClientsFilter | null {
     if (!f || typeof f !== "object") return null;
     const period =
       f.period && f.period.preset !== "custom"
-        ? // Пресет пересобираем от сегодняшней даты, иначе «Сегодня»
-          // означало бы вчера.
-          makePeriod(f.period.preset)
+        ? // Пресет пересобираем от сегодняшней даты компании, иначе
+          // «Сегодня» означало бы вчера (или день телефона в чужом поясе).
+          makePeriod(f.period.preset, now)
         : (f.period ?? null);
     return {
       ...EMPTY_FILTER,

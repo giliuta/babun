@@ -271,7 +271,7 @@ export function SelectRow({
           ) : Icon ? (
             <Icon color={glyph} size={16} strokeWidth={2} />
           ) : (
-            <Text style={{ fontSize: 11, fontWeight: "700", color: glyph }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 11, fontWeight: "700", color: glyph }}>
               {(initial ?? "?").slice(0, 1).toUpperCase()}
             </Text>
           )}

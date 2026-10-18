@@ -1,4 +1,4 @@
-import { Linking, Text, View } from "react-native";
+import { Linking, Platform, Text, View } from "react-native";
 import { Redirect, useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { CircleCheck, CircleX } from "lucide-react-native";
@@ -42,9 +42,13 @@ function PayDone() {
       : { title: "Оплата прошла", body: "Баланс SMS пополнится через минуту. Вернитесь в приложение Babun." };
   return (
     <Screen edges={["top", "bottom"]}>
-      <Head>
-        <title>{`${words.title} · Babun`}</title>
-      </Head>
+      {/* Заголовок вкладки — только сайту. На iOS `Head` регистрирует Handoff и
+          без origin в конфиге показывает человеку технический алерт. */}
+      {Platform.OS === "web" ? (
+        <Head>
+          <title>{`${words.title} · Babun`}</title>
+        </Head>
+      ) : null}
       <View style={{ alignItems: "center", paddingTop: 16 }}>
         <BrandLockup />
       </View>

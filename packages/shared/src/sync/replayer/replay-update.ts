@@ -1,15 +1,7 @@
 // Replay of a queued UPDATE: last-write-wins via the `updated_at` sentinel,
 // the server-wins conflict path, and the force-update fallback.
 
-import {
-  cacheGetOne,
-  cacheUpsert,
-  forwardQueuedSentinel,
-  type CachedAppointmentData,
-  type CachedClientData,
-  type CachedTable,
-  type QueuedOp,
-} from "../../db/cache/sql";
+import type { QueuedOp } from "../../db/cache/sql";
 import { assertTenantStill } from "./guards";
 import {
   relayClient,
@@ -17,6 +9,7 @@ import {
   type DbSupabase,
   type ReplayTable,
 } from "./relay";
+import { carrySentinel, type AppliedFn } from "./sentinel";
 import { cacheServerRow, touchesGuardedAppointmentFields } from "./table-rules";
 
 export async function replayUpdate(
@@ -28,7 +21,7 @@ export async function replayUpdate(
    *  конфликте побеждает сервер, а не она. */
   serverWinsOnConflict: boolean,
   /** Правка легла чисто, и у строки теперь новое `updated_at`. */
-  onApplied?: (updatedAt: string) => void,
+  onApplied?: AppliedFn,
   /** Компания устройства всё ещё та, под которой начат слив. */
   tenantStill?: () => boolean,
 ): Promise<boolean | "server-won"> {
@@ -141,23 +134,4 @@ export async function replayUpdate(
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;
-}
-
-/** Передать свежий сторож ждущим правкам строки и строке кэша. Сбой здесь
- *  правку не отменяет — она уже на сервере; худшее — прежний ложный
- *  «конфликт» у следующей. */
-async function carrySentinel(op: QueuedOp, from: string, to: string): Promise<void> {
-  try {
-    await forwardQueuedSentinel(op.table, op.row_id, op.id, from, to);
-    const cached = await cacheGetOne<CachedClientData | CachedAppointmentData>(
-      op.table as CachedTable,
-      op.row_id,
-    );
-    const stamp = (cached as { updated_at?: unknown } | null)?.updated_at;
-    if (cached && stamp === from) {
-      await cacheUpsert(op.table as CachedTable, { ...cached, updated_at: to });
-    }
-  } catch {
-    /* см. выше */
-  }
 }

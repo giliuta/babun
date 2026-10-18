@@ -1,16 +1,10 @@
 import { useMemo, useState } from "react";
-import {
-  getCurrentCyprusTime,
-  getCurrentTimeInZone,
-} from "@babun/shared/common/utils/date-utils";
 import { summarizeVat } from "@babun/shared/local/finance/vat";
 import { useMyAccess } from "@/session/access-queries";
 import { useAppointments, useFinanceServices } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { todayYmd } from "@/lib/paper/format";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
-import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCurrentRole } from "@/session/tenant";
 import { useAccountsWithBalances } from "../accounts";
 import {
@@ -20,6 +14,8 @@ import {
   readableTransactions,
 } from "../finance-read-rules";
 import { makePeriod, type Period } from "@/lib/period";
+import { useBusinessClock } from "../home/use-business-clock";
+import { useBusinessPeriod } from "../use-business-period";
 import { useFinanceCategories, useTransactions } from "../queries";
 import { useClientInvoicing } from "../client-invoicing";
 import { awaitingAnswer } from "../ledger-select";
@@ -73,12 +69,8 @@ export function useAnalytics(start: AnalyticsStart) {
   const sides = moneySides({ role, map: myAccess });
   const showMoney = sides.income;
   const showExpense = showMoney && sides.expense;
-  const calendarSettings = useCalendarSettings().data;
-  const timezone = calendarSettings?.timezone ?? "Europe/Nicosia";
-  const businessNow = calendarSettings?.timezone
-    ? getCurrentTimeInZone(timezone)
-    : getCurrentCyprusTime();
-  const today = todayYmd(timezone);
+  const clock = useBusinessClock();
+  const { businessNow, businessToday: today } = clock;
   // Строки журнала — по стороне и команде строки и «Ограничениям»,
   // как режет сервер: «его глазами» журнал читается токеном владельца.
   const readRules = useMemo(
@@ -90,8 +82,11 @@ export function useAnalytics(start: AnalyticsStart) {
     businessNow.getMinutes(),
   ).padStart(2, "0")}`;
 
-  const [period, setPeriod] = useState<Period>(
-    () => start.period ?? makePeriod("month", businessNow),
+  // Пресет живёт по календарю компании и переживает полночь и приезд пояса
+  // так же, как у «Финансов» (`use-business-period.ts`).
+  const [period, setPeriod] = useBusinessPeriod(
+    clock,
+    (now): Period => start.period ?? makePeriod("month", now),
   );
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);

@@ -26,6 +26,7 @@ import {
 } from "../queue-events";
 import { randomUuid } from "../uuid";
 import { isTransientNetworkError } from "../transient-error";
+import { OnlineOnlyWriteError } from "../cache-errors";
 import { readCachedClient, refetchAndCacheOne } from "./read";
 import { makeCachedRow, makeServerRow, toDomain } from "./rows";
 import {
@@ -37,6 +38,8 @@ import {
 } from "./policy";
 
 type DbSupabase = SupabaseClient<Database>;
+
+const TAGS_ONLINE_ONLY = "Изменения тегов недоступны без сети — попробуй позже";
 
 // ─── Write — create ───────────────────────────────────────────────
 
@@ -128,9 +131,7 @@ export async function updateClient(
   // includes tag_ids → strip + toast.
   let scrubbedPatch = patch;
   if (offline && patch.tag_ids !== undefined) {
-    warnToast(
-      "Изменения тегов недоступны без сети — попробуй позже",
-    );
+    warnToast(TAGS_ONLINE_ONLY);
     const { tag_ids: _drop, ...rest } = patch;
     void _drop;
     scrubbedPatch = rest;
@@ -181,13 +182,18 @@ export async function updateClient(
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }
-      // ТЕГИ В ОЧЕРЕДЬ НЕ ЛОЖАТСЯ: их нет в сыром `updateOp.payload`, а
-      // локальная строка и ответ уже несут новые теги. Так правка выглядела
-      // сохранённой, а после обновления с сервера теги возвращались
-      // прежними. Возвращаем кэш и отдаём ошибку — экран покажет свой отказ.
-      if (refuseQueueing(opts) || scrubbedPatch.tag_ids !== undefined) {
+      if (refuseQueueing(opts)) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
+      }
+      // ТЕГИ В ОЧЕРЕДЬ НЕ ЛОЖАТСЯ: связующую таблицу очередь не несёт
+      // (`clientToUpdate` про `tag_ids` не знает). Положить правку в очередь и
+      // вернуть успех — значит показать новые теги, которые пропадут при
+      // первой перечитке. Отказываем всей правке целиком (вместе с прочими
+      // полями патча — карточка шлёт теги отдельно), откатив кэш.
+      if (scrubbedPatch.tag_ids !== undefined) {
+        if (existing) await cacheUpsert("clients", existing).catch(() => {});
+        throw new OnlineOnlyWriteError(TAGS_ONLINE_ONLY);
       }
       await enqueueUpdate(updateOp, merged);
       void kickReplayer({ supabase });

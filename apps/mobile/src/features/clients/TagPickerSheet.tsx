@@ -30,6 +30,7 @@ import { useThemeColors } from "@/theme/colors";
 
 export function TagPickerSheet({
   visible,
+  open,
   onSettings,
   tags,
   selected,
@@ -37,6 +38,10 @@ export function TagPickerSheet({
   onClose,
 }: {
   visible: boolean;
+  /** Шторка открыта по смыслу. Шестерёнка паркует её (`visible` ложно), но
+   *  не закрывает: отметки до похода в настройки должны дожить до возврата.
+   *  Нет — открытие совпадает с `visible`. */
+  open?: boolean;
   /** Каталог тегов тенанта (Кабинет → «Теги клиентов»). */
   tags: ClientTag[];
   /** Теги клиента сейчас, по порядку: первый — главный. */
@@ -50,13 +55,15 @@ export function TagPickerSheet({
   const t = useThemeColors();
   const [draft, setDraft] = useState<string[]>(selected);
   // Каждое открытие начинается с того, что стоит у клиента сейчас: черновик
-  // прошлого закрытия без «Применить» не должен всплыть.
+  // прошлого закрытия без «Применить» не должен всплыть. Возврат с парковки —
+  // не открытие: сеять на нём значит стереть сделанные отметки.
+  const opened = open ?? visible;
   useEffect(() => {
-    if (visible) setDraft(selected);
+    if (opened) setDraft(selected);
     // `selected` — свежий массив с каждым рендером карточки; сеять только на
     // открытии.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [opened]);
 
   const toggle = (id: string) => {
     haptics.tap();
