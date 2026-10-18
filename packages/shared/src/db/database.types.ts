@@ -669,6 +669,45 @@ export type Database = {
           },
         ]
       }
+      calendar_feed_tokens: {
+        Row: {
+          created_at: string
+          revoked_at: string | null
+          tenant_id: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          revoked_at?: string | null
+          tenant_id: string
+          token?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          revoked_at?: string | null
+          tenant_id?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_feed_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_feed_tokens_tenant_id_user_id_fkey"
+            columns: ["tenant_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_members"
+            referencedColumns: ["tenant_id", "user_id"]
+          },
+        ]
+      }
       calendar_members: {
         Row: {
           created_at: string
@@ -1934,6 +1973,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      finance_occurred_on_fixes: {
+        Row: {
+          fixed_at: string
+          new_occurred_on: string
+          old_occurred_on: string
+          transaction_id: string
+        }
+        Insert: {
+          fixed_at?: string
+          new_occurred_on: string
+          old_occurred_on: string
+          transaction_id: string
+        }
+        Update: {
+          fixed_at?: string
+          new_occurred_on?: string
+          old_occurred_on?: string
+          transaction_id?: string
+        }
+        Relationships: []
       }
       finance_templates: {
         Row: {
@@ -4562,7 +4622,6 @@ export type Database = {
           contact_whatsapp: string | null
           country: string
           created_at: string
-          created_by: string | null
           currency: string
           current_period_end: string | null
           document_language: string
@@ -4576,14 +4635,12 @@ export type Database = {
           invoice_number_padding: number
           invoice_number_yearly_reset: boolean
           invoice_prefix: string
-          kind: string
           legal_name: string | null
           logo_url: string | null
           name: string
           onboarded_at: string | null
           paid_calendars: number | null
           personal_calendar_enabled: boolean
-          personal_of: string | null
           plan: string
           plan_override: string | null
           stripe_customer_id: string | null
@@ -4613,7 +4670,6 @@ export type Database = {
           contact_whatsapp?: string | null
           country?: string
           created_at?: string
-          created_by?: string | null
           currency?: string
           current_period_end?: string | null
           document_language?: string
@@ -4627,14 +4683,12 @@ export type Database = {
           invoice_number_padding?: number
           invoice_number_yearly_reset?: boolean
           invoice_prefix?: string
-          kind?: string
           legal_name?: string | null
           logo_url?: string | null
           name: string
           onboarded_at?: string | null
           paid_calendars?: number | null
           personal_calendar_enabled?: boolean
-          personal_of?: string | null
           plan?: string
           plan_override?: string | null
           stripe_customer_id?: string | null
@@ -4664,7 +4718,6 @@ export type Database = {
           contact_whatsapp?: string | null
           country?: string
           created_at?: string
-          created_by?: string | null
           currency?: string
           current_period_end?: string | null
           document_language?: string
@@ -4678,14 +4731,12 @@ export type Database = {
           invoice_number_padding?: number
           invoice_number_yearly_reset?: boolean
           invoice_prefix?: string
-          kind?: string
           legal_name?: string | null
           logo_url?: string | null
           name?: string
           onboarded_at?: string | null
           paid_calendars?: number | null
           personal_calendar_enabled?: boolean
-          personal_of?: string | null
           plan?: string
           plan_override?: string | null
           stripe_customer_id?: string | null
@@ -4809,6 +4860,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _assert_account_not_hidden: {
+        Args: { p_account_id: string; p_tenant_id: string }
+        Returns: undefined
+      }
+      _assert_invoice_wait_account: {
+        Args: {
+          p_account_id: string
+          p_check_hidden: boolean
+          p_team_id: string
+          p_tenant_id: string
+        }
+        Returns: undefined
+      }
       _dispatch_push: {
         Args: { p_data: Json; p_event_type: string; p_recipients: string[] }
         Returns: undefined
@@ -4921,7 +4985,6 @@ export type Database = {
         }
       }
       _js_number: { Args: { p: Json }; Returns: number }
-      _mcp_probe: { Args: never; Returns: number }
       _receipt_client_snapshot: {
         Args: {
           p_client_id: string
@@ -4945,6 +5008,7 @@ export type Database = {
           p_invoice: Database["public"]["Tables"]["invoices"]["Row"]
           p_note: string
           p_on: string
+          p_payment_id?: string
         }
         Returns: undefined
       }
@@ -5120,6 +5184,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      appointment_history_entry_date: {
+        Args: { p_appointment_id: string }
+        Returns: string
+      }
       appointment_link_answer: {
         Args: { p_answer: string; p_token: string }
         Returns: Json
@@ -5177,6 +5245,18 @@ export type Database = {
       }
       cabinet_tariff_payments: { Args: { p_limit?: number }; Returns: Json }
       calendar_delete_in_progress: { Args: never; Returns: boolean }
+      calendar_feed_events: {
+        Args: { p_token: string }
+        Returns: {
+          address: string
+          comment: string
+          date: string
+          id: string
+          status: string
+          time_end: string
+          time_start: string
+        }[]
+      }
       cancel_appointment_payment: {
         Args: {
           p_appointment_id: string
@@ -5328,13 +5408,6 @@ export type Database = {
       client_seen_by_caller: { Args: { p_client: Json }; Returns: Json }
       client_without_contacts: { Args: { p_client: Json }; Returns: Json }
       client_without_money: { Args: { p_client: Json }; Returns: Json }
-      companies_blocking_account_delete: {
-        Args: { p_user?: string }
-        Returns: {
-          name: string
-          tenant_id: string
-        }[]
-      }
       create_client_with_tags: {
         Args: {
           p_client: Json
@@ -5344,7 +5417,6 @@ export type Database = {
         }
         Returns: Json
       }
-      create_company: { Args: { p_name: string }; Returns: Json }
       create_first_calendar: {
         Args: { p_color?: string; p_id: string; p_name: string }
         Returns: {
@@ -5475,15 +5547,19 @@ export type Database = {
         Args: { p_transfer_group_id: string }
         Returns: boolean
       }
+      delete_appointment: { Args: { p_id: string }; Returns: string }
       delete_calendar: { Args: { p_team_id: string }; Returns: Json }
       delete_credit_note: { Args: { p_note_id: string }; Returns: undefined }
       delete_invoice: { Args: { p_invoice_id: string }; Returns: undefined }
-      delete_appointment: { Args: { p_id: string }; Returns: string }
       delete_operation: { Args: { p_id: string }; Returns: string }
       delete_receipt: { Args: { p_receipt_id: string }; Returns: undefined }
       delete_sole_owned_tenants_for_account: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      deleted_appointment_ready: {
+        Args: { p_appointment: Json }
+        Returns: Json
       }
       deleted_operation_ready: { Args: { p_operation: Json }; Returns: Json }
       document_prefix: {
@@ -5502,15 +5578,6 @@ export type Database = {
         }
         Returns: number
       }
-      document_series_started: {
-        Args: {
-          p_doc_type: string
-          p_legal_entity_id: string
-          p_tenant_id: string
-          p_year: number
-        }
-        Returns: boolean
-      }
       effective_vat_settings: {
         Args: { p_team_id: string }
         Returns: {
@@ -5528,10 +5595,6 @@ export type Database = {
           p_year: number
         }
         Returns: string
-      }
-      grant_full_company_access: {
-        Args: { p_by: string; p_tenant: string; p_user: string }
-        Returns: undefined
       }
       grant_invitation_calendar: {
         Args: {
@@ -5564,6 +5627,7 @@ export type Database = {
         Returns: Json
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      issue_calendar_feed: { Args: never; Returns: Json }
       issue_invoice: {
         Args: {
           p_account_id?: string
@@ -5772,7 +5836,6 @@ export type Database = {
         Args: { p_team_id: string; p_tenant_id: string }
         Returns: Json
       }
-      leave_company: { Args: { p_tenant: string }; Returns: undefined }
       legal_entity_of_team: {
         Args: { p_team_id: string; p_tenant_id: string }
         Returns: string
@@ -5791,16 +5854,6 @@ export type Database = {
       list_member_access: { Args: { p_user_id: string }; Returns: Json }
       list_member_clients: { Args: { p_client_id?: string }; Returns: Json[] }
       list_members: { Args: { p_team_id?: string }; Returns: Json }
-      list_my_accounts: {
-        Args: never
-        Returns: {
-          joined_at: string
-          kind: string
-          name: string
-          role: string
-          tenant_id: string
-        }[]
-      }
       list_my_calendars: {
         Args: never
         Returns: {
@@ -5903,6 +5956,7 @@ export type Database = {
         Returns: Json
       }
       my_access_map: { Args: never; Returns: Json }
+      my_calendar_feed: { Args: never; Returns: Json }
       my_invitations: { Args: never; Returns: Json }
       next_document_number: {
         Args: {
@@ -5947,6 +6001,7 @@ export type Database = {
         }[]
       }
       personal_calendar_name: { Args: { p_locale: string }; Returns: string }
+      purge_deleted_appointments: { Args: never; Returns: number }
       purge_deleted_operations: { Args: never; Returns: number }
       purge_expired_accounts: { Args: never; Returns: number }
       purge_expired_clients: { Args: never; Returns: number }
@@ -6466,6 +6521,7 @@ export type Database = {
       }
       restore_deleted_appointment: { Args: { p_id: string }; Returns: string }
       restore_deleted_operation: { Args: { p_id: string }; Returns: string }
+      revoke_calendar_feed: { Args: never; Returns: Json }
       seed_client_sources: {
         Args: { p_team: string; p_tenant: string }
         Returns: undefined
@@ -6854,7 +6910,6 @@ export type Database = {
         }[]
       }
       sync_tenant_claims: { Args: { p_user_id: string }; Returns: undefined }
-      tariff_partner_count: { Args: { p_tenant: string }; Returns: number }
       team_is_working: {
         Args: { p_team: string; p_tenant: string }
         Returns: boolean
@@ -6875,10 +6930,6 @@ export type Database = {
       tenant_tier_limit: {
         Args: { p_what: string; t_id: string }
         Returns: number
-      }
-      transfer_company_ownership: {
-        Args: { p_tenant: string; p_user: string }
-        Returns: undefined
       }
       try_uuid: { Args: { p_value: string }; Returns: string }
       undo_appointment_payment: {
