@@ -12,7 +12,8 @@ import {
 } from "@/features/calendar/reminders";
 import { isCalendarEvent } from "@/features/calendar/event-access";
 import { serverReason } from "@/features/calendar/server-reason";
-import { SETTLED_STAYS, isPersonalEvent, settledVisit } from "./appointment-rules";
+import { SERVICES_HOLD_TEAM, SETTLED_STAYS, isPersonalEvent, settledVisit } from "./appointment-rules";
+import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
 import { isPastSlotAt } from "./dates";
 import type { CalendarClock } from "./use-calendar-clock";
 import type { CalendarGrid } from "./use-calendar-grid";
@@ -30,7 +31,7 @@ import type { SlotNotice } from "./use-slot-notice";
 type CreateSlotPlacementDeps =
   Pick<CalendarClock, "todayYmd" | "nowMinutes">
   & Pick<CalendarGrid, "freeSlotsFor" | "moveWindowMin" | "workBandFor">
-  & Pick<CalendarSources, "toast" | "teams" | "updateAppt">
+  & Pick<CalendarSources, "toast" | "teams" | "updateAppt" | "servicesQuery">
   & Pick<GridModes, "pickClientId" | "pick" | "setMoving" | "editingApt" | "setEditingApt"
     | "moving" | "placedFromRef" | "movingKind">
   & Pick<CalendarScope, "activeTeamId">
@@ -50,8 +51,13 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     pushBookOnce, setMoving, isCrew, memberCopy, moveWindowMin, attemptId,
     settleAttempt, createAppt, router, teams, updateAppt, appointmentTimeZone,
     editingApt, setEditingApt, moving, placedFromRef, movingKind, workBandFor,
-    setNotice, setSlotDraft, tenantId,
+    setNotice, setSlotDraft, tenantId, servicesQuery,
   } = deps;
+  // Копия или перенос в другую команду с услугами прайса своей команды.
+  const servicesHoldTeam = (apt: Appointment, toTeam: string | null) =>
+    toTeam !== apt.team_id &&
+    !isCalendarEvent(apt) &&
+    servicesBlockTeamMove(apt.service_ids ?? [], servicesQuery.data ?? [], toTeam);
   /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ: в прошлом сверху
    *  выезжает плашка с кнопкой. Глухой запрет мешал бы ровно там, где выезд
    *  состоялся, а завести его забыли. Поэтому у правила есть дверь, и человек
@@ -126,6 +132,11 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       );
       return true;
     }
+    const copyTeam = isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
+    if (servicesHoldTeam(apt, copyTeam)) {
+      toast(SERVICES_HOLD_TEAM, "info");
+      return false;
+    }
     const copy = {
       ...duplicateAppointment(apt),
       id: randomUuid(),
@@ -159,6 +170,10 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     // выбрать.
     if ((teamChanges || dateYmd !== apt.date) && settledVisit(apt)) {
       toast(SETTLED_STAYS, "info");
+      return false;
+    }
+    if (servicesHoldTeam(apt, toTeam)) {
+      toast(SERVICES_HOLD_TEAM, "info");
       return false;
     }
     setMoving(null);

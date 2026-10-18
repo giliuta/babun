@@ -95,3 +95,16 @@ describe("draftDirty — new event", () => {
     assert.equal(ev({ serviceIdsCount: 2, comment: "x", cityTouched: true }), false);
   });
 });
+
+describe("draftDirty — форма, открытая с клиентом", () => {
+  test("клиент из ссылки — не ввод; другой клиент — ввод", () => {
+    assert.equal(draftDirty(pristine({ clientId: "c1", initialClientId: "c1" })), false);
+    assert.equal(draftDirty(pristine({ clientId: "c2", initialClientId: "c1" })), true);
+    assert.equal(draftDirty(pristine({ clientId: null, initialClientId: "c1" })), true);
+  });
+  test("у события — то же для объекта", () => {
+    const ev = { kind: "event" as const, clientId: "c1", initialClientId: "c1" };
+    assert.equal(draftDirty(pristine({ ...ev, locationId: "l1", initialLocationId: "l1" })), false);
+    assert.equal(draftDirty(pristine({ ...ev, locationId: "l2", initialLocationId: "l1" })), true);
+  });
+});

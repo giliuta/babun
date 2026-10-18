@@ -241,8 +241,11 @@ export function useBookForm() {
       dateTouched: draft.dateTouchedRef.current,
       serviceIdsCount: serviceIds.length,
       hasPendingPayment: draft.pendingPayment != null,
+      initialClientId: first(params.clientId) ?? null,
+      initialLocationId: first(params.locationId) ?? null,
     },
     from: params.from,
+    saveable: verdict.canSave && !verdict.workLocked,
     navigation,
     router,
   });
