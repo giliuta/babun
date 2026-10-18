@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Href, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "@react-navigation/native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { confirmThen } from "@/lib/confirm";
+import { chooseOption } from "@/lib/choose";
 import { resolveReturnTo } from "@/features/appointments/return-to";
 import { draftDirty, type DraftDirtyInput } from "./book-dirty";
 
@@ -98,19 +98,28 @@ export function useLeaveGuard({
     // (она же считается в `notesDirty`).
     eventObjectNote.discard();
   };
+  // ВЫХОД С ИЗМЕНЕНИЯМИ — ВОПРОС «СОХРАНИТЬ?», А НЕ «ЗАКРЫТЬ?». Человек
+  // нажал «назад», потому что закончил: чаще всего он хочет сохранить, и
+  // заставлять его отменять выход, листать вниз и жать «Сохранить» — лишний
+  // круг. «Сохранить» сохраняет и уходит, «Не сохранять» уходит без них,
+  // «Отмена» листа оставляет на форме. Сохранение собирается в форме позже
+  // этого хука, поэтому приходит ссылкой (`saveRef`).
+  const saveRef = useRef<(() => void | Promise<void>) | null>(null);
   const confirmDiscard = (onDiscard: () => void) => {
-    confirmThen(
-      "Закрыть без сохранения?",
-      {
-        message: "Введённое не сохранится.",
-        confirmLabel: "Закрыть",
-        destructive: true,
-      },
-      () => {
+    void chooseOption(
+      isEdit ? "Сохранить изменения?" : "Сохранить запись?",
+      [{ label: "Сохранить" }, { label: "Не сохранять", destructive: true }],
+      { message: isEdit ? "Вы изменили запись." : "Запись ещё не создана." },
+    ).then((index) => {
+      if (index === 0) {
+        void saveRef.current?.();
+        return;
+      }
+      if (index === 1) {
         discardNotes();
         onDiscard();
-      },
-    );
+      }
+    });
   };
   const requestClose = () => {
     if (!dirty) {
@@ -121,7 +130,7 @@ export function useLeaveGuard({
   };
 
   // Back-свайп и аппаратная «назад» теряли заполненную запись без спроса —
-  // теперь перехватываем POP тем же подтверждением, что и кнопка «Отмена».
+  // теперь перехватываем POP тем же вопросом, что и стрелка «назад».
   usePreventRemove(dirty && !leaving, ({ data }) => {
     confirmDiscard(() => navigation.dispatch(data.action));
   });
@@ -139,5 +148,5 @@ export function useLeaveGuard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaving]);
 
-  return { leaveBook, editBaselineRef, requestClose };
+  return { leaveBook, editBaselineRef, requestClose, saveRef };
 }

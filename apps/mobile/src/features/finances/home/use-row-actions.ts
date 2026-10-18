@@ -28,9 +28,7 @@ export interface RowActionsInput {
   view: HomeView;
   setView: ReturnType<typeof useFinanceRoute>["setView"];
   scope: string | null;
-  accountId: string | null;
   appts: readonly Appointment[];
-  scopedAccounts: readonly { id: string }[];
   allAccounts: HomeReferences["allAccounts"];
   liveAccounts: readonly { id: string }[] | undefined;
   debts: readonly Debt[];
@@ -43,7 +41,7 @@ export interface RowActionsInput {
 
 /** Every way out of the screen and every tap on a feed row. */
 export function useRowActions(input: RowActionsInput) {
-  const { sheets, access, view, setView, scope, accountId, appts, scopedAccounts, allAccounts, debts } = input;
+  const { sheets, access, view, setView, scope, appts, allAccounts, debts } = input;
   const { scopedTransactions, refundTotals, businessToday } = input;
   const { setEditingDebt, setDebtOpen, setEditingTx, setOpOpen, setPopupTx, docFilter, setDocFilter } = sheets;
   const router = useRouter();
@@ -94,13 +92,7 @@ export function useRowActions(input: RowActionsInput) {
   const openAppointment = (appointmentId: string): boolean => {
     const target = appts.find((a) => a.id === appointmentId);
     if (!target) return false;
-    // Под «Счетами» дорога несёт и счёт — если его лента правда на экране:
-    // иначе возврат выбрал бы счёт, которого человек не видел.
-    const shownAccount =
-      view === "accounts" && scopedAccounts.some((a) => a.id === accountId)
-        ? accountId
-        : null;
-    pushOnce(appointmentHref(target, { view, account: shownAccount, team: scope }));
+    pushOnce(appointmentHref(target));
     return true;
   };
 

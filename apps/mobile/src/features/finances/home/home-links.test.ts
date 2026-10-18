@@ -16,20 +16,7 @@ describe("home links", () => {
     assert.equal(newInvoiceHref(null), "/invoices/new");
   });
 
-  test("appointment carries its day, team and the way back", () => {
-    assert.equal(
-      appointmentHref(
-        { id: "a1", date: "2026-10-03", team_id: "t1" },
-        { view: "accounts", account: "acc1", team: "t1" },
-      ),
-      "/(dashboard)?appointmentId=a1&date=2026-10-03&teamId=t1&from=finances%3Aaccounts%3Aacc1%40t1",
-    );
-  });
-
-  test("appointment without a team and the root view", () => {
-    assert.equal(
-      appointmentHref({ id: "a1", date: "2026-10-03", team_id: null }, { view: "all", account: null, team: null }),
-      "/(dashboard)?appointmentId=a1&date=2026-10-03&from=finances",
-    );
+  test("appointment opens as a page over the money tab", () => {
+    assert.equal(appointmentHref({ id: "a1" }), "/book?appointmentId=a1");
   });
 });

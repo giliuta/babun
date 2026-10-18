@@ -135,12 +135,8 @@ export function ReceiptPage({ id }: { id: string }) {
 
   const openAppointment = () => {
     if (!appointment) return;
-    router.push(
-      (`/(dashboard)?appointmentId=${appointment.id}&date=${appointment.date}` +
-        (appointment.team_id ? `&teamId=${appointment.team_id}` : "") +
-        // Закрыл запись — вернулся в этот чек, а не во вкладку денег.
-        `&from=${encodeURIComponent(`receipt:${receipt.id}`)}`) as Href,
-    );
+    // Запись — страницей поверх чека: «назад» возвращает в этот чек.
+    router.push(`/book?appointmentId=${encodeURIComponent(appointment.id)}` as Href);
   };
 
   const busy = pdfBusy || paper.linesLoading;

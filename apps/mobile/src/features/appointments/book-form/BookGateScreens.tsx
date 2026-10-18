@@ -1,4 +1,6 @@
 import { Pressable, View } from "react-native";
+import { ChevronLeft } from "lucide-react-native";
+import { ICON } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { Spinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -71,10 +73,10 @@ export function BookLoadingScreen({
           onPress={onClose}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Закрыть запись"
+          accessibilityLabel="Назад"
           style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
         >
-          <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
+          <ChevronLeft color={t.body} size={ICON.md} />
         </Pressable>
         <Text
           className="flex-1 text-center"

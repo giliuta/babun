@@ -12,7 +12,7 @@ import { RecordRowsPanel } from "./RecordRowsPanel";
 import { debtRows, manualDebtRows, mergeDebtRows, type DebtRow } from "./debt-rows";
 import type { RecordRow } from "./record-rows";
 import { inTeamScope } from "./team-scope";
-import { financesFrom } from "@/features/appointments/return-to";
+import { appointmentHref } from "./home/home-links";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -181,16 +181,9 @@ export function DebtorsList({
       onEditDebt(r.debtId);
       return;
     }
-    // Команда визита нужна адресу: календарь встаёт на её колонку. Строка
-    // приходит из общей панели, поэтому берём её из набора долгов.
-    const teamOfRow = sorted.find((x) => x.key === r.key)?.teamId ?? null;
-    router.push(
-      (`/(dashboard)?appointmentId=${r.appointmentId ?? r.key}&date=${r.date}` +
-        (teamOfRow ? `&teamId=${teamOfRow}` : "") +
-        // Возврат — в ТОТ ЖЕ разрез: закрыв запись, человек ждёт список
-        // должников, а не общую ленту (см. resolveReturnTo).
-        `&from=${encodeURIComponent(financesFrom("debt", { team: teamId }))}`) as Href,
-    );
+    // Запись — страницей поверх списка должников: «назад» возвращает в тот
+    // же список, на то же место (см. `appointmentHref`).
+    router.push(appointmentHref({ id: r.appointmentId ?? r.key }) as Href);
   };
 
   // ДВЕ СТОРОНЫ — ДВА СЛОВА СПРАВА В ЭЙБРАУ: маленькие кнопки без кружка и без
