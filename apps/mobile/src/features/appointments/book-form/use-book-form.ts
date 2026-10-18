@@ -263,6 +263,8 @@ export function useBookForm() {
     setReminderSheetOpen: sheets.setReminderSheetOpen,
     leaveBook: guard.leaveBook,
   });
+  // «Сохранить» из вопроса при выходе — та же кнопка, что внизу формы.
+  guard.saveRef.current = actions.save;
 
   const title = bookTitle(isEdit, kind);
   const chrome = bookChrome({
