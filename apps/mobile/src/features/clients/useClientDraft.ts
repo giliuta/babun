@@ -33,6 +33,7 @@ import {
 import { useDraftDuplicate } from "@/features/clients/useClientDraft/duplicate";
 import type { ClientDraftOptions } from "@/features/clients/useClientDraft/options";
 import { useNewClientTeam } from "@/features/clients/useClientDraft/team";
+import { useBusinessToday } from "@/features/settings/business-today";
 
 // The draft gate and route params are a pure core in `./useClientDraft/core`
 // (a guard test loads it standalone); dedupe and team pick are hooks there.
@@ -70,9 +71,11 @@ export function useClientDraft(
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
   const country = useDefaultCountry(newClientTeam);
   const dial = countryDialCode(country);
+  const businessToday = useBusinessToday();
   const [draft, setDraft] = useState<Client>(() =>
     createBlankClient({
       full_name: name?.trim() ?? "",
+      first_contact_date: businessToday,
       // КОМАНДА — С ПЕРВОГО КАДРА, если она уже известна. Поле номера,
       // открытое сразу с фокусом (имя пришло из записи), берёт код страны на
       // первом кадре и потом его не меняет: команда, дописанная эффектом

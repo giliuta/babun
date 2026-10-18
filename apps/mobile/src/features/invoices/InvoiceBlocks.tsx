@@ -166,8 +166,8 @@ export function InvoiceBlocks({
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
   const statsById = useMemo(
-    () => buildStatsMap(clients, appointments.data ?? [], invoicing),
-    [clients, appointments.data, invoicing],
+    () => buildStatsMap(clients, appointments.data ?? [], invoicing, today),
+    [clients, appointments.data, invoicing, today],
   );
   const clientStats = client ? statsById.get(client.id) : undefined;
   // ПРАЙС — КОМАНДЫ, А НЕ ВСЕЙ КОМПАНИИ: услуги подтягиваются с команды. Правило

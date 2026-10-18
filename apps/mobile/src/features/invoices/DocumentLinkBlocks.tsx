@@ -10,7 +10,7 @@ import { PaymentTile, useTileWidth } from "@/features/appointments/PaymentTiles"
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import type { ClientFileItem } from "@/features/clients/use-client-files";
-import { todayYMD } from "@/features/clients/filter";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 import { accountIcon } from "@/features/finances/account-ui";
 import type { AccountWithBalance } from "@/features/finances/accounts";
@@ -49,6 +49,7 @@ export function DocumentLinkBlocks({
   const t = useThemeColors();
   const router = useRouter();
   const tileWidth = useTileWidth();
+  const today = useBusinessToday();
   const teams = useTeams();
   const team = appointment?.team_id
     ? (teams.data ?? []).find((item) => item.id === appointment.team_id)
@@ -93,7 +94,7 @@ export function DocumentLinkBlocks({
             <VisitRow
               appointment={appointment}
               team={team}
-              today={todayYMD()}
+              today={today}
               showMoney
               onPress={onOpenAppointment}
             />

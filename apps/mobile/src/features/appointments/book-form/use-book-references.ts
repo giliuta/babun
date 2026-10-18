@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
@@ -43,9 +44,10 @@ export function useBookReferences(teamId: string | null) {
   // строку превратил бы выбор клиента в квадрат по числу записей.
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsById = useMemo(
-    () => buildStatsMap(clientsQuery.data ?? [], allAppts, invoicing),
-    [clientsQuery.data, allAppts, invoicing],
+    () => buildStatsMap(clientsQuery.data ?? [], allAppts, invoicing, today),
+    [clientsQuery.data, allAppts, invoicing, today],
   );
   const calendarSettings = calendarSettingsQuery.data;
   // Создание заявки и весь его хвост (синхронизация push события, тосты,
