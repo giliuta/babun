@@ -17,6 +17,7 @@
 // Поведение перенесено дословно из app/book/index.tsx (save), включая
 // порядок тостов и то, какие сбои НЕ роняют создание.
 
+import { Platform } from "react-native";
 import { useCallback } from "react";
 import {
   createBlankAppointment,
@@ -26,6 +27,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useCreateAppointment } from "@/features/calendar/mutations";
 import { syncEventAppointmentReminders } from "@/features/calendar/reminders";
 import { haptics } from "@/lib/haptics";
+import { useTenantId } from "@/lib/tenant";
 
 export interface BookingSaveInput {
   /** Готовый патч заявки (собирает вызывающий экран). */
@@ -40,6 +42,7 @@ export interface BookingSaveInput {
 export function useBookingSave() {
   const createMut = useCreateAppointment();
   const toast = useToast();
+  const tenantId = useTenantId();
 
   const save = useCallback(
     async ({
@@ -52,16 +55,19 @@ export function useBookingSave() {
         createBlankAppointment(patch),
       );
 
-      if (kind === "event" && eventReminderOffset != null) {
+      if (kind === "event" && eventReminderOffset != null && tenantId) {
         const reminderResult = await syncEventAppointmentReminders(
           created,
           timezone,
+          tenantId,
         );
         if (reminderResult === "denied") {
           toast("Событие создано, но уведомления запрещены в Настройках", "info");
         } else if (reminderResult === "deferred") {
           toast(
-            "Событие создано; напоминание стоит в очереди и установится, когда на iPhone освободится место",
+            Platform.OS === "android"
+              ? "Событие создано; напоминание стоит в очереди и установится, когда на телефоне освободится место"
+              : "Событие создано; напоминание стоит в очереди и установится, когда на iPhone освободится место",
             "info",
           );
         } else if (reminderResult === "capacity") {
@@ -83,7 +89,7 @@ export function useBookingSave() {
       haptics.success();
       return created;
     },
-    [createMut, toast],
+    [createMut, toast, tenantId],
   );
 
   return {

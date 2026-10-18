@@ -493,7 +493,7 @@ describe("проводка в коде", () => {
 
   test("опрос роли спрашивает паузу у очереди и перевзводится на КАЖДОЙ смене фазы", () => {
     const source = readFileSync(
-      resolve(here, "../features/settings/tenant.ts"),
+      resolve(here, "../session/tenant.ts"),
       "utf8",
     );
     assert.match(source, /refetchInterval: \(\) => rolePollInterval\(ROLE_POLL_MS\)/);

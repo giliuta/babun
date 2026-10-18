@@ -6,10 +6,10 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useTenantId } from "@/lib/tenant";
 import type { Team } from "@/features/reference/queries";
 
-import type { AccessBlock } from "../access-map";
+import type { AccessBlock } from "@/session/access-map";
 import { mirrorMapOf } from "../mirror/mirror-map";
-import { useMirrorMode } from "../mirror/mirror-state";
-import { returnHrefOf, stackHrefsOf } from "../mirror/mirror-return";
+import { useMirrorMode } from "@/session/mirror-state";
+import { returnHrefOf, stackHrefsOf } from "@/session/mirror-return";
 import type { RightsArea } from "./master-draft";
 
 // ОБЩЕЕ ТРЁМ РЕЖИМАМ СТРАНИЦЫ ПРАВ: вход в зеркало, экран «едет/отказ» и два
@@ -30,7 +30,7 @@ export function usePreview() {
   const router = useRouter();
   const tenantId = useTenantId();
   const { enter } = useMirrorMode();
-  // Откуда вошли — туда и выйдем (владелец 01.10, `mirror-return.ts`).
+  // Откуда вошли — туда и выйдем (`mirror-return.ts`).
   const pathname = usePathname();
   const segments = useSegments();
   const params = useGlobalSearchParams();
@@ -58,14 +58,13 @@ export function usePreview() {
     };
     // СНАЧАЛА ВЫХОДИМ ИЗ НАСТРОЕК В КОРЕНЬ, И ЭТО НЕ КОСМЕТИКА. Страница прав
     // закрыта мастеру, и оставленная в стеке она показала бы в зеркале стену
-    // «Недостаточно прав» — экран, которого сотрудник не увидит никогда
-    // (проверено глазами 20.09).
+    // «Недостаточно прав» — экран, которого сотрудник не увидит никогда.
     //
     // Одним действием навигатора, а не циклом `back()`: переходы копятся в
     // очередь, `canGoBack()` внутри того же кадра отвечает по-старому, и цикл
     // не кончается — приложение встаёт намертво.
     //
-    // И ДО ВКЛЮЧЕНИЯ ЗЕРКАЛА (аудит 29.09): роль «мастер» тут же прячет стек
+    // И ДО ВКЛЮЧЕНИЯ ЗЕРКАЛА: роль «мастер» тут же прячет стек
     // Кабинета за стеной, и «закрыть всё» приходило в стек, которого уже нет, —
     // «POP_TO_TOP was not handled by any navigator». Поэтому: закрыть, уйти в
     // раздел, и только следующим кадром включить зеркало.

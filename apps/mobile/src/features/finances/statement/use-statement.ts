@@ -4,11 +4,14 @@ import { listTransactionsForRange } from "@babun/shared/db/repositories/finance-
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useClients } from "@/features/clients/queries";
+import { useMyAccess } from "@/session/access-queries";
+import { useCurrentRole } from "@/session/tenant";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { useAccountsWithBalances } from "../accounts";
 import { useFinanceCategories } from "../queries";
+import { statementIsComplete } from "./statement-complete";
 import { buildStatementDocument, type StatementDocument } from "./statement-document";
 
 /** С какого дня берётся выписка: у счёта нет нижней границы. */
@@ -39,6 +42,8 @@ export function useStatementDocument(
   const people = useMasters({ includeInactive: true });
   const timeZone = useCalendarSettings().data?.timezone ?? "Europe/Nicosia";
   const today = todayYmd(timeZone);
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess();
   // Журнал — от начала: остаток на начало периода считает всё, что было до
   // него. Конец — сегодня или конец периода, если он дальше (операция могла
   // быть внесена вперёд).
@@ -68,8 +73,15 @@ export function useStatementDocument(
       },
       today,
       period,
+      // Операции читаются под правами человека; остаток — сервер по всем.
+      complete: statementIsComplete({
+        role,
+        map: myAccess.data,
+        teamId: account.brigade_id,
+        today,
+      }),
     });
-  }, [account, ledger.data, teams.data, accounts.data, categories.data, clients.data, people.data, today, period]);
+  }, [account, ledger.data, teams.data, accounts.data, categories.data, clients.data, people.data, today, period, role, myAccess.data]);
 
   const firstDay = useMemo(() => {
     let min: string | null = null;

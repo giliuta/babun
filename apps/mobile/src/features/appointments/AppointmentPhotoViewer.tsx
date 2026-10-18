@@ -12,7 +12,7 @@ import type {
   AppointmentPhotoRecord,
   PhotoKind,
 } from "@babun/shared/db/repositories/appointment-photos";
-import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
+import { MirrorBanner } from "@/components/blocks/MirrorBanner";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 

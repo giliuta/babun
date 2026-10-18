@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { useThemeColors } from "@/theme/colors";
-import { headCell, numCell, PAPER, TotalRow } from "@/features/documents/ReceiptPaperParts";
+import { headCell, numCell, PAPER, TotalRow } from "@/components/blocks/ReceiptPaperParts";
 import type { StatementDocument } from "./statement-document";
 
 // ЗЕРКАЛО ВЫПИСКИ — ТА ЖЕ БУМАГА, ЧТО УЙДЁТ В PDF (`statement-pdf.ts`).
@@ -43,6 +43,11 @@ export function StatementPaper({ doc }: { doc: StatementDocument }) {
       </Text>
       {doc.teamName ? (
         <Text style={{ marginTop: 2, fontSize: 10.5, color: PAPER.muted }}>{doc.teamName}</Text>
+      ) : null}
+      {doc.notice ? (
+        <Text style={{ marginTop: 8, fontSize: 10.5, lineHeight: 15, fontWeight: "600", color: PAPER.ink }}>
+          {doc.notice}
+        </Text>
       ) : null}
 
       <View style={{ marginTop: 14 }}>

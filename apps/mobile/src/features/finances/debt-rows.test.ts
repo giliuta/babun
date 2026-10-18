@@ -318,7 +318,7 @@ describe("mergeDebtRows", () => {
   });
 });
 
-// Владелец 04.10: неоплаченный инвойс — в «Долгах», остатком, один раз.
+// Неоплаченный инвойс — в «Долгах», остатком, один раз.
 describe("invoiceDebtRows", () => {
   const inv = (over: Record<string, unknown>) => ({
     id: "i1", number: "INV-2026-006", kind: "invoice", status: "issued",

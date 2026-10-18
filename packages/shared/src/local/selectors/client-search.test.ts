@@ -31,6 +31,7 @@ describe("matchesClient", () => {
         id: "location-1",
         label: "Офис",
         address: "Agias Fylaxeos 10",
+        isPrimary: true,
         note: "Код ворот 42",
         equipment: [
           {
@@ -122,7 +123,7 @@ describe("реквизиты клиента в поиске", () => {
   });
 });
 
-// ЖИЛЬЦЫ НАХОДЯТСЯ ПО ИМЕНИ УПРАВЛЯЮЩЕЙ (владелец 22.09). Слова связи —
+// ЖИЛЬЦЫ НАХОДЯТСЯ ПО ИМЕНИ УПРАВЛЯЮЩЕЙ. Слова связи —
 // имя карточки-группы, роль, место — приходят снаружи: у самого клиента
 // лежит только id карточки.
 describe("слова связи в поиске", () => {
@@ -201,5 +202,34 @@ describe("буквы без разложения", () => {
     assert.equal(matchesClient(client("ua", { full_name: "Олексій Коваль" }), "Oleksii"), true);
     assert.equal(matchesClient(client("tr", { full_name: "Ayşe Işık" }), "isik"), true);
     assert.equal(matchesClient(client("tr", { full_name: "Ayşe Işık" }), "Işık"), true);
+  });
+});
+
+describe("номер в местном формате с ведущим 0", () => {
+  // В базе номер хранится с кодом страны, а набирают его так, как диктуют:
+  // «07700 900123» (Британия), «067 123 4567» (Украина). Без нуля это хвост
+  // международного номера.
+  const uk = client("uk", { full_name: "John", phone: "+44 7700 900123", phone_e164: "+447700900123" });
+  const ua = client("ua", { full_name: "Олег", phone: "+380 67 123 4567", phone_e164: "+380671234567" });
+  const de = client("de", { full_name: "Hans", phone: "+49 151 23456789", phone_e164: "+4915123456789" });
+
+  test("местный номер находит клиента", () => {
+    assert.equal(matchesClient(uk, "07700 900123"), true);
+    assert.equal(matchesClient(ua, "067 123 4567"), true);
+    assert.equal(matchesClient(ua, "0671234567"), true);
+    assert.equal(matchesClient(de, "0151 23456789"), true);
+  });
+
+  test("ноль не превращает чужой номер в совпадение", () => {
+    // Хвост — значит конец номера: «0» + цифры из середины не находят.
+    assert.equal(matchesClient(uk, "077009001"), false);
+    // Короткий запрос с нулём ищется как раньше — подстрокой как есть.
+    assert.equal(matchesClient(ua, "06712"), true);
+    assert.equal(matchesClient(uk, "0123"), true);
+  });
+
+  test("прежние совпадения на месте", () => {
+    assert.equal(matchesClient(ua, "671234567"), true);
+    assert.equal(matchesClient(ua, "+380671234567"), true);
   });
 });

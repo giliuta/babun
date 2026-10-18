@@ -4,7 +4,7 @@ import { uiLocale } from "@babun/shared/i18n/locale";
 
 import { GOOGLE_WEB_CLIENT_ID, signInWithGoogleIdToken, type SocialResult } from "./social-sign-in";
 
-// «ПРОДОЛЖИТЬ С GOOGLE» НА САЙТЕ — КНОПКОЙ GOOGLE IDENTITY SERVICES (13.10).
+// «ПРОДОЛЖИТЬ С GOOGLE» НА САЙТЕ — КНОПКОЙ GOOGLE IDENTITY SERVICES.
 // Переход на страницу Google показывал «продолжить на …supabase.co»; кнопка
 // GIS открывает окно Google поверх babun.app и пишет «Войти в babun.app».
 // Она отдаёт id-токен, его меняет на сессию `signInWithIdToken`. Вид кнопки

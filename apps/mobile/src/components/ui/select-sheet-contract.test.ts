@@ -3,13 +3,14 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bookFormSource } from "../../features/appointments/book-form/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
-// ШТОРКА ВЫБОРА ОДНА НА ПРОДУКТ — И ЭТО ПРОВЕРЯЕТСЯ, А НЕ ОБЕЩАЕТСЯ
-// (владелец 2026-09-10: «архитектура этой шторки должна быть везде
-// одинаковая»).
+// ШТОРКА ВЫБОРА ОДНА НА ПРОДУКТ — И ЭТО ПРОВЕРЯЕТСЯ, А НЕ ОБЕЩАЕТСЯ:
+// архитектура шторки везде одинаковая.
 //
 // Канон был записан комментарием внутри `BookingPickers` — и следовали ему две
 // шторки из семи, потому что следовать было нечему: строка лежала копиями.
@@ -19,6 +20,13 @@ const read = (relative: string) => readFileSync(resolve(here, relative), "utf8")
 
 /** Все шторки, где ВЫБИРАЮТ из списка. Новая шторка выбора добавляется сюда
  *  тем же коммитом, которым появляется. */
+/** A sheet whose parts live in a sibling folder is read together with it. */
+const PARTS: Record<string, string> = {
+  "../../features/appointments/BookingPickers.tsx": "../../features/appointments/booking-pickers",
+};
+const readSheet = (path: string) =>
+  readModuleSource(resolve(here, path), PARTS[path] ? resolve(here, PARTS[path]) : undefined);
+
 const SHEETS = [
   "../../features/clients/ClientPickerSheet.tsx",
   "../../features/clients/ObjectPickerSheet.tsx",
@@ -32,7 +40,7 @@ const SHEETS = [
 describe("анатомия шторки выбора", () => {
   test("строку рисует только общий примитив", () => {
     for (const path of SHEETS) {
-      const source = read(path);
+      const source = readSheet(path);
       // Своя высота строки = своя анатомия. Единственное законное место, где
       // высота названа числом, — сам примитив.
       assert.doesNotMatch(
@@ -50,7 +58,7 @@ describe("анатомия шторки выбора", () => {
 
   test("поиск — общий, второго поля в шторках не бывает", () => {
     for (const path of SHEETS) {
-      const source = read(path);
+      const source = readSheet(path);
       assert.doesNotMatch(
         source,
         /<TextInput/,
@@ -61,7 +69,7 @@ describe("анатомия шторки выбора", () => {
 
   test("шапка задаётся пропом, а не рисуется в теле", () => {
     for (const path of SHEETS) {
-      const source = read(path);
+      const source = readSheet(path);
       assert.match(
         source,
         /title=\{|title="/,
@@ -88,12 +96,11 @@ describe("анатомия шторки выбора", () => {
     assert.doesNotMatch(row, /borderWidth/);
   });
 
-  // ВЫБРАННОЕ В ФОРМЕ — ПЛИТКОЙ ШТОРКИ (владелец 2026-09-15: «выбранное должно
-  // показываться так же, как в шторке — блок с подсветкой и иконкой — во
-  // всех»). Команда и метка в шапке записи рисовались бледным кружком, а их
-  // шторки — квадратной плиткой; у команды к тому же разными глифами.
+  // ВЫБРАННОЕ В ФОРМЕ — ПЛИТКОЙ ШТОРКИ: блок с подсветкой и иконкой, как в
+  // шторке, во всех формах. Бледный кружок у команды и метки в шапке записи
+  // разошёлся бы с квадратной плиткой их шторок; у команды ещё и разными глифами.
   test("команда и метка в форме — плитка шторки, карточка белая", () => {
-    const card = read("../../features/appointments/TeamLabelRow.tsx");
+    const card = read("../blocks/TeamLabelRow.tsx");
     const row = read("./select-rows.tsx");
     assert.match(card, /<AppearanceTile\b/, "выбранное в шапке формы снова не плитка шторки");
     const tile = row.match(/const TILE = (\d+)/)?.[1];
@@ -104,18 +111,17 @@ describe("анатомия шторки выбора", () => {
       "плитка выбранного в форме разошлась по размеру с плиткой шторки",
     );
     assert.match(card, /size=\{CHOSEN_TILE\}/);
-    // Кружок остаётся ТОЛЬКО у пустого значения (владелец 2026-09-10 выбрал
-    // его глазами); выбранное кружком больше не рисуется.
+    // Кружок остаётся ТОЛЬКО у пустого значения; выбранное кружком не рисуется.
     assert.match(card, /\{muted \? \(\s*<View\s+style=\{\{\s*width: 26,/, "пустая «Метка» перестала быть кружком");
-    // Карточки белые (владелец 2026-09-06: «эти блоки не должны окрашиваться»).
+    // Карточки белые (блоки не окрашиваются).
     assert.doesNotMatch(card, /appearanceRowFill|\$\{color\}14|\$\{color\}24/, "карточка шапки окрасилась");
     assert.match(card, /<Card style=\{\{ flex: 1 \}\}>/, "карточка шапки больше не белая `Card`");
   });
 
   test("глиф команды один и тот же в плитке и в шторке", () => {
-    const card = read("../../features/appointments/TeamLabelRow.tsx");
+    const card = read("../blocks/TeamLabelRow.tsx");
     const sheet = read("../../features/appointments/BookingSheets.tsx");
-    const book = read("../../../app/book/index.tsx");
+    const book = bookFormSource();
     assert.doesNotMatch(
       sheet,
       /icon=\{Circle\}|import \{[^}]*\bCircle\b[^}]*\} from "lucide-react-native"/,

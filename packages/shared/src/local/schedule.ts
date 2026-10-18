@@ -113,9 +113,7 @@ export function getDayScheduleForDate(
   // «в эту дату так» is the sharper statement of intent, and the mobile
   // special-day editor writes overrides, so a vacation that silently
   // outranked them would make that editor a liar (toggle "рабочий день"
-  // on, grid stays grey). Flipped from vacation-first 2026-08-15; prod
-  // had zero overrides and zero vacations, so no stored data changed
-  // meaning.
+  // on, grid stays grey).
   const dayOverride = schedule.date_overrides?.[dateKey];
   if (dayOverride) return dayOverride;
   if (isInVacation(schedule, dateKey)) {
@@ -158,7 +156,7 @@ export function setDateOverride(
 /** ВЫХОДНОЙ ЛИ ЭТА ДАТА — по ВСЕМУ графику: правка на дату, отпуск, недельный
  *  выходной. Тумблер «Выходной» в шторке метки читал только правку на дату:
  *  у воскресенья, выходного по неделе, он стоял выключенным, хотя сетка
- *  показывала «Вых» (повторный аудит 03.10). Графика нет — день рабочий. */
+ *  показывала «Вых». Графика нет — день рабочий. */
 export function isDayOff(schedule: TeamSchedule | null | undefined, dateKey: string): boolean {
   if (!schedule) return false;
   const [y, m, d] = dateKey.split("-").map(Number);
@@ -170,8 +168,8 @@ export function isDayOff(schedule: TeamSchedule | null | undefined, dateKey: str
  *  Включить — день становится выходным (часы дня сохраняются в правке).
  *  Выключить — правка снимается, если без неё день рабочий; если же день
  *  выходной по неделе или в отпуске, правкой на дату он делается РАБОЧИМ по
- *  общим часам. Прежде снятие только удаляло правку — и воскресенье, выходное
- *  по неделе, из шторки сделать рабочим было нельзя (повторный аудит 03.10). */
+ *  общим часам. Если бы снятие только удаляло правку, воскресенье, выходное
+ *  по неделе, из шторки нельзя было бы сделать рабочим. */
 export function setDayOff(schedule: TeamSchedule, dateKey: string, off: boolean): TeamSchedule {
   const [y, m, d] = dateKey.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -183,11 +181,18 @@ export function setDayOff(schedule: TeamSchedule, dateKey: string, off: boolean)
     const day = getDayScheduleForDate(schedule, date);
     return setDateOverride(schedule, dateKey, { ...day, is_working: false });
   }
+  // ЧАСЫ — ОБЩИЕ ЧАСЫ НЕДЕЛИ, как их показывает шторка графика: часы первого
+  // рабочего дня Пн…Вс. Шторка пишет часы только в дни
+  // недели, а `start/end` графика остаются от его рождения (обычно
+  // 00:00–24:00): рабочее воскресенье вставало «с полуночи до полуночи».
+  // Рабочих дней нет вовсе — тогда общие поля.
+  const week = [1, 2, 3, 4, 5, 6, 0].map((jsDay) => getDaySchedule(schedule, jsDay));
+  const hours = week.find((day) => day.is_working) ?? schedule;
   return setDateOverride(schedule, dateKey, {
     is_working: true,
-    start: schedule.start,
-    end: schedule.end,
-    breaks: schedule.breaks ?? [],
+    start: hours.start,
+    end: hours.end,
+    breaks: hours.breaks ?? [],
   });
 }
 
@@ -196,8 +201,3 @@ export function timeToMinutes(time: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-export function minutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}

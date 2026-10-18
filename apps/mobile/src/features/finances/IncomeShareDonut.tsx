@@ -133,7 +133,7 @@ export function IncomeShareDonut({
 
   const total = slices.reduce((s, r) => s + r.value, 0);
   // В центре — нетто, как в шапке секции над кольцом: продажи 800 и возвраты
-  // −100 давали «€700» сверху и «€800» в кольце (аудит 2026-09-30). Доли
+  // −100 давали «€700» сверху и «€800» в кольце. Доли
   // по-прежнему — от продаж.
   const net = Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100;
   if (slices.length === 0 || total === 0) return null;

@@ -1,8 +1,6 @@
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 
-// СТРОКИ ЗАПИСИ, КОТОРЫЕ НЕ РАВНЫ ОДНОМУ ПРАВУ (владелец 30.09: «блоки внутри
-// записи — что видит, что не видит, что может редактировать», и «продумай
-// логическую цепочку»). Страница прав показывает запись блоками в порядке
+// СТРОКИ ЗАПИСИ, КОТОРЫЕ НЕ РАВНЫ ОДНОМУ ПРАВУ. Страница прав показывает запись блоками в порядке
 // самой записи, а сервер проверяет права так, как устроены деньги и время:
 //
 //   • «Время» — видно всегда; менять его — то же право, что «Перенос
@@ -111,13 +109,6 @@ export function withCompositeBlocks(offered: readonly AccessBlock[]): AccessBloc
     });
   }
   return out;
-}
-
-/** Реальные изменения прав для ступени строки. Не составная строка — само
- *  право. */
-export function rowChanges(key: string, level: AccessLevel, get: LevelGet): Record<string, AccessLevel> {
-  const row = BY_KEY.get(key);
-  return row ? row.changesFor(level, get) : { [key]: level };
 }
 
 /** Ступень строки. Не составная — положение самого права. */

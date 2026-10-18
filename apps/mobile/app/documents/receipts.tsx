@@ -8,7 +8,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
-import { useReceipts } from "@/features/documents/receipts-queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
 import { formatShortDateRu } from "@/features/clients/format";
 import { useClients } from "@/features/clients/queries";
 import { useThemeColors } from "@/theme/colors";

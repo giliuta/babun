@@ -7,11 +7,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import type { TeamFilledByTrigger } from "../team-filled-by-trigger";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type { Debt, DebtDirection } from "../../local/finance/debt";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["debts"]["Row"];
+type Insert = Database["public"]["Tables"]["debts"]["Insert"];
+type Update = Database["public"]["Tables"]["debts"]["Update"];
 
 const DEBTS_PAGE_SIZE = 1000;
 
@@ -45,7 +48,7 @@ export interface DebtRangeOptions {
  * Долги за период по дню возникновения. Окно — то же, что у долгов записей:
  * список под цифрой обязан набираться тем же правилом, что сама цифра.
  *
- * ПОСТРАНИЧНО, КАК ЖУРНАЛ (15.09). «Финансы» читают долги всей компании за
+ * ПОСТРАНИЧНО, КАК ЖУРНАЛ. «Финансы» читают долги всей компании за
  * период и отбирают команду на устройстве (`pickTeamDebts`) — так смена
  * команды не ходит в сеть. Одна выборка с `limit` срезала бы строки ДО
  * отбора, и у команды молча пропали бы старые долги. Порядок с добивкой
@@ -103,11 +106,11 @@ export async function listDebtPaidTotals(
       .order("id", { ascending: true })
       .limit(DEBTS_PAGE_SIZE);
     if (error) throw new Error(`listDebtPaidTotals: ${error.message}`);
-    const page = (data ?? []) as Array<{
+    const page = (data ?? []) as {
       id: string;
       debt_id: string | null;
       amount: number;
-    }>;
+    }[];
     for (const row of page) {
       if (!row.debt_id) continue;
       totals.set(
@@ -124,7 +127,7 @@ export async function listDebtPaidTotals(
 export interface NewDebt {
   /** id, придуманный формой один раз на черновик. Повтор того же черновика
    *  (ответ потерялся, человек нажал ещё раз) упирается в первичный ключ и
-   *  возвращает уже записанный долг, а не заводит второй (аудит 2026-10-03). */
+   *  возвращает уже записанный долг, а не заводит второй. */
   id?: string;
   direction: DebtDirection;
   counterparty: string;
@@ -172,22 +175,23 @@ export async function insertDebt(
   draft: NewDebt,
 ): Promise<Debt> {
   assertDebtDraft(draft);
+  const insert: TeamFilledByTrigger<Insert> = {
+    ...(draft.id ? { id: draft.id } : {}),
+    tenant_id: tenantId,
+    direction: draft.direction,
+    counterparty: draft.counterparty.trim(),
+    amount: draft.amount,
+    occurred_on: draft.occurred_on,
+    occurred_time: draft.occurred_time ?? null,
+    client_id: draft.client_id ?? null,
+    category_id: draft.category_id ?? null,
+    note: draft.note?.trim() || null,
+    receipt_url: draft.receipt_url ?? null,
+    team_id: draft.team_id ?? null,
+  };
   const { data, error } = await supabase
     .from("debts")
-    .insert({
-      ...(draft.id ? { id: draft.id } : {}),
-      tenant_id: tenantId,
-      direction: draft.direction,
-      counterparty: draft.counterparty.trim(),
-      amount: draft.amount,
-      occurred_on: draft.occurred_on,
-      occurred_time: draft.occurred_time ?? null,
-      client_id: draft.client_id ?? null,
-      category_id: draft.category_id ?? null,
-      note: draft.note?.trim() || null,
-      receipt_url: draft.receipt_url ?? null,
-      team_id: draft.team_id ?? null,
-    })
+    .insert(insert as Insert)
     .select("*")
     .single();
   if (error && draft.id && (error as { code?: string }).code === "23505") {
@@ -215,7 +219,7 @@ export async function updateDebt(
   id: string,
   patch: DebtPatch,
 ): Promise<void> {
-  const update: Database["public"]["Tables"]["debts"]["Update"] = {
+  const update: TeamFilledByTrigger<Update> = {
     updated_at: new Date().toISOString(),
   };
   if (patch.direction !== undefined) update.direction = patch.direction;
@@ -244,7 +248,7 @@ export async function updateDebt(
 
   const { data, error } = await supabase
     .from("debts")
-    .update(update)
+    .update(update as Update)
     .eq("id", id)
     .select("id")
     .maybeSingle();

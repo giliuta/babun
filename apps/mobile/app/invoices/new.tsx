@@ -19,15 +19,15 @@ import {
   useInvoices,
   useIssueInvoice,
   useUpdateInvoice,
-} from "@/features/invoices/queries";
+} from "@/features/finances/invoices-queries";
 import { rememberedDueDays } from "@/features/invoices/due-days";
 import { useSession } from "@/providers/SessionProvider";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole , useTenant } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole , useTenant } from "@/session/tenant";
+import { accessGate } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
@@ -46,7 +46,7 @@ export default function NewInvoiceScreen() {
     amount?: string;
     title?: string;
     issuedOn?: string;
-    /** Правка выставленного счёта на месте (владелец 04.10). */
+    /** Правка выставленного счёта на месте. */
     invoiceId?: string;
   }>();
   const editId = params.invoiceId || undefined;
@@ -60,7 +60,7 @@ export default function NewInvoiceScreen() {
   const services = useAllServices();
   const teams = useTeams();
   // Партнёр выставляет инвойсы только командам, где у него «Документы:
-  // Выставляет» (03.10); владелец — всем.
+  // Выставляет»; владелец — всем.
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
   const issueTeams = (teams.data ?? []).filter(
@@ -70,8 +70,8 @@ export default function NewInvoiceScreen() {
         "write",
   );
   const tenant = useTenant();
-  // Срок оплаты — как на своём прошлом инвойсе, первый — 30 дней (владелец
-  // 03.10). Отказ списка не держит экран: тогда просто 30.
+  // Срок оплаты — как на своём прошлом инвойсе, первый — 30 дней.
+  // Отказ списка не держит экран: тогда просто 30.
   const invoices = useInvoices();
   const me = useSession().session?.user.id ?? null;
   const calendarSettings = useCalendarSettings();
@@ -122,7 +122,13 @@ export default function NewInvoiceScreen() {
   const submit = async (value: InvoiceEditorValue) => {
     if (editId) {
       const { link_to_tx_id: _link, ...draft } = value;
-      await update.mutateAsync(draft);
+      const saved = await update.mutateAsync(draft);
+      if (value.language && saved.language !== value.language) {
+        notify(
+          "Изменения сохранены, язык бумаги не сохранился",
+          "Документ на прежнем языке. Смените его ещё раз через «Изменить инвойс» в «⋯».",
+        );
+      }
       // Сохранён — тот же номер, назад к его странице.
       leavingRef.current = true;
       back();
@@ -145,7 +151,7 @@ export default function NewInvoiceScreen() {
   // ЗАПОЛНЕННЫЙ ЧЕРНОВИК НЕ ИСЧЕЗАЕТ ПО ОДНОМУ ТАПУ. Клиент, позиции, налог и
   // комментарий — это работа на минуту, и «‹» стирала её без вопроса.
   //
-  // ВОПРОС — НА ЛЮБОЙ УХОД, А НЕ ТОЛЬКО НА «‹» (аудит 2026-10-03). Свайп от
+  // ВОПРОС — НА ЛЮБОЙ УХОД, А НЕ ТОЛЬКО НА «‹». Свайп от
   // левого края и системное «назад» снимали экран мимо стрелки, и черновик
   // исчезал молча. Теперь спрашивает сама навигация (`usePreventRemove`, как
   // у черновика клиента), а «‹» просто уходит — тот же вопрос задаст она.
@@ -227,6 +233,9 @@ export default function NewInvoiceScreen() {
           }}
           teams={issueTeams}
           businessToday={businessToday}
+          currentBusinessToday={() =>
+            todayYmd(calendarSettings.data?.timezone ?? "Europe/Nicosia")
+          }
           tenant={tenant.data}
           submitting={issue.isPending || update.isPending}
           onSubmit={submit}

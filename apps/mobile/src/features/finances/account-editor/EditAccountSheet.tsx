@@ -25,23 +25,22 @@ import { TransferSheet } from "../TransferSheet";
 import { AccountCloseGroup } from "./AccountCloseGroup";
 import { AccountMoneyGroup } from "./AccountMoneyGroup";
 import { AccountNameCard } from "./AccountNameCard";
+import { duplicateNameNote, findDuplicateName } from "./account-names";
 import { editorView, type EditorView } from "./editor-logic";
 import { ACCOUNT_SHEET_RATIO, accountSaver, type AlertError } from "./types";
 import { useCloseFlow } from "./use-close-flow";
 
 // ПРАВКА СЧЁТА — режим правки листа счёта (`AccountEditorSheet`). Здесь всё,
-// что было на странице настроек счёта (владелец 2026-09-15: «тапнуть на тот же
-// созданный и то же самое редактировать уже созданный счёт»). Порядок (03.10):
+// что нужно для настройки счёта (страницы настроек нет). Порядок:
 // имя и вид → «Деньги» (на счёте, VAT, перевести) → «Счёт» (оплата записи,
 // выписка) → скрыть / удалить.
 //
-// НАЛОГА У СЧЁТА НЕТ (владелец 2026-09-23: «VAT мы уже пишем в „Итого“, нам
-// без разницы — счёт с VAT или без»). Налог решается там, где вносятся
+// НАЛОГА У СЧЁТА НЕТ: VAT уже пишется в «Итого», счёту всё равно, с VAT он или без.
+// Налог решается там, где вносятся
 // деньги: в «Итого» записи и клавишами операции; счёт только показывает,
 // сколько VAT на нём к уплате (`AccountMoneyGroup`).
 //
-// «ПРИМЕНИТЬ» В ФУТЕРЕ (владелец 03.10: «в настройках счёта должна быть
-// кнопка применить или сохранить, чтоб было всё чётко»). Имя, вид и «В оплате
+// «ПРИМЕНИТЬ» В ФУТЕРЕ: в настройках счёта — кнопка «Применить». Имя, вид и «В оплате
 // записи» копятся черновиком и уходят на сервер одной правкой; закрыть лист с
 // черновиком — только после вопроса. Действия («Перевести», «Выписка»,
 // «Скрыть», «Удалить») — сразу, это не настройки; черновик они не трогают.
@@ -90,7 +89,7 @@ export function EditAccountSheet({
   const [pending, setPending] = useState<Partial<AccountDraft>>({});
   useEffect(() => setPending({}), [accountId, visible]);
 
-  // «ВЫПИСКА» — СТРАНИЦА ПОВЕРХ «СЧЕТОВ» (владелец 03.10: сначала превью,
+  // «ВЫПИСКА» — СТРАНИЦА ПОВЕРХ «СЧЕТОВ» (сначала превью,
   // потом файл). Лист модальный и над страницей висел бы, поэтому он сперва
   // уезжает, страница открывается после его ухода, а «назад» возвращает лист
   // с тем же черновиком — родитель его не закрывал.
@@ -132,7 +131,24 @@ export function EditAccountSheet({
         return;
       }
       if (name === saved.name) delete patch.name;
-      else patch.name = name;
+      else {
+        // ТО ЖЕ ПРАВИЛО, ЧТО У СОЗДАНИЯ: переименование не должно давать два
+        // счёта команды с одним названием (свой же счёт — не дубль).
+        const duplicate = findDuplicateName(
+          accounts.filter((other) => other.id !== saved.id),
+          name,
+          saved.brigade_id,
+        );
+        if (duplicate) {
+          notify(
+            "Такое название уже есть",
+            duplicateNameNote(duplicate, teamById.get(saved.brigade_id ?? "")?.name ?? null)
+              ?? "Дайте счёту другое название.",
+          );
+          return;
+        }
+        patch.name = name;
+      }
     }
     if (Object.keys(patch).length === 0) {
       setPending({});
@@ -207,8 +223,8 @@ export function EditAccountSheet({
               <AccountCloseGroup
                 account={account}
                 onHide={() => {
-                  // «СКРЫТЬ» ⇄ «ПОКАЗАТЬ» — СРАЗУ, БЕЗ ВОПРОСА (владелец 03.10:
-                  // скрытый счёт работает, виден только на странице «Счета»).
+                  // «СКРЫТЬ» ⇄ «ПОКАЗАТЬ» — СРАЗУ, БЕЗ ВОПРОСА (скрытый счёт работает,
+                  // виден только на странице «Счета»).
                   // Прятать — вместе с «В оплате записи»: черновик этого
                   // тумблера уходит, иначе «Применить» упёрся бы в запрет базы.
                   const hide = !account.is_hidden;

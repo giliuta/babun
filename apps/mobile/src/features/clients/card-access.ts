@@ -1,8 +1,8 @@
 import type { Client } from "@babun/shared/local/clients";
-import type { ClientsCapabilities } from "./clients-company";
+import type { ClientsCapabilities } from "@/session/clients-company";
 import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 
-// ЧТО ВИДНО И ЧТО ПРАВИТСЯ НА КАРТОЧКЕ КЛИЕНТА — ОДНИМ ОТВЕТОМ (30.09).
+// ЧТО ВИДНО И ЧТО ПРАВИТСЯ НА КАРТОЧКЕ КЛИЕНТА — ОДНИМ ОТВЕТОМ.
 //
 // Три источника складываются, и складываться им негде, кроме этого места:
 //   • выключатель КОМАНДЫ клиента («Карточка клиента» в настройках клиентов,
@@ -11,8 +11,8 @@ import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 //     закрытых блоков приходят пустыми) — «Скрыт» / «Видит» / «Меняет»;
 //   • прежние права компании (`caps`) — для строк без `blocks`: у владельца
 //     и до наката миграции всё ведёт себя как раньше.
-// «Меняет» у блока работает само по себе (владелец 02.10: «если поставлено
-// „Меняет" — может редактировать полноценно объекты и всё, что нужно»), а
+// «Меняет» у блока работает само по себе (полноценная правка объектов и
+// всего, что нужно), а
 // база — имя, номера, команда — у сотрудника только «Видит»: её правит
 // владелец. Так решает и сервер (`access_client_blocks`,
 // `update_client_with_tags`).
@@ -68,7 +68,7 @@ export function cardAccess({
   const draftByRights = draft && !!draftBlocks;
   const byRights = draftByRights || (!draft && !!client?.blocks);
   const rights = draftByRights ? { blocks: draftBlocks ?? undefined } : client;
-  // Имя, номер и мессенджеры — блок «Клиент» (02.10: «Скрыт / Видит /
+  // Имя, номер и мессенджеры — блок «Клиент» («Скрыт / Видит /
   // Меняет»); у строк без `blocks` (владелец) — как раньше.
   const cardEdit =
     draft ||
@@ -100,8 +100,7 @@ export function cardAccess({
     objects: block(teamOn.objects, "clients.objects"),
     // Метку и тег черновик тоже ставит только с правом менять карточки.
     labels: block(teamOn.labels, "clients.labels", true, caps.edit),
-    // «Тег» — свой выключатель команды и своё право (владелец 03.10:
-    // «разделение на метку и на тег»).
+    // «Тег» — свой выключатель команды и своё право, отдельно от метки.
     tags: block(teamOn.tags, "clients.tags", true, caps.edit),
     personal: block(teamOn.personal, "clients.personal"),
     // Файлы кладёт хранилище, которое видит компанию из токена (`caps.files`).
@@ -113,21 +112,21 @@ export function cardAccess({
     },
     requisites: block(teamOn.requisites, "clients.requisites", caps.money),
     history: block(true, "clients.history"),
-    // ДЕНЬГИ ИДУТ ВМЕСТЕ С «ИСТОРИЕЙ» (владелец 03.10: «если разрешаю
-    // историю — он в любом случае может увидеть и долг, и деньги»). Отдельного
-    // права «Долг и деньги» больше нет; у своей базы — как было (`caps.money`).
+    // ДЕНЬГИ ИДУТ ВМЕСТЕ С «ИСТОРИЕЙ»: кому открыта история, тому видны и долг,
+    // и деньги. Отдельного права «Долг и деньги» нет; у своей базы —
+    // `caps.money`.
     money: block(true, "clients.history", caps.money, false),
-    // SMS клиента — свой блок (02.10): «Видит» — история, «Меняет» —
+    // SMS клиента — свой блок: «Видит» — история, «Меняет» —
     // отправка с карточки, «Присылать SMS» и имя для SMS.
     sms: block(true, "clients.sms"),
   };
 }
 
-/** СВОДКА КЛИЕНТА ПО ЕГО ПРАВАМ (аудит 015, 30.09). Сводку считает экран
+/** СВОДКА КЛИЕНТА ПО ЕГО ПРАВАМ. Сводку считает экран
  *  из записей, которые сотрудник видит по правам КАЛЕНДАРЯ, — и без маски
  *  долг, выручка и «был …» пролезли бы в строку списка, сортировку «по
  *  долгу», фильтр «Должники» и строку истории в записи мимо прав КЛИЕНТА.
- *  Без «Истории» — ни денег (03.10: «Долг и деньги» ушли в неё), ни визитов и дат.
+ *  Без «Истории» — ни денег (они идут вместе с ней), ни визитов и дат.
  *  Строка без `blocks` (владелец) — как есть. */
 export function statsByBlocks<S extends {
   visits: number;
@@ -142,7 +141,7 @@ export function statsByBlocks<S extends {
   expectedRevenue: number;
 }>(client: Pick<Client, "blocks">, stats: S): S {
   if (!client.blocks) return stats;
-  // Деньги — вместе с «Историей» (03.10).
+  // Деньги — вместе с «Историей».
   const noHistory = clientBlockLevel(client, "clients.history") === "hidden";
   const noMoney = noHistory;
   if (!noMoney && !noHistory) return stats;

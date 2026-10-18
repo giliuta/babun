@@ -1,6 +1,6 @@
 -- Кадровые документы мастера — только владельцу.
 --
--- Политика `master_docs_all_own` (20260517_003_webhooks_master_docs_ratings.sql)
+-- Политика `master_docs_all_own` (20260517000003_webhooks_master_docs_ratings.sql)
 -- была написана в эпоху «все свои в одном тенанте»: `for all to anon,
 -- authenticated using (tenant_id = current_tenant_id())`. То есть ЛЮБОЙ
 -- участник компании — включая обычного мастера — читал и УДАЛЯЛ кадровые

@@ -24,99 +24,17 @@ import type { Appointment } from "../appointments";
 import { getPaidAmount, getDebtAmount } from "../appointments";
 import type { Client } from "../clients";
 
-export interface ClientStats {
-  /** Number of completed visits. */
-  visits: number;
-  /** Lifetime money paid by the client. */
-  totalSpent: number;
-  /** YYYY-MM-DD of the most recent completed visit, or "" if none. */
-  lastVisitDate: string;
-  /** Number of days since lastVisitDate, or null if never visited. */
-  lastVisitDays: number | null;
-  /** Next future appointment, scheduled OR in_progress. */
-  nextApt: { date: string; time: string } | null;
-  /** Days until nextApt (0 = today, 1 = tomorrow), or null. */
-  nextAptDays: number | null;
-  /** ЛИЧНЫЙ РИТМ КЛИЕНТА — медиана промежутков между его завершёнными
-   *  визитами, в днях. null, когда визитов меньше двух: ритма ещё нет.
-   *
-   *  Нужен вместо общего порога «давно не был». Один порог на всех врёт в
-   *  обе стороны: клининг ездит раз в неделю, кондиционеры — раз в полгода,
-   *  и 60 дней для первого катастрофа, а для второго норма. Медиана, а не
-   *  среднее: один сезонный пропуск не должен сдвигать норму. */
-  medianGapDays: number | null;
-  /** ПРОШЕДШИЕ НЕЗАКРЫТЫЕ ВИЗИТЫ: запись стоит «запланирована», а дата уже
-   *  прошла. Работу почти наверняка сделали, но её никто не закрыл — значит
-   *  визит не считается визитом, деньги не попали ни в долг, ни в выручку,
-   *  а клиент выглядит тем, кто «так и не приехал».
-   *
-   *  Календарь это состояние знает и красит янтарём; список клиентов до
-   *  сих пор не знал (аудит 2026-08-07). */
-  unclosedVisits: number;
-  /** YYYY-MM-DD самого позднего ПРОШЕДШЕГО НЕЗАКРЫТОГО визита, или "".
-   *  Строка списка красит дату последнего визита жёлтым, если последним был
-   *  именно такой (владелец 01.10: «последний визит не закрыт — жёлтым»). */
-  lastUnclosedDate: string;
-  /** Неполученные деньги: завершённые визиты с недоплатой ПЛЮС прошедшие
-   *  записи, по которым команда не отчиталась, — для владельца это одно и
-   *  то же «нам не заплатили». */
-  debt: number;
-  /** Expected revenue — Σ total_amount of FUTURE scheduled/in-progress
-   *  appointments (today or later). Powers the card's grey «ожидаемая
-   *  прибыль» figure. 0 when the client has no upcoming bookings. */
-  expectedRevenue: number;
-  /** team_id of the client's most-recent COMPLETED visit that carried one
-   *  — drives the «команда» segment on the list card. null if the client
-   *  has no completed visits with a team (future-only bookings don't count). */
-  lastTeamId: string | null;
-  /** Days since the client record was created. */
-  ageDays: number;
-  /** Days until the next birthday (0–365), or null when no birthday. */
-  birthdayInDays: number | null;
-}
+import { EMPTY_STATS, type ClientStats } from "./client-stats/types";
+import {
+  birthdayInDays,
+  daysBetween,
+  isoToDate,
+  medianGap,
+  parseKey,
+  todayKey,
+} from "./client-stats/dates";
 
-const EMPTY_STATS: ClientStats = {
-  visits: 0,
-  totalSpent: 0,
-  lastVisitDate: "",
-  lastVisitDays: null,
-  nextApt: null,
-  nextAptDays: null,
-  medianGapDays: null,
-  unclosedVisits: 0,
-  lastUnclosedDate: "",
-  debt: 0,
-  expectedRevenue: 0,
-  lastTeamId: null,
-  ageDays: 0,
-  birthdayInDays: null,
-};
-
-// ─── Date helpers ─────────────────────────────────────────────────
-
-/** Today as YYYY-MM-DD, in local time. */
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function parseKey(key: string): Date | null {
-  const [y, m, d] = key.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-}
-
-function daysBetween(a: Date, b: Date): number {
-  const ms = b.getTime() - a.getTime();
-  return Math.round(ms / 86400000);
-}
-
-function isoToDate(iso: string): Date | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-}
+export type { ClientStats } from "./client-stats/types";
 
 // ─── Public — single client ────────────────────────────────────────
 
@@ -158,15 +76,32 @@ export function isVisit(a: Pick<Appointment, "status">): boolean {
  *  своё правило на экране истории разошлось бы с суммой, по которой тапнули.
  *
  *  Выполненная — недоплата; отменённая — ничего; прошедшая, по которой
- *  бригада не отчиталась, — тоже долг (владелец 2026-08-09, см. ниже);
+ *  бригада не отчиталась, — тоже долг (см. ниже);
  *  будущая — ещё не долг. `today` — локальный YYYY-MM-DD. */
 export function appointmentDebt(
   a: Appointment,
   today: string,
+  invoicing?: ClientInvoicing,
 ): number {
+  // Работа под живым инвойсом должна ровно остаток своего инвойса — как в
+  // «Финансах», где долгом стоит инвойс, а не запись.
+  const invoiced = invoicing?.byAppointment.get(a.id);
+  if (invoiced !== undefined) return invoiced;
   if (a.status === "cancelled") return 0;
   if (isVisit(a)) return getDebtAmount(a);
   return a.date < today ? getDebtAmount(a) : 0;
+}
+
+/** ИНВОЙСЫ В ДОЛГЕ КЛИЕНТА — тем же правилом, что плитка «Долги» и день
+ *  календаря: работа под живым инвойсом (`invoicedAppointmentIds`) из долга
+ *  записей выпадает, а долгом становится остаток самого инвойса. Без этого
+ *  частичная кредит-нота к оплаченному инвойсу навсегда оставляла у записи
+ *  «долг» на сумму ноты: в «Финансах» €0, на карточке клиента — €100. */
+export interface ClientInvoicing {
+  /** Работа под живым инвойсом → остаток к оплате её инвойса (0 — оплачен). */
+  byAppointment: ReadonlyMap<string, number>;
+  /** Остаток живых инвойсов клиента БЕЗ записи, ключ — client_id. */
+  unlinkedByClient: ReadonlyMap<string, number>;
 }
 
 export function buildStats(
@@ -175,9 +110,14 @@ export function buildStats(
   client: Pick<Client, "id" | "full_name" | "created_at" | "birthday"> &
     Partial<Pick<Client, "locations">>,
   apts: Appointment[],
+  invoicing?: ClientInvoicing,
 ): ClientStats {
+  const invoiceDebt = invoicing?.unlinkedByClient.get(client.id) ?? 0;
   if (apts.length === 0) {
-    return computeNonAptFields(client, { ...EMPTY_STATS });
+    return computeNonAptFields(client, {
+      ...EMPTY_STATS,
+      debt: Math.round(invoiceDebt * 100) / 100,
+    });
   }
   const cid = client.id;
   const cname = normName(client.full_name);
@@ -203,16 +143,16 @@ export function buildStats(
       a.client_id == null && nameInComment(normName(a.comment), cname);
     if (!matchById && !matchByName) continue;
 
-    // ДОЛГ ВОЗНИКАЕТ И БЕЗ ОТМЕТКИ БРИГАДЫ. Владелец 2026-08-09: «прошло
-    // время записи — оно автоматически перебрасывается в долг, всё равно
-    // надо принимать решение по клиенту». Прошедшая неотменённая работа,
+    // ДОЛГ ВОЗНИКАЕТ И БЕЗ ОТМЕТКИ БРИГАДЫ: прошло время записи — она
+    // автоматически становится долгом, по клиенту всё равно надо принимать
+    // решение. Прошедшая неотменённая работа,
     // по которой бригадир не отчитался, — это те же неполученные деньги,
     // что и закрытый визит без оплаты. Отдельной корзины «не закрыто» в
     // деньгах нет: она делила одно и то же надвое.
     //
     // ВИЗИТОМ такая запись не считается — визитов у клиента ровно столько,
     // сколько подтверждённых работ; на них живут ритм, «Пропали» и доход.
-    debt += appointmentDebt(a, today);
+    debt += appointmentDebt(a, today, invoicing);
 
     if (isVisit(a)) {
       visits += 1;
@@ -266,7 +206,9 @@ export function buildStats(
   return computeNonAptFields(client, {
     visits,
     totalSpent: Math.round(totalSpent),
-    debt: Math.round(debt),
+    // Долг — в центах, а не до евро: €0,40 иначе пропадал вместе с клиентом
+    // из «Должников», а €12,60 печаталось как «€13».
+    debt: Math.round((debt + invoiceDebt) * 100) / 100,
     expectedRevenue: Math.round(expectedRevenue),
     lastTeamId,
     lastVisitDate,
@@ -311,17 +253,6 @@ function computeNonAptFields(
   };
 }
 
-function birthdayInDays(birthday: string): number | null {
-  if (!birthday) return null;
-  const [, mm, dd] = birthday.split("-").map(Number);
-  if (!mm || !dd) return null;
-  const today = new Date();
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  let target = new Date(today.getFullYear(), mm - 1, dd);
-  if (target < t0) target = new Date(today.getFullYear() + 1, mm - 1, dd);
-  return daysBetween(t0, target);
-}
-
 // ─── Public — full map (the fast path the page uses) ───────────────
 
 /**
@@ -333,6 +264,7 @@ function birthdayInDays(birthday: string): number | null {
 export function buildStatsMap(
   clients: Client[],
   apts: Appointment[],
+  invoicing?: ClientInvoicing,
 ): Map<string, ClientStats> {
   // First pass: index appointments.
   const byId = new Map<string, Appointment[]>();
@@ -368,7 +300,7 @@ export function buildStatsMap(
     } else {
       combined = own;
     }
-    out.set(c.id, buildStats(c, combined));
+    out.set(c.id, buildStats(c, combined, invoicing));
   }
   return out;
 }
@@ -376,35 +308,12 @@ export function buildStatsMap(
 /** Fast helper for page-level segment counts. */
 /** «Пропал»: был у нас, давно не приезжал И НЕ ЗАПИСАН ВПЕРЁД.
  *
- *  Проверка `nextApt` добавлена 2026-08-07: без неё в список на обзвон
- *  попадал клиент, который был 90 дней назад и приезжает завтра —
- *  диспетчер звонил зря и переставал верить фильтру.
+ *  Без проверки `nextApt` в список на обзвон попадал бы клиент, который
+ *  был 90 дней назад и приезжает завтра, — диспетчер звонил бы зря и
+ *  переставал верить фильтру.
  *
  *  Порог сравнивается через `>=`: ряд называется «60+ дней», а строгое
  *  `>` означало 61 — подпись обязана описывать РОВНО предикат. */
-/** Медиана промежутков между визитами (дни). Меньше двух визитов — ритма
- *  ещё нет, возвращаем null: по одному приезду судить не о чем. */
-function medianGap(dates: readonly string[]): number | null {
-  if (dates.length < 2) return null;
-  const days = [...dates]
-    .sort()
-    .map((d) => parseKey(d))
-    .filter((d): d is Date => d !== null);
-  if (days.length < 2) return null;
-  const gaps: number[] = [];
-  for (let i = 1; i < days.length; i += 1) {
-    const gap = daysBetween(days[i - 1], days[i]);
-    // Два визита в один день — не промежуток, а один выезд из двух работ.
-    if (gap > 0) gaps.push(gap);
-  }
-  if (gaps.length === 0) return null;
-  gaps.sort((a, b) => a - b);
-  const mid = Math.floor(gaps.length / 2);
-  return gaps.length % 2 === 1
-    ? gaps[mid]
-    : Math.round((gaps[mid - 1] + gaps[mid]) / 2);
-}
-
 export function isLongSilence(s: ClientStats, days = 60): boolean {
   return (
     s.visits > 0 &&

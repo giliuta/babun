@@ -8,7 +8,7 @@ import {
   withTeamlessRows,
 } from "./team-scope";
 
-// Данные Giliuta 15.09: три строки без команды на счёте «Revolut Business»
+// Данные Giliuta: три строки без команды на счёте «Revolut Business»
 // Команды 1 — перевод 5.00, доход 59.50 и возврат −59.50.
 const T1 = "team-1";
 const T3 = "team-3";

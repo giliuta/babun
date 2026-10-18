@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useInClientsTab } from "@/features/clients/reference-href";
+import { useInClientsTab } from "@/lib/reference-href";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -14,13 +14,14 @@ import { SelectList } from "@/components/ui/select-rows";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
-import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/session/company-scope";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
+import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { useClient } from "@/features/clients/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
@@ -29,25 +30,22 @@ import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
 
-// ИСТОРИЯ ЗАПИСЕЙ — полноценная страница (владелец 2026-07-26: «должна быть
-// просто история записей: нажимаю — и там абсолютно все записи по этому
-// клиенту, полноценная страница»).
+// ИСТОРИЯ ЗАПИСЕЙ — полноценная страница со всеми записями клиента.
 //
-// На карточке — ОДНА строка «История записей · N»: ленты там он не хочет
-// («визиты вот это вот куча»). Здесь же отвечаем на вопросы в порядке их
+// На карточке — ОДНА строка «История записей · N», без ленты. Здесь же отвечаем на вопросы в порядке их
 // появления: когда → что делали → сколько → всё ли заплачено.
 //
 // Запись открывается ПОВЕРХ этой страницы, поэтому «назад» из записи ведёт
-// в историю, а второй «назад» — к клиенту. Раньше тап уводил в таб
-// «Календарь», и возврат выбрасывал человека туда же.
+// в историю, а второй «назад» — к клиенту. Если вести тап через таб
+// «Календарь», возврат выбросил бы человека туда же.
 //
-// ОДНИМ СПИСКОМ, ОТДЕЛЬНЫМИ ПЛАШКАМИ (владелец 03.10: «блоков „Впереди“ и
-// „2026“ не надо — полностью поэтапно вниз списком»; «полноценные блоки,
-// отдельные друг от друга, красивые, компактные» — как список тегов).
+// ОДНИМ СПИСКОМ, ОТДЕЛЬНЫМИ ПЛАШКАМИ: без блоков «Впереди» и года,
+// просто вниз списком; плашки отдельные друг от друга, компактные, как
+// список тегов.
 // Плашка — `VisitRow` (наш `SelectRow`) в `SelectList`.
 // Услуги не пишутся; заметки клиента — в блоке «Заметка» карточки.
 //
-// ВНИЗУ — «ЗАПИСАТЬ КЛИЕНТА» (владелец 03.10): та же дверь, что «Записать» в
+// ВНИЗУ — «ЗАПИСАТЬ КЛИЕНТА»: та же дверь, что «Записать» в
 // «⋯» карточки, с тем же правом «Новые записи».
 
 // Строка — `VisitRow`: та же, что последняя запись на карточке.
@@ -71,7 +69,7 @@ function ClientVisitsScreen() {
     unpaid?: string;
   }>();
   const { data: client } = useClient(clientId ?? "");
-  // С 30.09 история открыта и сотруднику — по праву «История» этого
+  // История открыта и сотруднику — по праву «История» этого
   // клиента; суммы и долг — по праву «Долг и деньги» (`card-access.ts`).
   const access = useCardAccess(client, false);
   const showMoney = access.money.show;
@@ -92,9 +90,12 @@ function ClientVisitsScreen() {
   const today = todayYMD();
   // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`): тапнули по
   // €240 — список обязан дать €240.
+  // Работа под инвойсом должна остаток инвойса — тем же правилом, что
+  // «Долг» на карточке и плитка «Долги» в «Финансах».
+  const invoicing = useClientInvoicing();
   const unpaidList = useMemo(
-    () => unpaidVisits(appointments, today),
-    [appointments, today],
+    () => unpaidVisits(appointments, today, invoicing),
+    [appointments, today, invoicing],
   );
   const unpaidIds = useMemo(
     () => new Set(unpaidList.list.map((a) => a.id)),
@@ -121,8 +122,7 @@ function ClientVisitsScreen() {
   }, [rows]);
 
   // Итог сверху — то, ради чего историю чаще всего и открывают.
-  // Визит — прошедшая неотменённая работа: статуса «Выполнена» больше нет
-  // (владелец 03.10).
+  // Визит — прошедшая неотменённая работа: статуса «Выполнена» нет.
   const done = appointments.filter(
     (a) => a.status !== "cancelled" && (a.kind ?? "work") === "work" && a.date <= today,
   );
@@ -131,14 +131,20 @@ function ClientVisitsScreen() {
   const spent = appointments
     .filter((a) => a.status !== "cancelled" && (a.kind ?? "work") === "work")
     .reduce((n, a) => n + Math.max(0, getPaidAmount(a)), 0);
+  // Инвойс без записи — тоже долг клиента (как на карточке), но строки
+  // визита у него нет: он входит в итог словами.
+  const invoiceOnly = invoicing?.unlinkedByClient.get(clientId ?? "") ?? 0;
+  const debtTotal = Math.round((unpaidList.total + invoiceOnly) * 100) / 100;
   const caption = unpaidOnly
     ? unpaidList.list.length > 0
-      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`
-      : "Неоплаченных записей нет."
+      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(debtTotal)}`
+      : invoiceOnly > 0
+        ? `Неоплаченных записей нет · по инвойсам ${formatEUR(invoiceOnly)}`
+        : "Неоплаченных записей нет."
     : done.length > 0
       ? showMoney
         ? `${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
-            unpaidList.total > 0 ? ` · долг ${formatEUR(unpaidList.total)}` : ""
+            debtTotal > 0 ? ` · долг ${formatEUR(debtTotal)}` : ""
           }`
         : `${done.length} ${visitsWord(done.length)}`
       : null;
@@ -151,8 +157,7 @@ function ClientVisitsScreen() {
   const scope = useClientsScopeOrNull();
   const bookInPlan = usePlanAllows("book-clients");
   const bookTeam = client?.team_id ?? rows.find((a) => a.team_id)?.team_id ?? null;
-  // Нет права записи — нет и кнопки (владелец 03.10: «если нет разрешения
-  // на запись — этого и не будет»; так же «Добавить файл» и «Добавить
+  // Нет права записи — нет и кнопки (так же «Добавить файл» и «Добавить
   // объект»). Серой она остаётся только владельцу, когда запись закрыта
   // тарифом.
   const bookRight =
@@ -162,8 +167,8 @@ function ClientVisitsScreen() {
     calendarActionsFor(bookTeam).create;
   const canBook = bookRight && (scope?.kind === "member" || bookInPlan);
 
-  // Запись открывается ПОВЕРХ истории, а не через таб «Календарь»
-  // (владелец 2026-07-26): «назад» — сюда, ещё раз «назад» — в клиента.
+  // Запись открывается ПОВЕРХ истории, а не через таб «Календарь»:
+  // «назад» — сюда, ещё раз «назад» — в клиента.
   const open = (a: Appointment) => {
     haptics.tap();
     router.push(`/book?appointmentId=${a.id}` as Href);
@@ -174,7 +179,7 @@ function ClientVisitsScreen() {
   const inTab = useInClientsTab();
   return (
     // Нижнюю зону держит таб-бар — как у списка клиентов: иначе кнопка
-    // внизу стояла на ~34pt выше, чем на соседних экранах (владелец 03.10).
+    // внизу стояла на ~34pt выше, чем на соседних экранах.
     <Screen edges={inTab ? ["top"] : undefined}>
       {/* ФИЛЬТР НАЗВАН В ШАПКЕ и снимается там же словом «Все» — как разрез
           ленты в «Финансах» (PanelHeader). */}
@@ -217,7 +222,7 @@ function ClientVisitsScreen() {
           {caption ? (
             <RowCaption
               text={caption}
-              tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
+              tone={unpaidOnly || (showMoney && debtTotal > 0) ? "warning" : "quiet"}
             />
           ) : null}
           {/* День — заголовком над своими плашками, как в «Финансах»;
@@ -233,9 +238,10 @@ function ClientVisitsScreen() {
                     team={a.team_id ? teamsById.get(a.team_id) : undefined}
                     today={today}
                     showMoney={showMoney}
+                    invoicing={invoicing}
                     // Запись чужой (не открытой сейчас) компании страница
                     // записи не прочтёт — она читает активную; такая строка —
-                    // показание, а не дверь в пустой экран (аудит 03.10).
+                    // показание, а не дверь в пустой экран.
                     onPress={
                       historyOnly.has(a.id) || (scope && !scope.isActive) ? undefined : () => open(a)
                     }

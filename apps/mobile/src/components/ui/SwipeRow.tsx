@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import {
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
+import {
+  Pressable,
+  Text,
+  View,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
+} from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -11,9 +25,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { SWIPE_LEADING, SWIPE_TRAILING, mergeSwipeActions } from "./swipe-a11y";
 
-// СМАХНУТЬ ВЛЕВО → ОДНО ДЕЙСТВИЕ (владелец 2026-08-06: «можно смахнуть влево
-// и там можно будет нажать удалить»). Тот же жест, что в Почте и Сообщениях —
+// СМАХНУТЬ ВЛЕВО → ОДНО ДЕЙСТВИЕ. Тот же жест, что в Почте и Сообщениях —
 // объяснять его не нужно.
 //
 // Действие НА СТОРОНУ — РОВНО ОДНО, и оно настраивается: цвет, значок,
@@ -22,13 +36,12 @@ import { useThemeColors } from "@/theme/colors";
 // умеет. Что не влезло в одну кнопку, живёт в long-press-меню, и ПЕРВЫЙ пункт
 // меню совпадает со свайпом — жест и слово говорят одно и то же.
 //
-// ВТОРАЯ СТОРОНА (`leading`, владелец 2026-08-17: «если слева вправо потянуть,
-// то только тогда можно открыть звёздочку») — для действия, ОБРАТНОГО по
+// ВТОРАЯ СТОРОНА (`leading`) — для действия, ОБРАТНОГО по
 // смыслу разрушительному: уносит вправо-налево, отмечает слева-направо. Обе
 // кромки никогда не открыты одновременно.
 //
-// СТОРОНА ЗАКРЕПЛЕНА ЗА СМЫСЛОМ, А НЕ ЗА «САМЫМ СИЛЬНЫМ ИЗ ДОСТУПНОГО»
-// (владелец 2026-09-10: «свайп вправо это удалить, а не скрыть»). Правая
+// СТОРОНА ЗАКРЕПЛЕНА ЗА СМЫСЛОМ, А НЕ ЗА «САМЫМ СИЛЬНЫМ ИЗ ДОСТУПНОГО».
+// Правая
 // кромка — ВСЕГДА «Удалить»; левая — «Скрыть»/«Показать»/«Вернуть». Если
 // строку удалить нельзя (стандартная категория защищена RLS), правой кромки
 // у неё просто НЕТ — палец упирается в ноль, а не находит там чужое
@@ -37,7 +50,7 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Почему не крестик в строке: 32pt кнопка живёт в строке ВСЕГДА и отбирает
 // место у содержания, а её зона смыкается с соседними кнопками (у номеров
-// это уже приводило к ошибочным удалениям, аудит 2026-07-27). Свайп ничего
+// это уже приводило к ошибочным удалениям). Свайп ничего
 // не занимает и требует намеренного движения.
 //
 // Кнопка не делает разрушительного молча: у «Удалить» вызывающая сторона
@@ -57,6 +70,12 @@ const FULL_AT = ACTION_W * 1.6;
 /** Кто сейчас раскрыт. Модульная переменная, а не контекст: ряды живут в
  *  разных списках и разных экранах, а правило у них одно. */
 let closeOpenRow: (() => void) | null = null;
+
+/** То, что строка могла объявить для ротора сама. */
+type RowA11y = {
+  accessibilityActions?: readonly AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+};
 
 export function SwipeRow({
   label,
@@ -86,9 +105,8 @@ export function SwipeRow({
    *  выключен: у «Удалить» промах пальца стоил бы объекта. */
   fullSwipe?: boolean;
   onAction?: () => void;
-  /** ВТОРАЯ КРОМКА — потянуть СЛЕВА НАПРАВО (владелец 2026-08-17: «если слева
-   *  вправо потянуть, то только тогда можно открыть звёздочку и сделать её
-   *  выбранной»). Правило то же: одна сторона — одно действие. Кромки
+  /** ВТОРАЯ КРОМКА — потянуть СЛЕВА НАПРАВО: открывает звёздочку и делает её
+   *  выбранной. Правило то же: одна сторона — одно действие. Кромки
    *  взаимоисключающие: открыта всегда ровно одна. */
   leading?: {
     label: string;
@@ -97,7 +115,7 @@ export function SwipeRow({
     accessibilityLabel?: string;
     onAction: () => void;
   };
-  /** ПЛАШКА НА ХОЛСТЕ (файлы и реквизиты клиента, 03.10): строка — отдельная
+  /** ПЛАШКА НА ХОЛСТЕ (файлы и реквизиты клиента): строка — отдельная
    *  плашка со скруглением, и подложка с кромкой скругляются вместе с ней.
    *  Нет — строка внутри карточки, углы держит карточка. */
   radius?: number;
@@ -149,6 +167,27 @@ export function SwipeRow({
   const hasLeading = !!leading;
   /** Правая кромка существует только вместе со своим действием. */
   const hasTrailing = !!onAction && !!label;
+
+  // СВАЙП — ЕЩЁ И ДЕЙСТВИЯ РОТОРА (`swipe-a11y.ts`). Вешаются на саму строку:
+  // фокус VoiceOver стоит на ней, а не на обёртке жеста. Свои действия строки
+  // сливаются с кромками, а не затираются.
+  const edges = { leading: leading?.label, trailing: hasTrailing ? label : undefined };
+  const own: RowA11y | null =
+    (edges.leading || edges.trailing) && isValidElement<RowA11y>(children) && children.type !== Fragment
+      ? children.props
+      : null;
+  const row =
+    own && isValidElement<RowA11y>(children)
+      ? cloneElement(children, {
+          accessibilityActions: mergeSwipeActions(own.accessibilityActions, edges),
+          onAccessibilityAction: (event: AccessibilityActionEvent) => {
+            const name = event.nativeEvent.actionName;
+            if (name === SWIPE_TRAILING) fire();
+            else if (name === SWIPE_LEADING) fireLead();
+            else own.onAccessibilityAction?.(event);
+          },
+        })
+      : children;
   const pan = Gesture.Pan()
     // По горизонтали: вертикальный скролл списка должен побеждать.
     .activeOffsetX([-12, 12])
@@ -193,8 +232,9 @@ export function SwipeRow({
           насколько её сдвинули.
 
           ДЛЯ РОТОРА ЕЁ НЕ СУЩЕСТВУЕТ. Кромка — часть жеста, а не элемент
-          списка: то же действие строка отдаёт через `accessibilityActions`, и
-          без этого VoiceOver читал под каждым счётом фантомную кнопку. */}
+          списка: то же действие строка отдаёт через `accessibilityActions`
+          (их вешает сам SwipeRow, см. `row`), и без этого VoiceOver читал под
+          каждым счётом фантомную кнопку. */}
       {hasTrailing ? (
         <View
           accessibilityElementsHidden
@@ -275,7 +315,7 @@ export function SwipeRow({
 
       <GestureDetector gesture={pan}>
         <Animated.View style={[rowStyle, { backgroundColor: t.surface }]}>
-          {children}
+          {row}
         </Animated.View>
       </GestureDetector>
     </View>

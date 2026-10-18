@@ -1,6 +1,6 @@
 -- ДОГОН ДРЕЙФА: у client_attachments не было половины обещанных ограничений.
 --
--- ЧТО СЛУЧИЛОСЬ. Таблицу завёл 20260517_008_client_attachments.sql. Через два
+-- ЧТО СЛУЧИЛОСЬ. Таблицу завёл 20260517000008_client_attachments.sql. Через два
 -- месяца 20260720210003_master_privacy_hardening.sql написал ВТОРОЙ
 -- `create table if not exists` — с другим определением: unique на storage_path,
 -- check на size_bytes, FK и default auth.uid() у created_by. Второе создание
@@ -31,7 +31,7 @@
 --
 -- ЧЕГО ЗДЕСЬ НАМЕРЕННО НЕТ.
 --   * `mime_type set default 'application/octet-stream'` — дефолт остаётся
---     пустой строкой, как в 20260517_008 и как на проде. Приложение
+--     пустой строкой, как в 20260517000008 и как на проде. Приложение
 --     (apps/mobile/src/features/clients/card-attachments.ts) всегда шлёт
 --     mime_type явно, так что дефолт никого не спасает, а менять его — значит
 --     разводить прод и репо ещё раз, теперь в другую сторону.

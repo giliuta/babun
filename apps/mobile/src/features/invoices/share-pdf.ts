@@ -4,12 +4,12 @@ import type {
   InvoicePaymentLedger,
   InvoiceSettlement,
 } from "@babun/shared/local/finance/invoice-ledger";
-import type { Tenant } from "@/features/settings/tenant";
-import { invoiceDictionary, type InvoiceLanguage } from "./dictionary";
-import { shareHtmlAsPdf } from "@/features/documents/share-pdf";
-import { buildInvoicePdfHtml } from "./pdf";
+import type { Tenant } from "@/session/tenant";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
+import { shareHtmlAsPdf } from "@/lib/share-pdf";
+import { buildInvoicePdfHtml } from "@/lib/paper/pdf";
 
-// Печать — общий примитив `@/features/documents/share-pdf` (см. его
+// Печать — общий примитив `@/lib/share-pdf` (см. его
 // комментарий: веб-iframe/`printToFileAsync`+`shareAsync`, один на продукт).
 // Здесь остаётся только сборка HTML конкретного инвойса и имя, под которым
 // он уходит наружу — поведение самой печати не менялось ни на шаг.
@@ -22,9 +22,9 @@ export async function shareInvoicePdf(input: {
   accountNames?: ReadonlyMap<string, string>;
   businessToday?: string;
   /** ЯЗЫК ДОКУМЕНТА, А НЕ ЯЗЫК ПРИЛОЖЕНИЯ. Он выбран при выставлении и лежит
-   *  в строке инвойса; сюда его обязан передать экран. Пока этого параметра
-   *  не было, англичанин, которому счёт СОБИРАЛИ на английском, получал PDF
-   *  «ИНВОЙС / Продавец / Получатель / К оплате» — аудит бумаги 2026-09-20. */
+   *  в строке инвойса; сюда его обязан передать экран. Без него
+   *  англичанин, которому счёт СОБИРАЛИ на английском, получил бы PDF
+   *  «ИНВОЙС / Продавец / Получатель / К оплате». */
   language?: InvoiceLanguage;
   /** Кредит-нота: номер отменённого инвойса (см. `IssuedDocumentInput`). */
   creditNote?: { originalNumber: string | null } | null;

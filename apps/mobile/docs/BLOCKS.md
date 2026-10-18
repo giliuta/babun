@@ -22,10 +22,10 @@
 | Примитив | Файл | Роль |
 |---|---|---|
 | `SectionCard` | `src/components/ui/SectionCard.tsx` | Блок с ИМЕНЕМ: капс-подпись внутри белой карточки, её команды — иконками справа в той же строке (`action`, до двух) |
-| `RowGroup` | `src/components/ui/card-rows.tsx` | Секция с подытогом справа и пояснением под ней. **Только финансы.** Под именованный блок не брать |
+| `RowGroup` | `src/components/ui/card-rows/RowGroup.tsx` (импорт — из `src/components/ui/card-rows.tsx`) | Секция с подытогом справа и пояснением под ней. **Только финансы.** Под именованный блок не брать |
 | `ChooseRow` | `src/components/ui/ChooseRow.tsx` | Пустое состояние блока — дверь: кружок со значком, синяя подпись, серый хинт |
 | `ReferenceBlock` | `src/components/ui/ReferenceBlock.tsx` | БЛОК ВЫБОРА ИЗ СПРАВОЧНИКА целиком: шапка → дверь «Выбрать …» → выбранное значком, цветом и именем. Одно тело у категории и у типа события |
-| `FieldRow` · `ChoiceRow` · `NavRow` · `ActionRow` · `ValueRow` | `src/components/ui/card-rows.tsx`, `src/components/ui/ValueRow.tsx` | Строки внутри блока |
+| `FieldRow` · `ChoiceRow` · `NavRow` · `ActionRow` · `ValueRow` | `src/components/ui/card-rows.tsx` (одна строка — один файл в `card-rows/`), `src/components/ui/ValueRow.tsx` | Строки внутри блока |
 | `SwipeRow` | `src/components/ui/SwipeRow.tsx` | Кромки закреплены за смыслом: ПРАВАЯ (`label`) — «Удалить»/«Убрать», ЛЕВАЯ (`leading`) — «Скрыть»/«Показать»/«Вернуть». Нечего удалять — правой кромки нет (`label` необязателен) |
 | `SelectRow` · `SelectSearch` · `SelectList` | `src/components/ui/select-rows.tsx` | Строка, поиск и ритм ЛЮБОЙ шторки выбора |
 | `BottomSheet` | `src/components/ui/BottomSheet.tsx` | Шторка: `title`, `subtitle`, `headerAction`, `footer`, `maxHeightRatio` |
@@ -61,7 +61,7 @@
 | Строка выбранного (клиент) | `px-4 py-2.5`; имя **17 / 700**, история строкой, телефон **13** |
 | Кнопка-орган справа в строке | круг **32×32** на `rowFill` |
 | Кнопка действия у строки (`RowActionButton`: звонок, маршрут) | круг **28×28** — размер плитки строки (владелец 03.10), `hitSlop 8` до 44pt, значок **16** |
-| Заметка `InlineNoteField` | поля **12** по бокам, **2** сверху, **8** снизу; внутри **12 / 7**; кегль **13** |
+| Заметка `InlineNoteField` | поля **12** по бокам, **2** сверху, **8** снизу; внутри **12 / 9**; кегль **15/20** чёрным; белое поле `surface` в рамке **1** `separator`, без цвета и тени |
 
 | Шторка выбора | Число |
 |---|---|
@@ -216,8 +216,10 @@
 
 ## 2. Блок «Объект» + шторка + форма объекта
 
-**Канон:** `app/book/index.tsx:2447` (запись), `2974` (событие),
-`src/features/clients/blocks/ObjectsBlock.tsx:126` (`ObjectRow` — строка).
+**Канон:** `src/features/appointments/book-form/WorkObjectBlock.tsx` (запись),
+`src/features/appointments/book-form/EventObjectBlock.tsx` (событие) — части
+формы `app/book/index.tsx`, `src/features/clients/blocks/objects-block/ObjectRow.tsx`
+(`ObjectRow` — строка; импортируется через `src/features/clients/blocks/ObjectsBlock.tsx`).
 
 Строка объекта не копируется, а берётся та же: `ObjectRow`. В записи объект
 ВЫБИРАЮТ, поэтому справа шеврон, а заметка объекта — своей плашкой под строкой.
@@ -258,7 +260,7 @@
 Создание пишет черновик одной кнопкой, правка — на уходе с каждого поля.
 
 **Дополнительные страницы:** типы объектов —
-`src/features/reference/screens/ObjectTypesScreen.tsx`, двери
+`src/features/clients/ObjectTypesScreen.tsx`, двери
 `clients/object-types.tsx`, `cabinet/object-types.tsx`, `(shared)/object-types.tsx`.
 
 **Не делать:** второй формы объекта (была, свели 2026-09-10 — сторожит
@@ -332,8 +334,11 @@
 У инвойса вторая строка услуги — её описание, у записи — длительность: у
 счёта нет минут.
 
-**Страница услуг** — `app/(dashboard)/cabinet/services.tsx`, двери
-`calendar/services.tsx`, `(shared)/services.tsx`. Цвета у услуги НЕТ (снят 2026-09-08).
+**Страница услуг** — `app/(dashboard)/cabinet/services.tsx` (тело —
+`src/features/services/price-list/ServicesList.tsx`), двери
+`calendar/services.tsx`, `(shared)/services.tsx`. Цвет у услуги есть: точка слева от имени
+(`NameColorField` в форме, `AppearanceTile` в строке прайса), и её берёт запись при правиле
+«Обычный цвет: Цвет услуги».
 
 **Форма услуги прайса** — `src/features/services/ServiceSheet.tsx`.
 
@@ -358,7 +363,7 @@
 
 ## 4. Блок «Оплата»
 
-**Канон:** `app/book/index.tsx` → `<PaymentBlock>`,
+**Канон:** `src/features/appointments/book-form/WorkBody.tsx` → `<PaymentBlock>`,
 `src/features/appointments/PaymentBlock.tsx`, плитки —
 `src/features/appointments/PaymentTiles.tsx`.
 
@@ -370,8 +375,9 @@
 
 ## 5. Блок «Заметка»
 
-**Канон записи:** `app/book/index.tsx` — `SectionCard title="Заметка"` +
-`InlineNoteField`. **Канон события:** там же ниже — ТОТ ЖЕ блок и то же поле,
+**Канон записи:** `src/features/appointments/book-form/WorkBody.tsx` —
+`SectionCard title="Заметка"` + `InlineNoteField`. **Канон события:**
+`src/features/appointments/book-form/EventBody.tsx` — ТОТ ЖЕ блок и то же поле,
 отличаются только подсказка и то, во что оно пишет.
 
 ```tsx
@@ -403,7 +409,7 @@
 открывать»). Блок `src/features/clients/blocks/ClientFilesBlock.tsx` показывает
 ПОСЛЕДНИЙ файл под заголовком своего дня (`VisitDayHeader`), тап — страница
 `app/(dashboard)/clients/attachments.tsx`: вся лента (`clientFileTimeline` в
-`src/features/clients/client-files.ts`) днями, плашки `ClientFileRow` —
+`src/lib/client-files.ts`) днями, плашки `ClientFileRow` —
 `SelectRow plain`: фото — снимком в плитке (`image`), документ, инвойс и чек —
 значком; у инвойса и чека справа сумма цветом (получено — зелёным, ждёт —
 янтарём). Тап открывает сразу; своё вложение удаляется свайпом; «Добавить
@@ -425,7 +431,7 @@
 
 ## 7. Докет «Команда · Метка» и блок «Время»
 
-**Канон:** `src/features/appointments/TeamLabelRow.tsx:46` (`TeamLabelRow`),
+**Канон:** `src/components/blocks/TeamLabelRow.tsx:41` (`TeamLabelRow`),
 `src/features/appointments/BookingSummary.tsx:96` (`WhenRow`).
 
 Выбранная команда и метка — квадратная плитка шторки (`AppearanceTile`, 28pt,
@@ -510,7 +516,7 @@
 | Метка записи и события | докет `TeamLabelRow` | `reference/LabelPickerSheet` | нет |
 | Метка дня | тап по числу в календаре | `calendar/DayLabelSheet` (обёртка над той же) | нет |
 | Метка клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`) | `reference/LabelPickerSheet` | нет |
-| Тег клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`) | `clients/TagPickerSheet` — тег один, тап выбирает и закрывает | нет |
+| Теги клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`): главный тег именем, остальные «+N» | `clients/TagPickerSheet` — тегов несколько, тап отмечает, «Применить» пишет набор | нет |
 | Категория операции | `finances/CategoryBlock` (в листе операции — плотная строка в общей карточке с суммой) | `ui/PickerSheet` | нет |
 | Тип события | `appointments/EventTypeBlock` — тот же `ReferenceBlock`, что у категории | `ui/PickerSheet`; тап по выбранной строке снимает тип | нет |
 | Счёт | `PaymentTiles` либо `ValueRow` | `ui/ValuePickerSheet` | нет |
@@ -519,7 +525,8 @@
 | Действие («Добавить», «Как связаться») | строка-дверь | `ui/PickerSheet` | нет |
 
 **Справочники** — все по рецепту «Метки»
-(`src/features/reference/screens/LabelsScreen.tsx`): `BottomSheet`-редактор,
+(`src/features/reference/screens/LabelsScreen.tsx`, редактор —
+`src/features/reference/screens/labels/LabelEditSheet.tsx`): `BottomSheet`-редактор,
 `GradientButton` внизу, `ReorderList`, `EmptyState`, `NameColorField`.
 
 **Порядок — ручкой В САМОМ СПИСКЕ** (владелец 2026-09-12: «шесть точек справа
@@ -631,7 +638,7 @@
 |---|---|---|
 | «Клиент» | `src/features/clients/ClientHeader.tsx` | имя · «чей он» (`src/features/clients/MemberOfLine.tsx`) · номер с кнопкой «Связаться» (тап — лист способов, удержание — звонок) · доп. номера и мессенджеры (`src/features/clients/ClientExtraContacts.tsx`) · дверь «Добавить контакт»; в новом клиенте над номером — страна «🇨🇾 Кипр +357» с поиском (`src/features/clients/use-phone-country.tsx`) |
 | «Заметка клиента» | `src/features/clients/blocks/NotesBlock.tsx` | `InlineNoteField` сразу под «Клиентом» (слот `note` шапки) |
-| «Люди» | `app/(dashboard)/clients/[id].tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
+| «Люди» | `src/features/clients/card/ClientCardPage.tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
 | «История» | `src/features/clients/ClientContactRow.tsx` | сводка `src/features/clients/ClientSummaryCard.tsx` (визиты · сумма · был · команда; при долге — в «Неоплаченные») · дверь «Записать» |
 | «Объекты» | `src/features/clients/ClientObjectsSection.tsx` + `src/features/clients/blocks/ObjectsBlock.tsx` | `ObjectRow` · мини-заметка объекта под строкой · «Все объекты · N» → `clients/objects.tsx` · дверь «Добавить объект» (курсор сразу в адрес) |
 | «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | последний файл под заголовком дня (`ClientFileRow`) → `clients/attachments.tsx`: лента по дням, инвойсы и чеки в ней же · пустой блок — дверь «Добавить файл» |
@@ -665,7 +672,7 @@
 | ~~16 самописных залитых кнопок~~ | ~~своя `Pressable`~~ | пять закрыто, `variant="filled"` построен |
 | `src/features/clients/ClientDraftNotice.tsx` | компактное действие внутри плашки: 44pt с радиусом числом | жанр канон не описывает — 52pt в строку плашки не встанет, а превращать в ссылку значит решать за владельца. **Ждёт его слова** |
 | `src/features/clients/ClientRow.tsx` | свайп собран на сырой библиотеке; на ЛЕВОЙ кромке ДВЕ кнопки; ротор VoiceOver не видит ни один глагол | `SwipeRow`, одно действие на кромку, второе — в меню долгого нажатия |
-| `app/(dashboard)/cabinet/`: `app/(dashboard)/cabinet/inventory.tsx`, `app/(dashboard)/cabinet/account.tsx` | сырой `Modal animationType="slide"` вместо `BottomSheet` | рецепт «Метки» |
+| Кабинет: `src/features/inventory/InventoryEditorSheet.tsx` (склад), `src/features/cabinet/account/DangerZoneSection.tsx` («Вход и безопасность») | сырой `Modal animationType="slide"` вместо `BottomSheet` | рецепт «Метки» |
 | `app/(dashboard)/chats/[id].tsx` | два сырых листа: выбор клиента написан заново | `ClientPickerSheet` |
 | `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` · `src/features/appointments/CrewAppointmentSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
 | 9 мест | `borderRadius` числом (12, 20, 13, 15, 9, 36) | `t.radius.card` / `t.radius.pill` |
@@ -684,7 +691,9 @@
 
 ## 10. Что ещё НЕ компонент (и потому копируется глазами)
 
-Блок «Объект» живёт разметкой внутри `app/book/index.tsx`. Пока это так,
+Блок «Объект» живёт разметкой внутри формы записи —
+`src/features/appointments/book-form/WorkObjectBlock.tsx` и
+`src/features/appointments/book-form/EventObjectBlock.tsx`. Пока это так,
 «взять готовый блок» значит «скопировать из указанной строки», а не
 «поставить один тег». Вынести его — ближайший шаг.
 

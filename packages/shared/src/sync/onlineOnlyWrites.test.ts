@@ -33,6 +33,7 @@ import { isOnlineOnlyWriteError } from "./cache-errors";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const TEAM = "33333333-3333-4333-8333-333333333333";
 const REFUSAL = "Нет интернета. Клиенты «AirFix» сохраняются только онлайн.";
 const ONLINE_ONLY = { onlineOnly: REFUSAL };
 
@@ -89,13 +90,13 @@ afterEach(() => {
 describe("офлайн: запись в неактивную компанию отбивается до кэша и очереди", () => {
   beforeEach(() => setNetwork(new FixedNetwork(false)));
 
-  const cases: Array<[string, () => Promise<unknown>]> = [
+  const cases: [string, () => Promise<unknown>][] = [
     ["создание клиента", () => createClient(networkDownSupabase(), client(), TENANT, ONLINE_ONLY)],
     ["правка клиента", () => updateClient(networkDownSupabase(), CLIENT_ID, { comment: "х" }, TENANT, ONLINE_ONLY)],
     ["архив клиента", () => archiveClient(networkDownSupabase(), CLIENT_ID, TENANT, null, ONLINE_ONLY)],
     ["возврат клиента", () => restoreClient(networkDownSupabase(), client(), TENANT, ONLINE_ONLY)],
     ["стирание клиента", () => deleteClient(networkDownSupabase(), CLIENT_ID, TENANT, ONLINE_ONLY)],
-    ["создание тега", () => createClientTag(networkDownSupabase(), { name: "Тег", color: "#fff" }, TENANT, ONLINE_ONLY)],
+    ["создание тега", () => createClientTag(networkDownSupabase(), { name: "Тег", color: "#fff", team_id: TEAM }, TENANT, ONLINE_ONLY)],
     ["правка тега", () => updateClientTag(networkDownSupabase(), "tag-1", { name: "Тег" }, TENANT, ONLINE_ONLY)],
     ["удаление тега", () => deleteClientTag(networkDownSupabase(), "tag-1", TENANT, ONLINE_ONLY)],
   ];

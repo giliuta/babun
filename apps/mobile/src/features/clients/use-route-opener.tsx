@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { RouteSheet } from "@/features/clients/RouteSheet";
-import { useEnabledMapServices } from "@/lib/map-services";
-import { directRouteUrl, openDirect, routeTarget } from "@/lib/route-menu";
+import { useEnabledMapServices } from "@/features/clients/map-services";
+import { directRouteUrl, openDirect, routeTarget } from "@/features/clients/route-menu";
 import { haptics } from "@/lib/haptics";
 
 // «МАРШРУТ» СТРОКОЙ — ТА ЖЕ ШТОРКА КАРТ, ЧТО У КНОПКИ ОБЪЕКТА
 // (`ObjectRouteButton`), для мест, где маршрут — целая строка, а не кнопка в
 // хвосте. Лист выезда партнёра и лист события открывали Apple Карты в
 // браузере напрямую: мимо «Карт для маршрута» команды, мимо присланного
-// клиентом пина и с веб-страницей на Android (аудит формы записи 03.10).
+// клиентом пина и с веб-страницей на Android.
 //
 // `open` решает, нужен ли выбор: одна карта или присланная ссылка — сразу,
 // иначе — лист; `sheet` рендерится рядом со строкой.

@@ -6,7 +6,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import type { FinanceSettingRow } from "./settings-levels";
 import { useFinanceSettingLevelsOf } from "./use-finance-settings";
 
-// ПОДСТРАНИЦА ШЕСТЕРЁНКИ «ФИНАНСОВ» — ЗА ПРАВОМ СВОЕЙ СТРОКИ (03.10, как
+// ПОДСТРАНИЦА ШЕСТЕРЁНКИ «ФИНАНСОВ» — ЗА ПРАВОМ СВОЕЙ СТРОКИ (как
 // `clients/ClientSettingsRoute`). Строки «Скрыты» на шестерёнке нет, но адрес
 // подстраницы живёт и без неё — ссылкой, «назад», прямым переходом. Без этой
 // двери «Скрыты» открывались бы адресом. «Только видит» проходит: страница

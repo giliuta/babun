@@ -4,8 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// ДЕНЬГИ СЛУШАЮТСЯ УРОВНЕЙ (этап 2 доступа, срез 1; владелец 15.09: «чтоб всё
-// сразу менялось в живом времени… максимальное качество»). Сторож миграции
+// ДЕНЬГИ СЛУШАЮТСЯ УРОВНЕЙ. Сторож миграции
 // проверяет каталог один раз на накате; этот тест — каждый раз, когда кто-то
 // перепишет правило, политику или функцию в обход. Сравнение идёт по ТЕКСТУ
 // условий целиком (пробелы схлопнуты): прошлый сторож искал метки через
@@ -65,6 +64,18 @@ function latestDefinition(fn: string): Definition {
   const latest = all[all.length - 1];
   assert.ok(latest, `no migration defines public.${fn}`);
   return latest;
+}
+
+/** ОКНО И ПРАВА ПАРТНЁРА (20261016180100) переопределили обе сводки счетов:
+ *  живая — либо эта миграция, либо та, и фильтр видимых счетов в ней цел. */
+const PARTNER_WINDOW_MIGRATION = "20261016180100_finance_hidden_accounts_window_vat.sql";
+function assertLiveKeepsVisibleAccounts(fn: string): void {
+  const live = latestDefinition(fn);
+  assert.ok([MIGRATION, PARTNER_WINDOW_MIGRATION].includes(live.file), `${fn}: ${live.file}`);
+  const body = norm(live.body);
+  assert.ok(body.includes("visible_accounts := public.access_accounts_totals();"), fn);
+  assert.ok(body.includes("(caller_is_owner or t.account_id = any(visible_accounts))"), fn);
+  assert.ok(body.includes("(caller_is_owner or a.id = any(visible_accounts))"), fn);
 }
 
 /** The definition right before this migration — what the owner runs today. */
@@ -500,7 +511,7 @@ describe("owner-only money functions follow levels, and the owner path is byte f
       ["where a.tenant_id = tenant_uuid)", "where a.tenant_id = tenant_uuid and (caller_is_owner or a.id = any(visible_accounts)))"],
     ], "account_balances");
     assert.equal(own("account_balances"), expected);
-    assert.equal(latestDefinition("account_balances").file, MIGRATION);
+    assertLiveKeepsVisibleAccounts("account_balances");
   });
 
   test("account_period_totals = the live body plus the visible-accounts filter", () => {
@@ -517,7 +528,7 @@ describe("owner-only money functions follow levels, and the owner path is byte f
       ["where a.tenant_id = tenant_uuid)", "where a.tenant_id = tenant_uuid and (caller_is_owner or a.id = any(visible_accounts)))"],
     ], "account_period_totals");
     assert.equal(own("account_period_totals"), expected);
-    assert.equal(latestDefinition("account_period_totals").file, MIGRATION);
+    assertLiveKeepsVisibleAccounts("account_period_totals");
   });
 
   test("replace_day_extras = the live body with the owner-only refusal split", () => {
@@ -532,7 +543,7 @@ describe("owner-only money functions follow levels, and the owner path is byte f
       ],
     ], "replace_day_extras");
     assert.equal(own("replace_day_extras"), expected);
-    // Срез 2а (29.09) разделил «Доходы и расходы» на два права и переписал
+    // Позже «Доходы и расходы» разделили на два права и переписали
     // эту проверку; его тело сторожит `finance-income-expense-contract.test.ts`.
     assert.ok(
       [MIGRATION, "20260929235000_finance_income_expense_levels.sql"].includes(latestDefinition("replace_day_extras").file),

@@ -278,7 +278,7 @@ app/
    живая схема ссылается на `team_id/master_id/location_id` через `text` в 8 таблицах — новые
    таблицы с `id text` (композитный PK `(tenant_id, id)`) делают все существующие FK валидными
    без единого изменения и сохраняют репозитории port-as-is. uuid = переделка 8 таблиц = «дважды».
-   Миграции написаны: `apps/web/supabase/migrations/20260624_001…004` (001 — 6 таблиц
+   Миграции написаны: `apps/web/supabase/migrations/20260624000001…004` (001 — 6 таблиц
    teams/masters/services/service_categories/cities/equipment; 002 personal_event_types; 003
    tenant_loyalty_settings; 004 FK-hardening = review-only no-op). Категории/location-labels/
    event-recent-places — уже покрыты (`finance_categories`, `tenant_state`), новых таблиц нет.

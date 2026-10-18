@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TextInput } from "react-native";
+import { Text, TextInput } from "react-native";
 import {
   AuthCard,
   AuthField,
@@ -12,17 +12,19 @@ import {
   PillButton,
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
+import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
+import { useAuthTheme } from "@/components/auth/theme";
 import { mayFinishHere, signupFinish } from "@/components/auth/signup-finish";
 import { useOwnAccountName, useRenameOwnAccount } from "@/features/cabinet/own-account-name";
 import { usePendingInvitationToken } from "@/features/settings/invitations";
-import { useMyMemberships } from "@/features/settings/my-memberships";
+import { useMyMemberships } from "@/session/my-memberships";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 
-// «ПОЧТИ ГОТОВО» — ПОСЛЕДНИЙ ШАГ ЕДИНОГО ВХОДА (владелец 09.10: «вход через
-// Apple, Google… потом должны придумывать пароль»). Сюда гейт входа приводит
+// «ПОЧТИ ГОТОВО» — ПОСЛЕДНИЙ ШАГ ЕДИНОГО ВХОДА (после Apple/Google
+// нужно придумать пароль). Сюда гейт входа приводит
 // аккаунт, у которого `signupFinish(user).needed`:
 //   • вошёл через Apple/Google впервые — имя (уже подставлено) и пароль, чтобы
 //     потом входить и почтой;
@@ -40,6 +42,7 @@ export default function FinishSignupScreen() {
   const memberships = useMyMemberships();
   const accountName = useOwnAccountName().data ?? "";
   const rename = useRenameOwnAccount();
+  const t = useAuthTheme();
   const passwordRef = useRef<TextInput>(null);
   const [name, setName] = useState(finish.suggestedName);
   const [password, setPassword] = useState("");
@@ -72,7 +75,9 @@ export default function FinishSignupScreen() {
   }
 
   const trimmed = name.trim();
-  const valid = trimmed.length > 0 && (!finish.needsPassword || password.length > 0);
+  // Минимум пароля — как на регистрации и сбросе: иначе «Готово»
+  // горело на одном символе, а отказ сервера приходил уже после нажатия.
+  const valid = trimmed.length > 0 && (!finish.needsPassword || password.length >= PASSWORD_MIN);
 
   async function save() {
     if (!valid || saving || !user) return;
@@ -140,6 +145,12 @@ export default function FinishSignupScreen() {
           </>
         ) : null}
       </InputCard>
+
+      {finish.needsPassword && passwordTooShort(password) ? (
+        <Text style={{ marginTop: 8, marginLeft: 4, fontSize: 13, color: t.sub }}>
+          Минимум 6 символов
+        </Text>
+      ) : null}
 
       <FormError message={error} />
 

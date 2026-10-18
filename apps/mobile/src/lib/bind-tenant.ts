@@ -26,8 +26,8 @@ import { TENANT_HEADER } from "./tenant-header";
 // полем `BOUND_TENANT_FIELD`, и выгрузка через него не работает вовсе — это
 // проверяет сама очередь (`sync/replayer.ts`), а не договорённость.
 //
-// Образец шима — `pagingClient()` в `features/calendar/queries.ts`: тот же
-// приём «объект под видом клиента, всё немоделируемое бросает».
+// Тот же приём «объект под видом клиента» — `readOnlyClient()` в
+// `features/calendar/queries.ts`.
 
 type DbSupabase = SupabaseClient<Database>;
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 
 const MOBILE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -22,8 +23,8 @@ function ordered(sourceText: string, first: string, second: string): void {
 
 describe("mobile create quota integration", () => {
   test("client and appointment hooks preflight before the cached create", () => {
-    const clients = source("src/features/clients/queries.ts");
-    const appointments = source("src/features/calendar/mutations.ts");
+    const clients = readModuleSource(path.join(MOBILE_ROOT, "src/features/clients/queries.ts"));
+    const appointments = readModuleSource(path.join(MOBILE_ROOT, "src/features/calendar/mutations.ts"));
 
     ordered(clients, "await preflightQuotaForCreate", "return createClientCached");
     assert.match(clients, /online:\s*isOnline\(\)/);
@@ -38,10 +39,10 @@ describe("mobile create quota integration", () => {
     const runtime = source("src/lib/sync-runtime.ts");
     const providers = source("src/providers/AppProviders.tsx");
     // Транзакция смены компании ПЕРЕЕХАЛА из приёма приглашения в
-    // `switch-tenant.ts` (2026-09-12): её же зовёт переключатель контуров, а
+    // `switch-tenant.ts`: её же зовёт переключатель контуров, а
     // двух способов менять компанию не бывает. Проверяем там, где она живёт
     // теперь, и отдельно — что приглашение не завело себе вторую копию.
-    const switching = source("src/features/settings/switch-tenant.ts");
+    const switching = source("src/session/switch-tenant.ts");
     const invitations = source("src/features/settings/invitations.ts");
 
     assert.match(runtime, /startSyncRuntime\(tenantId:\s*string\)/);

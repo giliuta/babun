@@ -49,31 +49,29 @@ import {
   fetchMyCalendars,
   myCalendarsQueryKey,
   type MyCalendar,
-} from "@/features/settings/workspaces";
-import { can, isUserRole, type UserRole } from "@/features/settings/role-policy";
+} from "@/session/workspaces";
+import { can, isUserRole, type UserRole } from "@/session/role-policy";
 import {
   fetchCalendarSettings,
   fetchTenantProfile,
-} from "@/features/settings/company-fetchers";
+} from "@/session/company-fetchers";
 import {
   fetchCities,
   fetchMasters,
   fetchTeams,
 } from "@/features/reference/queries";
 import { fetchServices } from "@/features/services/queries";
-import { pagingClient } from "@/features/calendar/queries";
 import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appointments";
 import { listMasterClientsSafe } from "@/features/clients/queries";
-import { defaultPeriod } from "@/features/finances/period";
+import { defaultPeriod } from "@/lib/period";
 
 // ПРОГРЕВ КОМПАНИЙ — ЧТОБЫ ПЕРЕХОД БЫЛ ПЕРВЫМ КАДРОМ С ДАННЫМИ.
 //
 // Сам переход давно стоит 71 мс: компания меняется в памяти устройства, сеть
 // не ждётся. Но экран за ним показывал «загрузку», потому что данных ТОЙ
 // компании в памяти не было — react-query живёт в памяти, и после каждого
-// запуска приложения любая компания, кроме активной, холодная. Владелец
-// 2026-09-13: «чтобы заранее погружалось… открывается сразу же этот день,
-// неделя… между своими и чужими командами без каких-либо задержек».
+// запуска приложения любая компания, кроме активной, холодная. Нужно,
+// чтобы день и неделя открывались сразу, между своими и чужими командами без задержек.
 //
 // Поэтому пока человек работает, приложение заранее читает первые экраны его
 // компаний — каждой под её заголовком, привязанным клиентом (`bind-tenant.ts`)
@@ -82,7 +80,7 @@ import { defaultPeriod } from "@/features/finances/period";
 // находит данные на месте; протухшие перечитываются в фоне, уже под открытым
 // экраном.
 //
-// АКТИВНАЯ ТОЖЕ (2026-09-15). Раньше грелись только другие компании, и у
+// АКТИВНАЯ ТОЖЕ. Раньше грелись только другие компании, и у
 // активной холодными оставались экраны, которые ещё не открывали: мастера с
 // архивом, карта графиков, деньги. Её ключи с побочными действиями хука
 // прогрев не трогает (`ACTIVE_COMPANY_SKIPS`), а ключ, за которым уже следит
@@ -148,7 +146,7 @@ function readTarget(ctx: CompanyContext, target: WarmTarget): Promise<unknown> {
     case "appointments":
       return role === "master"
         ? listMasterAppointmentsSafePaged(client)
-        : repoListAppointments(pagingClient(client), tenantId);
+        : repoListAppointments(client, tenantId);
     case "services-all":
       return fetchServices(client, tenantId, role, { archived: true });
     case "cities":

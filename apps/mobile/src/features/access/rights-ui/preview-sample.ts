@@ -11,10 +11,9 @@ import {
 } from "@/features/appointments/record-blocks";
 import type { RecordRow } from "@/features/finances/record-rows";
 
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "../access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
 
-// ПРИМЕР ДЛЯ ВИДА БЛОКА В ШТОРКЕ ПРАВА (владелец 29.09: «сам этот блок
-// вставить визуально в этой шторке»). В шторке стоит НАСТОЯЩИЙ блок продукта
+// ПРИМЕР ДЛЯ ВИДА БЛОКА В ШТОРКЕ ПРАВА. В шторке стоит НАСТОЯЩИЙ блок продукта
 // с выдуманными данными, а что в нём видно и что нажимается, считает ТО ЖЕ
 // правило, что страница записи у сотрудника (`recordBlocks`,
 // `calendarActions`). Поэтому вид в шторке не может разойтись с тем, что он
@@ -58,8 +57,6 @@ export const SAMPLE_INCOME = row({
   amount: 120,
   time: "10:00",
 });
-
-export const SAMPLE_EXPENSE = row({ key: "expense", title: "Фреон R32", subtitle: "Материалы", amount: -40 });
 
 export const SAMPLE_DEBT = row({ key: "debt", title: "Иван Смирнов", subtitle: "Заправка фреоном", amount: 80 });
 

@@ -35,7 +35,7 @@ apps/web/src/app/dashboard/page.tsx
 
 ### Existing trigger source
 
-`apps/web/supabase/migrations/20260428_001_auth_tenants.sql` defines `public.handle_new_user()`:
+`apps/web/supabase/migrations/20260428000001_auth_tenants.sql` defines `public.handle_new_user()`:
 
 - Inserts `tenants` row with `owner_user_id = new.id`.
 - Stamps `auth.users.raw_app_meta_data.tenant_id`.
@@ -56,7 +56,7 @@ Backfill targets: 2 tenants × 4 tags = 8 inserted rows.
 ## Acceptance criteria
 
 1. `app/dashboard/page.tsx` no longer imports or runs `MOCK_APPOINTMENTS`. The `SEED_KEY` localStorage entry is also no longer written. Existing localStorage flag is left in place (we don't reach into users' browsers to clean it up — it just stops being relevant).
-2. Migration `20260430_004_default_tags.sql` extends `handle_new_user()` to insert four default `client_tags` rows in the same transaction as the tenant insert.
+2. Migration `20260430000004_default_tags.sql` extends `handle_new_user()` to insert four default `client_tags` rows in the same transaction as the tenant insert.
 3. Same migration back-fills the four default tags for every tenant that doesn't already have a tag with that exact name. Idempotent — re-run is safe.
 4. Existing tenants (airfix + giluta) end up with exactly 4 default tags each.
 5. A fresh signup ends up with: 4 default tags, empty appointments, empty clients.
@@ -86,7 +86,7 @@ b. Create a new trigger `on_tenant_inserted` after insert on `public.tenants`.
 
 ### A3 — Backfill via `ON CONFLICT`-equivalent (`NOT EXISTS`)
 
-`client_tags` has no unique constraint on `(tenant_id, name)` (the schema in `20260427_001_init_clients.sql` doesn't define one — STORY-036 didn't anticipate this). A naive `INSERT` of the four defaults for the 2 existing tenants would succeed even on re-run, producing duplicates.
+`client_tags` has no unique constraint on `(tenant_id, name)` (the schema in `20260427000001_init_clients.sql` doesn't define one — STORY-036 didn't anticipate this). A naive `INSERT` of the four defaults for the 2 existing tenants would succeed even on re-run, producing duplicates.
 
 Two options:
 
@@ -122,7 +122,7 @@ For now, four tags is a static list. Promoting them to a `default_tag_templates`
 
 No corresponding test changes — there were none for the seed path to begin with.
 
-### G2 — Migration `20260430_004_default_tags.sql` (review-required before apply)
+### G2 — Migration `20260430000004_default_tags.sql` (review-required before apply)
 
 Two statements in order:
 
@@ -204,7 +204,7 @@ Steps 6-7 require a deploy of the G1 change (the seed only stops firing once the
 
 ```
 M  apps/web/src/app/dashboard/page.tsx                        (~57 lines deleted)
-A  apps/web/supabase/migrations/20260430_004_default_tags.sql (~50 lines)
+A  apps/web/supabase/migrations/20260430000004_default_tags.sql (~50 lines)
 M  packages/shared/src/common/utils/version.ts                 (v350 → v351)
 M  apps/web/public/sw.js                                       (babun-v350 → babun-v351)
 ```

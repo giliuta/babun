@@ -1,19 +1,18 @@
 import { Text, View, useWindowDimensions } from "react-native";
 import { CalendarCheck, CalendarClock, CalendarX2, type LucideIcon } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
+import type { ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
 import { SelectRow } from "@/components/ui/select-rows";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
 import { useRecordColor } from "@/features/clients/use-record-color";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
-// ЗАПИСЬ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ТЕГИ И МЕТКИ (владелец 03.10:
-// «полноценные блоки отдельные друг от друга, красивые, компактные — типа
-// такого плана», показав список тегов). Это наш `SelectRow`: плашка белая
-// («заливку фона не надо»), слева плитка цветом записи со значком; цвет — тот
-// же, что у блока записи в календаре (`useRecordColor`).
-//   · ДАТА — НЕ В ПЛАШКЕ, А ЗАГОЛОВКОМ НАД НЕЙ, как дни в «Финансах»
-//     (владелец 03.10: «разделитель даты — перед плашкой, как в финансах»),
+// ЗАПИСЬ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ТЕГИ И МЕТКИ: отдельные друг от
+// друга компактные блоки. Это наш `SelectRow`: плашка белая (без заливки
+// фона), слева плитка цветом записи со значком; цвет — тот же, что у блока
+// записи в календаре (`useRecordColor`).
+//   · ДАТА — НЕ В ПЛАШКЕ, А ЗАГОЛОВКОМ НАД НЕЙ, как дни в «Финансах»,
 //     с годом («ЧТ, 1 ОКТЯБРЯ 2026»: клиент бывает прошлогодний);
 //   · название — команда, подпись — время;
 //   · справа — только число своим цветом, в столбике одной ширины:
@@ -74,19 +73,22 @@ export function VisitRow({
   today,
   showMoney,
   onPress,
+  invoicing,
 }: {
   appointment: Appointment;
   /** Команда записи из справочника с архивом; нет — без подписи команды. */
   team: VisitTeam | undefined;
   today: string;
-  /** Деньги клиента — за правом «История» (03.10): нет — числа нет. */
+  /** Деньги клиента — за правом «История»: нет — числа нет. */
   showMoney: boolean;
   /** Нет — плашка показание (запись открыть нельзя). */
   onPress?: () => void;
+  /** Работа под инвойсом: её долг — остаток инвойса (`client-invoicing.ts`). */
+  invoicing?: ClientInvoicing;
 }) {
   const t = useThemeColors();
   const { fontScale } = useWindowDimensions();
-  const status = visitStatus(a, today, showMoney);
+  const status = visitStatus(a, today, showMoney, invoicing);
   const hue = useRecordColor(a, team?.color, today) || t.accent;
   const teamName = team ? (team.is_active ? team.name : `${team.name} · в архиве`) : "";
   const time = a.time_start ? a.time_start.slice(0, 5) : "";
@@ -94,7 +96,7 @@ export function VisitRow({
     <SelectRow
       icon={statusIcon(status.kind)}
       color={hue}
-      // Фон — белый, цвет записи — только у плитки (владелец 03.10).
+      // Фон — белый, цвет записи — только у плитки.
       plain
       title={teamName || "Запись"}
       subtitle={time || undefined}

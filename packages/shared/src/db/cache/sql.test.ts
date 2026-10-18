@@ -53,7 +53,7 @@ function client(
     id,
     tenant_id: tenantId,
     updated_at: "2026-01-01T00:00:00.000Z",
-    name: `Client ${id}`,
+    full_name: `Client ${id}`,
     ...overrides,
   } as unknown as CachedClient;
 }
@@ -90,11 +90,11 @@ describe("cache row CRUD", () => {
   });
 
   test("cacheUpsert overwrites an existing row (ON CONFLICT)", async () => {
-    await cacheUpsert("clients", client("c1", TENANT_A, { name: "Old" }));
-    await cacheUpsert("clients", client("c1", TENANT_A, { name: "New" }));
+    await cacheUpsert("clients", client("c1", TENANT_A, { full_name: "Old" }));
+    await cacheUpsert("clients", client("c1", TENANT_A, { full_name: "New" }));
     const rows = await cacheRead<CachedClient>("clients", TENANT_A);
     expect(rows.length).toBe(1);
-    expect((rows[0] as unknown as { name: string }).name).toBe("New");
+    expect(rows[0]?.full_name).toBe("New");
   });
 
   test("cacheRead is tenant-scoped", async () => {

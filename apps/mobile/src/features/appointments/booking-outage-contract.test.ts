@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { readModuleSource } from "@/lib/module-source";
+import { bookFormSource } from "./book-form/source-for-tests";
 
-// ФОРМА ЗАПИСИ НА ЛЕЖАЩЕМ СЕРВЕРЕ (03.10 вечер, шлюз отдавал 503/525).
+// ФОРМА ЗАПИСИ НА ЛЕЖАЩЕМ СЕРВЕРЕ (шлюз отдаёт 503/525).
 // Три поломки сразу:
 //  • упавшее ПЕРЕЧИТЫВАНИЕ команд (данные на руках) меняло заполненную форму
 //    на экран ошибки;
@@ -13,7 +15,8 @@ import path from "node:path";
 //    «Добавить услугу» — завести дубль того, что у команды есть.
 
 const MOBILE = path.resolve(__dirname, "../../..");
-const book = readFileSync(path.join(MOBILE, "app/book/index.tsx"), "utf8");
+// The booking form is the route plus `book-form/` (route first).
+const book = bookFormSource();
 const pickers = readFileSync(path.join(MOBILE, "src/features/appointments/BookingPickers.tsx"), "utf8");
 
 describe("booking form while the server is down", () => {
@@ -55,7 +58,7 @@ describe("booking form while the server is down", () => {
   });
 
   test("the owner's repeated «Создать» after a dropped answer is the same record", () => {
-    const mutations = readFileSync(path.join(MOBILE, "src/features/calendar/mutations.ts"), "utf8");
+    const mutations = readModuleSource(path.join(MOBILE, "src/features/calendar/mutations.ts"));
     assert.match(mutations, /if \(isOwnRecordAlreadyCreated\(error as Error\)\) return stampedOwn;/);
   });
 });

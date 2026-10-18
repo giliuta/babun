@@ -1,4 +1,4 @@
-// Гонка сверки календаря и свежей правки (аудит 03.10).
+// Гонка сверки календаря и свежей правки.
 //
 // Сверка качает снимок сервера секундами и потом целиком заменяет им кэш.
 // Перенос, записанный в кэш, пока снимок ехал, затирался этим снимком: запись
@@ -16,7 +16,11 @@ import {
   NavigatorOnlineNetwork,
 } from "../storage/sql/provider";
 import type { NetworkAdapter } from "../storage/sql/types";
-import { __resetCacheForTests, cacheRead } from "../db/cache/sql";
+import {
+  __resetCacheForTests,
+  cacheRead,
+  type CachedAppointmentData,
+} from "../db/cache/sql";
 import { cacheServerAppointment, listAppointments } from "./appointmentsCached";
 import { createBlankAppointment } from "../local/appointments";
 
@@ -36,21 +40,24 @@ type ListResult = { data: unknown[]; error: null };
 
 /** Сервер, чьи ответы на список записей отдаются по команде теста. */
 function slowServer() {
-  const pending: Array<(value: ListResult) => void> = [];
+  const pending: ((value: ListResult) => void)[] = [];
   const client = {
     from() {
+      // Список читается страницами: select → eq → order → range, и только
+      // ответ на запрос ждёт команды теста.
       const chain: Record<string, unknown> = {};
       chain.select = () => chain;
-      chain.eq = () => ({
-        then: (
-          onFulfilled: (value: ListResult) => unknown,
-          onRejected?: (reason: unknown) => unknown,
-        ) =>
-          new Promise<ListResult>((resolve) => pending.push(resolve)).then(
-            onFulfilled,
-            onRejected,
-          ),
-      });
+      chain.eq = () => chain;
+      chain.order = () => chain;
+      chain.range = () => chain;
+      chain.then = (
+        onFulfilled: (value: ListResult) => unknown,
+        onRejected?: (reason: unknown) => unknown,
+      ) =>
+        new Promise<ListResult>((resolve) => pending.push(resolve)).then(
+          onFulfilled,
+          onRejected,
+        );
       return chain;
     },
   };
@@ -64,7 +71,7 @@ function slowServer() {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 25));
 
 async function cachedStart(): Promise<string[]> {
-  const rows = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+  const rows = await cacheRead<CachedAppointmentData>("appointments", TENANT);
   return rows.map((row) => String(row.time_start));
 }
 

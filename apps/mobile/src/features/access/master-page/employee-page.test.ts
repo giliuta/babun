@@ -4,11 +4,13 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { readModuleSource } from "@/lib/module-source";
+
 import { createInvitationArgs } from "./invitation-contract";
 import { monthWorkOf, workLine, workOfPeriod, workWindow } from "./master-work";
 import { rightsFocusOf, rightsFocusQuery } from "./rights-focus";
 
-// STORY-087 — страница сотрудника по законам страницы клиента (владелец 23.09).
+// STORY-087 — страница сотрудника по законам страницы клиента.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -86,9 +88,9 @@ describe("одна дверь на человека", () => {
     assert.match(member, /teamLine=\{\(id\) => draftTeamBrief\(blocks, draft, id\)\}/);
   });
   test("права названы словами про человека", () => {
-    const map = read("../access-map.ts");
+    const map = read("../../../session/access-map.ts");
     assert.match(map, /off: "Не видит",\s*read: "Видит",\s*write: "Меняет"/);
-    assert.match(read("master-draft.ts"), /export const MIXED_WORD = "Частично";/);
+    assert.match(readModuleSource(resolve(here, "master-draft.ts")), /export const MIXED_WORD = "Частично";/);
   });
 });
 

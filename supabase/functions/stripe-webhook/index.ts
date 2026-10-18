@@ -40,37 +40,11 @@
 //   * Audit-then-reconcile order, the 23505 short-circuit, tenant
 //     resolution and every status mapping are unchanged.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { serviceClient } from "../_shared/service-client.ts";
+import { json } from "../_shared/http.ts";
 import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 
-const json = (status: number, body: unknown): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
 
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const legacyServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  let serviceKey: string | undefined;
-  if (secretKeysJson) {
-    try {
-      const candidates = Object.values(
-        JSON.parse(secretKeysJson) as Record<string, unknown>,
-      ).filter((v): v is string => typeof v === "string" && v.length > 20);
-      serviceKey =
-        candidates.find((v) => v.startsWith("sb_secret_")) ?? candidates[0];
-    } catch {
-      // fall through
-    }
-  }
-  if (!serviceKey) serviceKey = legacyServiceKey || undefined;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 type Tier = "free" | "solo" | "pro" | "max";
 type SubStatus =
@@ -540,12 +514,16 @@ async function syncCalendarsBeforeInvoice(
   const sub = await stripe.subscriptions.retrieve(subId);
   const item = sub.items?.data?.[0];
   if (!item || !/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return;
-  const { count } = await sbs
+  const { count, error } = await sbs
     .from("teams")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
-  const live = Math.max(1, typeof count === "number" ? count : 1);
+  // Не прочли календари — 5xx и повтор от Stripe, а не счёт за один.
+  if (error || typeof count !== "number") {
+    throw new Error(`live calendars unreadable: ${error?.code ?? "no count"}`);
+  }
+  const live = Math.max(1, count);
   if (item.quantity === live) return;
   await stripe.subscriptions.update(subId, {
     items: [{ id: item.id, quantity: live }],

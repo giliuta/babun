@@ -1,4 +1,4 @@
-// Гонка сверки клиентов и тегов со свежей правкой (аудит 04.10).
+// Гонка сверки клиентов и тегов со свежей правкой.
 //
 // Тот же дефект, что закрыт у записей (appointments-revalidate-race.test.ts):
 // сверка качает снимок сервера секундами и целиком заменяет им кэш. Клиент,
@@ -26,7 +26,10 @@ import {
   cacheUpsert,
   enqueueOp,
   markOpPermanentlyFailed,
+  type CachedClientData,
+  type CachedTag,
 } from "../db/cache/sql";
+import { createBlankClient } from "../local/clients";
 import { __resetReplayerForTests } from "./replayer";
 import { listClients } from "./clientsCached";
 import { listClientTags } from "./tagsCached";
@@ -36,6 +39,7 @@ const TENANT = "11111111-1111-1111-1111-111111111111";
 const CLIENT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const TAG_A = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const TEAM = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
 class OnlineNetwork implements NetworkAdapter {
   isOnline(): boolean {
@@ -51,8 +55,8 @@ type ListResult = { data: unknown[]; error: null };
 /** Сервер, чьи ответы по таблице `slowTable` отдаются по команде теста;
  *  остальные таблицы отвечают сразу пустым списком. Каждый запрос пишется. */
 function slowServer(slowTable: string) {
-  const pending: Array<(value: ListResult) => void> = [];
-  const selects: Array<{ table: string; columns: string }> = [];
+  const pending: ((value: ListResult) => void)[] = [];
+  const selects: { table: string; columns: string }[] = [];
   const client = {
     from(table: string) {
       const chain: Record<string, unknown> = {};
@@ -98,13 +102,22 @@ function clientRow(id: string, fullName: string, updatedAt: string) {
   };
 }
 
+/** Cache row as the wrappers store it: domain client plus bookkeeping keys. */
+function cachedClient(id: string, fullName: string, updatedAt: string): CachedClientData {
+  return {
+    ...createBlankClient({ id, full_name: fullName }),
+    tenant_id: TENANT,
+    updated_at: updatedAt,
+  };
+}
+
 async function cachedNames(): Promise<string[]> {
-  const rows = await cacheRead<Record<string, unknown>>("clients", TENANT);
+  const rows = await cacheRead<CachedClientData>("clients", TENANT);
   return rows.map((row) => String(row.full_name)).sort();
 }
 
 async function cachedTagNames(): Promise<string[]> {
-  const rows = await cacheRead<Record<string, unknown>>("tags", TENANT);
+  const rows = await cacheRead<CachedTag>("tags", TENANT);
   return rows.map((row) => String(row.name)).sort();
 }
 
@@ -121,7 +134,7 @@ afterEach(() => {
 
 describe("сверка клиентов и правка, легшая во время запроса", () => {
   test("клиент, заведённый пока ехал снимок, не пропадает, а сверка идёт ещё раз", async () => {
-    await cacheUpsert("clients", { ...clientRow(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"), tag_ids: [] });
+    await cacheUpsert("clients", cachedClient(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"));
     const server = slowServer("clients");
 
     await listClients(server.client, TENANT);
@@ -129,7 +142,7 @@ describe("сверка клиентов и правка, легшая во вр�
     expect(server.reads()).toBe(1);
 
     // Пока снимок едет, владелец заводит Бориса.
-    await cacheUpsert("clients", { ...clientRow(CLIENT_B, "Борис", "2026-10-04T10:00:00Z"), tag_ids: [] });
+    await cacheUpsert("clients", cachedClient(CLIENT_B, "Борис", "2026-10-04T10:00:00Z"));
 
     // Снимок снят ДО Бориса: замена отменена, Борис в кэше.
     server.answer(0, [clientRow(CLIENT_A, "Анна", "2026-10-01T00:00:00Z")]);
@@ -148,7 +161,7 @@ describe("сверка клиентов и правка, легшая во вр�
   });
 
   test("без правок за время запроса снимок ложится сразу, повторной сверки нет", async () => {
-    await cacheUpsert("clients", { ...clientRow(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"), tag_ids: [] });
+    await cacheUpsert("clients", cachedClient(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"));
     const server = slowServer("clients");
 
     await listClients(server.client, TENANT);
@@ -161,7 +174,7 @@ describe("сверка клиентов и правка, легшая во вр�
   });
 
   test("два чтения списка разом — одна сверка, а не две наперегонки", async () => {
-    await cacheUpsert("clients", { ...clientRow(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"), tag_ids: [] });
+    await cacheUpsert("clients", cachedClient(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"));
     const server = slowServer("clients");
 
     await listClients(server.client, TENANT);
@@ -201,6 +214,7 @@ describe("сверка тегов и правка, легшая во время 
       icon: null,
       position: 0,
       hidden: false,
+      team_id: TEAM,
     });
     const server = slowServer("client_tags");
 
@@ -216,6 +230,7 @@ describe("сверка тегов и правка, легшая во время 
       icon: null,
       position: 1,
       hidden: false,
+      team_id: TEAM,
     });
 
     server.answer(0, [{ id: TAG_A, tenant_id: TENANT, name: "VIP", color: "#2c5be0" }]);
@@ -234,13 +249,13 @@ describe("сверка тегов и правка, легшая во время 
   });
 });
 
-// КЛИЕНТ, ЧЬЯ ВСТАВКА УПАЛА НАВСЕГДА, С ЭКРАНА НЕ ПРОПАДАЕТ (аудит 04.10):
+// КЛИЕНТ, ЧЬЯ ВСТАВКА УПАЛА НАВСЕГДА, С ЭКРАНА НЕ ПРОПАДАЕТ:
 // перечитку он не держит, и снимок сервера стирал его из кэша — запись к нему
 // оставалась на сетке без клиента. Пока вставка в очереди, клиент на месте.
 describe("перечитка клиентов и неотправленная вставка", () => {
   test("клиент с навсегда упавшей вставкой остаётся в кэше, остальное — по серверу", async () => {
-    await cacheUpsert("clients", { ...clientRow(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"), tag_ids: [] });
-    await cacheUpsert("clients", { ...clientRow(CLIENT_B, "Борис офлайн", "2026-10-04T10:00:00Z"), tag_ids: [] });
+    await cacheUpsert("clients", cachedClient(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"));
+    await cacheUpsert("clients", cachedClient(CLIENT_B, "Борис офлайн", "2026-10-04T10:00:00Z"));
     await enqueueOp({
       table: "clients",
       op: "insert",

@@ -18,11 +18,9 @@ import type { AccountWithBalance } from "@/features/finances/accounts";
 import { accountIcon } from "@/features/finances/account-ui";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { formatInvoiceMoney, parseMoneyAmount } from "./format";
+import { formatInvoiceMoney, parseMoneyAmount } from "@/lib/paper/format";
 
-// ПРИНЯТЬ ОПЛАТУ ПО ИНВОЙСУ — НАШИМИ БЛОКАМИ (владелец 2026-10-04: «сам вид
-// принятия оплаты отвратительный, переделать»; «когда я нажимаю кнопку
-// оплатить — чтоб всё чётко было»). Тот же язык, что у операции и «Оплаты»
+// ПРИНЯТЬ ОПЛАТУ ПО ИНВОЙСУ — НАШИМИ БЛОКАМИ. Тот же язык, что у операции и «Оплаты»
 // записи: блок «Сумма» (AmountBlock, остаток подписью), дата строкой с
 // барабаном раскрывашкой (из листа второй лист не открывают), «Счёт» —
 // плитками счетов. Способ оплаты не спрашивается: он следует из вида счёта
@@ -30,7 +28,7 @@ import { formatInvoiceMoney, parseMoneyAmount } from "./format";
 // одна, внизу; закрывают лист свайпом или скримом.
 //
 // Чек здесь НЕ выписывается: принять оплату и выписать чек — два разных шага
-// (владелец 04.10: «могу принять оплату, а чек сгенерировать позже»).
+// (чек можно сгенерировать позже).
 
 export function InvoicePaymentSheet({
   visible,

@@ -14,7 +14,7 @@ import {
 } from "./grid-memory";
 import { HOUR_H_DEFAULT, HOUR_H_MAX, maxScroll, minHourH, PAD_BOTTOM, PAD_TOP } from "./zoom-math";
 
-// ПАМЯТЬ СЕТКИ (владелец 11.10): масштаб «сколько часов на экране» и время у
+// ПАМЯТЬ СЕТКИ: масштаб «сколько часов на экране» и время у
 // верхнего края переживают перезапуск, смену вида и команды.
 
 const VH = 519.33;

@@ -14,17 +14,15 @@ import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { acceptSmsInput, MAX_SMS_PARTS, smsVars } from "./sms-compose";
 
-// ТЕКСТ ШАБЛОНА SMS — БЛОК ШТОРКИ ШАБЛОНА (STORY-089, 02.10).
+// ТЕКСТ ШАБЛОНА SMS — БЛОК ШТОРКИ ШАБЛОНА.
 // Поле, под ним сколько знаков и SMS, и дверь «Вставить поле»: шторка выбора
-// с «Применить» (как «Когда отправлять», владелец 03.10); у каждого поля
+// с «Применить» (как «Когда отправлять»); у каждого поля
 // значок, цвет и имя — без примера под ним; поле встаёт туда, где курсор.
-// Ряда фишек больше нет (владелец 02.10: «вот это тоже нужно как-то
-// изменить»), блока «Клиент увидит» и подсказок тоже (03.10: «не надо, и так
-// понятно… не ставь вообще подсказки»).
+// Ряда фишек, блока «Клиент увидит» и подсказок нет.
 
 /** Значок и цвет поля — в шторке «Вставить поле». */
 const TOKEN_LOOK: Record<string, { icon: LucideIcon; color: string }> = {
@@ -41,8 +39,7 @@ const TOKEN_LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   "[Ссылка]": { icon: Link, color: SETTINGS_TILE.purple },
 };
 
-/** «ВСТАВИТЬ ПОЛЕ» — та же шторка, что «Когда отправлять» (владелец 03.10:
- *  «это то же самое, но сделай более аккуратно»): все поля видны, тап
+/** «ВСТАВИТЬ ПОЛЕ» — та же шторка, что «Когда отправлять»: все поля видны, тап
  *  отмечает, «Применить» вставляет. */
 function InsertFieldSheet({
   visible,

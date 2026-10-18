@@ -41,7 +41,7 @@ function noRowWriteSupabase() {
 
 function rpcSupabase(
   result: { error: { message: string } | null },
-  calls?: Array<Record<string, unknown>>,
+  calls?: Record<string, unknown>[],
   data: unknown = null,
 ) {
   return {
@@ -54,10 +54,44 @@ function rpcSupabase(
 
 describe("удаление денежной строки подтверждается сервером", () => {
   it("удаляет операцию в «Удалённые операции» серверной функцией", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await deleteTransaction(rpcSupabase({ error: null }, calls, ROW_ID), ROW_ID);
 
     expect(calls).toEqual([{ name: "delete_operation", p_id: ROW_ID }]);
+  });
+
+  it("повтор удаления после потерянного ответа: строки уже нет — это успех", async () => {
+    const notFound = { code: "P0002", message: "Операция недоступна или связана с инвойсом" };
+    const supabase = {
+      rpc: () => Promise.resolve({ data: null, error: notFound }),
+      from() {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        };
+        return builder;
+      },
+    } as never;
+    await expect(deleteTransaction(supabase, ROW_ID)).resolves.toBeUndefined();
+  });
+
+  it("«не найдена», но строка на месте (инвойс) — отказ остаётся отказом", async () => {
+    const notFound = { code: "P0002", message: "Операция недоступна или связана с инвойсом" };
+    const supabase = {
+      rpc: () => Promise.resolve({ data: null, error: notFound }),
+      from() {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          maybeSingle: () => Promise.resolve({ data: { id: ROW_ID }, error: null }),
+        };
+        return builder;
+      },
+    } as never;
+    await expect(deleteTransaction(supabase, ROW_ID)).rejects.toThrow(
+      "Операция недоступна или связана с инвойсом",
+    );
   });
 
   it("не считает успехом удаление без ответа сервера", async () => {
@@ -69,16 +103,60 @@ describe("удаление денежной строки подтверждае�
     ).rejects.toThrow("Нет доступа");
   });
 
-  it("не считает успехом правку, отфильтрованную RLS", async () => {
+  it("правка строки, которой уже нет, говорит, что её удалили", async () => {
     await expect(
       updateTransaction(noRowWriteSupabase(), ROW_ID, { amount: 100 }),
-    ).rejects.toThrow("Операция недоступна или связана с инвойсом");
+    ).rejects.toThrow("Операцию уже удалили на другом устройстве");
+  });
+
+  it("не считает успехом правку, отфильтрованную RLS, если строка на месте", async () => {
+    const reads = [null, { id: ROW_ID }];
+    const supabase = {
+      from() {
+        const builder = {
+          update: () => builder,
+          eq: () => builder,
+          in: () => builder,
+          is: () => builder,
+          select: () => builder,
+          maybeSingle: () =>
+            Promise.resolve({ data: reads.shift() ?? null, error: null }),
+        };
+        return builder;
+      },
+    } as never;
+    await expect(updateTransaction(supabase, ROW_ID, { amount: 100 })).rejects.toThrow(
+      "Операция недоступна или связана с инвойсом",
+    );
+  });
+
+  it("не знает, есть ли строка (чтение упало), — не объявляет её удалённой", async () => {
+    const answers = [
+      { data: null, error: null },
+      { data: null, error: { message: "Network request failed" } },
+    ];
+    const supabase = {
+      from() {
+        const builder = {
+          update: () => builder,
+          eq: () => builder,
+          in: () => builder,
+          is: () => builder,
+          select: () => builder,
+          maybeSingle: () => Promise.resolve(answers.shift()),
+        };
+        return builder;
+      },
+    } as never;
+    await expect(updateTransaction(supabase, ROW_ID, { amount: 100 })).rejects.toThrow(
+      "Операция недоступна или связана с инвойсом",
+    );
   });
 });
 
 describe("отмена денег через серверные RPC", () => {
   it("отменяет оплату записи по её id", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await undoAppointmentPayment(rpcSupabase({ error: null }, calls), APPOINTMENT_ID);
 
     expect(calls).toEqual([
@@ -87,7 +165,7 @@ describe("отмена денег через серверные RPC", () => {
   });
 
   it("сбрасывает все чеки записи по её id", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await resetAppointmentPayment(rpcSupabase({ error: null }, calls), APPOINTMENT_ID);
 
     expect(calls).toEqual([
@@ -96,7 +174,7 @@ describe("отмена денег через серверные RPC", () => {
   });
 
   it("передаёт предоплату суммой и способом оплаты", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await setAppointmentPrepayment(
       rpcSupabase({ error: null }, calls),
       APPOINTMENT_ID,
@@ -115,7 +193,7 @@ describe("отмена денег через серверные RPC", () => {
   });
 
   it("отменяет перевод по группе, а не по отдельной ноге", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await deleteTransfer(rpcSupabase({ error: null }, calls), "group-1");
 
     expect(calls).toEqual([

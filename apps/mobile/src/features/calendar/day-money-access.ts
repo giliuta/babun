@@ -1,12 +1,10 @@
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, type AccessGate, type AccessGateInput } from "@/features/access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate, type AccessGate, type AccessGateInput } from "@/session/my-access";
 import { asRecordWindow, recordWindowStart } from "@/features/appointments/record-window";
 
-// ДОХОД И РАСХОД ДНЯ — ПРАВО КАЛЕНДАРЯ, А НЕ «ФИНАНСОВ» (владелец 04.10:
-// «функция расход/доход должна быть в доступах календаря — финансы этого
-// календаря за день, не общие финансы; он не может оттуда увидеть общую
-// картину»).
+// ДОХОД И РАСХОД ДНЯ — ПРАВО КАЛЕНДАРЯ, А НЕ «ФИНАНСОВ»: это финансы этого календаря
+// за день, не общие финансы, и общую картину по ним увидеть нельзя.
 //
 // Полоса под сеткой, клетка месяца и лист «Финансы дня» открываются правом
 // `calendar.day_money` (Скрыты · Видит · Вносит), а не доходами и расходами

@@ -12,8 +12,11 @@ import {
   setShownSessionUserId,
 } from "./active-tenant";
 import { LABEL_FALLBACK_COLOR } from "@/features/calendar/day-label";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "./module-source";
+import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
 
-// ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review, 06.10).
+// ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review).
 //
 // Журнал сервера: logout 07:10:53.414, через 0,4 с — `GET /cities` БЕЗ токена,
 // 200 и пусто; вход 07:11:13 — метки дней перечитаны, сами метки нет. На
@@ -53,7 +56,7 @@ describe("выход и вход тем же человеком", () => {
   });
 
   test("хвост вышедших страниц на входе выбрасывается", () => {
-    const source = read("./auth-clear.ts");
+    const source = readModuleSource(resolve(here, "./auth-clear.ts"));
     const wipe = functionBody(source, "function wipeFastStores(");
     assert.ok(
       wipe.indexOf("signedOutOnPurpose = true") > wipe.indexOf("queryClient.clear()"),
@@ -68,7 +71,7 @@ describe("выход и вход тем же человеком", () => {
 
   test("метки ждут роль, как команды и метки дней", () => {
     const body = functionBody(
-      read("../features/reference/queries.ts"),
+      readModuleSource(resolve(here, "../features/reference/queries.ts")),
       "export function useCities(",
     );
     assert.match(body, /enabled: !!tenantId && ready,/);
@@ -133,7 +136,13 @@ describe("цвет метки, которой нет в справочнике",
       "../../app/(dashboard)/(home)/index.tsx",
       "../../app/book/index.tsx",
     ]) {
-      const source = read(file);
+      // The calendar screen is the route plus `features/calendar/home/`, the
+      // booking form the route plus `book-form/`.
+      const source = file.includes("(home)")
+        ? calendarScreenSource()
+        : file === "../../app/book/index.tsx"
+          ? bookFormSource()
+          : read(file);
       const calls = source.split("resolveCalendarDayLabel({").slice(1);
       assert.ok(calls.length > 0, `${file}: нет вызова`);
       for (const call of calls) {

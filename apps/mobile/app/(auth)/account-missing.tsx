@@ -10,8 +10,7 @@ import { signOutAndWipe } from "@/lib/auth-clear";
 import { useOnboardingGate, useRetryOnboardingGate } from "@/lib/tenant";
 
 // Аккаунт вошёл, а его данные не открылись: строки аккаунта нет или сеть не
-// дала её проверить. Мастера настройки здесь больше нет (владелец 04.10:
-// «как называется ваш бизнес… чем вы занимаетесь… — убираем»): аккаунт
+// дала её проверить. Мастера настройки здесь больше нет: аккаунт
 // готов к работе с регистрации, этот экран — только запасной выход.
 export default function AccountMissingScreen() {
   const gate = useOnboardingGate();

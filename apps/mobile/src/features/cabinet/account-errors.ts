@@ -1,7 +1,7 @@
 import { isHumanText } from "@babun/shared/i18n/runtime";
 import { looksLikeNoConnection } from "@/lib/connection-words";
 
-// «ВХОД И БЕЗОПАСНОСТЬ» ГОВОРИТ СЛОВАМИ (аудит Кабинета 03.10). Смена пароля
+// «ВХОД И БЕЗОПАСНОСТЬ» ГОВОРИТ СЛОВАМИ. Смена пароля
 // показывала ответ Supabase как есть — «Password is known to be weak…»,
 // «Request rate limit reached», — а удаление аккаунта любой отказ сервера
 // печатало «Edge Function returned a non-2xx status code».

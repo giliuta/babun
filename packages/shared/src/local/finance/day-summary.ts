@@ -60,11 +60,10 @@ export function computeDayFinance(
   services: Service[],
   extras: DayExtra[],
 ): DayFinanceTotals {
-  // ПРИШЕДШИЕ ДЕНЬГИ — С ЛЮБОЙ ЗАПИСИ, А НЕ ТОЛЬКО С ВЫПОЛНЕННОЙ (владелец
-  // 2026-09-24: «если не заплатили — это не доход», и наоборот: заплатили —
-  // доход). Раньше считались только завершённые записи, и предоплата €255 по
-  // ещё запланированному визиту в кассе была, а в «Доходе» дня — нет, хотя
-  // «Финансы» её показывали. Полный возврат `getPaidAmount` сам сводит к нулю.
+  // ПРИШЕДШИЕ ДЕНЬГИ — С ЛЮБОЙ ЗАПИСИ, А НЕ ТОЛЬКО С ВЫПОЛНЕННОЙ: не заплатили — не доход,
+  // заплатили — доход. Если считать только завершённые записи, предоплата
+  // €255 по ещё запланированному визиту была бы в кассе, но не в «Доходе»
+  // дня, хотя «Финансы» её показывают. Полный возврат `getPaidAmount` сам сводит к нулю.
   const earnedFromAppts = appointments.reduce(
     (sum, a) => sum + getPaidAmount(a),
     0,
@@ -130,14 +129,3 @@ export function computeDayFinance(
   };
 }
 
-// ─── Day mode (drives the finance modal layout) ─────────────────────
-// By date, not by data: past day shows that day's P&L, today shows
-// progress, future shows the plan. Both keys must be YYYY-MM-DD so the
-// lexicographic compare matches chronological order.
-export type DayMode = "future" | "today" | "past";
-
-export function getDayMode(dateKey: string, todayKey: string): DayMode {
-  if (dateKey > todayKey) return "future";
-  if (dateKey < todayKey) return "past";
-  return "today";
-}

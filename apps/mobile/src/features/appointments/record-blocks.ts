@@ -1,15 +1,15 @@
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
+import type { EventBlocks, RecordBlocks, RecordLevel } from "./record-blocks/levels";
 import { asRecordWindow, type RecordWindow } from "./record-window";
 
-// ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — БЛОКИ ПО ПРАВАМ (владелец 21.09: «визуал
-// должен быть идентичный… берёшь чётко те блоки, даёшь просто разрешение на
-// них»). Мастер открывает ту же страницу записи, что и владелец; каждый блок
+// ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — БЛОКИ ПО ПРАВАМ (визуал идентичный, меняется только разрешение на
+// блоки). Мастер открывает ту же страницу записи, что и владелец; каждый блок
 // показывается по уровню своего права в календаре записи:
 //   • hidden — блока нет вовсе;
 //   • read   — тот же блок, без нажатий и стрелок выбора;
 //   • write  — как у владельца.
 //
-// STORY-088 (волна 1): сервер проверяет каждое поле правки сотрудника своим
+// STORY-088: сервер проверяет каждое поле правки сотрудника своим
 // блоком (`member_appointment_update`), поэтому «Меняет» здесь — обещание,
 // которое сервер держит. Блок, который сервер ещё не проверяет, сотрудник
 // видит без правки: сменить его ему сервер не даст.
@@ -17,45 +17,10 @@ import { asRecordWindow, type RecordWindow } from "./record-window";
 
 type Role = "owner" | "dispatcher" | "master";
 
-export type RecordLevel = "hidden" | "read" | "write";
-
-export interface RecordBlocks {
-  /** Команда и мастер записи. */
-  team: RecordLevel;
-  /** Метка записи. */
-  label: RecordLevel;
-  /** Дата, время и длительность: меняет тот, кто переносит («Переносить»). */
-  when: RecordLevel;
-  client: RecordLevel;
-  object: RecordLevel;
-  /** Услуги в записи — строки работ. Состав меняет «Сумма и услуги: Меняет». */
-  services: RecordLevel;
-  /** Сумма записи — цены в строках, скидка, «Итого». */
-  amount: RecordLevel;
-  payment: RecordLevel;
-  files: RecordLevel;
-  /** Заметка записи — своё право «Заметка» (30.09). Пока сервер его не
-   *  проверяет — читают все, не пишет никто. Статуса нет (03.10). */
-  note: RecordLevel;
-  /** Цвет записи: видят все, красит — «Цвет записи». */
-  color: RecordLevel;
-  /** Блок «SMS» внизу записи — история сообщений её клиенту (03.10). */
-  sms: RecordLevel;
-}
-
-/** БЛОКИ СОБЫТИЯ (владелец 30.09: «и внутри события — что может видеть, что
- *  не может, что может редактировать»). Видит — во всех событиях команды;
- *  меняет — только своё событие при «Записи событий: Видит и создаёт»
- *  (`bookRights`). Команда и время видны всегда. */
-export interface EventBlocks {
-  label: RecordLevel;
-  /** Тип — название и цвет события. */
-  type: RecordLevel;
-  client: RecordLevel;
-  object: RecordLevel;
-  note: RecordLevel;
-  files: RecordLevel;
-}
+// Level types and the `/book` rights live in `./record-blocks/`; this file
+// stays the public entry.
+export type { EventBlocks, RecordBlocks, RecordLevel } from "./record-blocks/levels";
+export { bookRights, readOnlyBookRights, type BookRights } from "./record-blocks/book-rights";
 
 /** Что человек может сделать с записями календаря — кнопки сетки и меню. */
 export interface CalendarActions {
@@ -75,7 +40,7 @@ export interface CalendarActions {
   dayLabels: RecordLevel;
   /** График команды: рабочие часы и перерывы. */
   schedule: RecordLevel;
-  /** «Ограничения» (03.10): за какой срок назад видна прошедшая работа. */
+  /** «Ограничения»: за какой срок назад видна прошедшая работа. */
   window: RecordWindow;
 }
 
@@ -186,7 +151,7 @@ export function recordBlocks(input: Input): RecordBlocks {
   const services = level("record.services");
   return {
     team: level("record.team"),
-    // Метка записи — под «Меткой дня» (30.09): день скрыт — метки записи нет.
+    // Метка записи — под «Меткой дня»: день скрыт — метки записи нет.
     label: read("calendar.day_labels") === "off" ? "hidden" : level("record.label"),
     when: writeOrRead("calendar.move"),
     client: level("record.client"),
@@ -200,7 +165,7 @@ export function recordBlocks(input: Input): RecordBlocks {
     // «Заметка» — своё право с 30.09; неживое — прежнее правило.
     note: read("record.note") === undefined ? "read" : level("record.note"),
     color: writeOrRead("record.color"),
-    // «SMS» записи (03.10): сервер отдаёт историю только вместе с «Клиентом»
+    // «SMS» записи: сервер отдаёт историю только вместе с «Клиентом»
     // (`sms_for_appointment`) — без клиента блок пустой, его нет.
     sms: level("record.client") === "hidden" ? "hidden" : level("record.sms"),
   };
@@ -237,7 +202,7 @@ export function eventBlocks(input: Input): EventBlocks {
   };
   const filesBefore: RecordLevel = asRecordLevel(read("record.files")) === "hidden" ? "hidden" : "write";
   return {
-    // Метка события — под «Меткой дня» (30.09).
+    // Метка события — под «Меткой дня».
     label: read("calendar.day_labels") === "off" ? "hidden" : level("event.label", "write"),
     type: level("event.type", "write"),
     client: level("event.client", "read"),
@@ -266,186 +231,5 @@ export function calendarActions(input: Input): CalendarActions {
     // Реестр на телефоне ещё не знает права — окна нет: прятать записи по
     // догадке хуже, чем показать (сервер режет сам).
     window: read("calendar.window") === undefined ? "own" : asRecordWindow(read("calendar.window")),
-  };
-}
-
-/** Что можно нажать на странице записи `/book` — один ответ на все двери
- *  страницы. Владельцу всё. Сотруднику — рабочая запись по блокам её
- *  календаря; своё событие при «События: Меняет» — всё, кроме клиента,
- *  объекта и календаря (сервер их у события сотрудника не принимает). */
-export interface BookRights {
-  editTeam: boolean;
-  showLabel: boolean;
-  editLabel: boolean;
-  editWhen: boolean;
-  showClient: boolean;
-  editClient: boolean;
-  showObject: boolean;
-  editObject: boolean;
-  showServices: boolean;
-  editServices: boolean;
-  editTotal: boolean;
-  showMoney: boolean;
-  editNote: boolean;
-  editColor: boolean;
-  editEventType: boolean;
-  /** Блок заметки есть (у записи — «Заметка», у события — его «Заметка»). */
-  showNote: boolean;
-  /** Тип события показан. */
-  showType: boolean;
-  /** Блок файлов есть. */
-  showFiles: boolean;
-  /** Файлы добавляются. */
-  editFiles: boolean;
-  /** Блок «SMS» внизу записи (03.10). */
-  showSms: boolean;
-}
-
-export function bookRights(input: {
-  isMember: boolean;
-  kind: "work" | "event";
-  isEdit: boolean;
-  record: RecordBlocks;
-  /** Блоки события в его календаре; нет — как было до прав блоков события. */
-  event?: EventBlocks;
-  /** Сотрудник может править это событие: своё и «События: Меняет». */
-  eventWritable: boolean;
-}): BookRights {
-  const { isMember, kind, isEdit, record, eventWritable } = input;
-  if (!isMember) {
-    return {
-      editTeam: true,
-      showLabel: true,
-      editLabel: true,
-      editWhen: true,
-      showClient: true,
-      editClient: true,
-      showObject: true,
-      editObject: true,
-      showServices: true,
-      editServices: true,
-      editTotal: true,
-      showMoney: true,
-      editNote: true,
-      editColor: true,
-      editEventType: true,
-      showNote: true,
-      showType: true,
-      showFiles: true,
-      editFiles: true,
-      showSms: true,
-    };
-  }
-  if (kind === "event") {
-    // Блоки события (30.09): видит — по блоку; меняет — своё событие и
-    // только открытый на «Видит и меняет» блок.
-    const ev = input.event ?? {
-      label: "write",
-      type: "write",
-      client: "read",
-      object: "read",
-      note: "write",
-      files: "write",
-    };
-    const edits = (level: RecordLevel) => eventWritable && level === "write";
-    return {
-      // Календарь новой записи выбран слотом; у сохранённой — не меняется.
-      editTeam: !isEdit && eventWritable,
-      showLabel: ev.label !== "hidden",
-      editLabel: edits(ev.label),
-      editWhen: eventWritable,
-      showClient: ev.client !== "hidden",
-      editClient: edits(ev.client),
-      showObject: ev.object !== "hidden",
-      editObject: edits(ev.object),
-      showServices: false,
-      editServices: false,
-      editTotal: false,
-      showMoney: false,
-      editNote: edits(ev.note),
-      // Цвет события — цвет его типа.
-      editColor: edits(ev.type),
-      editEventType: edits(ev.type),
-      showNote: ev.note !== "hidden",
-      showType: ev.type !== "hidden",
-      showFiles: ev.files !== "hidden",
-      editFiles: edits(ev.files),
-      // SMS шлют клиенту записи — у события их блока нет.
-      showSms: false,
-    };
-  }
-  const w = (level: RecordLevel) => level === "write";
-  if (!isEdit) {
-    // НОВАЯ ЗАПИСЬ — ЦЕЛИКОМ ЕГО (миграция 20260924170000): «Новые записи:
-    // Может» — это клиент, объект, услуги, метка, цвет и заметка своей записи;
-    // запись клиента без клиента не сохраняется. Ручная цена и скидка —
-    // по-прежнему «Сумма: Меняет»: каталожные цены сотрудник не перебивает.
-    return {
-      editTeam: true,
-      showLabel: true,
-      editLabel: true,
-      editWhen: true,
-      showClient: true,
-      editClient: true,
-      showObject: true,
-      editObject: true,
-      showServices: true,
-      editServices: true,
-      editTotal: w(record.amount),
-      showMoney: record.amount !== "hidden",
-      editNote: true,
-      editColor: true,
-      editEventType: false,
-      showNote: true,
-      showType: false,
-      showFiles: record.files !== "hidden",
-      editFiles: w(record.files),
-      showSms: record.sms !== "hidden",
-    };
-  }
-  return {
-    editTeam: w(record.team),
-    showLabel: record.label !== "hidden",
-    editLabel: w(record.label),
-    editWhen: w(record.when),
-    showClient: record.client !== "hidden",
-    editClient: w(record.client),
-    showObject: record.object !== "hidden",
-    editObject: w(record.object),
-    showServices: record.services !== "hidden",
-    editServices: w(record.services),
-    editTotal: w(record.amount),
-    showMoney: record.amount !== "hidden",
-    editNote: w(record.note),
-    editColor: w(record.color),
-    editEventType: false,
-    showNote: record.note !== "hidden",
-    showType: false,
-    showFiles: record.files !== "hidden",
-    editFiles: w(record.files),
-    showSms: record.sms !== "hidden",
-  };
-}
-
-/** ЗАПИСЬ КЛИЕНТА БЕЗ ТАРИФА — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 02.10: «без
- *  тарифа нельзя добавлять объекты, услугу применить нельзя, менять нельзя
- *  ничего в целом на клиентах»). Видно то же, что и с тарифом; ни одна
- *  правка не нажимается — тот же вид, что у партнёра с «Только видит»:
- *  пустой блок (объект не выбран) уходит, заполненный стоит без двери.
- *  Сервер держит то же (`tenant_free_readonly_guard`). */
-export function readOnlyBookRights(rights: BookRights): BookRights {
-  return {
-    ...rights,
-    editTeam: false,
-    editLabel: false,
-    editWhen: false,
-    editClient: false,
-    editObject: false,
-    editServices: false,
-    editTotal: false,
-    editNote: false,
-    editColor: false,
-    editEventType: false,
-    editFiles: false,
   };
 }

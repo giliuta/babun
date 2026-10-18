@@ -11,9 +11,9 @@
     "web": "bun run --cwd apps/mobile web",
     "start": "bun run --cwd apps/mobile start",
     "build:web": "bun run --cwd apps/mobile build:web",
-    "typecheck": "bun run --cwd apps/mobile typecheck",
+    "typecheck": "bun run --cwd apps/mobile typecheck && bun run --cwd packages/shared typecheck",
     "test": "bun test",
-    "lint": "bun run --cwd apps/mobile lint"
+    "lint": "bun run --cwd apps/mobile lint && bun run --cwd packages/shared lint"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

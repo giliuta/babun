@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { useClosedAccountActions } from "@/features/finances/accounts-page/use-closed-account-actions";
 import { money, moneySign } from "@babun/shared/common/utils/money";
-import { useIsOnline } from "@babun/shared/sync";
+import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -17,7 +17,11 @@ import { RowCaption } from "@/components/ui/card-rows";
 import { notify } from "@/lib/notify";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { AccountsGroup } from "@/features/finances/accounts-page/AccountsGroup";
-import { accountEditParam, presetTeamFor } from "@/features/finances/accounts-page/page-rules";
+import {
+  accountEditParam,
+  clearSettledMoves,
+  presetTeamFor,
+} from "@/features/finances/accounts-page/page-rules";
 import { useHideAccount } from "@/features/finances/accounts-page/use-hide-account";
 import {
   useAccountsWithBalances,
@@ -29,31 +33,24 @@ import { accountOrderGroups, financeAccountsHref } from "@/features/finances/acc
 import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 
-// СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (владелец 2026-09-15).
+// СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (панель «Счета» и шестерёнка).
 //
-// «Когда я захожу в счета — есть счета, два; справа сделай строчки. Я нажимаю
-// на эти строчки — перекидывается именно на страницу… оно открывается как
-// услуга по сути; и влево свайп — скрыть; и можно их перетаскивать, менять
-// местами; внизу кнопка „Добавить счёт“». И про шестерёнку: «эту настройку
-// поставь в шестерёнку, и там счета, чтоб была одна и та же страница».
-//
-// Поэтому страница собрана по рецепту прайса услуг (`cabinet/services.tsx`):
+// Страница собрана по рецепту прайса услуг (`cabinet/services.tsx`):
 // строка-карточка на команду, ручка справа, «Скрыть» на левой кромке, тап —
 // правка, главное действие — кнопкой в футере. Правка и создание — ОДНА
-// шторка (`AccountEditorSheet`): «ещё лучше не полноценная страница, а
-// шторка… я могу также тапнуть на тот же созданный и то же самое
-// редактировать».
+// шторка (`AccountEditorSheet`), а не полноценная страница: созданный счёт
+// открывается той же шторкой.
 //
 // ОСТАТКИ В СТРОКАХ ЕСТЬ: шестерёнка ведёт сюда мимо панели, и другого места
 // увидеть деньги счёта у этой двери нет.
 //
-// ДЕНЬГИ АРХИВНОЙ КОМАНДЫ ЗДЕСЬ ВИДНЫ (критика плана, блокер 2): «Финансы»
+// ДЕНЬГИ АРХИВНОЙ КОМАНДЫ ЗДЕСЬ ВИДНЫ: «Финансы»
 // показывают только живые команды, и у этих счетов нет другой двери. Группа у
 // них своя, см. `accountOrderGroups`.
 //
-// ПРАВА (03.10): строка шестерёнки «Счета» команды. Владелец — всё и по всем
+// ПРАВА: строка шестерёнки «Счета» команды. Владелец — всё и по всем
 // командам. Партнёр — только команды, где у него «Счета» открыты: «Только
 // видит» — список без правки, порядка и «Добавить счёт»; «Видит и меняет» —
 // заводит, правит, двигает и удаляет счета своей команды
@@ -70,7 +67,7 @@ export default function AccountsScreen() {
   const router = useRouter();
   const deletedQuery = useDeletedAccounts();
   // Полный список: закрытые нужны счётчику двери в архив и шторке правки.
-  // Со скрытыми: скрытый счёт виден только здесь (владелец 03.10).
+  // Со скрытыми: скрытый счёт виден только здесь.
   const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   // ВСЕ команды, включая архивные: по ним называются группы осиротевших
   // счетов и строится подпись команды в листе перевода.
@@ -82,6 +79,10 @@ export default function AccountsScreen() {
   // там, куда её положили, а не прыгнуть обратно на те 300 мс, пока сервер
   // подтверждает запись. Ключ — id счёта, значение — новая позиция.
   const [moved, setMoved] = useState<Record<string, number>>({});
+  // Номер последнего переноса каждого счёта: ответ на ранний перенос не должен
+  // снимать позицию, которую человек уже переставил заново.
+  const moveSeq = useRef(0);
+  const lastMove = useRef(new Map<string, number>());
 
   // ШТОРКА ПРАВКИ ПО АДРЕСУ `?edit=<uuid>`: старый `/accounts/<id>/settings` и
   // лист операции приводят сюда уже с открытым счётом. Читается при входе и
@@ -95,7 +96,7 @@ export default function AccountsScreen() {
   const editParam = accountEditParam(edit);
   // Шторка по адресу поднимается ПОСЛЕ въезда страницы: открытая в первом
   // рендере, она попадала на анимацию перехода (а из листа операции — ещё и
-  // на его отъезд) и не появлялась вовсе (ревью 2026-09-15).
+  // на его отъезд) и не появлялась вовсе.
   const [editor, setEditor] = useState<{ open: boolean; id: string | null }>(
     () => ({ open: false, id: editParam }),
   );
@@ -124,13 +125,13 @@ export default function AccountsScreen() {
     () => new Map(teams.map((team) => [team.id, team])),
     [teams],
   );
-  // ЗАКРЫТЫЕ — В ТОЙ ЖЕ ГРУППЕ, ВНИЗУ (владелец 2026-09-29: «убери вкладку
-  // „Закрытые счета“»). Как скрытая категория: серая строка под открытыми,
+  // ЗАКРЫТЫЕ — В ТОЙ ЖЕ ГРУППЕ, ВНИЗУ (отдельной вкладки «Закрытые счета»
+  // нет). Как скрытая категория: серая строка под открытыми,
   // «Открыть» слева, «Удалить» пустого справа. Группа команды держит и те и
   // другие; итог над группой — только открытые: закрытый счёт не входит ни в
   // один итог.
   // Закрытый счёт стёртой или архивной команды не показываем вовсе: деньги
-  // архива в живых финансах не существуют (владелец 2026-09-21), и группа
+  // архива в живых финансах не существуют, и группа
   // «Команда удалена» из одних серых строк по €0 — шум.
   const groups = useMemo(
     () =>
@@ -154,8 +155,8 @@ export default function AccountsScreen() {
   );
   const closedActions = useClosedAccountActions();
   const hider = useHideAccount({ accounts: all, teamById });
-  // ОДНА КОМАНДА ПО АДРЕСУ (`?team=`, владелец 2026-09-24: «настройки
-  // финансов по каждой команде»). Из «Настроек финансов» страница приходит на
+  // ОДНА КОМАНДА ПО АДРЕСУ (`?team=`): настройки
+  // финансов — по каждой команде. Из «Настроек финансов» страница приходит на
   // команде — сверху лента, ниже только её счета, и новый счёт заводится ей.
   // Из панели «Счета» адреса нет, и страница прежняя: все команды группами.
   const owner = useCurrentRole().data === "owner";
@@ -177,7 +178,7 @@ export default function AccountsScreen() {
       ? groups
       : [];
   // «УДАЛЁННЫЕ СЧЕТА» — ДВЕРЬ ПОД СПИСКОМ, ТОЛЬКО КОГДА ТАМ ЧТО-ТО ЛЕЖИТ
-  // (владелец 03.10: «попадают в папку „Удалённые счета"»). Страница сама за
+  // (удалённые счета попадают в папку «Удалённые счета»). Страница сама за
   // шестерёнкой, поэтому дверь здесь, а не ещё одной строкой настроек.
   const deletedCount = (deletedQuery.data ?? []).filter(
     (account) => !teamId || account.brigade_id === teamId,
@@ -185,8 +186,10 @@ export default function AccountsScreen() {
 
   /** Новый порядок строк группы: пишем позиции 0, 1, 2… по списку id. */
   const applyOrder = (ids: string[]) => {
-    // Снимать оптимистичный порядок после успеха не нужно: он совпадает с
-    // тем, что вернёт рефетч, и снятие дало бы лишний кадр старого порядка.
+    const seq = (moveSeq.current += 1);
+    ids.forEach((id) => lastMove.current.set(id, seq));
+    // Позиции держатся, пока сервер не ответил и список не перечитан: иначе
+    // строка прыгнула бы обратно на те 300 мс подтверждения.
     setMoved((current) => {
       const next = { ...current };
       ids.forEach((id, index) => {
@@ -197,17 +200,29 @@ export default function AccountsScreen() {
     // `mutateAsync`, а не `mutate(…, { onError })`: второй перенос до ответа
     // на первый отцеплял бы колбэки первого, и его отказ прошёл бы молча (та же
     // ловушка react-query 5, что в `accountSaver`).
-    void reorder.mutateAsync(ids).catch((e: unknown) => {
-      // Сервер не принял — снимаем оптимистичный порядок целиком: показывать
-      // порядок, которого нет в базе, значит соврать при следующем входе.
-      setMoved({});
-      notify(
-        "Не удалось сохранить порядок",
-        online && e instanceof Error
-          ? e.message
-          : "Без сети порядок не сохранится — он живёт на сервере.",
-      );
-    });
+    void reorder
+      .mutateAsync(ids)
+      .then(
+        () => undefined,
+        (e: unknown) => {
+          // Частичный отказ: часть позиций записана, часть нет — ниже список
+          // перечитывается и показывает то, что лежит в базе.
+          notify(
+            "Не удалось сохранить порядок",
+            online && e instanceof Error
+              ? e.message
+              : "Без сети порядок не сохранится — он живёт на сервере.",
+          );
+        },
+      )
+      // При ЛЮБОМ исходе: перечитать, и только потом снять оптимистичные
+      // позиции — после успеха они перекрыли бы свежие с сервера, после отказа
+      // показывали бы порядок, которого в базе нет.
+      // Без сети перечитывать нечем (запрос встал бы в паузу и держал бы
+      // оптимистичные позиции вечно) — тогда снимаем их сразу.
+      .then(() => (isOnline() ? accountsQuery.refetch() : undefined))
+      .catch(() => undefined)
+      .then(() => setMoved((current) => clearSettledMoves(current, ids, lastMove.current, seq)));
   };
 
   // ВЕТВЛЕНИЕ ПО «ДАННЫХ НЕТ», А НЕ ПО isPending (§8): без сети запрос стоит
@@ -223,8 +238,7 @@ export default function AccountsScreen() {
   };
 
   // Страница стоит НАД вкладками: таб-бара под ней нет, и нижний край держит
-  // сам экран — иначе «Добавить счёт» садилась на полоску «домой» (владелец
-  // 03.10: «как будто слишком низко»). Та же высота, что у «Записать клиента»
+  // сам экран — иначе «Добавить счёт» садилась на полоску «домой». Та же высота, что у «Записать клиента»
   // поверх записи.
   return (
     <Screen>
@@ -234,9 +248,8 @@ export default function AccountsScreen() {
         // сюда и заходят, а не на календарь, куда примитив уводит пустую
         // историю.
         fallbackHref={financeAccountsHref() as Href}
-        // Команду выбрали в «Настройках финансов» — страница её и только её
-        // (владелец 2026-09-30: «когда захожу в счета, там не должно быть
-        // переключения команд»). Имя команды называет шапка группы счетов —
+        // Команду выбрали в «Настройках финансов» — страница её и только её,
+        // без переключения команд. Имя команды называет шапка группы счетов —
         // второй раз под заголовком оно не повторяется.
       />
       {!hasData && !loadError ? (
@@ -264,8 +277,7 @@ export default function AccountsScreen() {
           contentContainerStyle={{ paddingBottom: 24 }}
           scrollEnabled={!dragging}
         >
-          {/* Пусто — словами, без кнопки (владелец 2026-09-15: «никаких
-              кнопок внутри»). Добавить — футером, закрытые — строкой ниже. */}
+          {/* Пусто — словами, без кнопки внутри. Добавить — футером, закрытые — строкой ниже. */}
           {shownGroups.length === 0 ? (
             <RowCaption text="Счетов нет" />
           ) : null}
@@ -283,10 +295,9 @@ export default function AccountsScreen() {
               onReopen={(account) => closedActions.openAgain(account)}
             />
           ))}
-          {/* ДЕНЬГИ БЕЗ СЧЁТА — СЛОВАМИ, А НЕ МОЛЧАНИЕМ (аудит 2026-09-10).
+          {/* ДЕНЬГИ БЕЗ СЧЁТА — СЛОВАМИ, А НЕ МОЛЧАНИЕМ.
               Сервер считает операции, у которых счёта нет вовсе, и в остатки
-              они не попадают. Одно слово с суммой (вкус владельца
-              2026-09-06), без инструкции: откуда эти деньги, он знает сам. */}
+              они не попадают. Одно слово с суммой, без инструкции: откуда эти деньги, он знает сам. */}
           {owner && moneySign(unassigned) !== 0 ? (
             <RowCaption text={`Без счёта ${money(unassigned)}`} />
           ) : null}

@@ -34,7 +34,7 @@ export class ExpoSqliteAdapter implements SqlAdapter {
       // оптимистичная строка) идёт своим соединением; без ожидания любая
       // запись основного соединения в это время сразу падала «database is
       // locked» — промис без обработчика, правка не уходила, а после
-      // перезапуска старая правка догоняла свежую (24.09). Пять секунд
+      // перезапуска старая правка догоняла свежую. Пять секунд
       // ожидания блокировки — настройка соединения, на файл не влияет.
       this.db.execSync("PRAGMA busy_timeout = 5000;");
       // ЖУРНАЛ WAL: чтение не ждёт запись (владелец 2026-09-30: «перенос
@@ -80,8 +80,16 @@ export class ExpoSqliteAdapter implements SqlAdapter {
     // the exclusive transaction. Other writers WAIT (busy_timeout above) until
     // this commits — the isolation the atomic enqueue+upsert pair and the
     // cacheClearAll wipe need, without failing them.
-    return this.handle().withExclusiveTransactionAsync(
-      (txn) => task(txn as unknown as SqlAdapter),
-    );
+    //
+    // `txn` — НОВОЕ соединение (expo-sqlite открывает его на каждую такую
+    // транзакцию), а `busy_timeout` — настройка соединения: основное
+    // получает её в `handle()`, это — нет. Без неё две транзакции (enqueue и полная замена кэша
+    // компании) не ждали друг друга: вторая сразу падала «database is
+    // locked». `BEGIN` у expo отложенный, блокировку он ещё не берёт, поэтому
+    // ожидание, выставленное первой командой, успевает до первой записи.
+    return this.handle().withExclusiveTransactionAsync(async (txn) => {
+      await txn.execAsync("PRAGMA busy_timeout = 5000;");
+      await task(txn as unknown as SqlAdapter);
+    });
   }
 }

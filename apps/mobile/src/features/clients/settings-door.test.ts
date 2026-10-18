@@ -4,8 +4,8 @@ import { describe, test } from "node:test";
 import { clientSettingsDoor, type ClientSettingsDoorInput } from "./settings-door";
 
 // ШЕСТЕРЁНКА ЛИСТА — В НАБОР КОМАНДЫ И КОМПАНИИ, КОТОРЫЙ ЛИСТ ПОКАЗЫВАЕТ
-// (аудит 03.10): без команды подстраница правила набор телефона, а партнёр
-// попадал в свою компанию со всеми правами.
+// без команды подстраница правила бы набор телефона, а партнёр попадал бы в
+// свою компанию со всеми правами.
 
 const owner = (over: Partial<ClientSettingsDoorInput> = {}): ClientSettingsDoorInput => ({
   pathname: "/clients/channels",
@@ -58,8 +58,8 @@ describe("шестерёнка листов «Связаться», «Добав
     });
   });
 
-  // 03.10: общий адрес стоит на тех же воротах строки, что вкладочный
-  // (`ClientSettingsRoute`), — роль календаря его больше не закрывает.
+  // Общий адрес стоит на тех же воротах строки, что вкладочный
+  // (`ClientSettingsRoute`), — роль календаря его не закрывает.
   test("общий адрес из записи — по той же строке, что вкладка", () => {
     const shared = { pathname: "/maps" } as const;
     assert.deepEqual(clientSettingsDoor(partner({ ...shared, level: "read" })), {

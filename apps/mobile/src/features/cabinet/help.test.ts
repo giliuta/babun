@@ -115,3 +115,9 @@ describe("HELP_FAQ", () => {
     assert.equal(new Set(questions).size, questions.length);
   });
 });
+
+test("письмо поддержки называет настоящее устройство, а не всегда iPhone", () => {
+  // С Android письмо подписывалось «Устройство: iPhone».
+  assert.match(supportMailBody("1.0.3", "Android 36"), /Устройство: Android 36/);
+  assert.match(supportMailBody("1.0.3"), /Устройство: iPhone/);
+});

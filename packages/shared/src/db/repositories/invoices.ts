@@ -2,34 +2,28 @@
 // Creation, numbering and editing are atomic database RPCs; the RN client
 // performs validation too, then confirms the committed document by reading it.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "../database.types";
 import { rpcArgs } from "../rpc-args";
 import type {
-  InvoiceKind,
   InvoiceLedger,
   InvoiceLedgerWithLines,
-  InvoiceLineLedger,
   InvoiceLineDraft,
-  InvoiceStatus,
   InvoiceVatMode,
 } from "../../local/finance/invoice-ledger";
-import {
-  calculateInvoiceTotals,
-  invoiceLineTotal,
-  parseInvoiceClientSnapshot,
-  parseInvoiceSellerSnapshot,
-} from "../../local/finance/invoice-ledger";
+import { calculateInvoiceTotals } from "../../local/finance/invoice-ledger";
 import {
   assertInvoiceTotal,
-  roundInvoiceMoney,
   validateInvoiceDraft,
 } from "./invoice-write-helpers";
 import type { UiLocale } from "../../i18n/locales";
+import {
+  rowToInvoice,
+  rowToLine,
+  type DbSupabase,
+  type LineRow,
+  type Row,
+} from "./invoices/mappers";
+import { assertInvoiceControlRead } from "./invoices/control-read";
 
-type DbSupabase = SupabaseClient<Database>;
-type Row = Database["public"]["Tables"]["invoices"]["Row"];
-type LineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
 const INVOICE_PAGE_SIZE = 1000;
 
 export interface IssueInvoiceDraft {
@@ -58,62 +52,6 @@ export interface IssueInvoiceDraft {
    *  20260922100000). Не задан — основной; чужой или удалённый сервер
    *  сводит к основному. */
   client_requisites_id?: string | null;
-}
-
-function rowToInvoice(r: Row): InvoiceLedger {
-  return {
-    id: r.id,
-    tenant_id: r.tenant_id,
-    number: r.number,
-    year: r.year,
-    seq: r.seq,
-    issued_on: r.issued_on,
-    language: r.language ?? "ru",
-    due_on: r.due_on,
-    client_id: r.client_id,
-    appointment_id: r.appointment_id,
-    brigade_id: r.brigade_id,
-    company_id: r.company_id,
-    account_id: r.account_id,
-    location_id: r.location_id ?? null,
-    client_requisites_id: r.client_requisites_id ?? null,
-    subtotal_net: Number(r.subtotal_net ?? 0),
-    vat_percent: Number(r.vat_percent ?? 19),
-    vat_amount: Number(r.vat_amount ?? 0),
-    total: Number(r.total ?? 0),
-    currency: r.currency,
-    status: r.status as InvoiceStatus,
-    // ВИД И РЕЖИМ НДС — С САМОГО ДОКУМЕНТА. Без вида витрины отличали сторно
-    // от счёта по минусовой сумме и отдельным запросом связей, а режим НДС
-    // угадывали по суммам, хотя сервер его теперь пишет.
-    kind: (r.kind as InvoiceKind | null) ?? "invoice",
-    credit_note_of_id: r.credit_note_of_id,
-    credit_note_of_receipt_id: r.credit_note_of_receipt_id ?? null,
-    credited_amount: Number(r.credited_amount ?? 0),
-    credit_partial: r.credit_partial ?? false,
-    vat_mode: (r.vat_mode as InvoiceVatMode | null) ?? null,
-    pdf_url: r.pdf_url,
-    notes: r.notes,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    created_by: r.created_by,
-    seller_snapshot: parseInvoiceSellerSnapshot(r.seller_snapshot),
-    client_snapshot: parseInvoiceClientSnapshot(r.client_snapshot),
-  };
-}
-
-function rowToLine(r: LineRow): InvoiceLineLedger {
-  return {
-    id: r.id,
-    invoice_id: r.invoice_id,
-    position: r.position,
-    title: r.title,
-    description: r.description ?? null,
-    qty: Number(r.qty ?? 1),
-    unit: r.unit ?? null,
-    unit_price: Number(r.unit_price ?? 0),
-    total: Number(r.total ?? 0),
-  };
 }
 
 export async function listInvoices(
@@ -259,93 +197,20 @@ export async function setInvoiceLanguage(
   id: string,
   language: UiLocale,
 ): Promise<void> {
-  const { error } = await supabase
+  // `.select()` — чтобы увидеть, сколько строк ушло под запись: политика строк
+  // отвечает на недоступный документ «0 обновлено» без ошибки, и без сверки
+  // вызывающий считал бы язык записанным.
+  const { data, error } = await supabase
     .from("invoices")
     .update({ language })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id, language");
   if (error) throw new Error(`setInvoiceLanguage: ${error.message}`);
-}
-
-function assertInvoiceControlRead(
-  saved: InvoiceLedgerWithLines,
-  lines: InvoiceLineDraft[],
-  totals: { subtotal_net: number; vat_amount: number; total: number },
-  expected: {
-    issuedOn: string;
-    dueOn: string | null;
-    clientId: string | null;
-    appointmentId: string | null;
-    brigadeId: string | null;
-    notes: string | null;
-    vatMode: InvoiceVatMode;
-    vatPercent: number;
-    // Необязательны, потому что `null` здесь значит «человек не выбирал»:
-    // сервер тогда подставляет ОСНОВНОЙ набор реквизитов (`resolve_company_id`),
-    // и сверять `null` с подставленным нельзя — сверка пропускается, см. ниже.
-    companyId?: string | null;
-    accountId?: string | null;
-    allowResolvedReferences: boolean;
-  },
-): void {
-  const expectedVat = expected.vatMode === "off"
-    ? 0
-    : roundInvoiceMoney(expected.vatPercent);
-  const headerMatches =
-    saved.issued_on === expected.issuedOn &&
-    saved.due_on === expected.dueOn &&
-    saved.notes === (expected.notes?.trim() || null) &&
-    moneyEqual(saved.subtotal_net, totals.subtotal_net) &&
-    moneyEqual(saved.vat_amount, totals.vat_amount) &&
-    moneyEqual(saved.total, totals.total) &&
-    moneyEqual(saved.vat_percent, expectedVat);
-  const referencesMatch = expected.allowResolvedReferences
-    ? (expected.clientId === null || saved.client_id === expected.clientId) &&
-      (expected.appointmentId === null || saved.appointment_id === expected.appointmentId) &&
-      (expected.brigadeId === null || saved.brigade_id === expected.brigadeId)
-    : saved.client_id === expected.clientId &&
-      saved.appointment_id === expected.appointmentId &&
-      saved.brigade_id === expected.brigadeId;
-  // РЕКВИЗИТЫ И СЧЁТ СВЕРЯЮТСЯ, ТОЛЬКО КОГДА ЧЕРНОВИК ИХ ВЫБРАЛ. `null`
-  // здесь не значит «пусто в базе»: сервер вправе подставить основной набор
-  // реквизитов сам (`resolve_company_id`), и сверка `null` с подставленным
-  // значением ложно уронила бы правильно выставленный счёт.
-  const requisitesMatch =
-    (expected.companyId == null || saved.company_id === expected.companyId) &&
-    (expected.accountId == null || saved.account_id === expected.accountId);
-  const linesMatch =
-    saved.lines.length === lines.length &&
-    saved.lines.every((line, index) => {
-      const expectedLine = lines[index];
-      // ОПИСАНИЕ И ЕДИНИЦА СВЕРЯЮТСЯ НАРАВНЕ С ДЕНЬГАМИ. Сторож дописан
-      // после инцидента, в котором сервер молча терял именно эти два поля,
-      // и без них он по построению не мог поймать его повторение: суммы
-      // сходятся, а к клиенту уезжает счёт без текста позиций.
-      return line.position === index &&
-        line.title === expectedLine.title &&
-        line.description === (expectedLine.description ?? null) &&
-        line.unit === (expectedLine.unit ?? null) &&
-        Math.abs(line.qty - expectedLine.qty) < 0.0005 &&
-        moneyEqual(line.unit_price, expectedLine.unit_price) &&
-        // СТОРОЖ СЧИТАЕТ ТЕМ ЖЕ СПОСОБОМ, ЧТО И СЕРВЕР. Своё
-        // `qty * unit_price` в double расходилось с `round(qty * unit_price, 2)`
-        // на numeric ровно на цент (1,5 × €2,01 — 3,01 против 3,02), и сторож
-        // ронял ПРАВИЛЬНО записанный документ: инвойс создан, номер
-        // израсходован, а человек видит ошибку выставления.
-        moneyEqual(
-          line.total,
-          invoiceLineTotal(expectedLine.qty, expectedLine.unit_price),
-        );
-    });
-
-  if (!headerMatches || !referencesMatch || !requisitesMatch || !linesMatch) {
-    throw new Error(
-      "Контрольное чтение инвойса не совпало с отправленным документом",
-    );
+  const row = (data ?? [])[0] as { language?: string | null } | undefined;
+  if (!row) throw new Error("setInvoiceLanguage: invoice is not writable");
+  if (row.language !== language) {
+    throw new Error("setInvoiceLanguage: language was not saved");
   }
-}
-
-function moneyEqual(left: number, right: number): boolean {
-  return Math.abs(roundInvoiceMoney(left) - roundInvoiceMoney(right)) < 0.005;
 }
 
 export async function setInvoicePdfUrl(
@@ -365,8 +230,8 @@ export async function setInvoicePdfUrl(
 }
 
 /**
- * ПРАВКА ВЫСТАВЛЕННОГО ИНВОЙСА НА МЕСТЕ (владелец 2026-10-04: «я ещё не
- * отправил клиенту — могу отредактировать»). Тот же номер; сервер пускает
+ * ПРАВКА ВЫСТАВЛЕННОГО ИНВОЙСА НА МЕСТЕ (пока клиенту не отправлен, его можно
+ * отредактировать). Тот же номер; сервер пускает
  * только владельца и только счёт без оплат (`update_invoice_draft`, миграция
  * 20261004060000). Реквизиты продавца не меняются — номер из их серии.
  */
@@ -410,8 +275,7 @@ export async function updateInvoice(
 }
 
 /**
- * УДАЛЕНИЕ ИНВОЙСА (владелец 2026-10-04: «смахнуть — удалить, и тогда
- * восстанавливается порядковый номер»). Только последний в серии и без
+ * УДАЛЕНИЕ ИНВОЙСА (удаление возвращает порядковый номер). Только последний в серии и без
  * оплат — сервер так и держит (`delete_invoice`); иначе — кредит-нота.
  */
 export async function deleteInvoice(supabase: DbSupabase, invoiceId: string): Promise<void> {

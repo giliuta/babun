@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { afterChoiceSheet, chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { useTenant } from "@/features/settings/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useTenant } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   locationRequestLink,
   locationRequestShareText,
@@ -26,7 +26,7 @@ import {
 
 export function useLocationRequestActions() {
   const tenant = useTenant();
-  // ИМЯ — КОМПАНИИ КАРТОЧКИ, а не открытой в календаре (03.10): при команде
+  // ИМЯ — КОМПАНИИ КАРТОЧКИ, а не открытой в календаре: при команде
   // партнёра клиент AirFix получал «Giliuta: отметьте адрес…». Имени чужой
   // компании нет под рукой — без подписи, но не чужим именем.
   const scope = useClientsScopeOrNull();

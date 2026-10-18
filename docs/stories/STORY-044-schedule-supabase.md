@@ -200,7 +200,7 @@ Same call as STORY-042 A4. Multi-device sync via reload is sufficient for AirFix
 
 ## Group plan
 
-### G1 — SQL migration (`20260430_005_schedule.sql`) — review-required before apply
+### G1 — SQL migration (`20260430000005_schedule.sql`) — review-required before apply
 
 Four `CREATE TABLE` blocks + `set_updated_at` triggers + RLS policies + the trigger extension + the backfill of default `calendar_settings` rows. Final SQL written before apply; here's the shape:
 

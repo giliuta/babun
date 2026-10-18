@@ -13,8 +13,11 @@ import {
   type BreakdownRow,
 } from "./breakdown";
 import { PanelHeader } from "./PanelHeader";
-import { dmyShort } from "./period";
+import { dmyShort } from "@/lib/period";
 import { changeOf } from "./profit-compare";
+import { BreakdownBarRow, BreakdownSectionHeader } from "./profit-breakdown/BreakdownRows";
+
+export { BreakdownBarRow, BreakdownSectionHeader } from "./profit-breakdown/BreakdownRows";
 
 // «Разбор прибыли» — port of the web ProfitPanel (bars view): «Доход»
 // (income by service/category, breakdownIncome resolves an income tx to the
@@ -23,8 +26,7 @@ import { changeOf } from "./profit-compare";
 // Цифру самой прибыли печатает переключатель над панелью — второго раза ей
 // здесь не нужно.
 //
-// ПЕРЕСОБРАНО 2026-09-30 (владелец: «улучшим прибыль — как показывается, что
-// показывается»):
+// УСТРОЙСТВО РАЗБОРА:
 //   • в шапке — МАРЖА: сама прибыль стоит в плитке, а «хорошая ли она»
 //     говорит доля от дохода — новое, а не повтор;
 //   • кольцо долей снято: его подписи повторяли те же услуги, что полоски
@@ -33,8 +35,8 @@ import { changeOf } from "./profit-compare";
 //   • строка услуги подписана её материалами («материалы €10») — расход
 //     «Материалы» перестал быть безымянной суммой;
 //   • разделы — словами плиток: «Доход», «Расход»;
-//   • К ПРОШЛОМУ ПЕРИОДУ — только здесь, не на плитках (владелец: «аналитику
-//     такую — только в прибыли»): блок «прибыль / доход / расход — было и
+//   • К ПРОШЛОМУ ПЕРИОДУ — только здесь, не на плитках (аналитика
+//     такого рода — только в прибыли): блок «прибыль / доход / расход — было и
 //     стало» и изменение у каждой услуги и статьи расхода. Строка без пары в
 //     прошлом периоде изменения не несёт: «+∞ %» ничего не говорит.
 export function ProfitBreakdown({
@@ -181,7 +183,7 @@ export function ProfitBreakdown({
         />
         {/* Подвал — и у пустого разбора. В «Аналитике» там «Работы и оплаты»
             и «Прогноз»: месяц, где сделано на €370 и не пришло ни евро,
-            показывал одно «Нет доходов» и прятал как раз долг (03.10). */}
+            показывал одно «Нет доходов» и прятал как раз долг. */}
         {footer}
       </ScrollView>
     );
@@ -298,117 +300,4 @@ function signedEUR(amount: number, outflow: boolean): string {
 /** «материалы €10» под услугой; без материалов — ничего. */
 function materialsNote(amount: number | undefined): string | undefined {
   return amount && amount > 0 ? `материалы ${formatEUR(amount)}` : undefined;
-}
-
-/**
- * СТРОКА РАЗБОРА — имя, «×N», сумма справа и полоска доли под ними. Одна
- * вёрстка на «Прибыль» «Финансов» и на панели «Аналитики» (владелец
- * 2026-09-24: «бери всё созданное, не придумывай с нуля»).
- */
-export function BreakdownBarRow({
-  name,
-  count,
-  value,
-  color,
-  share,
-  note,
-  delta,
-}: {
-  name: string;
-  /** «×N» после имени; ноль — без счётчика. */
-  count: number;
-  value: string;
-  /** Цвет суммы и полоски — цвет смысла строки. */
-  color: string;
-  /** Доля 0…1; вне отрезка прижимается. */
-  share: number;
-  /** Тихая подпись после имени — «было €593», «материалы €40». */
-  note?: string;
-  /** Изменение перед суммой — «↑ 23%» цветом смысла (рост или падение). */
-  delta?: { text: string; color: string };
-}) {
-  const th = useThemeColors();
-  const pct = Math.min(100, Math.max(0, share * 100));
-  return (
-    <View className="px-4 py-2.5">
-      <View className="flex-row items-center">
-        <Text
-          className="shrink text-[15px]"
-          style={{ color: th.ink }}
-          numberOfLines={1}
-        >
-          {name}
-        </Text>
-        {count > 0 ? (
-          <Text className="ml-1.5 text-xs" style={{ color: th.faint }}>
-            ×{count}
-          </Text>
-        ) : null}
-        {note ? (
-          <Text
-            className="ml-1.5 shrink text-xs"
-            numberOfLines={1}
-            style={{ color: th.faint, fontVariant: ["tabular-nums"] }}
-          >
-            {note}
-          </Text>
-        ) : null}
-        {delta ? (
-          <Text
-            className="ml-auto pl-2.5 text-[13px] font-semibold"
-            style={{ fontVariant: ["tabular-nums"], color: delta.color }}
-          >
-            {delta.text}
-          </Text>
-        ) : null}
-        <Text
-          className={`${delta ? "ml-2.5" : "ml-auto pl-2.5"} text-[15px] font-semibold`}
-          style={{ fontVariant: ["tabular-nums"], color }}
-        >
-          {value}
-        </Text>
-      </View>
-      <View
-        className="mt-1.5 h-1.5 overflow-hidden rounded-full"
-        style={{ backgroundColor: th.separator }}
-      >
-        <View
-          className="h-1.5 rounded-full"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
-      </View>
-    </View>
-  );
-}
-
-/** Шапка секции разбора — «ЧТО ПРИНЕСЛО ДЕНЕГ · €728». Одна на «Прибыль» и
- *  секции «Аналитики»: капс слева, итог секции её цветом справа. */
-export function BreakdownSectionHeader({
-  title,
-  value,
-  color,
-}: {
-  title: string;
-  value?: string;
-  color?: string;
-}) {
-  const th = useThemeColors();
-  return (
-    <View className="flex-row items-baseline px-4 pb-1 pt-3">
-      <Text
-        className="text-xs font-semibold uppercase tracking-wider"
-        style={{ color: th.sub }}
-      >
-        {title}
-      </Text>
-      {value ? (
-        <Text
-          className="ml-auto text-[13px] font-bold"
-          style={{ fontVariant: ["tabular-nums"], color: color ?? th.ink }}
-        >
-          {value}
-        </Text>
-      ) : null}
-    </View>
-  );
 }

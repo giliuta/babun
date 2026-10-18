@@ -40,7 +40,7 @@ describe("история SMS — плитки, поиск, дни", () => {
       ["СЕГОДНЯ", 2, 12],
       ["ВС, 27 СЕНТЯБРЯ", 2, 24],
     ]);
-    // Две части — две SMS (03.10): «1 SMS · €0,24» не сходилось с ценой.
+    // Две части — две SMS: «1 SMS · €0,24» не сходилось с ценой.
     const twoParts = groupByDay([{ ...items[0]!, segments: 2 }], now);
     assert.equal(twoParts[0]?.count, 2);
     assert.equal(dayTitle(new Date("2026-09-28T09:00:00"), now), "ВЧЕРА");

@@ -3,6 +3,8 @@ import { describe, test } from "node:test";
 
 import { cardAccess, type TeamBlocksOn } from "./card-access";
 
+import { statsByBlocks } from "./card-access";
+
 const ALL_ON: TeamBlocksOn = {
   note: true, people: true, objects: true, labels: true, tags: true, personal: true, files: true, requisites: true,
 };
@@ -38,7 +40,7 @@ describe("карточка клиента: блоки по команде и п�
     assert.deepEqual(a.objects, { show: true, edit: true });
     assert.deepEqual(a.personal, { show: false, edit: false });
     assert.equal(a.history.show, true);
-    // Деньги идут вместе с «Историей» (03.10): видит историю — видит и долг.
+    // Деньги идут вместе с «Историей»: видит историю — видит и долг.
     assert.deepEqual(a.money, { show: true, edit: false });
     const noHistory = cardAccess({
       client: { blocks: { ...client.blocks, "clients.history": "off" } },
@@ -81,8 +83,6 @@ describe("карточка клиента: блоки по команде и п�
     assert.equal(a.card.edit, true);
   });
 });
-
-import { statsByBlocks } from "./card-access";
 
 describe("сводка клиента по его правам", () => {
   const stats = {

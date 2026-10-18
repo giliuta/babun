@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "@/lib/module-source";
 
 // КОМАНДА ЖИВЁТ ТОЛЬКО В `select`.
 //
-// С 2026-09-15 метки дня и графики читаются одним ключом на компанию: команду
+// Метки дня и графики читаются одним ключом на компанию: команду
 // ключ больше не называет, а отбирает её `select`. Значит `select` здесь — не
 // украшение, а весь фильтр: удали его или подмени команду — и каждый календарь
 // компании покажет метки и графики всех команд сразу. Тест на чистой функции
@@ -21,8 +21,9 @@ function stripComments(source: string): string {
     .replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 }
 
+// Split data layers (barrel + folder) are read whole: see `module-source.ts`.
 const sourceOf = (rel: string): string =>
-  stripComments(readFileSync(join(here, rel), "utf8"));
+  stripComments(readModuleSource(join(here, rel)));
 
 /** Тело хука до следующего `export`, пробелы схлопнуты. */
 function hookBody(source: string, hook: string): string {
@@ -61,7 +62,7 @@ describe("метки дня: ключ компании, команда — selec
     );
     assert.match(
       source,
-      /import \{[^}]*\bpickTeamLabels\b[^}]*\} from "\.\/reference-select"/,
+      /import \{[^}]*\bpickTeamLabels\b[^}]*\} from "\.\.\/reference-select"/,
     );
   });
 
@@ -94,7 +95,7 @@ describe("графики: карта компании, команда — select
   });
 });
 
-// УСЛУГИ — ТОТ ЖЕ ПРИЁМ (15.09): каталог выбора и полный справочник читают один
+// УСЛУГИ — ТОТ ЖЕ ПРИЁМ: каталог выбора и полный справочник читают один
 // ключ, живые отбирает `select`. Без него владелец увидит к выбору убранные
 // услуги.
 describe("услуги: один ключ справочника, живые — select", () => {

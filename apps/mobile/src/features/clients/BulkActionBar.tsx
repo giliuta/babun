@@ -5,7 +5,7 @@
 //   · SMS      → opens BulkSmsSheet (template picker + blast/sequential)
 //   · Экспорт  → CSV of the selection via the OS share sheet (bulk-export)
 //   · Удалить  → «Удалённые клиенты» after a native confirm, with undo
-//                (owner 03.10: no client archive any more)
+//                (there is no client archive)
 //
 // Disabled-not-hidden when nothing is picked, so the bar never reflows. The
 // SMS/Export/Delete plumbing lives in the parent (index.tsx) — this is a
@@ -15,7 +15,7 @@ import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MessageSquare, Share2, Trash2 } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 export function BulkActionBar({
@@ -34,7 +34,7 @@ export function BulkActionBar({
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const disabled = count === 0;
-  // Без тарифа рассылки нет (02.10): «SMS» серое, тап — плашка про тариф.
+  // Без тарифа рассылки нет: «SMS» серое, тап — плашка про тариф.
   const smsLocked = !usePlanAllows("sms");
   const nudgeTariff = useTariffNudge();
 

@@ -1,54 +1,38 @@
 // Clients data layer — форма клиента, объекты, техника и долг по записям.
 
-import { generateId } from "./masters";
-
-// STORY-036: client ids must be uuid-shaped because the canonical
-// store is now Supabase (clients.id is uuid pk). `crypto.randomUUID`
-// is available in every browser we ship to + Node 19+. Falls back to
-// the legacy `cli-…` id only in environments where crypto is missing
-// (very old browsers, certain SSR contexts) — those clients won't
-// round-trip to Supabase but will at least stay readable in
-// localStorage.
-function newClientId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return generateId("cli");
-}
+import { randomUuid } from "../sync/uuid";
 import { getDebtAmount, type Appointment } from "./appointments";
 
-export interface ClientTag {
-  id: string;
-  name: string;
-  color: string;
-  /** Значок из общего словаря (`ICON_PRESETS`); пусто — тег живёт одним цветом.
-   *  Появился 2026-09-10 вместе с блоком «Вид»: владелец попросил один и тот же
-   *  выбор цвета и значка у всех справочников. */
-  icon?: string | null;
-  /** Порядок в справочнике — перетаскивание ручкой, как у типов объектов. */
-  position?: number;
-  /** Скрытый тег гаснет, уходит в конец списка и не предлагается в выборе;
-   *  у клиентов, которым он уже проставлен, он остаётся. */
-  hidden?: boolean;
-  /** Команда тега (владелец 30.09: «теги закреплены за командой»). У каждой
-   *  команды свой список; клиенту предлагаются теги его команды. */
-  team_id?: string | null;
-}
+import type {
+  AcquisitionSource,
+  Client,
+  ClientMembership,
+  PropertyType,
+} from "./clients/types";
 
-/**
- * Acquisition channel — how did the client find us.
- * Inspired by Monica's "how_we_met" model, adapted for service businesses.
- */
-export type AcquisitionSource =
-  | "referral" // друг/знакомый привёл
-  | "instagram"
-  | "whatsapp"
-  | "google_maps"
-  | "website"
-  | "repeat" // повторный клиент
-  | "walk_in" // «просто проезжали мимо»
-  | "other"
-  | "unknown";
+export type {
+  AcquisitionSource,
+  ACType,
+  ACUnit,
+  AddressParts,
+  Client,
+  ClientContactsHidden,
+  ClientMembership,
+  ClientNote,
+  ClientRequisites,
+  ClientSourceValue,
+  ClientTag,
+  Location,
+  PhoneEntry,
+  PropertyType,
+} from "./clients/types";
+
+// Client ids are uuids (clients.id is a uuid primary key). `randomUuid`
+// yields a real uuid on every runtime, React Native included, where
+// `crypto.randomUUID` is missing.
+function newClientId(): string {
+  return randomUuid();
+}
 
 export const ACQUISITION_LABELS: Record<AcquisitionSource, string> = {
   referral: "Рекомендация",
@@ -62,14 +46,6 @@ export const ACQUISITION_LABELS: Record<AcquisitionSource, string> = {
   unknown: "Неизвестно",
 };
 
-/** ИСТОЧНИК КЛИЕНТА В ДАННЫХ (владелец 03.10: «могут самостоятельно добавить
- *  источник»). Готовый — ключом из `ACQUISITION_LABELS`, свой источник
- *  команды — `src:<id строки client_sources>`. Поле в базе — текст, поэтому
- *  колонка клиента не менялась. */
-export type ClientSourceValue = AcquisitionSource | `src:${string}`;
-
-export type PropertyType = "apartment" | "house" | "office" | "restaurant" | "shop" | "other";
-
 export const PROPERTY_LABELS: Record<PropertyType, string> = {
   apartment: "Квартира",
   house: "Дом",
@@ -77,14 +53,6 @@ export const PROPERTY_LABELS: Record<PropertyType, string> = {
   restaurant: "Ресторан",
   shop: "Магазин",
   other: "Другое",
-};
-
-export type ACType = "split" | "ducted" | "cassette";
-
-export const AC_TYPE_LABELS: Record<ACType, string> = {
-  split: "Сплит",
-  ducted: "Канальный",
-  cassette: "Кассетный",
 };
 
 /** Что подставить в «Адрес» заявки при выборе объекта. Поле заявки принимает
@@ -99,254 +67,6 @@ export function locationAddressForBooking(loc: {
   return (
     loc.address?.trim() || loc.mapUrl?.trim() || loc.label?.trim() || ""
   );
-}
-
-/** Позиция НА ОБЪЕКТЕ — то, что обслуживают повторно: кондиционер, пылесос,
- *  бассейн, автомобиль, зона уборки. Продукт продаётся не только
- *  кондиционерщикам (владелец 2026-08-06), поэтому здесь НЕТ ни закрытого
- *  списка типов, ни «внутреннего/внешнего блока»: тип — свободное слово
- *  бизнеса, а смысл уровня — график обслуживания и напоминание «пора». */
-export interface ACUnit {
-  id: string;
-  /** Где стоит: комната, этаж, участок. Необязательно. */
-  room: string;
-  brand?: string;
-  model?: string;
-  /** Слово бизнеса: «Сплит», «Пылесос», «Бассейн». Пусто — тип не важен. */
-  type_name?: string;
-  /** @deprecated Наследие HVAC-версии: закрытый список сплит/канальный/
-   *  кассетный. Больше не пишется и не показывается; читается только чтобы
-   *  перенести старое значение в `type_name`. */
-  ac_type?: ACType;
-  /** @deprecated Внутренний/внешний блок — устройство кондиционера, у
-   *  пылесоса или маникюрного стола такого нет. */
-  has_indoor?: boolean;
-  /** @deprecated см. has_indoor. */
-  has_outdoor?: boolean;
-  /** Beta #49 (CRM Core brief) — equipment service schedule. When
-   *  `service_interval_months` is set, the system computes
-   *  `next_service_date = max(installed_at, last_service_at) +
-   *  interval` and flags the unit as «пора обслуживать» when the
-   *  due date is within ≤ 14 days. */
-  installed_at?: string;        // YYYY-MM-DD
-  last_service_at?: string;     // YYYY-MM-DD
-  service_interval_months?: number;
-}
-
-export interface ClientNote {
-  id: string;
-  text: string;
-  created_at: string;
-}
-
-// ─── Client locations (objects) ────────────────────────────────────────
-// Один клиент может иметь несколько объектов — дом, офис, вилла —
-// со своим адресом и **своим оборудованием**. v309: equipment
-// переехало с клиента на объект, потому что у одной семьи может
-// быть 3 кондея в квартире и 5 в офисе — это разное оборудование
-// одного и того же клиента.
-/** УТОЧНЕНИЕ АДРЕСА (владелец 2026-09-06: «не строчку „адрес или ссылка“, а
- *  полноценное заполнение — город, улица, дом, подъезд, квартира, индекс, как
- *  на доставке»). Все поля необязательны. `address` СОБИРАЕТСЯ из них
- *  (`composeAddress`), когда заполнено хоть одно «где» — улица, комплекс или
- *  город: список, SMS и бригадный лист читают одну строку и о частях не
- *  знают. Комплекс стоит выше подъезда намеренно: на Кипре спасает название
- *  комплекса и корпус, а не номер подъезда. */
-export interface AddressParts {
-  /** Улица и дом одной строкой — так пишут адрес здесь: «Makariou 12». */
-  street?: string;
-  /** Комплекс, корпус, название здания. */
-  complex?: string;
-  entrance?: string;
-  floor?: string;
-  apartment?: string;
-  city?: string;
-  zip?: string;
-}
-
-export interface Location {
-  id: string;
-  label: string;         // "Дом", "Офис", "Вилла"
-  address: string;
-  /** Части адреса, из которых собрана строка `address` (см. `AddressParts`).
-   *  Нет — адрес набран одной строкой или пришёл пином. */
-  addressParts?: AddressParts;
-  /** P0 #6 (CRM Core brief) — per-object property type so a client
-   *  with «дом + офис» doesn't have to repurpose one global
-   *  client.property_type. Optional + additive: old localStorage
-   *  rows that don't have this field read as `undefined`, which the
-   *  shared `<ObjectFormFields />` treats as «not picked yet». */
-  property_type?: PropertyType;
-  /** MEGA-UPDATE: ссылка на Google Maps / Apple Maps.
-   *  Когда задана — кнопка «Навигация» ведёт по ссылке (точнее,
-   *  клиент мог прислать нестандартный pin). Без неё —
-   *  google.com/maps/dir по текстовому адресу. */
-  mapUrl?: string;
-  isPrimary: boolean;    // первый объект для автовыбора
-  /** Откуда объект: `client_link` — клиент сам отметил адрес по ссылке
-   *  (RPC location_request_submit, STORY-077). Пусто — заведён в CRM. */
-  source?: "client_link";
-  /** v309 — заметка к объекту, видна команде у порога:
-   *  «зелёная дверь, домофон 25», «снимать обувь», «собака во дворе». */
-  note?: string;
-  /** v309 — A/C юниты на этом объекте. До v309 хранилось на клиенте;
-   *  миграция переносит client.equipment → locations[primary].equipment. */
-  equipment?: ACUnit[];
-}
-
-export interface PhoneEntry {
-  id: string;
-  number: string;
-  /** "Основной", "WhatsApp", "Жена", "Рабочий" etc. */
-  label: string;
-  /** v309 — имя контакта на этом номере. Реальный сценарий: одна
-   *  карточка клиента, основной — муж, второй номер — «Жена · Мария».
-   *  Для отображения в строке и подстановки в SMS-обращение. */
-  name?: string;
-}
-
-/** Один набор реквизитов клиента — то, что печатается получателем инвойса.
- *  Ровно один набор основной (`is_default`), он же зеркалится в четыре
- *  колонки клиента. Правила чистки — `client-requisites.ts`. */
-export interface ClientRequisites {
-  id: string;
-  legal_name: string | null;
-  vat_number: string | null;
-  reg_number: string | null;
-  billing_address: string | null;
-  is_default: boolean;
-}
-
-/**
- * СВЯЗЬ КЛИЕНТА С ДРУГОЙ КАРТОЧКОЙ (STORY-085, вариант 3 владельца 2026-09-21:
- * «все — клиенты, связаны друг с другом»). Екатерина входит в карточку Павла
- * («жена»), Ольга — в карточку Gem Capital («управляющая»). Хранится у того,
- * кто входит: «в какие карточки я вхожу и кем». Люди карточки X — клиенты, у
- * которых в `memberships` стоит X. Роль — своими словами, пусто — без роли.
- */
-export interface ClientMembership {
-  group_id: string;
-  role: string;
-  /** МЕСТО ВНУТРИ КАРТОЧКИ-ГРУППЫ — id объекта из `locations` той карточки
-   *  (STORY-086). Без него вопрос «кто живёт в Вилле 5» не имеет ответа:
-   *  управляющая с десятью виллами держит всех жильцов в одной карточке, и
-   *  связь «жилец Натальи» сама по себе не говорит, чей он жилец.
-   *
-   *  `null`/нет ключа — связь без места (жена, управляющая): это законно и
-   *  НЕ значит «место потерялось». Сервер сверяет id с `locations` группы и
-   *  обнуляет чужой или исчезнувший, оставляя саму связь живой — человек не
-   *  перестал быть жильцом Натальи оттого, что виллу стёрли. */
-  location_id?: string | null;
-}
-
-/** Почему номер клиента сотруднику сейчас не пришёл (015 + 014, 30.09):
- *  `null` — можно открыть дверью `member_client_contacts`, `'day'` — откроется
- *  в день записи, `'right'` — права на телефоны нет. */
-export type ClientContactsHidden = "day" | "right" | null;
-
-export interface Client {
-  id: string;
-  full_name: string;
-  phone: string;
-  /** НОМЕР СОТРУДНИКУ — ПО ОДНОМУ. Ключ есть только у строки сотрудника из
-   *  окна сервера: там контактов нет никогда (телефоны, мессенджеры, почта,
-   *  люди — пусто). Нет ключа — строка владельца, контакты полные. */
-  contacts_hidden?: ClientContactsHidden;
-  /** ПРАВА СОТРУДНИКА ПО БЛОКАМ КАРТОЧКИ (015 + 014, 30.09): `{ clients:
-   *  "read"|"write", "clients.note": "off"|"read"|"write", … }` — по командам,
-   *  через которые клиент ему виден. Поля закрытых блоков приходят пустыми.
-   *  Нет ключа — строка владельца: всё открыто (`card-access.ts`). */
-  blocks?: Readonly<Record<string, string>>;
-  /** Реквизиты клиента для инвойса — у компании и у человека одинаково
-   *  (владелец 2026-09-21: «инвойс могут просить прямо на клиента с его
-   *  реквизитами»). Имена те же, что у реквизитов продавца (`companies`),
-   *  чтобы инвойс печатал обе стороны одним кодом. Сотруднику сервер их не
-   *  отдаёт: это документы и деньги. */
-  legal_name?: string | null;
-  vat_number?: string | null;
-  reg_number?: string | null;
-  billing_address?: string | null;
-  /** НАБОРЫ РЕКВИЗИТОВ (владелец 22.09: «один инвойс на эти реквизиты, второй —
-   *  на эти… как объекты»). Четыре поля выше — ЗЕРКАЛО основного набора: его
-   *  держит сервер (триггер `clients_sync_requisites`, миграция
-   *  20260922100000), и старые читатели работают без правок. Нет ключа —
-   *  строка старше миграции; читать через `clientRequisitesOf`. */
-  requisites?: ClientRequisites[];
-  /** STORY-085: в какие карточки входит этот клиент и кем. */
-  memberships?: ClientMembership[];
-  /** Дополнительные номера — супруг(а), арендатор, помощник, рабочий, WhatsApp на другом номере. */
-  phones: PhoneEntry[];
-  /** Если WhatsApp зарегистрирован на другой номер, не основной. */
-  whatsapp_phone: string;
-  email: string;
-  sms_name: string;
-  telegram_username: string;
-  instagram_username: string;
-  balance: number;
-  discount: number;
-  comment: string;
-  tag_ids: string[];
-  acquisition_source: ClientSourceValue;
-  referred_by_client_id: string | null;
-  first_contact_date: string | null;
-  address: string;
-  /** Метка клиента — имя из библиотеки меток Кабинета (cities). Пишется
-   *  автоматически из метки дня при записи, пока не выбрана вручную. */
-  city: string;
-  /** true — метку выбрали руками, автоприсвоение её не перезаписывает.
-   *  «Убрать метку» сбрасывает во false (возврат в авто-режим). */
-  city_manual?: boolean;
-  property_type: PropertyType | "";
-  /** DEPRECATED with v309 — equipment moved onto Location. Field kept
-   *  for legacy reads; `loadClients` migrates into the primary
-   *  location's `equipment` array on first load. */
-  equipment: ACUnit[];
-  /** v309 — язык клиента для SMS-шаблонов (ru/en/el на Кипре чаще всего). */
-  /** Объекты клиента (дом/офис/вилла) — новое поле для STORY-002.
-   *  Если у клиента несколько объектов, при записи явно выбирается
-   *  один. Legacy-поле `address` оставлено для миграции. */
-  locations: Location[];
-  notes: ClientNote[];
-  /** YYYY-MM-DD, empty = unknown. */
-  birthday: string;
-  /** Блокировка: клиент в чёрном списке. */
-  blacklisted: boolean;
-  /** Клиент просил не присылать SMS: сервис ему не пишет ни сам, ни по
-   *  кнопке (STORY-089). Правится только `set_client_sms_opt_out`. */
-  sms_opt_out?: boolean;
-  /** КОМАНДА КЛИЕНТА (владелец 30.09: «чтоб клиенты относились к
-   *  определённой команде»). По ней лента «Все | Команда…» во вкладке
-   *  «Клиенты». Пусто только у компании без команд. Меняется только
-   *  `set_client_team`; при создании — выбранная команда ленты, без неё
-   *  сервер ставит первую доступную. */
-  team_id?: string | null;
-  /** v313 — закреплён вверху списка. ISO timestamp когда закрепили. */
-  pinned_at?: string | null;
-  /** v313 — отметка «напомнить про клиента» (ISO). Когда наступит,
-   *  должно сработать push-уведомление; для launch-MVP просто
-   *  отображается на карточке. */
-  reminder_at?: string | null;
-  /** clients-99: canonical E.164 phone for dedup + indexing. NULL
-   *  until the row is touched by a libphonenumber-aware writer. */
-  phone_e164?: string | null;
-  /** clients-99: optional avatar image. Empty/null → fall back to
-   *  deterministic initials. */
-  avatar_url?: string | null;
-  /** Клиент убран из рабочего списка. NULL = живой.
-   *
-   *  ДВА СОСТОЯНИЯ НЕВИДИМОСТИ различаются ПАРОЙ полей, а не отдельной
-   *  таблицей — клиент остаётся клиентом со своей историей:
-   *    deleted_at есть, purge_at пуст  → АРХИВ, бессрочно;
-   *    deleted_at есть, purge_at стоит → КОРЗИНА, сотрётся в эту дату. */
-  deleted_at?: string | null;
-  /** Дата полного стирания (корзина «Недавно удалённые», 30 дней как в
-   *  Фото на iPhone). Чистит ночное задание purge_expired_clients.
-   *  У активных и у архивных — NULL. */
-  purge_at?: string | null;
-  /** clients-99: tenant_state master id. No FK on DB because masters
-   *  live in tenant_state, not a physical table. */
-  favorite_master_id?: string | null;
-  created_at: string;
 }
 
 /** Связи клиента; у старых объектов — пусто. */

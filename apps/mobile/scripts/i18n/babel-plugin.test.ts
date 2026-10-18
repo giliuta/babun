@@ -116,8 +116,8 @@ describe("i18n babel plugin", () => {
   it("leaves document paper in its own language", () => {
     const fs = require("node:fs") as typeof import("node:fs");
     for (const file of [
-      "apps/mobile/src/features/invoices/dictionary.ts",
-      "apps/mobile/src/features/invoices/paper-languages.ts",
+      "apps/mobile/src/lib/paper/dictionary.ts",
+      "apps/mobile/src/lib/paper/paper-languages.ts",
       "apps/mobile/src/features/documents/receipt-words.ts",
     ]) {
       const source = fs.readFileSync(path.resolve(__dirname, "../../../..", file), "utf8");

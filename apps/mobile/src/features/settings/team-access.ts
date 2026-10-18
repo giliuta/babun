@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database, Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { sendInvitationEmail } from "@/features/access/invitation-email";
+import { sendInvitationEmail } from "@/features/settings/invitation-email";
 import { useSession } from "@/providers/SessionProvider";
 import {
   isInvitableRole,
@@ -87,7 +87,7 @@ export function useCreateInvitation() {
       /** Календарь, в который зовут. `null` — приглашение без календаря:
        *  человек войдёт по роли, строк прав ему не запишется. */
       teamId?: string | null;
-      /** Мини-карточка человека (владелец 15.09): имя и телефон в E.164
+      /** Мини-карточка человека: имя и телефон в E.164
        *  необязательны; при приёме сервер кладёт их в карточку мастера. */
       fullName?: string | null;
       phone?: string | null;

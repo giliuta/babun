@@ -75,7 +75,7 @@ export function subscribeRevalidated(cb: Listener): () => void {
  *  emit after every tag write. `stableStamp` sorts keys first, so equal data
  *  yields an equal stamp regardless of column order. */
 export function cacheSignature(
-  rows: ReadonlyArray<{ id: string; updated_at?: string | null }>,
+  rows: readonly { id: string; updated_at?: string | null }[],
 ): string {
   const parts = rows.map((r) => {
     const id = String(r.id ?? "");

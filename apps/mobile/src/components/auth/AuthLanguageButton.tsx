@@ -7,10 +7,10 @@ import { localeInfo } from "@babun/shared/i18n/locales";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { LanguageOptionList } from "@/components/ui/LanguageOptionList";
 import { useAuthTheme } from "@/components/auth/theme";
-import { reloadApp } from "@/features/cabinet/reload-app";
+import { reloadApp } from "@/lib/reload-app";
 
-// ЯЗЫК — ДО ВХОДА (владелец 04.10: «не все говорят на русском… как он зайдёт,
-// увидит русский — как он зарегистрируется»). Кнопка в углу экранов входа,
+// ЯЗЫК — ДО ВХОДА: не все говорят на русском, а язык при входе определяет, как
+// человек зарегистрируется. Кнопка в углу экранов входа,
 // регистрации и сброса пароля: флаг и имя языка его же словами, чтобы человек
 // нашёл свой, не читая текущего. Тап — та же шторка, что в Кабинете →
 // «Языки»; выбор перезапускает приложение уже на новом языке.

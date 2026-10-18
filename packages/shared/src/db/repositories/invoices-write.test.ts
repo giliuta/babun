@@ -1,15 +1,14 @@
-// ВЫСТАВЛЕНИЕ И ПРАВКА СЧЁТА — единственная дорога документа к клиенту, и до
-// сегодня по ней не проходил ни один тест. Инцидент 2026-08-25 случился именно
-// здесь: серверная функция перечисляла колонки поимённо и молча писала строку
-// без описания и единицы — черновик на экране выглядел правильным, а к клиенту
-// четыре дня уезжали позиции без текста.
+// ВЫСТАВЛЕНИЕ И ПРАВКА СЧЁТА — единственная дорога документа к клиенту, и ей
+// нужны тесты. Серверная функция, перечисляющая колонки поимённо, молча
+// пишет строку без описания и единицы — черновик на экране выглядит
+// правильным, а к клиенту уезжают позиции без текста.
 //
 // Поэтому проверяются три вещи, а не «что функция что-то вернула»:
 //   1) в RPC реально уходят `description` и `unit`;
 //   2) набор ключей строки СОВПАДАЕТ с колонками, которые пишет сервер, —
 //      контрактный тест по последней миграции, как у клиентских RPC;
 //   3) контрольное чтение ПАДАЕТ, если сервер вернул строку без описания или
-//      без единицы (до правки сторож этого не замечал).
+//      без единицы.
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -92,8 +91,8 @@ function lineRow(overrides: Record<string, unknown> = {}) {
  *  invoice_lines), — иначе половина сторожа остаётся непроверенной. */
 function fakeSupabase(opts: {
   rpc?: { data: unknown; error: { message: string } | null };
-  savedLines?: Array<Record<string, unknown>>;
-  calls?: Array<Record<string, unknown>>;
+  savedLines?: Record<string, unknown>[];
+  calls?: Record<string, unknown>[];
 }) {
   const rpcResult = opts.rpc ?? { data: invoiceRow(), error: null };
   const savedLines = opts.savedLines ?? [lineRow()];
@@ -165,7 +164,7 @@ const SERVER_OWNED_COLUMNS = new Set(["invoice_id", "position", "total"]);
 
 describe("строка счёта доезжает до сервера целиком", () => {
   it("кладёт описание и единицу в p_lines", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await issueInvoice(fakeSupabase({ calls }), TENANT, issueDraft);
 
     expect(calls[0]?.name).toBe("issue_invoice");
@@ -179,10 +178,10 @@ describe("строка счёта доезжает до сервера цели�
   });
 
   it("шлёт ровно те поля, которые пишет серверная вставка", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await issueInvoice(fakeSupabase({ calls }), TENANT, issueDraft);
     const sent = Object.keys(
-      (calls[0]?.p_lines as Array<Record<string, unknown>>)[0],
+      (calls[0]?.p_lines as Record<string, unknown>[])[0],
     ).sort();
     const expected = serverLineColumns()
       .filter((column) => !SERVER_OWNED_COLUMNS.has(column))

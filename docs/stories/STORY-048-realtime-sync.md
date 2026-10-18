@@ -32,7 +32,7 @@ Realtime was deferred in STORY-042 / 044 / 049 / 050 because there was no second
 
 `supabase_realtime` publication exists with 0 tables. 10 target tables all have `REPLICA IDENTITY DEFAULT` (PK-based) — we'll upgrade to `FULL` for OLD-row coverage. State + mutator patterns documented in the inventory report (see chat). Excluded tables justified above.
 
-## G1 — SQL migration (`20260430_010_realtime_publication.sql`)
+## G1 — SQL migration (`20260430000010_realtime_publication.sql`)
 
 ```sql
 -- ALTER REPLICA IDENTITY FULL on the 10 multi-user tables so DELETE
@@ -224,7 +224,7 @@ This is the iOS PWA limitation (A9) showing up on Chromium too; documented as ex
 
 ### Files shipped (commit `4a032f1`)
 
-- `supabase/migrations/20260430_010_realtime_publication.sql` (32 lines)
+- `supabase/migrations/20260430000010_realtime_publication.sql` (32 lines)
 - `apps/web/src/hooks/useRealtimeTenantSync.ts` (~110 lines, new)
 - `apps/web/src/components/layout/DashboardClientLayout.tsx` — reloadSchedule extracted, 8 realtime hook calls added
 - `apps/web/src/components/layout/Sidebar.tsx` — realtime on `recurring_reminders` for badge count

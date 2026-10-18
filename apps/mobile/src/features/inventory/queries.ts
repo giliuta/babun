@@ -10,18 +10,18 @@ import {
 } from "@babun/shared/local/equipment";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 // РОЛЬ ЗДЕСЬ — СВОЯ (`useDataRole`), А НЕ ЗЕРКАЛЬНАЯ. Она входит в КЛЮЧ
 // запроса и в форму чтения: на зеркальной роли каждый вход и выход из
 // режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
 // владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
 // настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 
 export type { Equipment } from "@babun/shared/local/equipment";
 
 // Inventory lives in the canonical public.equipment table (migration
-// 20260624_001) so it syncs across devices and survives reinstalls.
+// 20260624000001) so it syncs across devices and survives reinstalls.
 // MMKV via the storage seam is only a tenant-scoped read cache. Canonical
 // writes must succeed on Supabase before the cache/UI reports success.
 

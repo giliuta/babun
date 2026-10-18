@@ -66,9 +66,9 @@ This story replaces the per-user-tenant model with a proper RBAC layer.
 | Self-leave team | ✓ if not last Owner | ✓ | ✓ |
 | Delete tenant | ✓ if last Owner (via `/api/account/delete` cascade) | ✗ | ✗ |
 
-## G1 — SQL migration (`20260430_008_team_roles.sql`)
+## G1 — SQL migration (`20260430000008_team_roles.sql`)
 
-Single migration, ~350 lines, 9 chunks for review. Full text in `babun-crm/apps/web/supabase/migrations/20260430_008_team_roles.sql`. See SQL section below.
+Single migration, ~350 lines, 9 chunks for review. Full text in `babun-crm/apps/web/supabase/migrations/20260430000008_team_roles.sql`. See SQL section below.
 
 ### Verify after apply
 
@@ -247,7 +247,7 @@ PageHeader (`useSidebar()` consumer) was incompatible with `/invite/[token]` sin
 
 ### Files shipped (commits `6aa616d` + `0fb140b`)
 
-- `supabase/migrations/20260430_008_team_roles.sql` (~430 SQL lines, single transaction)
+- `supabase/migrations/20260430000008_team_roles.sql` (~430 SQL lines, single transaction)
 - `packages/shared/src/db/database.types.ts` — `tenants.owner_user_id` row dropped, new tables `tenant_members` + `invitations`, `accept_invitation` / `current_tenant_id` / `current_user_role` function shapes
 - `apps/web/src/app/api/invite/route.ts` (new) — Owner-only invite generation
 - `apps/web/src/app/api/team/switch/route.ts` (new) — active tenant switcher endpoint

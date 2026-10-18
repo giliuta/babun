@@ -3,20 +3,34 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
+import { bookFormSource } from "../appointments/book-form/source-for-tests";
+import { clientCardSource } from "../clients/card/source-for-tests";
 
-// ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ 03.10 — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
+// ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
 // СИМУЛЯТОРА (экран и жесты тянут react-native). Каждый держит конкретную
 // поломку, найденную разбором «как сломать то, что пользователь не делает».
 
 const here = dirname(fileURLToPath(import.meta.url));
-const screen = () =>
-  readFileSync(resolve(here, "../../../app/(dashboard)/(home)/index.tsx"), "utf8");
-const block = () => readFileSync(resolve(here, "AppointmentBlock.tsx"), "utf8");
+// The calendar screen is the route file plus `features/calendar/home/`.
+const screen = () => calendarScreenSource();
+// The grid block is `AppointmentBlock.tsx` plus its parts in `appointment-block/`.
+const block = () =>
+  readModuleSource(resolve(here, "AppointmentBlock.tsx"), resolve(here, "appointment-block"));
+// The day grid is `DayView.tsx` plus its parts in `day-view/`.
+const dayGrid = () => readModuleSource(resolve(here, "DayView.tsx"), resolve(here, "day-view"));
+const monthGrid = () => readModuleSource(resolve(here, "MonthView.tsx"), resolve(here, "month-view"));
+// «Список» is `AgendaView.tsx` plus its parts in `agenda/`.
+const agendaList = () => readModuleSource(resolve(here, "AgendaView.tsx"), resolve(here, "agenda"));
+// The day money sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`.
+const daySheet = () =>
+  readModuleSource(resolve(here, "DayFinanceSheet.tsx"), resolve(here, "day-finance"));
 
 describe("календарь под нагрузкой", () => {
   test("быстрое событие рождается с uuid — «Отменить» удаляет именно его", () => {
     // Номер — uuid попытки: повтор того же действия после потерянного ответа
-    // несёт тот же номер и не заводит второе событие (аудит 03.10).
+    // несёт тот же номер и не заводит второе событие.
     const src = screen();
     assert.match(src, /total_amount: 0,\s*\}\), id: attemptId\(attempt\) \};\s*createAppt\.mutate\(ev,/);
     assert.match(src, /const id = randomUuid\(\);\s*attemptIdsRef\.current\.set\(key, id\);/);
@@ -25,7 +39,7 @@ describe("календарь под нагрузкой", () => {
   test("копия партнёра несёт номер попытки — повтор не даёт дубля", () => {
     const src = screen();
     assert.match(src, /timeEnd: addMinutesHM\(timeStart, moveWindowMin\),\s*id: attemptId\(attempt\),/);
-    assert.match(readFileSync(resolve(here, "mutations.ts"), "utf8"), /p_id: input\.id,/);
+    assert.match(readModuleSource(resolve(here, "mutations.ts")), /p_id: input\.id,/);
   });
 
   test("двойной тап не открывает форму записи дважды", () => {
@@ -78,17 +92,24 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(src, /team_id: isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\),/);
   });
 
-  test("отмена визита с деньгами — с вопросом, без «Отменить» и без «Восстановить»", () => {
+  test("отмена визита — одним тапом, без причины; с деньгами — вопрос и без «Отменить» в тосте", () => {
     const src = screen();
-    assert.match(src, /holdsMoney\(apt\)\s*\? void confirmAction\("Отменить визит с оплатой\?"/);
+    assert.doesNotMatch(src, /CANCEL_REASONS|"Причина отмены"|cancelWithReason/);
+    assert.match(src, /if \(!holdsMoney\(apt\)\) \{\s*setCancelled\(apt, true\);/);
+    assert.match(src, /confirmAction\("Отменить визит с оплатой\?"/);
     assert.match(src, /const undoable = to !== "cancelled" \|\| !holdsMoney\(apt\);/);
-    assert.match(src, /apt\.status !== "cancelled" \|\| apt\.payment_status !== "refunded";/);
-    assert.equal((src.match(/&& restorable\)|if \(restorable\)/g) ?? []).length, 2);
+  });
+  test("отменённую восстанавливают всегда; с возвращённой оплатой — с вопросом", () => {
+    const src = screen();
+    assert.doesNotMatch(src, /restorable/);
+    assert.equal((src.match(/label: "Восстановить", run: \(\) => restoreCancelled\(apt\)/g) ?? []).length, 2);
+    assert.match(src, /if \(apt\.payment_status !== "refunded"\) \{\s*setCancelled\(apt, false\);/);
+    assert.match(src, /confirmAction\("Вернуть запись\?"/);
   });
 
   test("кнопки сотрудника — только по его правам", () => {
     const src = screen();
-    // «В работу» / «Выполнена» удалены вместе со статусом (владелец 03.10).
+    // «В работу» / «Выполнена» удалены вместе со статусом.
     assert.doesNotMatch(src, /quickStatus|"В работу"|"Вернуть в план"/);
     assert.match(src, /ownEvent && eventRightsIn\(apt\.team_id \?\? null\)\.type === "write"/);
     assert.match(src, /\(canManageBookings \|\| activeActions\.schedule === "write"\)\s*\? \(next\) =>/);
@@ -160,7 +181,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("правки одной записи уходят по очереди жестов, устаревшая — строкой сервера", () => {
-    const src = readFileSync(resolve(here, "mutations.ts"), "utf8");
+    const src = readModuleSource(resolve(here, "mutations.ts"));
     assert.match(src, /return afterPreviousEdit\(id, \(\) =>\s*updateAppointment\(supabase, id, patch, tenantId as string\),\s*\);/);
     assert.match(src, /const next = previous\.then\(run, run\);/);
     assert.match(src, /err instanceof StaleAppointmentError && err\.fresh \? err\.fresh : ctx\?\.prevRecord/);
@@ -173,6 +194,18 @@ describe("повторный аудит календаря 03.10", () => {
       /typeof schedule === "function"\s*\? schedule\(\s*pickTeamSchedule\(\s*await listScheduleEntries\(supabase, tenantId as string\),/,
     );
     assert.match(screen(), /schedule: \(current\) => \{\s*const base: TeamSchedule = current \?\?/);
+  });
+
+  test("апсерты графика идут по очереди: «Сб» и «Вс» подряд не затирают друг друга", () => {
+    const sched = readFileSync(resolve(here, "../reference/team-schedule.ts"), "utf8");
+    const hook = sched.slice(sched.indexOf("export function useUpsertTeamSchedule"));
+    const fn = hook.slice(hook.indexOf("mutationFn:"), hook.indexOf("onMutate:"));
+    assert.match(fn, /afterPreviousScheduleWrite\(tenantId as string, async \(\) => \{/);
+    assert.ok(
+      fn.indexOf("afterPreviousScheduleWrite") < fn.indexOf("listScheduleEntries") &&
+        fn.indexOf("listScheduleEntries") < fn.indexOf("upsertScheduleEntry"),
+      "чтение свежего графика и апсерт должны стоять внутри очереди",
+    );
   });
 
   test("мелочи: «Новая запись» в пустом Списке у сотрудника с одними событиями, удаление записи с возвратом", () => {
@@ -222,22 +255,26 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("«Маршрут →» не раздвигает шапку дня и считает адреса по-русски", () => {
-    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    const agenda = agendaList();
     assert.match(agenda, /minHeight: 44,\s*marginVertical: -13,/);
     assert.match(agenda, /pluralize\(addresses\.length, "адрес", "адреса", "адресов"\)/);
   });
 
   test("«Финансы дня»: нули тихие, выбранная серая плитка — светлый тинт", () => {
-    const sheet = readFileSync(resolve(here, "DayFinanceSheet.tsx"), "utf8");
+    const sheet = daySheet();
     for (const k of ["income", "expense", "debt", "planned"]) {
       assert.match(sheet, new RegExp(`quiet=\\{moneySign\\(money\\.${k}\\) === 0\\}`));
     }
-    const toggle = readFileSync(resolve(here, "../finances/FinanceOverview.tsx"), "utf8");
+    // `SummaryToggle` lives in `finances/finance-overview/`, re-exported by the entry.
+    const toggle = readModuleSource(
+      resolve(here, "../finances/FinanceOverview.tsx"),
+      resolve(here, "../finances/finance-overview"),
+    );
     assert.match(toggle, /backgroundColor: active && !locked \? fillRgba\(color, 0\.1\) : t\.surface,/);
   });
 
   test("«Список» текущего месяца открывается на сегодня, один раз на месяц", () => {
-    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    const agenda = agendaList();
     assert.match(agenda, /const todayIndex = todayYmd\.startsWith\(monthKey\)\s*\? sections\.findIndex\(\(s\) => s\.title >= todayYmd\)/);
     assert.match(agenda, /if \(!monthKey \|\| scrolledFor\.current === monthKey\) return;\s*scrolledFor\.current = monthKey;/);
     assert.match(agenda, /onScrollToIndexFailed=/);
@@ -267,15 +304,15 @@ describe("повторный аудит календаря 03.10", () => {
   test("событие без типа показывает своё имя, а не пустую дверь", () => {
     const block = readFileSync(resolve(here, "../appointments/EventTypeBlock.tsx"), "utf8");
     assert.match(block, /: freeTitle\s*\? \{ name: freeTitle, color: titleColor \?\? null, Icon: Tag \}/);
-    const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+    const book = bookFormSource();
     assert.match(book, /<EventTypeBlock\s*type=\{eventType\}\s*title=\{eventTitle\}\s*titleColor=\{eventColor\}/);
   });
 
   test("день и месяц без записей не «грузятся» вечно на заглушке выключенного запроса", () => {
-    const sheet = readFileSync(resolve(here, "DayFinanceSheet.tsx"), "utf8");
+    const sheet = daySheet();
     assert.match(sheet, /const ledgerLoading = awaitingAnswer\(txQuery\) \|\| awaitingAnswer\(recordsTxQuery\);/);
     assert.doesNotMatch(sheet, /recordsTxQuery\.isPlaceholderData;/);
-    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    const month = monthGrid();
     assert.match(month, /const ledgerAwaiting = awaitingAnswer\(ledgerQuery\);/);
     // Операции записей не гасят месяц: создание записи не стирает суммы.
     assert.match(month, /if \(ledgerAwaiting\) return undefined;[\s\S]{0,200}?\[\.\.\.\(ledgerQuery\.data \?\? \[\]\), \.\.\.\(recordsLedgerQuery\.data \?\? \[\]\)\]\.filter\(readable\)/);
@@ -296,8 +333,8 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("месяц: метка видна и на хвостовых днях; окошко дат не подсвечивает «1» в Месяце", () => {
-    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
-    // Выходной команды заменяет метку (03.10) — в остальном метка у каждого дня.
+    const month = monthGrid();
+    // Выходной команды заменяет метку — в остальном метка у каждого дня.
     assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
     assert.match(mini, /const isViewed = markOpenDay && !isToday && key === openKey;/);
@@ -306,13 +343,13 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("озвучка даты — «3 октября», а не «3 октябрь»", () => {
     for (const f of ["MonthView.tsx", "MiniCalendar.tsx", "WeekView.tsx", "DayView.tsx"]) {
-      const src = readFileSync(resolve(here, f), "utf8");
+      const src = f === "DayView.tsx" ? dayGrid() : f === "MonthView.tsx" ? monthGrid() : readFileSync(resolve(here, f), "utf8");
       assert.doesNotMatch(src, /toLocaleDateString\("ru-RU", \{ month: "long" \}\)/, f);
     }
   });
 
   test("сетка: линия «сейчас» на своём времени, шаг колонки без +1, стопка с самым ранним началом", () => {
-    const day = readFileSync(resolve(here, "DayView.tsx"), "utf8");
+    const day = dayGrid();
     assert.match(day, /top: pct\(nowMin, totalMin\),[\s\S]{0,400}?marginTop: -4\.5,/);
     assert.match(day, /dayW=\{compact && laneW > 0 \? laneW : undefined\}/);
     assert.match(day, /minToHM\(Math\.min\(\.\.\.deckOpen\.map\(\(p\) => p\.startMin\)\)\)/);
@@ -335,21 +372,21 @@ describe("повторный аудит календаря 03.10", () => {
     const compose = readFileSync(resolve(here, "../sms/SmsCompose.tsx"), "utf8");
     assert.match(compose, /smsInPlan && context\?\.clientId && !context\.optOut && account\?\.serviceOn/);
     assert.match(screen(), /optOut: smsClient\?\.sms_opt_out === true,/);
-    const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+    const book = bookFormSource();
     assert.match(book, /optOut: client\?\.sms_opt_out === true,/);
-    const card = readFileSync(resolve(here, "../../../app/(dashboard)/clients/[id].tsx"), "utf8");
+    const card = clientCardSource();
     assert.match(card, /optOut: c\.sms_opt_out === true,/);
   });
 
   test("поиск клиента: найденные по имени — выше найденных по метке", () => {
     const picker = readFileSync(resolve(here, "../clients/ClientPickerSheet.tsx"), "utf8");
     assert.match(picker, /if \(query\) return rankClientMatches\(pool\.filter\(\(c\) => matchesClient\(c, query\)\), query\);/);
-    const list = readFileSync(resolve(here, "../clients/useClientFilters.ts"), "utf8");
+    const list = readModuleSource(resolve(here, "../clients/useClientFilters.ts"));
     assert.match(list, /return rankClientMatches\(hits, search\);/);
   });
 
   test("удалённая запись уходит с сетки вместе с тостом, а не после перечитывания", () => {
-    const src = readFileSync(resolve(here, "mutations.ts"), "utf8");
+    const src = readModuleSource(resolve(here, "mutations.ts"));
     const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
     assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
@@ -373,7 +410,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("«Список»: у отменённой сумма зачёркнута и без «к оплате»", () => {
-    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    const agenda = agendaList();
     assert.match(agenda, /textDecorationLine: cancelled \? "line-through" : "none",/);
     assert.match(agenda, /\{debt > 0 && !cancelled \? \(/);
   });
@@ -385,7 +422,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("шестерёнка: выключенный «Объект» записи гасит объект и у события", () => {
-    const prefs = readFileSync(resolve(here, "../appointments/booking-prefs.ts"), "utf8");
+    const prefs = readModuleSource(resolve(here, "../appointments/booking-prefs.ts"));
     assert.match(prefs, /block\.id === "object" && \(!isFeatureOn\(disabled, "objects"\) \|\| off\.has\("record_object"\)\)/);
   });
 
@@ -402,7 +439,10 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("имя календаря, набранное перед уходом со страницы, сохраняется", () => {
-    const gear = readFileSync(resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"), "utf8");
+    const gear = readModuleSource(
+      resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
+      resolve(here, "settings-screen"),
+    );
     assert.match(gear, /latest\.current = \{ draft, teamName: team\.name, onPatch \};/);
     assert.match(gear, /if \(trimmed && trimmed !== teamName\) patch\(\{ name: trimmed \}\);/);
     assert.match(gear, /latest\.current\.draft = null;\s*setDraft\(null\);/);
@@ -418,29 +458,33 @@ describe("повторный аудит календаря 03.10", () => {
   test("в календаре и листах записи — «запись», не «заявка»", () => {
     const src = screen();
     assert.doesNotMatch(src, /"Открыть заявку"|исчезнут из заявки/);
-    for (const file of ["../appointments/BookingSheets.tsx", "../appointments/CrewWorkRecord.tsx", "../appointments/CrewAppointmentSheet.tsx", "ActionMenuSheet.tsx"]) {
+    for (const file of ["../appointments/BookingSheets.tsx", "../appointments/CrewWorkRecord.tsx", "../appointments/CrewAppointmentSheet.tsx", "../../components/blocks/ActionMenuSheet.tsx"]) {
       const body = readFileSync(resolve(here, file), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
       assert.doesNotMatch(body, /"[^"]*[Зз]аявк[^"]*"/, file);
     }
   });
 
   test("шестерёнка: полночь не ломает смену (перерывы из листа убраны 11.10)", () => {
-    const sheet = readFileSync(resolve(here, "TeamScheduleSheet.tsx"), "utf8");
+    const sheet = readModuleSource(resolve(here, "TeamScheduleSheet.tsx"), resolve(here, "team-schedule"));
     assert.match(sheet, /prevEnd >= DAY_LAST - WRAP_EDGE && next\.hour \* 60 \+ next\.minute < WRAP_EDGE/);
     assert.match(sheet, /prevStart < WRAP_EDGE && next\.hour \* 60 \+ next\.minute >= DAY_LAST - WRAP_EDGE/);
   });
 
   test("шестерёнка: выходной виден и в Месяце; порядок команд и меток стоит", () => {
-    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    const month = monthGrid();
     assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     assert.match(screen(), /isDayOff=\{\(ymd\) => workBandFor\?\.\(ymd\) === null\}/);
-    const ref = readFileSync(resolve(here, "../reference/queries.ts"), "utf8");
+    const ref = readModuleSource(resolve(here, "../reference/queries.ts"));
     assert.equal(ref.match(/\.order\("position"\)\.order\("created_at"\)/g)?.length, 2);
   });
 
   test("шестерёнка: тип события и метка не теряют набранное молча", () => {
-    for (const file of ["../reference/screens/EventTypeSheet.tsx", "../reference/screens/LabelsScreen.tsx"]) {
-      const src = readFileSync(resolve(here, file), "utf8");
+    // The label editor lives in `labels/` next to `LabelsScreen.tsx`.
+    for (const [file, parts] of [
+      ["../reference/screens/EventTypeSheet.tsx"],
+      ["../reference/screens/LabelsScreen.tsx", "../reference/screens/labels"],
+    ]) {
+      const src = readModuleSource(resolve(here, file), parts && resolve(here, parts));
       assert.match(src, /onClose=\{guard\.close\}/, file);
       assert.match(src, /onExited=\{guard\.onExited\}/, file);
     }
@@ -449,10 +493,10 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("услуга: копейки на ступени набираются, цена за штуку держится при смене количества", () => {
-    const ladder = readFileSync(resolve(here, "../services/ServiceLadder.tsx"), "utf8");
+    const ladder = readModuleSource(resolve(here, "../services/ServiceLadder.tsx"), resolve(here, "../services/service-ladder"));
     assert.match(ladder, /value=\{typing \?\? value\}/);
     assert.match(ladder, /placeholder=\{id === "base" \? "0" : "—"\}/);
-    const sheet = readFileSync(resolve(here, "../services/ServiceSheet.tsx"), "utf8");
+    const sheet = readModuleSource(resolve(here, "../services/ServiceSheet.tsx"), resolve(here, "../services/service-sheet"));
     assert.match(sheet, /rowPrice: draftValue\(unit, qtyOf\(v\), "unit"\),/);
   });
 

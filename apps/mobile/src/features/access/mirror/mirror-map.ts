@@ -1,11 +1,10 @@
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "../access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
 import { visibleLevel, type MasterDraft } from "../master-page/master-draft";
 import { offeredBlocks } from "../master-page/rights-copy";
 
 // ЗЕРКАЛО: ЧЕРНОВИК ПРАВ → КАРТА ДОСТУПА, КАК ЕЁ ОТДАЁТ СЕРВЕР.
 //
-// Владелец 20.09: «делается зеркало… я могу тыкать на то, что ему можно
-// видеть и что ему нельзя видеть». Экраны продукта уже умеют спрашивать права
+// Владелец может тыкать на то, что человеку можно видеть и что нельзя. Экраны продукта уже умеют спрашивать права
 // одной картой (`my_access_map` → `MemberAccessMap` → `accessGate`), поэтому
 // зеркало не рисует макет: оно подменяет карту и показывает НАСТОЯЩИЕ экраны.
 //

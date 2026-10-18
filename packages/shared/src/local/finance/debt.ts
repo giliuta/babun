@@ -40,14 +40,11 @@ export interface Debt {
   created_at: string;
 }
 
-/** Слово владельца: «две ступени — я должен или мне должны» (2026-09-10). */
+/** Две ступени: «я должен» или «мне должны». */
 export const DEBT_DIRECTION_LABEL: Record<DebtDirection, string> = {
   incoming: "Мне должны",
   outgoing: "Я должен",
 };
-
-/** Направления в порядке показа: сначала деньги, которые придут. */
-export const DEBT_DIRECTIONS: readonly DebtDirection[] = ["incoming", "outgoing"];
 
 /**
  * Платёж по долгу приходит доходом, когда должны нам, и расходом, когда

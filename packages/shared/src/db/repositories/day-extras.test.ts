@@ -10,8 +10,8 @@ const extra = {
   payment_method: "cash" as const,
 };
 
-function rpcClient(data: Array<Record<string, unknown>>) {
-  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+function rpcClient(data: Record<string, unknown>[]) {
+  const calls: { name: string; args: Record<string, unknown> }[] = [];
   return {
     calls,
     client: {

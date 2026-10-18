@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { emailLinkOtpType, parseRecoveryLink, recoveryLinkKey } from "./recovery-link";
+import { readModuleSource } from "./module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -61,7 +62,7 @@ describe("ссылка сброса меняет пароль своему че�
   });
 
   test("вход по ссылке сброса проходит сверку человека", () => {
-    const authClear = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const authClear = readModuleSource(resolve(here, "auth-clear.ts"));
     const handler = authClear.slice(authClear.indexOf("export async function handleAuthEvent("));
     const guard = handler.slice(0, handler.indexOf("const next = session?.user?.id;"));
     assert.match(guard, /event !== "PASSWORD_RECOVERY"/);
@@ -69,7 +70,7 @@ describe("ссылка сброса меняет пароль своему че�
 });
 
 // Письма подтверждения и входа по коду ведут на babun.app/login?token_hash=…
-// (04.10): тип ключа берётся из ссылки, неизвестный — «email».
+//: тип ключа берётся из ссылки, неизвестный — «email».
 describe("тип ключа из ссылки письма", () => {
   test("type из адреса, по умолчанию email", () => {
     assert.equal(emailLinkOtpType("https://babun.app/login?token_hash=abc&type=email"), "email");

@@ -10,7 +10,7 @@ import { pagesToPdf, scanDocumentPages } from "./document-scanner";
 // что делать с выбранным: грузить сразу (сохранённая запись) или держать в
 // очереди до создания (новая).
 //
-// КАМЕРА СНИМАЕТ ТОЛЬКО ФОТО (выпуск в App Store, 06.10). Видео с камеры
+// КАМЕРА СНИМАЕТ ТОЛЬКО ФОТО (требование выпуска в App Store). Видео с камеры
 // пишет звук, а микрофон в сборке выключен (`microphonePermission: false` в
 // app.json): на живом iPhone expo-image-picker на такой вызов бросает
 // MissingMicrophonePermissionException, и камера не открывалась вовсе. Видео

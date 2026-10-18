@@ -44,9 +44,9 @@ function ledgerRow(index: number, overrides: Record<string, unknown> = {}) {
 }
 
 function pagedSupabase(
-  source: Array<Record<string, unknown>>,
-  ranges: Array<[number, number]>,
-  orders: Array<[string, boolean]>,
+  source: Record<string, unknown>[],
+  ranges: [number, number][],
+  orders: [string, boolean][],
 ) {
   return {
     from: () => {
@@ -93,8 +93,8 @@ function pagedSupabase(
 describe("finance transaction repository paging", () => {
   it("reads a date-range ledger past the PostgREST 1000-row cap", async () => {
     const source = Array.from({ length: 1001 }, (_, i) => ledgerRow(i + 1));
-    const ranges: Array<[number, number]> = [];
-    const orders: Array<[string, boolean]> = [];
+    const ranges: [number, number][] = [];
+    const orders: [string, boolean][] = [];
 
     const rows = await listTransactionsForRange(
       pagedSupabase(source, ranges, orders) as never,
@@ -112,6 +112,21 @@ describe("finance transaction repository paging", () => {
     ]);
   });
 
+  it("a row repeated across pages (window shifted by an insert) is counted once", async () => {
+    const unique = Array.from({ length: 1001 }, (_, i) => ledgerRow(i + 1));
+    // Вставка с другого телефона сдвинула окно: последняя строка первой
+    // страницы приходит и первой строкой второй.
+    const source = [...unique.slice(0, 1000), unique[999], unique[1000]];
+    const rows = await listTransactionsForRange(
+      pagedSupabase(source, [], []) as never,
+      "tenant-1",
+      "2026-07-01",
+      "2026-07-31",
+    );
+    expect(rows).toHaveLength(1001);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(1001);
+  });
+
   it("counts refunds outside the visible period past 1000 rows", async () => {
     const source = Array.from({ length: 1001 }, (_, i) =>
       ledgerRow(i + 1, {
@@ -120,8 +135,8 @@ describe("finance transaction repository paging", () => {
         refund_of_id: "income-1",
       }),
     );
-    const ranges: Array<[number, number]> = [];
-    const orders: Array<[string, boolean]> = [];
+    const ranges: [number, number][] = [];
+    const orders: [string, boolean][] = [];
 
     const totals = await listRefundTotals(
       pagedSupabase(source, ranges, orders) as never,

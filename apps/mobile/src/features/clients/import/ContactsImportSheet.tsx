@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View, Platform } from "react-native";
 import { Check } from "lucide-react-native";
 import type { CountryCode } from "libphonenumber-js";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
 import { useClients, useCreateClient } from "@/features/clients/queries";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { phoneKey } from "@/features/clients/merge-clients";
-import { formatPhoneAsYouType, tryToE164 } from "@/features/clients/phone";
+import { formatPhoneAsYouType, tryToE164 } from "@/lib/phone";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -19,9 +19,9 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Здесь список контактов с номерами: уже заведённые отмечены и выключены
 // (сверка по последним 8 цифрам — тот же ключ, что у слияния дублей),
-// остальные выбираются галочками. Лист открывается БЕЗ ЕДИНОЙ ГАЛКИ
-// (06.10, выпуск в магазины): контакты — чужие данные, и в CRM уходят только
-// те, кого человек отметил сам, а не вся книга одним «Добавить 135».
+// остальные выбираются галочками. Лист открывается БЕЗ ЕДИНОЙ ГАЛКИ:
+// контакты — чужие данные, и в CRM уходят только те, кого человек отметил
+// сам, а не вся книга одним «Добавить 135».
 
 // expo-contacts может отсутствовать в старом дев-билде — тот же охранный
 // require, что в useClientDraft.
@@ -53,8 +53,8 @@ export function ContactsImportSheet({
 }: {
   visible: boolean;
   onClose: () => void;
-  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт,
-   *  владелец 30.09); нет — сервер ставит первую доступную. */
+  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт);
+   *  нет — сервер ставит первую доступную. */
   teamId?: string | null;
 }) {
   const t = useThemeColors();
@@ -68,7 +68,10 @@ export function ContactsImportSheet({
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
-  const cancelled = useRef(false);
+  // ПОКОЛЕНИЕ ЗАПУСКА, А НЕ ФЛАГ «ОТМЕНЕНО». Флаг сбрасывало следующее
+  // открытие листа, и цикл прошлого запуска, ещё ждавший сервер, досоздавал
+  // отменённых клиентов. Закрытие меняет поколение; открытие его не трогает.
+  const generation = useRef(0);
 
   const known = useMemo(() => {
     const set = new Set<string>();
@@ -90,8 +93,12 @@ export function ContactsImportSheet({
   const knownRef = useRef(known);
   knownRef.current = known;
   useEffect(() => {
-    if (!visible) return;
-    cancelled.current = false;
+    if (!visible) {
+      // Лист спрятали снаружи, мимо его собственного закрытия, — запуск тоже
+      // устарел.
+      generation.current += 1;
+      return;
+    }
     if (!Contacts) {
       setDenied(true);
       return;
@@ -153,13 +160,14 @@ export function ContactsImportSheet({
     // дважды.
     if (!rows || picked.size === 0 || running.current) return;
     running.current = true;
+    const gen = generation.current;
     setBusy(true);
     let added = 0;
     const failed: string[] = [];
     for (const row of rows) {
       // Лист закрыли на ходу — прекращаем. Раньше цикл продолжал заводить
       // клиентов уже после того, как человек смахнул лист вниз.
-      if (cancelled.current) break;
+      if (generation.current !== gen) break;
       if (!picked.has(row.key) || row.exists) continue;
       try {
         await create.mutateAsync({
@@ -184,7 +192,8 @@ export function ContactsImportSheet({
         : `Добавлено ${added}, не удалось ${failed.length}`,
       failed.length === 0 ? "success" : "error",
     );
-    onClose();
+    // Лист уже закрыт (и, может быть, открыт заново) — новый не закрываем.
+    if (generation.current === gen) onClose();
   };
 
   const toggle = (key: string) =>
@@ -200,7 +209,7 @@ export function ContactsImportSheet({
       padded={false}
       visible={visible}
       onClose={() => {
-        cancelled.current = true;
+        generation.current += 1;
         onClose();
       }}
       maxHeightRatio={0.92}
@@ -269,7 +278,9 @@ export function ContactsImportSheet({
           }}
         >
           {CONTACTS_AVAILABLE
-            ? "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
+            ? Platform.OS === "android"
+              ? "Разрешите доступ к контактам в настройках телефона. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
+              : "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
             : "Адресная книга появится после следующей сборки приложения."}
         </Text>
       ) : (

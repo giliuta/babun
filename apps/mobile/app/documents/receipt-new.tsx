@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { View } from "react-native";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
+import { randomUuid } from "@babun/shared/sync";
 import { RowCaption } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
@@ -20,19 +22,21 @@ import {
   useComposeReceipt,
   useIssueReceipt,
   useUpdateReceipt,
-} from "@/features/documents/receipts-queries";
+} from "@/features/finances/receipts-queries";
 import { useReceiptSource } from "@/features/documents/use-receipt-source";
 import { useReceiptDraftPaper } from "@/features/documents/use-receipt-draft-paper";
-import { useNextInvoiceSeries } from "@/features/invoices/queries";
+import { useInvoicePayments, useNextInvoiceSeries } from "@/features/finances/invoices-queries";
+import { paymentFullyRefunded } from "@/lib/receipt-eligibility";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/session/tenant";
 import { useServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
+import { confirmThen } from "@/lib/confirm";
 
 // НОВЫЙ ЧЕК — ТОНКИЙ МАРШРУТ НАД СОСТАВИТЕЛЕМ, как `invoices/new.tsx` над
 // `InvoiceEditor`: экран держит только действие и переход, все блоки и листы
@@ -47,7 +51,7 @@ export default function NewReceiptScreen() {
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = useState(false);
   // Выписанный чек ждёт, пока уедет предпросмотр: переход, начатый под
-  // модальным листом, iOS показывал не всегда (проверка на 17e, 04.10).
+  // модальным листом, iOS показывал не всегда (замечено на iPhone 17e).
   const justIssued = useRef<Receipt | null>(null);
   const toast = useToast();
   const calendarSettings = useCalendarSettings();
@@ -57,24 +61,33 @@ export default function NewReceiptScreen() {
   const params = useLocalSearchParams<{ teamId?: string; transactionId?: string; receiptId?: string }>();
   const [draft, change] = useReceiptDraft(businessToday, params.teamId ?? null);
   const compose = useComposeReceipt();
+  // Id попытки чека с нуля: повтор после ошибки бумаги не пишет второй
+  // приход (`composeReceipt`). Новый — только после успешной выписки.
+  const [composeRequestId, setComposeRequestId] = useState(() => randomUuid());
   const issueForPayment = useIssueReceipt();
   const updateReceipt = useUpdateReceipt();
 
-  // ОТКУДА ЧЕК (владелец 2026-10-03/04): с нуля; на принятую оплату — значок
+  // ОТКУДА ЧЕК: с нуля; на принятую оплату — значок
   // чека в записи, «Выписать чек» инвойса; правка выписанного — «Изменить» в
   // листе чека, тот же номер. Заполнение — `useReceiptSource`.
   const source = useReceiptSource(params, change);
   const paymentTx = source.tx;
   const editing = source.mode === "edit";
   const forPayment = source.mode !== "new";
-  const accounts = useAccountsWithBalances();
+  // ЧЕК НА ОПЛАТУ БЕРЁТ СЧЁТ ИЗ САМОЙ ПРОВОДКИ, а деньги могли прийти на счёт,
+  // который потом скрыли или закрыли: живой список его не знает, и чек вставал
+  // бы на «Выберите счёт» без выхода. Свободный чек выбирает только из живых.
+  const accounts = useAccountsWithBalances(
+    forPayment ? { includeInactive: true, includeHidden: true, includeDeleted: true } : undefined,
+  );
+  const invoicePayments = useInvoicePayments();
   const services = useServices();
   const tenant = useTenant();
   const tenantIdForVat = useTenantId();
   const owner = useCurrentRole().data === "owner";
   const companies = useCompanies();
 
-  // НОМЕР ЧЕКА — В БЛОКЕ «РЕКВИЗИТЫ», КАК У ИНВОЙСА (владелец 04.10):
+  // НОМЕР ЧЕКА — В БЛОКЕ «РЕКВИЗИТЫ», КАК У ИНВОЙСА:
   // следующий номер серии этого юрлица, владелец правит его вручную. У
   // выписанного чека номер уже дан — строки нет.
   const companyId =
@@ -93,8 +106,8 @@ export default function NewReceiptScreen() {
   const nameFor = (line: { serviceId: string; serviceName?: string }) =>
     line.serviceName ?? catalog.get(line.serviceId)?.name ?? "Услуга";
 
-  // ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ (владелец 2026-09-20: «перед этим всегда должно
-  // показывать превью»). Собирается ровно той же моделью, что печатает PDF.
+  // ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ: перед выпиской всегда показываем
+  // превью. Собирается ровно той же моделью, что печатает PDF.
   //
   // НАЛОГ ЧЕКА С НУЛЯ СЧИТАЕТСЯ ТАК ЖЕ, КАК ЕГО ПОСЧИТАЕТ СЕРВЕР: изнутри
   // полученной суммы (`fill_transaction_vat`); ставка — набранная в «Итого»
@@ -108,11 +121,23 @@ export default function NewReceiptScreen() {
     : typed;
   const paperVatRate = paymentTx ? (paymentTx.vat_rate ?? 0) : vatRate;
   const currency = tenant.data?.currency || "EUR";
+  // КЛИЕНТ ЧЕКА НА ОПЛАТУ — КЛИЕНТ ЕЁ ПРОВОДКИ: выбор в составителе отключён, а
+  // сервер выпускает чек только на оплату человека.
+  const clientId = forPayment ? (paymentTx?.client_id ?? null) : draft.clientId;
+  const refunded =
+    source.mode === "payment" &&
+    !!paymentTx?.invoice_id &&
+    paymentFullyRefunded(paymentTx.id, invoicePayments.data?.[paymentTx.invoice_id]);
+  // Счёт чека на оплату известен проводке; от списка счетов он не зависит.
   const problem = forPayment && !source.ready
     ? "Загружаем оплату…"
-    : !draft.clientId
+    : forPayment && !clientId
+    ? "У оплаты нет клиента — чек выписывается на человека, поэтому на эту оплату его не выписать"
+    : refunded
+    ? "Оплата возвращена целиком — чек на неё не выписывается"
+    : !clientId
     ? "Выберите клиента — чек выписывается на человека"
-    : !account
+    : !forPayment && !account
       ? "Выберите счёт — деньги всегда куда-то приходят"
       : !(money.gross > 0)
         ? "Добавьте услуги — чек на ноль не выписывается"
@@ -132,7 +157,7 @@ export default function NewReceiptScreen() {
   });
 
   const issue = async () => {
-    if (problem || !account) return;
+    if (problem) return;
     const lines = receiptLinesForServer(draft, nameFor);
     try {
       const receipt = source.editing
@@ -152,7 +177,10 @@ export default function NewReceiptScreen() {
             locationId: draft.locationId,
             clientRequisitesId: draft.clientRequisitesId,
           })
+        : !account
+        ? null
         : await compose.mutateAsync({
+        requestId: composeRequestId,
         // Перечень замораживается в чеке сервером: выданный документ больше
         // не зависит от того, что потом станет с прайсом.
         lines,
@@ -176,10 +204,12 @@ export default function NewReceiptScreen() {
           business_today: businessToday,
         },
       });
+      if (!receipt) return;
+      if (!source.editing && !paymentTx) setComposeRequestId(randomUuid());
       setPreviewOpen(false);
       toast(editing ? `Чек ${receipt.number} сохранён` : `Чек ${receipt.number} выписан`, "success");
-      // ВЫПИСАННЫЙ ЧЕК ОТКРЫВАЕТСЯ СВОЕЙ СТРАНИЦЕЙ, как инвойс (владелец
-      // 04.10: «нажимаю — сохраняется, и уже всё можно отправлять»), когда
+      // ВЫПИСАННЫЙ ЧЕК ОТКРЫВАЕТСЯ СВОЕЙ СТРАНИЦЕЙ, как инвойс (после
+      // сохранения чек уже можно отправлять), когда
       // предпросмотр уехал.
       justIssued.current = receipt;
     } catch (error) {
@@ -189,13 +219,43 @@ export default function NewReceiptScreen() {
 
   const actionLabel = editing ? "Сохранить чек" : "Выписать чек";
 
+  // ЗАПОЛНЕННЫЙ ЧЕК НЕ ИСЧЕЗАЕТ ПО ОДНОМУ ТАПУ — как черновик инвойса: на любой
+  // уход («‹», свайп от края, системное «назад») спрашивает сама навигация.
+  // Грязным черновик делают только правки человека: заполнение из оплаты —
+  // не его работа, и уход с нетронутого чека вопроса не стоит.
+  const [dirty, setDirty] = useState(false);
+  const edit = (next: Parameters<typeof change>[0]) => {
+    setDirty(true);
+    change(next);
+  };
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  usePreventRemove(dirty, ({ data }) => {
+    if (leavingRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    confirmThen(
+      "Черновик не сохранён",
+      {
+        message: "Выйти и потерять заполненное?",
+        confirmLabel: "Выйти",
+        destructive: true,
+      },
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
+    );
+  });
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title={source.editing ? `Чек ${source.editing.number}` : "Новый чек"} />
       <ReceiptComposer
         draft={draft}
         businessToday={businessToday}
-        onChange={change}
+        onChange={edit}
         forPayment={forPayment}
         number={numberTarget}
         companyLocked={editing || !!source.invoiceCompanyId}
@@ -226,6 +286,8 @@ export default function NewReceiptScreen() {
           // Правка уже стоит поверх страницы чека — возвращаемся на неё;
           // новый чек встаёт на место составителя своей страницей.
           if (!receipt) return;
+          // Чек выписан — черновика больше нет, уход без вопроса.
+          leavingRef.current = true;
           if (editing) router.back();
           else router.replace(`/documents/receipt/${receipt.id}` as Href);
         }}

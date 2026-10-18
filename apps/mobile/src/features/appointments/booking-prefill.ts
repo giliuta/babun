@@ -1,5 +1,6 @@
 import type { Client } from "@babun/shared/local/clients";
-import { tryToE164 } from "../clients/phone";
+import type { CountryCode } from "libphonenumber-js";
+import { tryToE164 } from "@/lib/phone";
 
 export type BookingClientRef = Pick<
   Client,
@@ -34,11 +35,9 @@ export function resolveBookingClientPrefill(
   client: BookingClientRef,
   requestedLocationId?: string | null,
 ): BookingClientPrefill {
-  // ОБЪЕКТ НЕ ПОДТЯГИВАЕТСЯ ЗА КЛИЕНТОМ (владелец 2026-09-05: «сделай это не
-  // автоматически — нужно тапнуть, чтоб добавить объект; если автоматически,
-  // можно запутаться: оно показывает, что вроде объект есть»).
+  // ОБЪЕКТ НЕ ПОДТЯГИВАЕТСЯ ЗА КЛИЕНТОМ: нужно тапнуть, чтобы добавить объект.
   //
-  // Форма подставляла основной объект клиента молча, и запись выглядела
+  // Если форма подставляет основной объект клиента молча, запись выглядит
   // заполненной раньше, чем человек её заполнил: у клиента три виллы, а в
   // записи стояла первая — и бригада уезжала на неё же. Своё право
   // подставить остаётся только у ЯВНОГО адреса: тап «Записать» из строки
@@ -75,7 +74,13 @@ export function resolveBookingTeamId(
 /** Turn the single quick-create query into honest client fields. Text becomes
  * a name with an empty phone; phone-shaped input must be valid E.164 before
  * it can be created. */
-export function buildQuickClientDraft(raw: string): QuickClientDraft {
+export function buildQuickClientDraft(
+  raw: string,
+  /** Страна местного номера — та же, что у поля номера: без неё
+   *  греческий «6912345678» не разбирался, и шторка предлагала создать
+   *  клиента вместо того, чтобы найти существующего. */
+  country?: CountryCode,
+): QuickClientDraft {
   const trimmed = raw.trim();
   const phoneShaped =
     trimmed.length > 0 &&
@@ -92,7 +97,7 @@ export function buildQuickClientDraft(raw: string): QuickClientDraft {
     };
   }
 
-  const e164 = tryToE164(trimmed);
+  const e164 = tryToE164(trimmed, country);
   return {
     kind: "phone",
     full_name: "",
@@ -107,13 +112,14 @@ export function buildQuickClientDraft(raw: string): QuickClientDraft {
 export function findQuickClientDuplicate<T extends BookingClientRef>(
   clients: readonly T[],
   phoneE164: string | null,
+  country?: CountryCode,
 ): T | null {
   if (!phoneE164) return null;
   return (
     clients.find((client) => {
       if (client.deleted_at) return false;
       const canonical =
-        client.phone_e164?.trim() || tryToE164(client.phone ?? "");
+        client.phone_e164?.trim() || tryToE164(client.phone ?? "", country);
       return canonical === phoneE164;
     }) ?? null
   );

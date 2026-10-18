@@ -19,7 +19,7 @@ export function transferSuccessToast(
 ): { message: string; undoGroupId: string | null } {
   return {
     // ОДНО СОБЫТИЕ — ОДНО СЛОВО. «Сдано» означало сдачу выручки на счёт
-    // компании; общего счёта в продукте нет (владелец 2026-08-15).
+    // компании; общего счёта в продукте нет.
     message: `Переведено ${labels.amountText}: ${labels.fromLabel} → ${labels.toLabel}`,
     // Без группы отменять нечего — тост просто сообщает результат.
     undoGroupId: transferGroupId,

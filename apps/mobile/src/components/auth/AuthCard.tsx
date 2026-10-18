@@ -66,8 +66,7 @@ export function AuthCard({
   title?: string;
   subtitle?: string;
   children: ReactNode;
-  /** Тихая строка у нижнего края экрана — «Нет аккаунта? Регистрация»
-   *  (владелец 12.10: «маленькую надпись внизу»). */
+  /** Тихая строка у нижнего края экрана — «Нет аккаунта? Регистрация». */
   footer?: ReactNode;
 }) {
   const t = useAuthTheme();
@@ -198,8 +197,8 @@ export const AuthField = forwardRef<
         }}
         style={[
           { flex: 1, minHeight: 52, paddingLeft: 16, paddingRight: trailing ? 4 : 16, paddingVertical: 14, fontSize: 15, color: t.ink },
-          // ОДНА РАМКА ФОКУСА (владелец 04.10, вход на babun.app: «как будто
-          // три блока сразу»). Браузер рисует свою обводку только вокруг
+          // ОДНА РАМКА ФОКУСА (вход на babun.app: иначе выглядит, как будто
+          // три блока сразу). Браузер рисует свою обводку только вокруг
           // <input> — без «глаза» и поверх нашего кольца ниже. Кольцо и есть
           // фокус поля; браузерную обводку гасим. Только ширины мало: Chrome
           // рисует `outline-style: auto` при любой ширине — нужен прозрачный цвет.
@@ -318,46 +317,6 @@ export function GhostLink({
       style={{ height: 44, alignItems: "center", justifyContent: "center", marginTop: 8 }}
     >
       <Text maxFontSizeMultiplier={1.4} style={{ fontSize: 14, fontWeight: "500", color: muted ? t.sub : t.accent }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-/** Вторая главная кнопка экрана («Зарегистрироваться» под «Войти»): та же
- *  высота и форма, что у кнопок Apple/Google, белая с контуром — видна сразу,
- *  но не спорит с главной (владелец 11.10: «регистрацию — кнопкой»). */
-export function OutlineButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  const t = useAuthTheme();
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => ({
-        marginTop: 16,
-        minHeight: 52,
-        borderRadius: t.radius.card,
-        borderCurve: "continuous",
-        backgroundColor: t.surface,
-        borderWidth: 1,
-        borderColor: t.separator,
-        alignItems: "center",
-        justifyContent: "center",
-        opacity: pressed || disabled ? 0.7 : 1,
-      })}
-    >
-      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
         {label}
       </Text>
     </Pressable>

@@ -1,4 +1,4 @@
-import type { UserRole } from "@/features/settings/role-policy";
+import type { UserRole } from "@/session/role-policy";
 
 // КЛЮЧИ ЗАПРОСОВ КОМПАНИИ — ОДНО ТЕЛО НА ПРОДУКТ.
 //
@@ -46,7 +46,7 @@ export const sourceClientQueryKey = (
   view: string,
 ) => ["client", id, tenantId, view] as const;
 
-// С 2026-09-15 `useTeams` читает только вариант с «all» (активные отбираются
+// `useTeams` читает только вариант с «all» (активные отбираются
 // `select`); ключ без суффикса остался лишь у плана прогрева — до его правки.
 export const teamsQueryKey = (
   tenantId: string | null,
@@ -57,7 +57,7 @@ export const teamsQueryKey = (
     ? (["teams", tenantId, rolePart(role), "all"] as const)
     : (["teams", tenantId, rolePart(role)] as const);
 
-// С 2026-09-15 `useCities` читает ключ с `teamId = null` (команда — `select`);
+// `useCities` читает ключ с `teamId = null` (команда — `select`);
 // ключи с командой остались лишь у плана прогрева — до его правки.
 export const citiesQueryKey = (
   tenantId: string | null,
@@ -80,7 +80,7 @@ export const dayCitiesQueryKey = (tenantId: string | null, role: Role) =>
 export const dayExtrasQueryKey = (tenantId: string | null, role: Role) =>
   ["day-extras", tenantId, rolePart(role)] as const;
 
-// С 2026-09-15 экраны читают только карту компании (`allTeamSchedulesQueryKey`,
+// Экраны читают только карту компании (`allTeamSchedulesQueryKey`,
 // команда — `select`); ключ одной команды остался лишь у плана прогрева.
 export const teamScheduleQueryKey = (
   tenantId: string | null,
@@ -111,7 +111,7 @@ export const financeCategoriesQueryKey = (tenantId: string | null) =>
   ["finance-categories", tenantId] as const;
 
 /** Срез журнала: и хук, и прогрев берут его одной функцией — разъехавшиеся
- *  ключи молча завели бы две копии месяца. С 2026-09-15 хук зовёт его с
+ *  ключи молча завели бы две копии месяца. Хук зовёт его с
  *  `null, null`: команду и счёт отбирает `select` (`finances/ledger-select.ts`),
  *  а тап по чипу команды не заводит нового ключа и не ходит в сеть. Места под
  *  срезы в ключе остались, чтобы не менять форму. */
@@ -165,10 +165,16 @@ export const accountRowsQueryKey = (
 export const deletedAccountsQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "deleted"] as const;
 
-/** «Удалённые операции» (03.10). Под ключом журнала: удаление и «Вернуть»
+/** «Удалённые операции». Под ключом журнала: удаление и «Вернуть»
  *  роняют `["transactions"]` целиком — ящик перечитывается вместе с лентой. */
 export const deletedOperationsQueryKey = (tenantId: string | null) =>
   ["transactions", tenantId, "deleted"] as const;
+
+/** «Удалённые записи». Свой первый сегмент, не под «appointments»:
+ *  мост синхронизации читает все списки под этим ключом как живые строки
+ *  календаря (`sync-bridge.ts`), а снимок из ящика — не живая запись. */
+export const deletedAppointmentsQueryKey = (tenantId: string | null) =>
+  ["deleted-appointments", tenantId] as const;
 
 export const accountBalancesQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "balances"] as const;
@@ -187,7 +193,7 @@ export const paymentAccountsQueryKey = (
   teamId: string | null | undefined,
 ) => ["payment-accounts", tenantId, teamId ?? "no-team"] as const;
 
-// ПРАВА СОТРУДНИКОВ (STORY-081, «Контракт v1.1» сессии 006). Реестр блоков
+// ПРАВА СОТРУДНИКОВ (STORY-081, «Контракт v1.1»). Реестр блоков
 // общий для всех компаний, поэтому без компании в ключе; карта прав человека и
 // люди календаря принадлежат компании.
 export const accessBlocksQueryKey = () => ["access-blocks"] as const;

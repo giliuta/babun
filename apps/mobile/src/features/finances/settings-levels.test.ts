@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import { anyFinanceSetting, financeSettingLevels } from "./settings-levels";
 
 const map = (calendars: Record<string, Record<string, string>>, company: Record<string, string> = {}) =>

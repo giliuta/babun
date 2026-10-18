@@ -3,10 +3,10 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-// ДВА СТОРОЖА НАД ДЕНЕЖНЫМ ЛИСТОМ. Оба поставлены по следам аудита
-// 2026-09-20, и каждый охраняет дефект, который в тот день РЕАЛЬНО ЖИЛ в
-// дереве полдня и не уронил ни одной пробы.
+// ДВА СТОРОЖА НАД ДЕНЕЖНЫМ ЛИСТОМ. Каждый охраняет дефект, который РЕАЛЬНО жил в дереве
+// и не ронял ни одной пробы.
 //
 // Проверка по ИСХОДНОМУ ТЕКСТУ — тем же приёмом, что `blocks-catalog.test.ts`
 // и `receipt-paper-contract.test.ts`: RN-компоненты в этом дереве не
@@ -74,15 +74,18 @@ describe("живой орган не прячут стилем", () => {
   // сходились, тесты были зелёные — а выхода из ручной суммы у человека не
   // стало. Спрятанная разметка — это мёртвый код, который выглядит живым;
   // канон сносит мёртвое в том же заходе.
-  const MONEY_FILES = [
-    "features/appointments/TotalSheet.tsx",
-    "features/appointments/VatLooks.tsx",
-    "features/documents/ReceiptComposer.tsx",
+  // A component with a parts folder is read together with it.
+  const MONEY_FILES: [string, string?][] = [
+    ["features/appointments/TotalSheet.tsx", "features/appointments/total-sheet"],
+    ["features/appointments/VatLooks.tsx", "features/appointments/vat-looks"],
+    ["features/documents/ReceiptComposer.tsx"],
   ];
 
-  for (const relative of MONEY_FILES) {
+  for (const [relative, parts] of MONEY_FILES) {
     test(`${relative} — без display: "none"`, () => {
-      const code = stripComments(readFileSync(resolve(APP_SRC, relative), "utf8"));
+      const code = stripComments(
+        readModuleSource(resolve(APP_SRC, relative), parts ? resolve(APP_SRC, parts) : undefined),
+      );
       assert.ok(
         !/display:\s*["']none["']/.test(code),
         `${relative} прячет разметку стилем — спрятанное либо живёт, либо сносится`,

@@ -11,33 +11,31 @@
 //     operator never silently loses the personalisation.
 //
 // Text comes from the SMS templates of every team the operator sees
-// (useTeamTemplates(null), same text once — STORY-089 29.09); a
+// (useTeamTemplates(null), same text once — STORY-089); a
 // blank «Свой текст» option lets them type ad-hoc. Recipients without a
 // dialable phone are counted out up front (parity with the web sheet).
 
 import { useMemo, useState } from "react";
 import {
   Linking,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, X } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { Chip } from "@/components/ui/Chip";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import {
   smsErrorText,
   uniqueByBody,
@@ -76,7 +74,7 @@ export function BulkSmsSheet({
   // Sequential cursor — index of the recipient whose composer opens next.
   const [seqIdx, setSeqIdx] = useState<number | null>(null);
 
-  // ЧЕРЕЗ СЕРВИС (STORY-089, 30.09): рассылка с баланса компании, от одной
+  // ЧЕРЕЗ СЕРВИС (STORY-089): рассылка с баланса компании, от одной
   // выбранной команды — её имя отправителя стоит подписью. Только владельцу
   // (так решает и база) и только когда у какой-то команды есть имя.
   const toast = useToast();
@@ -116,7 +114,7 @@ export function BulkSmsSheet({
   };
 
   // Платное и необратимое — только после вопроса. Сумма — только в вебе:
-  // в iOS-приложении о цене молчим (правило App Store, владелец 24.09).
+  // в iOS-приложении о цене молчим (правило App Store).
   const sendViaService = () => {
     if (!fromTeam || !body.trim() || withPhone.length === 0) return;
     const items = withPhone.map((c) => ({ clientId: c.id, body: bulkBodyFor(body, c) }));
@@ -199,39 +197,21 @@ export function BulkSmsSheet({
   const inSequence = seqIdx !== null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable
-        className="flex-1"
-        style={{ backgroundColor: t.scrim }}
-        onPress={close}
-        accessible={false}
-      />
-      <View
-        className="absolute bottom-0 left-0 right-0 max-h-[86%] rounded-t-[10px] p-5"
-        style={{
-          backgroundColor: t.surface,
-          paddingBottom: Math.max(32, insets.bottom + 12),
-        }}
-      >
-        <View className="mb-1 flex-row items-center">
-          <Text className="flex-1 text-lg font-bold" style={{ color: t.ink }}>
-            SMS-рассылка
-          </Text>
-          <Pressable
-            onPress={close}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Закрыть"
-          >
-            <X color={t.body} size={ICON.md} />
-          </Pressable>
-        </View>
-        <Text className="mb-3 text-xs" style={{ color: t.sub }}>
-          {withPhone.length}{" "}
-          {countWordRu(withPhone.length, "получатель", "получателя", "получателей")}
-          {noPhone > 0 ? ` · ${noPhone} без телефона пропущены` : ""}
-        </Text>
-
+    <BottomSheet
+      visible={visible}
+      onClose={close}
+      title="SMS-рассылка"
+      subtitle={`${withPhone.length} ${countWordRu(withPhone.length, "получатель", "получателя", "получателей")}${noPhone > 0 ? ` · ${noPhone} без телефона пропущены` : ""}`}
+      // КАНОНИЧЕСКИЙ ЛИСТ, А НЕ СЫРОЙ Modal. Вопрос «Отправить через
+      // сервис?» ложится в окно этого листа (`sheet-overlay.tsx`); поверх
+      // сырого Modal он был третьим окном, iOS его не показывал, и невидимый
+      // вопрос глушил все следующие подтверждения.
+      maxHeightRatio={0.86}
+      scroll
+      // Поле текста и кнопки отправки не уходят под клавиатуру.
+      avoidKeyboard
+    >
+      <View style={{ paddingBottom: Math.max(32, insets.bottom + 12) }}>
         {inSequence ? (
           // ── Sequential progress ──────────────────────────────────────
           <View>
@@ -267,8 +247,8 @@ export function BulkSmsSheet({
             </View>
           </View>
         ) : (
-          // ── Compose ───────────────────────────────────────────────────
-          <ScrollView keyboardShouldPersistTaps="handled">
+          // ── Compose ── (листает сам лист: `scroll`)
+          <View>
             {canService ? (
               <View className="mb-3">
                 <SegmentedControl
@@ -385,9 +365,9 @@ export function BulkSmsSheet({
             </View>
             </>
             )}
-          </ScrollView>
+          </View>
         )}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }

@@ -11,7 +11,7 @@ const doc = (over: Partial<Parameters<typeof rememberedDueDays>[0] extends reado
   ...over,
 });
 
-// Владелец 2026-10-03: стандарт 30, дальше — как на прошлом своём инвойсе.
+// Стандарт 30, дальше — как на прошлом своём инвойсе.
 describe("rememberedDueDays", () => {
   it("starts at 30 days before the first invoice", () => {
     assert.equal(rememberedDueDays([], "me"), FIRST_INVOICE_DUE_DAYS);

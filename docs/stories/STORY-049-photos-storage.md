@@ -199,7 +199,7 @@ Calendar grid (`listAppointments`) is unaffected — it never fetched photos in 
   - Avif policy: not whitelisted (blocked by MIME filter)
 - Two RLS policies on `storage.objects` (per A6) applied via the migration SQL.
 
-### G2 — SQL migration `20260430_006_photos_storage.sql` (review-required before apply)
+### G2 — SQL migration `20260430000006_photos_storage.sql` (review-required before apply)
 
 Single migration file with:
 
@@ -392,7 +392,7 @@ During G6 step 15 cleanup we observed two related findings:
 
 ### Files shipped (commit `6748e62`)
 
-- `supabase/migrations/20260430_006_photos_storage.sql` (138 lines)
+- `supabase/migrations/20260430000006_photos_storage.sql` (138 lines)
 - `packages/shared/src/db/repositories/appointment-photos.ts` (221 lines, new)
 - `packages/shared/src/db/database.types.ts` — `appointment_photos` table types
 - `packages/shared/src/db/repositories/appointments.ts` — drop `photos` projection

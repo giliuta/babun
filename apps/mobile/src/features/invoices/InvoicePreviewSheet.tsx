@@ -9,15 +9,14 @@ import { SelectRow } from "@/components/ui/select-rows";
 import { StepBack } from "@/components/ui/StepBack";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import type { InvoiceLanguage } from "./dictionary";
-import type { InvoiceDocument } from "./document";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import type { InvoiceDocument } from "@/lib/paper/document";
 import { InvoicePaper } from "./InvoicePaper";
 
 // ПЕРЕД ВЫСТАВЛЕНИЕМ — ВСЕГДА ПОКАЗАТЬ БУМАГУ.
 //
-// Владелец 2026-09-20 про инвойс: «после того я нажимаю выставить инвойс —
-// сначала делается превью этого инвойса, и потом я нажимаю сохранить». Тот же
-// порядок, что у чека, и тот же лист — `ReceiptPreviewSheet` устроен так же.
+// Сначала превью инвойса, и только потом «Сохранить». Тот же порядок, что
+// у чека, и тот же лист — `ReceiptPreviewSheet` устроен так же.
 //
 // Здесь ничего не правят: правят блоки под листом, а лист показывает, что
 // именно уйдёт клиенту. Бумага — та же `InvoicePaper`, что печатается в PDF,
@@ -30,12 +29,10 @@ import { InvoicePaper } from "./InvoicePaper";
 /** Поля листа — как у шторки «Итого». */
 const SIDE = 20;
 
-// ЯЗЫК БУМАГИ — БЛОКОМ «ЯЗЫК» НАД ДОКУМЕНТОМ (владелец 2026-10-04: «там такой
-// блочок типа язык, и оно открывается шторка вниз»). Было два языка
-// переключателем «Русский | English»; теперь любой язык приложения. Список
-// приезжает ВТОРЫМ ШАГОМ этого же листа — лист поверх листа iOS не покажет
-// (`BottomSheet` — RN Modal), так же выбирают счёт в переводе. Тап по языку
-// возвращает к бумаге уже на нём.
+// ЯЗЫК БУМАГИ — БЛОКОМ «ЯЗЫК» НАД ДОКУМЕНТОМ, шторкой вниз. Доступен любой
+// язык приложения. Список приезжает ВТОРЫМ ШАГОМ этого же листа — лист поверх
+// листа iOS не покажет (`BottomSheet` — RN Modal), так же выбирают счёт в
+// переводе. Тап по языку возвращает к бумаге уже на нём.
 type Step = "paper" | "language";
 
 export function InvoicePreviewSheet({
@@ -68,7 +65,7 @@ export function InvoicePreviewSheet({
   onChangeLanguage: (next: InvoiceLanguage) => void;
   onIssue: () => void;
   onClose: () => void;
-  /** Шапка листа: «Инвойс» или «Кредит-нота» (04.10). */
+  /** Шапка листа: «Инвойс» или «Кредит-нота». */
   title?: string;
   /** Лист уехал — экран может открыть выписанный документ (iOS не даёт
    *  открыть страницу поверх уходящей модалки). */

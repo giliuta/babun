@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import {
   canEditDayMoneyRow,
   dayMoneyGate,
@@ -8,7 +8,7 @@ import {
   isDayMoneyRow,
 } from "./day-money-access";
 
-// ДОХОД И РАСХОД ДНЯ — ПРАВО КАЛЕНДАРЯ (владелец 04.10). Копия правил
+// ДОХОД И РАСХОД ДНЯ — ПРАВО КАЛЕНДАРЯ. Копия правил
 // сервера (`finance_transactions_*_day_money`, окно — «Ограничения»
 // календаря): в зеркале токен владельца, и строки режутся только здесь.
 

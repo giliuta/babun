@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { joinRu, teamBrief, teamSentence } from "./team-sentence";
 
 const reader = (levels: Record<string, AccessLevel>) => (key: string) => levels[key];

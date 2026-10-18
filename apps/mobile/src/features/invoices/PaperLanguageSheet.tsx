@@ -3,11 +3,11 @@ import type { UiLocale } from "@babun/shared/i18n/locales";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { LanguageOptionList } from "@/components/ui/LanguageOptionList";
 
-import type { InvoiceLanguage } from "./dictionary";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 
-// ЯЗЫК БУМАГИ ДОКУМЕНТА — инвойса и чека (владелец 2026-10-04: язык выбирают
+// ЯЗЫК БУМАГИ ДОКУМЕНТА — инвойса и чека (язык выбирают
 // шторкой со всеми языками). Язык — свойство документа; дверь к шторке —
-// строка «Язык» в блоке «Реквизиты» (договорённость 018/019), на странице
+// строка «Язык» в блоке «Реквизиты», на странице
 // выставленного инвойса пока — пункт «⋯». Список тот же, что в Кабинете →
 // «Языки». Одиночный выбор: тап выбирает и закрывает, кнопки нет (AGENTS 5.2).
 export function PaperLanguageSheet({

@@ -52,7 +52,7 @@ export function mapAuthError(
       return "Этот email уже зарегистрирован — войдите";
     if (m.includes("should be at least"))
       return "Пароль слишком короткий";
-    // Supabase отклоняет известные и утёкшие пароли (HaveIBeenPwned, 04.10).
+    // Supabase отклоняет известные и утёкшие пароли (HaveIBeenPwned).
     if (c.includes("weak_password") || m.includes("password"))
       return "Этот пароль слишком простой или уже утекал в интернет — придумайте другой";
     return "Не удалось создать аккаунт";
@@ -75,7 +75,7 @@ export function mapAuthError(
  * GoTrue с подтверждением почты НЕ ОШИБАЕТСЯ на уже занятом адресе: чтобы не
  * выдавать, кто зарегистрирован, он отвечает «успехом» без сессии и с пустым
  * `identities` — и письма не шлёт. Экран показывал «Письмо ушло на …», и
- * человек ждал письма, которого не будет (аудит первого входа 03.10).
+ * человек ждал письма, которого не будет.
  */
 export function signUpHitExistingAccount(
   data: { user: { identities?: readonly unknown[] | null } | null; session: unknown } | null,

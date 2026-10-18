@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { QueryClient } from "@tanstack/react-query";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "./module-source";
 
 import {
   knownTenantsForSwitch,
@@ -15,15 +17,11 @@ const read = (path: string): string => readFileSync(resolve(here, path), "utf8")
 
 // ЧТО ИМЕННО ЗДЕСЬ ДОКАЗЫВАЕТСЯ, И ЧЕГО ЗДЕСЬ НЕ ДОКАЗЫВАЕТСЯ.
 //
-// Владелец жаловался, что переход между компаниями «очень долго открывается».
-// Причина была в том, что чистка выбрасывала данные, уже лежавшие на
-// устройстве, и экран заново ждал сеть.
+// Переход между компаниями тормозит, если чистка выбрасывает данные, уже
+// лежащие на устройстве: экран заново ждёт сеть.
 //
-// Проверить это глазами ЧЕСТНО НЕ ВЫШЛО НИ У КОГО. Снимок экрана через
-// несколько секунд после тапа не отличает тёплый кэш от быстрой сети: и там и
-// там на картинке записи. Сессия 005 сначала подтвердила починку таким снимком
-// и сама же своё подтверждение сняла — семи секунд хватало, чтобы успела
-// ответить сеть. Мой круг на симуляторе страдал тем же.
+// Глазами это не проверить. Снимок экрана через несколько секунд после тапа
+// не отличает тёплый кэш от быстрой сети: и там и там на картинке записи.
 //
 // Поэтому здесь проверяется МЕХАНИЗМ, а не время: пережили ли чистку записи в
 // кэше запросов. Это ровно та величина, которая ломалась, и она измеряется
@@ -203,7 +201,7 @@ describe("проводка перехода в коде", () => {
   test("auth-clear зовёт настоящую чистку и не метит протухшим весь кэш", () => {
     // Комментарии вырезаются: разбор над чисткой называет снятый вызов по
     // имени, и сторож обязан смотреть на код, а не на его историю.
-    const authClear = read("auth-clear.ts").replace(/^\s*\/\/.*$/gm, "");
+    const authClear = readModuleSource(resolve(here, "auth-clear.ts")).replace(/^\s*\/\/.*$/gm, "");
     assert.match(authClear, /sweepQueryCacheOnSwitch\(queryClient, knownTenantIds\)/);
     assert.doesNotMatch(
       authClear,
@@ -213,7 +211,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("ПОРЯДОК: выбор календаря, роль и фаза дообновления — до смены компании; getSession нет", () => {
-    const switching = read("../features/settings/switch-tenant.ts");
+    const switching = read("../session/switch-tenant.ts");
     const setActive = switching.indexOf("setActiveTenantId(userId, tenantId)");
     assert.notEqual(setActive, -1);
     for (const before of [
@@ -233,8 +231,8 @@ describe("проводка перехода в коде", () => {
   });
 
   test("выбор календаря пишется в той же форме, что читает календарь", () => {
-    const switching = read("../features/settings/switch-tenant.ts");
-    const calendar = read("../../app/(dashboard)/(home)/index.tsx");
+    const switching = read("../session/switch-tenant.ts");
+    const calendar = calendarScreenSource();
     assert.match(switching, /const CALENDAR_VIEW_PREF = "calendar\.view";/);
     assert.match(
       calendar,
@@ -244,7 +242,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("лента не зовёт onPickOwn замыканием тапа — оно знает покидаемую компанию", () => {
-    const workspaces = read("../features/settings/workspaces.ts");
+    const workspaces = read("../session/workspaces.ts");
     assert.equal(
       workspaces.split("opts.onPickOwn(").length - 1,
       1,
@@ -255,7 +253,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("полоса загрузки молчит, пока идёт тихое дообновление", () => {
-    const calendar = read("../../app/(dashboard)/(home)/index.tsx");
+    const calendar = calendarScreenSource();
     assert.match(
       calendar,
       /<LoadingBar\s+visible=\{isRefetching && !pull\.refreshing && !silentRevalidating\}/,

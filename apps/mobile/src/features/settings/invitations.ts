@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { switchTenant } from "./switch-tenant";
+import { switchTenant } from "@/session/switch-tenant";
 import {
   clearPendingInvitationToken,
   getPendingInvitationToken,
@@ -125,10 +125,10 @@ export async function acceptAndActivateInvitation(
   token: string,
   previewRole?: InvitableRole,
   /** Своё место на устройстве уже есть — ПЕРЕХОДА НЕТ, как у приёма из
-   *  «Приглашений» (владелец 01.10: «добавление просто в команды и всё…
-   *  переключаться точно не надо»). По ссылке приём уводил владельца в чужой
-   *  аккаунт: роль становилась партнёрской, и «Тариф», «Партнёры», «Оплаты»
-   *  пропадали из Кабинета (аудит Кабинета 03.10). */
+   *  «Приглашений» (команды просто добавляются, переключаться не нужно).
+   *  Иначе приём по ссылке уводил бы владельца в чужой аккаунт: роль
+   *  становилась бы партнёрской, и «Тариф», «Партнёры», «Оплаты» пропали бы
+   *  из Кабинета. */
   opts: { stay?: boolean } = {},
 ): Promise<string> {
   if (!isInvitationToken(token)) throw new Error("Некорректная ссылка");
@@ -170,7 +170,7 @@ export async function acceptAndActivateInvitation(
 }
 
 /** Принятое приглашение → роль в новой компании → переход. ОДНО ТЕЛО на приём
- *  по ссылке и по id из карточки над календарём (STORY-081): второй способ
+ *  по ссылке и по id из карточки над календарём: второй способ
  *  менять компанию разошёлся бы с первым на первой же правке. */
 export async function activateAcceptedInvitation(
   tenantId: string,

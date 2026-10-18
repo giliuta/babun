@@ -6,7 +6,7 @@ import { SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useThemeColors } from "@/theme/colors";
-import type { AccountWithBalance } from "../accounts";
+import { balanceText, type AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
 import type { StageAccount } from "./types";
 
@@ -16,16 +16,13 @@ const SUM_COL_W = 92;
 /** Колонка VAT левее суммы: «VAT €1 234,56» серым 13pt. */
 const VAT_COL_W = 104;
 
-// ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10, третий заход:
-// «блок „На счёте", справа общая сумма, и эти две плитки; „Перевести" — в
-// другой блок; и вообще раздельно можно все эти блоки»):
+// ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ, блоки раздельны:
 //   • «На счёте» — плашка со значком, справа серым «VAT …» и общая сумма:
 //     сумма одна, VAT лежит внутри неё;
 //   • «Перевести», «В оплате записи», «Выписка» — каждый своим блоком.
-// Строки «Команда» нет: шторку открывают со страницы счетов этой команды
-// («зачем писать команда команда один»). «Остатка на начало» тоже нет («что
-// значит остаток на начало — это лишнее»): его задают при создании счёта.
-// Подписей под строками нет (вкус владельца 02–03.10).
+// Строки «Команда» нет: шторку открывают со страницы счетов этой команды.
+// «Остатка на начало» тоже нет: его задают при создании счёта.
+// Подписей под строками нет.
 export function AccountMoneyGroup({
   account,
   accounts,
@@ -36,7 +33,7 @@ export function AccountMoneyGroup({
 }: {
   account: AccountWithBalance;
   accounts: readonly AccountWithBalance[];
-  /** Правка в черновик листа: на сервер — по «Применить» (03.10). */
+  /** Правка в черновик листа: на сервер — по «Применить». */
   stage: StageAccount;
   /** Идёт другая правка счёта — переключатель ждёт её ответа. */
   busy: boolean;
@@ -51,18 +48,20 @@ export function AccountMoneyGroup({
   const canTransfer =
     account.is_active
     && accounts.some((other) => other.is_active && other.id !== account.id);
-  // СКОЛЬКО VAT НА СЧЁТЕ К УПЛАТЕ (владелец 2026-09-23: «сколько VAT мы
-  // должны будем заплатить»).
-  const vatDue = useAccountVatDue(account.id, true).data ?? 0;
+  // СКОЛЬКО VAT НА СЧЁТЕ К УПЛАТЕ — сколько VAT мы должны будем заплатить.
+  // Остаток не назван сервером — прочерк, и VAT рядом с ним не рисуется.
+  const vatDueQuery = useAccountVatDue(account.id, account.balance_known);
+  const vatDue = account.balance_known ? (vatDueQuery.data ?? 0) : 0;
+  const balance = balanceText(account, money);
   const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
 
   return (
     <>
-      {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT ЛЕЖИТ ВНУТРИ НЕЁ (владелец 03.10:
-          «в эти 320 входит VAT, не отдельно VAT и отдельно сумма без VAT»).
-          Плашка — та же, что у соседних блоков («вернуть в хороший дизайн»):
-          значок, слово, справа серым «VAT …» и жирная сумма — вариант 3 из
-          четырёх показанных. Нет налога — нет и VAT. На счёте — факт, а не
+      {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT ЛЕЖИТ ВНУТРИ НЕЁ: в эти 320 входит VAT,
+          а не отдельно VAT и отдельно сумма без VAT.
+          Плашка — та же, что у соседних блоков:
+          значок, слово, справа серым «VAT …» и жирная сумма.
+          Нет налога — нет и VAT. На счёте — факт, а не
           поле: остаток меняют операции. */}
       <SectionCard dense>
         <View style={blockBody}>
@@ -74,13 +73,12 @@ export function AccountMoneyGroup({
             onPress={noop}
             accessibilityLabel={
               moneySign(vatDue) !== 0
-                ? `На счёте ${money(account.balance)}, в том числе VAT ${money(vatDue)}`
-                : `На счёте ${money(account.balance)}`
+                ? `На счёте ${balance}, в том числе VAT ${money(vatDue)}`
+                : `На счёте ${balance}`
             }
             trailing={
-              // ДВЕ КОЛОНКИ ПОСТОЯННОЙ ШИРИНЫ (владелец 03.10 выбрал вариант 3
-              // — «серым перед суммой» — и попросил «чётко ряд для суммы VAT,
-              // чтоб не дёргался слева направо»): «VAT …» всегда начинается с
+              // ДВЕ КОЛОНКИ ПОСТОЯННОЙ ШИРИНЫ: «VAT …» серым перед суммой, чётким рядом
+              // для суммы VAT, чтобы не дёргалось слева направо: «VAT …» всегда начинается с
               // одного места, сумма счёта всегда прижата к правому краю, у
               // какого счёта лист ни открой.
               <View style={{ flexDirection: "row", alignItems: "baseline" }}>
@@ -103,11 +101,11 @@ export function AccountMoneyGroup({
                     textAlign: "right",
                     fontSize: 15,
                     fontWeight: "700",
-                    color: moneySign(account.balance) < 0 ? t.danger : t.ink,
+                    color: account.balance_known && moneySign(account.balance) < 0 ? t.danger : t.ink,
                     fontVariant: ["tabular-nums"],
                   }}
                 >
-                  {money(account.balance)}
+                  {balance}
                 </Text>
               </View>
             }

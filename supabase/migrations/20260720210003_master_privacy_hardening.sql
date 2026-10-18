@@ -460,7 +460,7 @@ create policy appointment_photos_delete_operator
 
 -- ── Client attachments ───────────────────────────────────────────────
 -- The claim that used to stand here ("missing from the checked-in migration
--- chain") was wrong: the table is created by 20260517_008_client_attachments.sql,
+-- chain") was wrong: the table is created by 20260517000008_client_attachments.sql,
 -- which sorts earlier and therefore always wins. The CREATE TABLE IF NOT EXISTS
 -- that followed was dead on every database — and worse, it silently described a
 -- schema nobody has (unique storage_path, mime_type default

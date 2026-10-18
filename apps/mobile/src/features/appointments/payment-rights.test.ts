@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import { paymentRights, type PaymentCalendar } from "./payment-rights";
 
 // «КТО МОЖЕТ БРАТЬ ДЕНЬГИ» — ПРАВИЛО, А НЕ РАЗМЕТКА.
@@ -207,7 +207,7 @@ describe("права блока «Оплата»", () => {
     });
   });
 
-  // «МЕНЯЕТ» — ВЕСЬ БЛОК (04.10): значки инвойса и чека слушаются права
+  // «МЕНЯЕТ» — ВЕСЬ БЛОК: значки инвойса и чека слушаются права
   // «Документы» в команде записи; без команды — только владелец.
   test("«Документы» в команде записи решают значки инвойса и чека", () => {
     const docs = (level: string | undefined, teamId: string | null = TEAM) =>

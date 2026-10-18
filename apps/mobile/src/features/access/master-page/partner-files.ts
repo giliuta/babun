@@ -5,7 +5,7 @@ import type { ClientAttachment, PickedFile } from "@/features/clients/card-attac
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
-// ФАЙЛЫ ПАРТНЁРА (владелец 04.10, мозговой штурм страницы партнёра): договор,
+// ФАЙЛЫ ПАРТНЁРА: договор,
 // копия документа, сертификаты. Тот же уклад, что у файлов клиента
 // (`card-attachments.ts`): строка `partner_files` + объект в закрытом бакете
 // `partner-files` по пути `{tenant}/{master}/{id}.{ext}`; сначала строка,

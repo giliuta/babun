@@ -145,7 +145,7 @@ const VAT_MODES = new Set<NonNullable<Appointment["vat_mode"]>>([
   "exclusive",
 ]);
 
-/** VAT записи: ключа нет (окно старше 03.10) — `undefined`, как раньше. */
+/** VAT записи: ключа нет (окно старой версии) — `undefined`. */
 function vatModeField(row: JsonRecord): Appointment["vat_mode"] {
   if (!("vat_mode" in row)) return undefined;
   const value = row.vat_mode;
@@ -236,7 +236,7 @@ function repeatField(value: Json | undefined): PersonalEventRepeat {
  *  итог, скидку, цены услуг, VAT, внесённое и статус оплаты окно отдаёт по
  *  уровням «Услуг», «Суммы» и «Оплаты» — при закрытом блоке там нули.
  *  Историю платежей и расходы окно не отдаёт никогда, и здесь они гаснут.
- *  Скидку, цены услуг и VAT окно отдаёт с 03.10 (миграция 20261003235710):
+ *  Скидку, цены услуг и VAT окно отдаёт (миграция 20261003235710):
  *  пустыми они расходились с «Итого», а сохранение стирало скидку записи. */
 export function masterAppointmentJsonToAppointment(value: Json): Appointment {
   const row = asRecord(value);
@@ -257,8 +257,7 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     discount_amount: moneyField(row, "discount_amount"),
     expenses: [],
     service_price_overrides: priceOverrides(row.service_price_overrides),
-    // Предоплата — по уровню «Суммы» и «Оплаты», как доплата (повторный аудит
-    // 03.10): нулём она делала долгом то, что клиент уже внёс.
+    // Предоплата — по уровню «Суммы» и «Оплаты», как доплата: нулём она делала долгом то, что клиент уже внёс.
     prepaid_amount: moneyField(row, "prepaid_amount"),
     payments: [],
     payment: null,

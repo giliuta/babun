@@ -18,7 +18,7 @@ type Dictionary = Readonly<Record<string, string>>;
 let dictionary: Dictionary | null = null;
 let loadedFor: UiLocale | null = null;
 
-/* eslint-disable @typescript-eslint/no-require-imports */
+ 
 function load(code: UiLocale): Dictionary | null {
   switch (code) {
     case "en":
@@ -37,7 +37,7 @@ function load(code: UiLocale): Dictionary | null {
       return null;
   }
 }
-/* eslint-enable @typescript-eslint/no-require-imports */
+ 
 
 function active(): Dictionary | null {
   const code = uiLocale();
@@ -111,7 +111,7 @@ let serverPatterns: ServerPattern[] | null = null;
  *  language meets a message the dictionary does not know verbatim. */
 function patterns(): ServerPattern[] {
   if (serverPatterns) return serverPatterns;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const keys = require("./server-keys.json") as string[];
   serverPatterns = keys
     .filter((key) => key.includes("{0}"))
@@ -124,7 +124,7 @@ function patterns(): ServerPattern[] {
   return serverPatterns;
 }
 
-// «ЗАПИСЬ», А НЕ «ЗАЯВКА» (прогон оплаты 04.10). Слово продукта — «запись»,
+// «ЗАПИСЬ», А НЕ «ЗАЯВКА». Слово продукта — «запись»,
 // а функции базы писались, когда она звалась заявкой: под «Записью» в шапке
 // всплывало «Полученная сумма больше итога заявки», «Заявка не найдена».
 // Переписывать два десятка функций базы и ключи шести словарей ради одного

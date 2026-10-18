@@ -4,7 +4,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { dayMoney, isMoneyRecord, moneyByAccount, moneyOfDay } from "./day-money";
 
-// ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ (владелец 2026-10-01). Живой случай: предоплата
+// ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ. Живой случай: предоплата
 // €20 внесена 30.09 за запись на 1.10 — полоса показывала её в среду, где
 // записи нет. Операция без записи — в своём дне, если внесена из календаря.
 
@@ -23,7 +23,7 @@ const tx = (
     refund_of_id: null,
     notes: null,
     team_id: "t1",
-    // Операция без записи — та, что внесена кнопкой календаря (04.10).
+    // Операция без записи — та, что внесена кнопкой календаря.
     from_calendar: true,
     ...over,
   }) as FinanceTransaction;
@@ -257,5 +257,24 @@ describe("по счетам", () => {
     const day = run(TODAY, [], rows);
     const split = moneyByAccount(day.incomeRows, ["cash", "card"]);
     assert.equal(split.reduce((s, e) => s + e.amount, 0), day.income);
+  });
+});
+
+describe("работа под инвойсом — не долг дня", () => {
+  test("как в «Финансах»: долг ждёт оплаты инвойсом, а не записью", () => {
+    const past = appt({ id: "p", date: TODAY, time_start: "09:00", time_end: "10:00" });
+    const later = appt({ id: "l", date: TODAY, time_start: "15:00", time_end: "16:00" });
+    const day = dayMoney({
+      ymd: TODAY,
+      appointments: [past, later],
+      transactions: [],
+      services: [],
+      teamId: "t1",
+      businessToday: TODAY,
+      nowHm: "11:35",
+      invoiced: new Set(["p", "l"]),
+    });
+    assert.equal(day.debt, 0);
+    assert.equal(day.planned, 0);
   });
 });

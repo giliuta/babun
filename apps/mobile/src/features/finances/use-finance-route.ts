@@ -34,7 +34,7 @@ export function useFinanceRoute(
   const [scope, setScope] = useState<string | null>(initial?.team ?? null);
   // ВЫБРАННЫЙ СЧЁТ ПЕРЕЖИВАЕТ ПОЕЗДКУ В ЗАПИСЬ так же, как разрез: открыл
   // «Наличные», из их ленты — запись, закрыл её и снова видишь ленту
-  // «Наличных», а не всех счетов (2026-09-15).
+  // «Наличных», а не всех счетов.
   const [accountId, setAccountId] = useState<string | null>(
     initial?.account ?? null,
   );

@@ -3,16 +3,16 @@ import { useLocalSearchParams } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
-import { ClientsScopeProvider } from "./company-scope";
-import { clientsRouteDecision, type RouteKind } from "./clients-company";
+import { useCurrentRole, useTenant } from "@/session/tenant";
+import { ClientsScopeProvider } from "@/session/company-scope";
+import { clientsRouteDecision, type RouteKind } from "@/session/clients-company";
 import { useClientsSources } from "./sources";
 
-// ВОРОТА ВКЛАДКИ «КЛИЕНТЫ» (STORY-082, владелец 19.09: «вся страница, вся
-// архитектура остаётся»).
+// ВОРОТА ВКЛАДКИ «КЛИЕНТЫ» (STORY-082): вся страница и вся архитектура
+// остаются.
 //
-// Раньше здесь стояла граница по роли: мастер видел на весь экран
-// «Недостаточно прав». Теперь экран спрашивает не роль, а ИСТОЧНИК: своя
+// Граница по роли дала бы мастеру на весь экран «Недостаточно прав». Поэтому
+// экран спрашивает не роль, а ИСТОЧНИК: своя
 // компания, компания-работодатель, открывшая клиентов, или клиент записи.
 // Ответ один на весь экран и его блоки — он же объявляется контекстом.
 //
@@ -22,10 +22,9 @@ import { useClientsSources } from "./sources";
 //   • «не найден» — ссылка на компанию, которой у него нет.
 // Кнопок внутри нет: действие экрана живёт в футере (канон 7.1).
 
-// ЗАГОЛОВОК БЕЗ ПОДПИСИ (канон пустых состояний, LOCKED 2026-08-27):
-// подпись есть только у ошибки. Раньше здесь стояли три объяснения — почему
-// компании нет, чья это ссылка и кто ведёт визиты; экран от этого становился
-// оправданием. Объяснения живут в коде, рядом с правилом.
+// ЗАГОЛОВОК БЕЗ ПОДПИСИ (канон пустых состояний): подпись есть только у
+// ошибки. Три объяснения — почему компании нет, чья это ссылка и кто ведёт
+// визиты — превращали бы экран в оправдание. Объяснения живут в коде, рядом с правилом.
 const WORDS: Record<"no-company" | "not-found" | "not-allowed", string> = {
   "no-company": "Здесь будут клиенты",
   "not-found": "Клиент не найден",
@@ -59,7 +58,7 @@ export function ClientsCompanyRoute({
   });
 
   // СЕРВЕР МОЛЧИТ, А ЗАПОМНЕННОГО НЕТ (первый запуск без сети): ждать
-  // нечего — честное «Нет связи» с «Повторить», а не вечная загрузка (03.10).
+  // нечего — честное «Нет связи» с «Повторить», а не вечная загрузка.
   if (decision.state === "wait" && sources.failed) {
     return (
       <Screen edges={["top"]}>

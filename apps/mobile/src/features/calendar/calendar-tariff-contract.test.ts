@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
-// БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА В КАЛЕНДАРЕ — ТОЛЬКО ДЛЯ ПРОСМОТРА (аудит 03.10).
+// БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА В КАЛЕНДАРЕ — ТОЛЬКО ДЛЯ ПРОСМОТРА.
 // Сервер (`appointments_free_readonly`) отклоняет любую правку записи с
 // kind='work', а календарь давал её тянуть, растягивать, красить, отменять и
 // удалять — блок переезжал и откатывался с ошибкой сервера вместо плашки
 // «Нужно изменить тариф», которую показывает страница записи.
 
-const here = dirname(fileURLToPath(import.meta.url));
-const screen = () =>
-  readFileSync(resolve(here, "../../../app/(dashboard)/(home)/index.tsx"), "utf8");
+// The calendar screen is the route file plus `features/calendar/home/`.
+const screen = () => calendarScreenSource();
 
 describe("календарь без тарифа", () => {
   test("запись клиента не берётся пальцем и не растягивается", () => {

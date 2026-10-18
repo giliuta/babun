@@ -8,7 +8,7 @@ import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import type { Team } from "@/features/reference/queries";
 import {
-  useRestoreAccount,
+  useUndoAccountTrash,
   useSetAccountHidden,
   useTrashAccount,
   type AccountWithBalance,
@@ -49,15 +49,15 @@ interface TransferPreset {
 
 // ЖЕСТЫ СТРОКИ НА СТРАНИЦЕ «СЧЕТА».
 //
-// «СКРЫТЬ» — СЧЁТ ДЛЯ СЕБЯ (владелец 03.10: «скрыть — чтоб он скрылся со
-// всего, но им можно было пользоваться; нигде не показывался, только в
-// счетах; для всех невидимый»). Скрытый счёт работает — на него переводят, —
+// «СКРЫТЬ» — СЧЁТ ДЛЯ СЕБЯ: скрывается отовсюду, но им можно пользоваться;
+// нигде не показывается, только в счетах; для всех невидимый. Скрытый счёт
+// работает — на него переводят, —
 // но виден только здесь и только владельцу; деньги записи он не принимает.
 // Вопроса нет: действие обратимо тем же жестом («Показать»), а тост держит
 // «Отменить» — счёт возвращается каким был, с прежним «В оплате записи».
 //
-// «УДАЛИТЬ» (владелец 03.10: «свайпом удалять, они попадают в папку
-// „Удалённые счета" на 30 дней, как клиенты»): удалить можно только пустой
+// «УДАЛИТЬ» — свайпом, счёт попадает в папку «Удалённые счета» на 30 дней, как клиенты:
+// удалить можно только пустой
 // счёт, поэтому деньги сначала уводятся переводом, ноль — вопрос «Удалить
 // счёт?», и счёт уходит в «Удалённые счета». Тост держит «Отменить».
 export function useHideAccount({
@@ -77,7 +77,7 @@ export function useHideAccount({
   const toast = useToast();
   const setHidden = useSetAccountHidden();
   const trashAcc = useTrashAccount();
-  const restoreAcc = useRestoreAccount();
+  const undoTrash = useUndoAccountTrash();
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [preset, setPreset] = useState<TransferPreset>({
@@ -136,7 +136,7 @@ export function useHideAccount({
         toast(`Счёт «${target.name}» удалён`, "success", {
           label: "Отменить",
           onPress: () =>
-            restoreAcc.mutate(target.id, {
+            undoTrash.mutate(target, {
               onError: (e) => toast(`Не удалось вернуть счёт: ${e.message}`, "error"),
             }),
         }),
@@ -179,7 +179,7 @@ export function useHideAccount({
         closingFrom.current = target;
         // ЛИСТ ПЕРЕВОДА — ПОСЛЕ ТОГО, КАК УЕХАЛ ВОПРОС. `confirmThen` отвечает
         // в миг тапа, пока шторка вопроса ещё уезжает, и открытый в этот кадр
-        // лист не появлялся вовсе (ревью 2026-09-15).
+        // лист не появлялся вовсе.
         setTimeout(() => {
           if (mounted.current) setTransferOpen(true);
         }, AFTER_SHEET_MS);

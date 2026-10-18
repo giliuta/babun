@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 
 // АУДИТ РАБОТЫ БЕЗ СЕТИ 03.10. Мутация react-query по умолчанию
 // (`networkMode: "online"`) без сети ставится НА ПАУЗУ В ПАМЯТИ: обёртки
@@ -21,7 +22,7 @@ function unpausedCount(src: string): { mutations: number; neverPause: number } {
 
 describe("работа без сети: правки не ждут в памяти", () => {
   test("мутации записей не встают на паузу без сети", () => {
-    const src = read("features/calendar/mutations.ts");
+    const src = readModuleSource(resolve(here, "..", "features/calendar/mutations.ts"));
     const { mutations, neverPause } = unpausedCount(src);
     // + общий объект опций правки (`useUpdateAppointmentOptions`).
     assert.equal(neverPause, mutations + 1);
@@ -29,7 +30,7 @@ describe("работа без сети: правки не ждут в памят
   });
 
   test("мутации клиентов и тегов не встают на паузу без сети", () => {
-    const src = read("features/clients/queries.ts");
+    const src = readModuleSource(resolve(here, "..", "features/clients/queries.ts"));
     const { mutations, neverPause } = unpausedCount(src);
     assert.ok(mutations > 0);
     assert.ok(neverPause >= mutations, `${neverPause} < ${mutations}`);

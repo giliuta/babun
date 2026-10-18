@@ -63,6 +63,9 @@ const NATIVE_ONLY_EXEMPT = new Set([
   // reconcile возвращает статус "unavailable", и его показывают человеку
   // (features/appointments/useBookingSave.ts, AppointmentSheet.tsx).
   "src/lib/notifications.ts",
+  // Type-only import of the scheduler shapes; nothing here runs, the guarded
+  // require stays in src/lib/notifications.ts.
+  "src/lib/notifications/types.ts",
 ]);
 
 function sourceFiles(root: string): string[] {
@@ -210,8 +213,10 @@ describe("веб-паритет: платформенные API только з�
       /from\s+["'][^"']*\/DateTimeInput["']/.test(code),
     );
     // Порог — «поиск нашёл места вызова», а не их точное число: шторка
-    // оплаты инвойса перешла на DateSpinner (04.10), и мест стало пять.
-    assert.ok(users.length >= 3, `мест вызова DateTimeInput: ${users.length}`);
+    // оплаты инвойса, период «Финансов» и дата перевода перешли на DateSpinner
+    // (на Android системный пикер — диалог,
+    // который открывался по кругу). Остался один вызов — сам `DateSpinner`.
+    assert.ok(users.length >= 1, `мест вызова DateTimeInput: ${users.length}`);
     const offenders = users.flatMap(({ id, code }) =>
       [...code.matchAll(/\bmode=["']([a-z-]+)["']/g)]
         .filter((m) => !modes.includes(m[1]))

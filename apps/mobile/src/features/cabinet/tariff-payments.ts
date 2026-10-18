@@ -1,7 +1,7 @@
 import { money } from "@babun/shared/common/utils/money";
-import { tierName, type Tier } from "@/features/tariffs/tiers";
+import { tierName, type Tier } from "@/session/tiers";
 
-// «ОПЛАТЫ ТАРИФА» — ЧИСТЫЙ СЛОЙ (владелец 03.10: «оплаты тарифа — да, надо»).
+// «ОПЛАТЫ ТАРИФА» — ЧИСТЫЙ СЛОЙ.
 //
 // Историю оплат ведёт не приложение, а вебхук Stripe: он пишет каждое событие
 // в `billing_events` целиком (`payload` — событие как пришло, счёт лежит в
@@ -21,9 +21,6 @@ import { tierName, type Tier } from "@/features/tariffs/tiers";
 //
 // Суммы Stripe хранит в центах, а тарифы у нас только в евро (`tariff-checkout`),
 // поэтому «÷ 100» без таблицы валют без десятичных знаков.
-
-/** События Stripe, из которых складывается лента. */
-export const PAYMENT_EVENTS = ["invoice.payment_succeeded", "invoice.payment_failed"] as const;
 
 /** Строка `billing_events` так, как её отдаёт запрос. */
 export interface BillingEventRow {

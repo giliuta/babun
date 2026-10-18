@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
@@ -15,7 +15,7 @@ import {
   PERIOD_LABELS,
   presetHint,
   type Period,
-} from "./period";
+} from "@/lib/period";
 
 // LOCKED v5 header split (finances-design.html): the period NAME opens this
 // preset list — paired «текущий/прошлый» blocks (День/Неделя/Месяц/Год),
@@ -221,14 +221,12 @@ export function PeriodWheelsModal({
       }
     >
       <View className="px-5 pb-2">
-        {/* СВОДНОЙ СТРОКИ ДИАПАЗОНА ЗДЕСЬ НЕТ (владелец 2026-09-10: «эта
-            строка лишняя, и так видно начало и конец»). Обе даты стоят прямо
-            под ней, на половинах сегмента, и печатать их вторым экземпляром
-            значит тратить строку на уже сказанное. */}
-        {/* НАЧАЛО | КОНЕЦ — ОДИН ЯЗЫК НА ПРОДУКТ (владелец 2026-09-10: «не с/до,
-            а начало-конец, так будет правильнее»). Тот же сегмент выбирает
-            половину у времени записи и у графика команды; «С»/«До» жили
-            только здесь и рядом читались как другой контрол. */}
+        {/* СВОДНОЙ СТРОКИ ДИАПАЗОНА ЗДЕСЬ НЕТ: обе даты и так стоят на половинах
+            сегмента, и печатать их вторым экземпляром значит тратить строку на
+            уже сказанное. */}
+        {/* НАЧАЛО | КОНЕЦ — ОДИН ЯЗЫК НА ПРОДУКТ: не «с/до», а «начало-конец». Тот же сегмент выбирает
+            половину у времени записи и у графика команды; «С»/«До» читались бы
+            рядом как другой контрол. */}
         <View
           className="mb-3 flex-row p-1"
           style={{ backgroundColor: t.fill, gap: 4, borderRadius: t.radius.card }}
@@ -239,14 +237,9 @@ export function PeriodWheelsModal({
 
         {/* one wheel edits the active endpoint */}
         <View className="items-center">
-          <DateTimeInput
-            themeVariant="light"
+          <DateSpinner
             value={parseYMD(side === "from" ? from : to)}
-            mode="date"
-            display="spinner"
-            locale="ru-RU"
-            onChange={(_, d) => {
-              if (!d) return;
+            onChange={(d) => {
               if (side === "from") setFrom(formatYMD(d));
               else setTo(formatYMD(d));
             }}

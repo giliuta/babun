@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import {
   instagramUrl,
+  normalizeHandle,
   telegramUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
@@ -11,10 +12,9 @@ import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 // СПОСОБЫ СВЯЗИ КЛИЕНТА, КОТОРЫЕ НЕ ЯВЛЯЮТСЯ НОМЕРОМ — Telegram, Instagram,
 // WhatsApp на другом номере, почта.
 //
-// Владелец 2026-08-02: «убираем „+ Добавить номер“ — нажимаешь плюс, снизу
-// вылазит плашка, как выбор метки, и одной кнопкой сразу добавляешь WhatsApp,
-// Telegram и так далее; и справа появляется значок — по нему чётко переходит
-// в телеграм».
+// Способ добавляется плюсом: снизу выезжает плашка, как выбор метки, и одной
+// кнопкой сразу добавляется WhatsApp, Telegram и так далее; справа появляется
+// значок, по которому переходят в мессенджер.
 //
 // Раньше эти поля жили на отдельной странице «Ещё» внизу карточки: чтобы
 // вписать @username, нужно было доскроллить до конца и уйти с карточки. Теперь
@@ -60,8 +60,9 @@ export interface ContactFieldDef {
   url: (value: string) => string | null;
 }
 
-/** @username хранится без «собачки»: её рисует поле, а не данные. */
-const stripAt = (v: string): string => v.trim().replace(/^@+/, "");
+/** @username хранится без «собачки»: её рисует поле, а не данные. Вставленная
+ *  ссылка на профиль сводится к нику (`normalizeHandle`). */
+const stripAt = (v: string): string => normalizeHandle(v);
 
 /** Порядок = порядок строк на карточке и пунктов в листе «Добавить». */
 export const CONTACT_FIELDS: ContactFieldDef[] = [
@@ -87,7 +88,7 @@ export const CONTACT_FIELDS: ContactFieldDef[] = [
     display: (c) => (stripAt(c.telegram_username ?? "") ? `@${stripAt(c.telegram_username ?? "")}` : ""),
     patch: (v) => ({ telegram_username: stripAt(v) }),
     // По @username, а не по номеру: по номеру и так переходит кнопка связи
-    // у самого номера (владелец 2026-08-02).
+    // у самого номера.
     url: (v) => (stripAt(v) ? telegramUrl(v, null) : null),
   },
   {
@@ -123,8 +124,8 @@ export const CONTACT_FIELDS: ContactFieldDef[] = [
   },
 ];
 
-// ЧТО ПРЕДЛАГАТЬ В ЛИСТЕ «ДОБАВИТЬ» (владелец 2026-08-02: «справа шестерёнка,
-// чтобы тумблерами включать способы связи, добавления и так далее»). У кого
+// ЧТО ПРЕДЛАГАТЬ В ЛИСТЕ «ДОБАВИТЬ» (справа шестерёнка: тумблерами включают
+// способы связи и добавления). У кого
 // весь Кипр в WhatsApp, тому Instagram в листе — лишняя строка на каждом
 // клиенте. Уже заполненное у клиента поле показывается на карточке всегда,
 // даже если способ выключен: спрятать введённые данные хуже, чем показать.

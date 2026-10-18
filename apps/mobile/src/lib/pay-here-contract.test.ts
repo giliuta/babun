@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 import { test } from "node:test";
 import { LEGAL_TEXTS, LEGAL_TEXTS_APP } from "../features/legal/legal-texts";
 import { balanceWarning } from "../features/sms/sms-model";
-import { tariffAction, tariffStatus, tierLine } from "../features/tariffs/tiers";
+import { tariffAction, tariffStatus, tierLine } from "@/session/tiers";
 
-// ОПЛАТА — ТОЛЬКО НА САЙТЕ (владелец 04.10, `pay-here.ts`). Приложение из
+// ОПЛАТА — ТОЛЬКО НА САЙТЕ (`pay-here.ts`). Приложение из
 // App Store / Google Play с кнопкой на чужую оплату отклоняют, поэтому каждая
 // дверь к оплате на телефоне закрыта флагом `CAN_PAY_HERE`, а слова состояния
 // не зовут платить.
@@ -17,8 +18,8 @@ const read = (rel: string) => readFileSync(path.join(SRC, rel), "utf8");
 const readApp = (rel: string) => readFileSync(path.join(SRC, "../app", rel), "utf8");
 
 test("оплата читает один флаг — его и переключают при отказе App Review", () => {
-  // 10.10 владелец включил оплату ссылкой на сайт и в приложениях из
-  // магазинов; при отказе 3.1.1 флаг возвращают в `Platform.OS === "web"`.
+  // Оплата ссылкой на сайт включена и в приложениях из магазинов; при отказе
+  // 3.1.1 флаг возвращают в `Platform.OS === "web"`.
   assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE: boolean = true;/);
 });
 
@@ -69,7 +70,7 @@ test("слова состояния без флага не зовут плати
   assert.equal(tariffStatus(pastDue, null, false), "Оплата не прошла");
 });
 
-// ПРОВЕРКА APP STORE 06.10 (3.1.3(f)): в приложении из магазина нет ни
+// ПРОВЕРКА APP STORE (3.1.3(f)): в приложении из магазина нет ни
 // покупки, ни призыва к ней — в том числе косвенного: кнопки «Тариф» у
 // закрытого, отсчёта пробного, счетов Stripe с оплатой, адреса оплаты в
 // условиях, страницы возврата из Stripe.
@@ -81,8 +82,11 @@ test("закрытое тарифом без флага — спокойная �
   const guard = nudge.search(/if \(!CAN_PAY_HERE\) \{\s*toast\(TARIFF_LOCKED_HINT, "info"\);\s*return;\s*\}/);
   assert.ok(guard > 0, "useTariffNudge без ветки приложения из магазина");
   assert.ok(nudge.indexOf('label: "Тариф"') > guard, "кнопка «Тариф» раньше проверки флага");
+  // PaymentTiles reads together with its `payment-tiles/` parts.
   for (const rel of ["features/tariffs/TariffLocked.tsx", "features/appointments/PaymentTiles.tsx"]) {
-    const file = read(rel);
+    const file = rel.endsWith("PaymentTiles.tsx")
+      ? readModuleSource(path.join(SRC, rel), path.join(SRC, "features/appointments/payment-tiles"))
+      : read(rel);
     assert.match(file, /accessibilityHint=\{(dimmed \? )?TARIFF_LOCKED_HINT/, `${rel}: подсказка VoiceOver мимо флага`);
     assert.doesNotMatch(file, /"Нужно изменить тариф"/, `${rel}: «Нужно изменить тариф» мимо флага`);
   }
@@ -149,16 +153,16 @@ test("возврат из Stripe без флага не открывается: 
 
 test("регистрация читает один флаг — его и переключают при отказе App Review", () => {
   // «Регистрация аккаунта для бизнеса — доступ к внешней оплате; уберите её».
-  // 10.10 владелец включил полную регистрацию и на iPhone; при отказе 3.1.1
-  // флаг возвращают в `Platform.OS !== "ios"`.
+  // Полная регистрация включена и на iPhone; при отказе 3.1.1 флаг возвращают
+  // в `Platform.OS !== "ios"`.
   assert.match(read("lib/pay-here.ts"), /export const CAN_SIGN_UP_HERE: boolean = true;/);
-  // Регистрация — своей кнопкой (11.10): «Войти» только входит, а кнопка
+  // Регистрация — своей кнопкой: «Войти» только входит, а кнопка
   // «Зарегистрироваться» есть при CAN_SIGN_UP_HERE или по приглашению.
   const login = readApp("(auth)/login.tsx");
   assert.doesNotMatch(login, /supabase\.auth\.signUp/);
   assert.match(login, /const \[canRegister, setCanRegister\] = useState\(CAN_SIGN_UP_HERE\);/);
   assert.match(login, /\.then\(\(token\) => setCanRegister\(Boolean\(token\)\)\);/);
-  // С 12.10 — тихой строкой внизу экрана, а не большой кнопкой.
+  // Тихой строкой внизу экрана, а не большой кнопкой.
   assert.match(login, /canRegister \? \(\s*<SwitchLink lead="Нет аккаунта\?" action="Регистрация" onPress=\{\(\) => router\.push\("\/register"\)\} \/>/);
   // Вход через Apple/Google создаёт пользователя сам — «Почти готово» на
   // iPhone пускает дальше только по приглашению или в чужую команду.

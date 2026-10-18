@@ -6,10 +6,10 @@ import {
   useUploadAttachments,
   type PickedFile,
 } from "@/features/clients/card-attachments";
-import { clientFileTimeline } from "@/features/clients/client-files";
+import { clientFileTimeline } from "@/lib/client-files";
 import { useClientVisitPhotos } from "@/features/clients/visit-photos";
-import { useReceipts } from "@/features/documents/receipts-queries";
-import { useInvoices } from "@/features/invoices/queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
+import { useInvoices } from "@/features/finances/invoices-queries";
 import type { PickedAppointmentPhoto } from "@/features/appointments/appointment-photos";
 import { useFilePickers } from "@/features/appointments/use-file-pickers";
 import { useToast } from "@/components/ui/Toast";
@@ -32,7 +32,7 @@ export function useClientFiles(clientId: string, showMoney: boolean) {
   const attachments = useClientAttachments(clientId);
   const visitPhotos = useClientVisitPhotos(clientId, appointmentIds);
   // Инвойсы и чеки — функция компании (STORY-088) и деньги: без права
-  // «История» (деньги клиента идут за ней, 03.10) их в ленте нет.
+  // «История» (деньги клиента идут за ней) их в ленте нет.
   const documentsOn = useFeatureOn("documents");
   const invoices = useInvoices({ clientId });
   const receipts = useReceipts({ clientId });

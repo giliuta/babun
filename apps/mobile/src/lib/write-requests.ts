@@ -8,7 +8,7 @@
 // Метод HTTP отвечает на это лишь наполовину: PostgREST зовёт функции через
 // POST, и `my_access_map` внешне неотличим от `issue_receipt`. Поэтому
 // функции разобраны поимённо, и разобраны не на глаз: у боевой базы
-// 20.09 спрошена объявленная ВОЛАТИЛЬНОСТЬ каждой из вызываемых функций
+// спрошена объявленная ВОЛАТИЛЬНОСТЬ каждой из вызываемых функций
 // (`pg_proc.provolatile`). `stable` — чтение, `volatile` — запись. Так
 // список опирается на свойство самой функции, а не на догадку по приставке
 // (у `_safe` в конце бывают и пишущие функции).
@@ -36,7 +36,7 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "list_master_services_safe",
   "list_member_access",
   "list_member_clients",
-  // «История записей» клиента сотруднику (015, 01.10): `stable`.
+  // «История записей» клиента сотруднику (015): `stable`.
   "member_client_history",
   "list_members",
   "list_my_calendars",
@@ -57,8 +57,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "sms_team_templates",
   "tenant_quota_appointments_month",
   "tenant_quota_clients",
-  // Рабочий день компании — окно «Около записи» в зеркале (015, 30.09):
-  // `provolatile = 's'` спрошено у базы 30.09.
+  // Рабочий день компании — окно «Около записи» в зеркале (015):
+  // `provolatile = 's'` спрошено у базы.
   "tenant_business_date",
 ]);
 
@@ -77,7 +77,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   // Тарифы (миграция 20261001183700, 015): рабочие команды и пробный период.
   "choose_working_teams",
   "create_client_with_tags",
-  // Первый календарь владельца — заводит только при пустой компании (03.10).
+  // Первый календарь владельца — заводит только при пустой компании.
   "create_first_calendar",
   "create_invitation",
   "decline_invitation",
@@ -87,6 +87,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "delete_invoice",
   // «Удалённые операции» (миграция 20261003224700, 016).
   "delete_operation",
+  // «Удалённые записи» (миграция 20261016170000).
+  "delete_appointment",
   "issue_invoice",
   "issue_receipt",
   "update_receipt",
@@ -117,6 +119,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "replace_day_extras",
   "reset_appointment_payment",
   "restore_deleted_operation",
+  "restore_deleted_appointment",
   "set_appointment_prepayment",
   "set_client_sms_opt_out",
   "set_client_team",

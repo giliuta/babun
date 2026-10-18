@@ -8,13 +8,13 @@ import { RowActionButton } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import { visitMark } from "@/features/clients/visit-mark";
 import { PhoneVisitLine, visitMarkWords } from "@/features/clients/VisitDate";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
-import { contactsLocked } from "@/features/clients/member-contacts";
-import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { contactsLocked } from "@/session/member-contacts";
+import { useRevealedClient } from "@/session/revealed-contacts";
 import { useOpenMemberContacts } from "@/features/clients/use-member-contacts";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
@@ -22,35 +22,27 @@ import { useThemeColors } from "@/theme/colors";
 
 // БЛОК «КЛИЕНТ» — ОДИН НА ПРОДУКТ.
 //
-// Жил разметкой внутри `app/book/index.tsx`, и жил ДВАЖДЫ: своя копия у
-// записи, своя у события. Копии уже начали расходиться (у события завелась
-// кнопка «убрать клиента», а поля отстояли на другие отступы) — ровно то, что
-// случается со всякой скопированной разметкой.
+// Блок общий для записи, события и составителя чека: своя копия у каждого
+// разошлась бы (у события завелась бы кнопка «убрать клиента», поля отстояли
+// бы на другие отступы). Порядок строк: имя → вводная о человеке → телефон,
+// затем кнопка связи и «X».
 //
-// Вынесен 2026-09-20, когда владелец попросил тот же блок в составителе чека:
-// «не надо создавать с нуля что-то новое, копируй то, что мы уже создали».
-// Третьей копии заводить было нельзя, поэтому блок стал компонентом, а обе
-// прежние копии — его вызовами. Вид не менялся: порядок строк (имя → вводная
-// о человеке → телефон), кнопка связи и «X» перенесены дословно.
-//
-// СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ (владелец 03.10: «одна такая же карточка
-// клиента, как на странице клиентов: имя, номер телефона и дата последнего
-// визита»). Долга, числа визитов и денег здесь больше нет — они на странице
+// СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ: такая же карточка клиента, как на странице
+// клиентов (имя, номер телефона и дата последнего визита). Долга, числа
+// визитов и денег здесь нет — они на странице
 // клиента. Под именем — номер и дата цветом, правило `visit-mark.ts`: синяя —
 // последний визит, жёлтая — визит не закрыт, серая — записан вперёд.
 //
-// КАРТОЧКА КЛИЕНТА — ДОЛГИМ НАЖАТИЕМ (владелец 03.10: «убери эти три точки…
-// чтобы зайти в карточку клиента — зажать на клиента, а если один раз нажать —
-// выбор клиента»). Кружка «…» в хвосте строки больше нет: тап по клиенту —
+// КАРТОЧКА КЛИЕНТА — ДОЛГИМ НАЖАТИЕМ. Кружка «…» в хвосте строки нет: тап по клиенту —
 // выбор, удержание — карточка (VoiceOver — действием «Карточка клиента»).
 //
 // ЧЕГО БЛОК НЕ ЗНАЕТ. Ни записи, ни события, ни чека. Заметку клиента он не
 // пишет сам — её передают готовым узлом (`note`): у записи это поле есть, у
 // чека его нет, и блок не должен выбирать за них.
 //
-// НОМЕР СОТРУДНИКУ — ПО ОДНОМУ (защита базы 30.09). Клиент записи у мастера
+// НОМЕР СОТРУДНИКУ — ПО ОДНОМУ (защита базы). Клиент записи у мастера
 // приходит без контактов (`contacts_hidden`): на месте цифр «•• ••• •••», а
-// прежняя кнопка звонка открывает номер дверью с журналом — как на карточке
+// кнопка звонка открывает номер дверью с журналом — как на карточке
 // клиента (`LockedPhoneRow`). «В день записи» — словами, без кнопки; права
 // нет — строки номера нет. У владельца ключа нет — всё как было.
 
@@ -58,6 +50,7 @@ export function ClientBlock({
   client,
   stats,
   onPick,
+  pickOpensCard = false,
   onOpenCard,
   onClear,
   note,
@@ -70,6 +63,9 @@ export function ClientBlock({
    *  для всех, блок по праву). Звонок и карточка при этом остаются: это
    *  дорога к человеку, а не правка записи. */
   onPick?: () => void;
+  /** Тап открывает карточку, а не выбор: клиента держит оплата записи,
+   *  подменить его нельзя, править — можно. Меняет только подсказку. */
+  pickOpensCard?: boolean;
   /** Удержание строки — карточка клиента. Нет — карточку человеку не открыть. */
   onOpenCard?: () => void;
   /** «X» — снять выбранного. Нет обработчика — нет и кнопки: у записи клиента
@@ -127,7 +123,9 @@ export function ClientBlock({
               .filter(Boolean)
               .join(". ")}
             accessibilityHint={
-              onPick && onOpenCard
+              onPick && pickOpensCard
+                ? "Открывает карточку клиента"
+                : onPick && onOpenCard
                 ? "Открывает выбор клиента; удерживайте — карточка клиента"
                 : onPick
                   ? "Открывает выбор клиента"
@@ -180,8 +178,7 @@ export function ClientBlock({
             </View>
           ) : shown.phone ? (
             // Та же кнопка, что у номера в карточке и в списке: тап звонит,
-            // удержание — способы связи; 32pt, как маршрут и «…» (владелец
-            // 2026-09-06).
+            // удержание — способы связи; 32pt, как маршрут и «…».
             <View className={`${gap} self-center`}>
               <PhoneChannelButton
                 number={shown.phone}

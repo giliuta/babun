@@ -1,10 +1,7 @@
-// ЗНАЧКИ — общий словарь на весь продукт (владелец 2026-08-17: «также
-// разработаем блок с иконками, которые нам в будущем могут понадобиться»).
-// Было сорок; 03.10 владелец попросил больше — «чтоб под офис был значок
-// офиса, под дом — дома»: добавлены ещё пять восьмёрок (здания · жильё и
-// отдых · внутри · техника и стройка · разное), всего восемьдесят. 15.10 —
-// сто четыре («сделай 100 значков и 100 цветов», затем «ещё четыре, чтоб
-// красиво стало»): услуги и уход · транспорт и офис · успех — 13 полных рядов.
+// ЗНАЧКИ — общий словарь на весь продукт, сто четыре штуки — 13 полных рядов:
+// чтобы под офис был значок офиса, под дом — дома (здания · жильё и отдых ·
+// внутри · техника и стройка · разное · услуги и уход · транспорт и офис ·
+// успех).
 // Рисует их `IconPicker`; читают — экраны, где значок уже выбран (счета).
 //
 // Порядок задаёт картинку так же, как в палитре: сетка идёт в ВОСЕМЬ столбцов,
@@ -178,7 +175,7 @@ export const ICON_PRESETS: IconPreset[] = [
   { value: "heart", label: "Сердце", icon: Heart },
   { value: "gift", label: "Подарок", icon: Gift },
   { value: "coffee", label: "Кофе", icon: Coffee },
-  // здания (03.10)
+  // здания
   { value: "building", label: "Многоэтажка", icon: Building },
   { value: "hotel", label: "Отель", icon: Hotel },
   { value: "factory", label: "Завод", icon: Factory },
@@ -223,7 +220,7 @@ export const ICON_PRESETS: IconPreset[] = [
   { value: "gym", label: "Спортзал", icon: Dumbbell },
   { value: "shopping", label: "Покупки", icon: ShoppingBag },
   { value: "paw", label: "Питомцы", icon: PawPrint },
-  // услуги и уход (15.10)
+  // услуги и уход
   { value: "scissors", label: "Ножницы", icon: Scissors },
   { value: "sparkles", label: "Уборка", icon: Sparkles },
   { value: "brush", label: "Кисть", icon: Brush },
@@ -232,7 +229,7 @@ export const ICON_PRESETS: IconPreset[] = [
   { value: "medic", label: "Медицина", icon: Stethoscope },
   { value: "flower", label: "Цветы", icon: Flower2 },
   { value: "bug", label: "Насекомые", icon: Bug },
-  // транспорт и офис (15.10)
+  // транспорт и офис
   { value: "bike", label: "Велосипед", icon: Bike },
   { value: "bus", label: "Автобус", icon: Bus },
   { value: "fuel", label: "Топливо", icon: Fuel },
@@ -241,7 +238,7 @@ export const ICON_PRESETS: IconPreset[] = [
   { value: "camera", label: "Фото", icon: Camera },
   { value: "docs", label: "Документы", icon: FileText },
   { value: "mail", label: "Почта", icon: Mail },
-  // успех (15.10)
+  // успех
   { value: "trophy", label: "Кубок", icon: Trophy },
   { value: "crown", label: "Корона", icon: Crown },
   { value: "rocket", label: "Ракета", icon: Rocket },

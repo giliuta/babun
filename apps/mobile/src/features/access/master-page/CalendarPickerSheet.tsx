@@ -36,7 +36,7 @@ export function CalendarPickerSheet({
       visible={visible}
       onClose={onClose}
       onExited={onExited}
-      // «Команды» — тем же словом, что блок и «Добавить в команду» (01.10).
+      // «Команды» — тем же словом, что блок и «Добавить в команду».
       title="Команды"
       padded={false}
       scroll

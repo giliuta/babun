@@ -17,7 +17,7 @@ A code-level audit found a single source of truth and three name-keyed consumer 
 
 - **Brigade subset.** `team.cities: string[]` + `team.default_city: string` on each `team` row. CRUD page: `/dashboard/teams/[id]/cities` (URL slug `cities`, title **"Метки"**). The page imports `LabelRow as CityRow` and shares `AddLabelModal` with the personal page (`teams/[id]/cities/page.tsx:44-45`).
 
-- **Personal-calendar subset.** `CalendarSettings.personalLabels: string[]` + `personalDefaultLabel` (Supabase columns `personal_labels jsonb`, `personal_default_label text` from migration `20260513_001_calendar_settings_personal_labels.sql`). CRUD page: `/dashboard/settings/calendar/labels` (URL slug `labels`, title **"Метки"**). Uses the **same** `LabelRow` + `AddLabelModal` components as the brigade page.
+- **Personal-calendar subset.** `CalendarSettings.personalLabels: string[]` + `personalDefaultLabel` (Supabase columns `personal_labels jsonb`, `personal_default_label text` from migration `20260513000001_calendar_settings_personal_labels.sql`). CRUD page: `/dashboard/settings/calendar/labels` (URL slug `labels`, title **"Метки"**). Uses the **same** `LabelRow` + `AddLabelModal` components as the brigade page.
 
 - **Per-day override** (sub-resource of brigade subset). `day_cities` table `(tenant, team, date) -> city_name`. Drives the chip under each weekday in `DayColumn.tsx:397-418` (icon: `MapPin`, fallback text: lowercase `"метка"`).
 

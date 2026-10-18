@@ -3,11 +3,10 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { Appointment } from "@babun/shared/local/appointments";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
 import type { Service } from "@/features/services/queries";
-import { changePct } from "./analytics/analytics-math";
+import { changePct, changeText } from "./analytics/analytics-math";
 import { inTeamScope } from "./team-scope";
 
-// «ПРИБЫЛЬ» К ПРОШЛОМУ ПЕРИОДУ (владелец 2026-09-30: «делай, только всё это
-// в прибыли… аналитику такую — только в прибыли»).
+// «ПРИБЫЛЬ» К ПРОШЛОМУ ПЕРИОДУ: такая аналитика — только в прибыли.
 //
 // Сравнение живёт ТОЛЬКО в панели «Прибыль»: на плитках и в других разрезах
 // его нет. Прошлый период — тот же, что у «Аналитики» (`previousPeriod`):
@@ -83,5 +82,5 @@ export function changeOf(
   const pct = changePct(now, before);
   if (pct === null || pct === 0) return null;
   const up = pct > 0;
-  return { text: `${up ? "↑" : "↓"} ${Math.abs(pct)}%`, good: up === goodUp };
+  return { text: changeText(pct), good: up === goodUp };
 }

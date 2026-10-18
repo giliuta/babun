@@ -1,9 +1,9 @@
 import { getStorage } from "@babun/shared/storage";
-import { makePeriod } from "@/features/finances/period";
+import { makePeriod } from "@/lib/period";
 import { EMPTY_FILTER, SEGMENT_OPTIONS, todayYMD, type ClientsFilter } from "./filter";
 
 // ОДИН живой набор фильтров, переживающий выход из приложения — и ничего
-// больше: ни имён, ни списка сохранённых наборов (те владелец отклонил).
+// больше: ни имён, ни списка сохранённых наборов (они не нужны).
 // Зачем: рабочий поток штатно выбрасывает из приложения — `tel:` звонок,
 // SMS, WhatsApp, массовая рассылка. Возвращаешься — набор собран заново
 // руками, шесть тапов на каждый круг обзвона.
@@ -21,8 +21,9 @@ interface Stored {
 }
 
 /** Набор сегодняшнего дня или null. Никогда не бросает: настройка — не
- *  повод ронять экран. */
-export function loadDayFilter(): ClientsFilter | null {
+ *  повод ронять экран. `now` — «сейчас» в поясе компании: от него
+ *  пересобирается пресетный период. */
+export function loadDayFilter(now: Date): ClientsFilter | null {
   try {
     const raw = getStorage().get<Stored>(KEY);
     if (!raw || raw.ymd !== todayYMD()) return null;
@@ -30,9 +31,9 @@ export function loadDayFilter(): ClientsFilter | null {
     if (!f || typeof f !== "object") return null;
     const period =
       f.period && f.period.preset !== "custom"
-        ? // Пресет пересобираем от сегодняшней даты, иначе «Сегодня»
-          // означало бы вчера.
-          makePeriod(f.period.preset)
+        ? // Пресет пересобираем от сегодняшней даты компании, иначе
+          // «Сегодня» означало бы вчера (или день телефона в чужом поясе).
+          makePeriod(f.period.preset, now)
         : (f.period ?? null);
     return {
       ...EMPTY_FILTER,
@@ -40,7 +41,7 @@ export function loadDayFilter(): ClientsFilter | null {
       period,
       // Массивы восстанавливаем строго массивами: чужой/битый JSON не
       // должен доехать до предикатов.
-      // Статус, которого больше нет («Пора обслужить», снят 03.10), — мимо:
+      // Статус, которого больше нет («Пора обслужить»), — мимо:
       // иначе он фильтровал бы список без токена, которым его снять.
       segments: Array.isArray(f.segments)
         ? f.segments.filter((k) => SEGMENT_OPTIONS.some((o) => o.key === k))

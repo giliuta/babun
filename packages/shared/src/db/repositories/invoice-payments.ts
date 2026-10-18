@@ -109,7 +109,7 @@ export async function listInvoicePayments(
   // последовательных запросов. Один keyset-скан всех «сиротских» возвратов
   // дешевле: набор ограничен эпохой до простановки invoice_id и не растёт,
   // а чужие возвраты отсеивает та же карта income → invoice.
-  const externalRefunds: Array<{ row: PaymentRow; invoiceId: string }> = [];
+  const externalRefunds: { row: PaymentRow; invoiceId: string }[] = [];
   if (incomeInvoice.size > 0) {
     const orphans = await pagePayments(supabase, tenantId, "orphan-refunds");
     for (const row of orphans) {

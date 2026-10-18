@@ -4,7 +4,7 @@ import { useToast } from "@/components/ui/Toast";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 
-import { useAccessBlocks } from "../queries";
+import { useAccessBlocks } from "@/session/access-queries";
 import { updateMasterDraft, useMasterDraft } from "./draft-store";
 import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
@@ -13,7 +13,7 @@ import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRigh
 import { previewAreaOf } from "./rights-focus";
 import { MemberRights } from "./MemberRights";
 import { RightsPlaceholder, activeOf, liveIdsOf, usePreview } from "./rights-page-shared";
-import { usePartnersAccess } from "./use-partner-manager";
+import { usePartnersAccess } from "@/session/use-partner-manager";
 import {
   draftFromInvitation,
   invitationCarriesCardFields,
@@ -78,7 +78,7 @@ function DraftRights({
   onBack: () => void;
 }) {
   const preview = usePreview();
-  // «Его глазами» — инструмент владельца; директор зовёт без него (04.10).
+  // «Его глазами» — инструмент владельца; директор зовёт без него.
   const partners = usePartnersAccess();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();
@@ -147,7 +147,7 @@ function InviteRights({
 }) {
   const toast = useToast();
   const preview = usePreview();
-  // «Его глазами» — инструмент владельца; директор зовёт без него (04.10).
+  // «Его глазами» — инструмент владельца; директор зовёт без него.
   const partners = usePartnersAccess();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();

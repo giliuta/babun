@@ -6,6 +6,7 @@ import {
   listRefundTotals,
   listTransactionsForAppointments,
   listTransactionsForRange,
+  rowToTx,
   updateTransaction,
   type TransactionDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
@@ -21,6 +22,8 @@ import {
 } from "@babun/shared/db/repositories/finance-categories";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
+import { containsPattern } from "@/lib/like-pattern";
+import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useTenantId } from "@/lib/tenant";
 import {
   financeCategoriesQueryKey,
@@ -116,7 +119,7 @@ export function useTransactions(
 
 /**
  * Операции, привязанные к записям, — в любой день внесения. Календарь ставит
- * деньги записи в день записи (владелец 2026-10-01), и полосе недели, клетке
+ * деньги записи в день записи, и полосе недели, клетке
  * месяца и шторке дня нужны и те, что внесены раньше видимых дней.
  *
  * Ключ — под общим префиксом `["transactions", компания]`: оплата, возврат и
@@ -139,6 +142,58 @@ export function useAppointmentsLedger(
     placeholderData,
     queryFn: () =>
       listTransactionsForAppointments(supabase, tenantId as string, key.split(",")),
+  });
+}
+
+/**
+ * All-time search by note — the fallback of the «Финансы» feed when the open
+ * period has nothing for the typed text. Notes only, newest 50: the screen
+ * enables it just while the period is honestly empty. Key sits under the
+ * `["transactions", company]` prefix, so ledger invalidation refreshes it.
+ */
+/** Значение в фильтре `or` — в кавычках: запятая в «12,50» иначе рвёт
+ *  синтаксис PostgREST на два условия. */
+function orValue(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/** Поиск за всё время — как обещает шапка: «Сумма, счёт, заметка».
+ *  Сумма — точная, со знаком и без (расход и возврат хранятся по-разному);
+ *  счёт — по имени. Раньше искалась одна заметка. */
+async function allTimeSearchFilter(tenantId: string, query: string): Promise<string> {
+  const parts = [`notes.ilike.${orValue(containsPattern(query))}`];
+  const cents = parseMoneyInputToCents(query, { allowNegative: true });
+  if (cents != null) {
+    const amount = Math.abs(cents) / 100;
+    parts.push(`amount.eq.${amount}`, `amount.eq.${-amount}`);
+  }
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .ilike("name", containsPattern(query))
+    .limit(50);
+  const ids = (accounts ?? []).map((a: { id: string }) => a.id);
+  if (ids.length > 0) parts.push(`account_id.in.(${ids.join(",")})`);
+  return parts.join(",");
+}
+
+export function useAllTimeNoteSearch(trimmedQuery: string, enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["transactions", tenantId, "search-all-time", trimmedQuery],
+    enabled: !!tenantId && enabled,
+    queryFn: async (): Promise<FinanceTransaction[]> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .or(await allTimeSearchFilter(tenantId as string, trimmedQuery))
+        .order("occurred_on", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToTx);
+    },
   });
 }
 
@@ -172,8 +227,8 @@ export function useFinanceCategories() {
 // refreshBalances() после каждой мутации). Периодные итоги счетов живут под
 // ["transactions"] — их роняет первая же строка.
 //
-// ["receipts"] здесь не лишний. Сам собой чек больше не рождается (20.09,
-// `receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
+// ["receipts"] здесь не лишний. Сам собой чек больше не рождается
+// (`receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
 // выписанный документ: возврат его гасит, снятие возврата — оживляет.
 // Открытая панель «Чеки» смонтирована и без инвалидации об этом не узнаёт.
 export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
@@ -186,8 +241,7 @@ export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   // висеть в списке до перезапуска приложения.
   qc.invalidateQueries({ queryKey: ["debts"] });
   // «История платежей» записи — свой ключ вне ["transactions"]: без него
-  // оплата и возврат по инвойсу доходили до неё только через минуту (аудит
-  // 017, 03.10).
+  // оплата и возврат по инвойсу доходили бы до неё только через минуту.
   qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
 }
 
@@ -200,10 +254,11 @@ export function useInsertTransaction() {
       insertTransaction(supabase, tenantId as string, draft),
     // Расход мог перевалить бюджет категории — владелец узнаёт сразу
     // (`budget-notify.ts`).
-    onSuccess: () => {
-      invalidateLedger(qc);
-      checkBudgetsAfterWrite(qc, tenantId);
-    },
+    // Лента перечитывается и после отказа: оборванный ответ мог уже
+    // записать строку, а «проверьте, записалась ли» без свежей ленты
+    // приглашает ввести её второй раз.
+    onSettled: () => invalidateLedger(qc),
+    onSuccess: (tx) => checkBudgetsAfterWrite(qc, tenantId, tx.occurred_on),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
@@ -213,12 +268,22 @@ export function useUpdateTransaction() {
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
-      updateTransaction(supabase, id, patch),
-    onSuccess: () => {
-      invalidateLedger(qc);
-      checkBudgetsAfterWrite(qc, tenantId);
-    },
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<TransactionDraft>;
+      /** День операции после правки — бюджет проверяется его месяцем. Патч
+       *  несёт день, только если его меняли. */
+      occurredOn?: string;
+    }) => updateTransaction(supabase, id, patch),
+    // Лента перечитывается и после отказа: оборванный ответ мог уже
+    // записать строку, а «проверьте, записалась ли» без свежей ленты
+    // приглашает ввести её второй раз.
+    onSettled: () => invalidateLedger(qc),
+    onSuccess: (_void, { patch, occurredOn }) =>
+      checkBudgetsAfterWrite(qc, tenantId, patch.occurred_on ?? occurredOn),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
@@ -261,8 +326,8 @@ export function useUpdateCategory() {
   });
 }
 
-/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — у команды (владелец 2026-09-10: «шесть
- *  точек справа для передвижения… везде это добавь»). Пишем всю пачку разом:
+/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — у команды (шесть точек справа для
+ *  передвижения). Пишем всю пачку разом:
  *  перетаскивание меняет позиции всех видимых строк команды. */
 export function useReorderFinanceCategories() {
   const qc = useQueryClient();

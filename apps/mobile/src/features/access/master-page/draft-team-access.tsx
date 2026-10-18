@@ -4,7 +4,7 @@ import { useRouter, type Href } from "expo-router";
 
 import type { Team } from "@/features/reference/queries";
 
-import type { AccessBlock } from "../access-map";
+import type { AccessBlock } from "@/session/access-map";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { CALENDAR_GROUPS } from "./access-summary";
 import { visibleLevel, type MasterDraft } from "./master-draft";
@@ -13,11 +13,7 @@ import { rightsFocusQuery } from "./rights-focus";
 import { viewSections } from "./rights-view-sections";
 
 // ЛЕНТА КОМАНД И «ДОСТУП» У НОВОГО СОТРУДНИКА И У ПРИГЛАШЕНИЯ — КАК У
-// СОТРУДНИКА (владелец 01.10: «сначала сделаем полноценно… добавление
-// мастера»). Черновик и приглашение рисовали команды строками, а права —
-// одной длинной страницей; сотрудник — лентой команд и блоком «Доступ» по
-// разделам (владелец 29.09). Теперь одна и та же страница во всех трёх
-// случаях: выбрал команду в ленте — под ней её права разделами, тап по
+// СОТРУДНИКА. Одна и та же страница во всех трёх случаях: выбрал команду в ленте — под ней её права разделами, тап по
 // разделу — страница раздела.
 
 export function useDraftTeamAccess({

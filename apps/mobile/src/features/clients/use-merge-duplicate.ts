@@ -3,7 +3,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClientAppointments } from "@/features/clients/appointments";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   duplicateQueryKeyPrefix,
   useDuplicateOf,
@@ -27,11 +27,12 @@ import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
 import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
-// Кнопка жила в плашке дубля, но внутри содержимого кнопок нет (владелец
-// 2026-09-15), и слияние переехало в меню к остальным необратимым. Дубль —
+// Кнопки в плашке дубля нет: внутри содержимого кнопок не бывает, и слияние
+// живёт в меню к остальным необратимым. Дубль —
 // тот же, что называет плашка (`useDuplicateOf`, один ключ, один запрос).
 //
 // ПОРЯДОК НЕ МЕНЯТЬ: патч основной → записи дубля → архив дубля. Патч не лёг —
@@ -64,7 +65,7 @@ function peopleIdsOf(
 
 function freshestClient(qc: QueryClient, id: string): Client | null {
   let best: { at: number; client: Client } | null = null;
-  for (const query of qc.getQueryCache().findAll({ queryKey: ["client", id] })) {
+  for (const query of qc.getQueryCache().findAll({ queryKey: clientKeys.card(id) })) {
     const client = query.state.data as Client | null | undefined;
     if (!client || client.id !== id) continue;
     if (!best || query.state.dataUpdatedAt > best.at) best = { at: query.state.dataUpdatedAt, client };
@@ -111,24 +112,22 @@ export function useMergeDuplicate({
       // 1. Дополняем основную. Не записалось — дальше не идём.
       //    Карточку берём СВЕЖУЮ из кэша: патч перезаписывает массивы
       //    (номера, объекты, заметки, связи) целиком, и снимок с момента
-      //    открытия страницы затёр бы номер, добавленный секунду назад
-      //    (аудит 22.09).
+      //    открытия страницы затёр бы номер, добавленный секунду назад.
       //    Ключ карточки длиннее id — ["client", id, компания, вид], — и
-      //    точный `getQueryData(["client", id])` не находил ничего: слияние
-      //    всегда брало снимок (проверка 03.10). Берём самый свежий из
-      //    совпавших по началу ключа.
+      //    точный `getQueryData(["client", id])` не находит ничего: слияние
+      //    всегда брало бы снимок. Берём самый свежий из совпавших по началу
+      //    ключа.
       const fresh = freshestClient(qc, primary.id) ?? primary;
       const patch = mergeClientPatch(fresh, dupRow);
       // Объект дубля, совпавший с объектом основной, уходит в него — и
-      // визиты на нём переезжают на объект основной (аудит 03.10).
+      // визиты на нём переезжают на объект основной.
       const { remap } = mergeLocations(fresh, dupRow);
       if (Object.keys(patch).length > 0) {
         await updateById.mutateAsync({ id: primary.id, patch });
       }
-      // «Клиент просил не писать» переезжает вместе с данными (повторный
-      // аудит 03.10): правка клиента его не несёт — у отказа своя функция, —
-      // и после слияния основная карточка снова обещала SMS человеку, который
-      // просил не писать.
+      // «Клиент просил не писать» переезжает вместе с данными: правка клиента
+      // его не несёт — у отказа своя функция, — и без переноса основная
+      // карточка обещала бы SMS человеку, который просил не писать.
       if (dupRow.sms_opt_out === true && fresh.sms_opt_out !== true) {
         await setOptOut.mutateAsync({
           clientId: primary.id,
@@ -145,7 +144,7 @@ export function useMergeDuplicate({
           patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },
         });
       }
-      // 3. Дубль — в «Удалённые клиенты» (архива с 03.10 нет): визиты уже
+      // 3. Дубль — в «Удалённые клиенты» (архива нет): визиты уже
       //    у основной, и без истории он сотрётся через 30 дней; оставшиеся
       //    за ним инвойсы или деньги база не даст стереть сама
       //    (`client_history_never_purges`). Мутация отчитывается числами, а
@@ -185,7 +184,7 @@ export function useMergeDuplicate({
     confirmThen(
       "Объединить карточки?",
       {
-        // Архива клиентов нет с 03.10: дубль уходит в «Удалённые клиенты».
+        // Архива клиентов нет: дубль уходит в «Удалённые клиенты».
         message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
         confirmLabel: "Объединить",
       },

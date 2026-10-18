@@ -54,7 +54,7 @@ describe("resolveBookingClientPrefill", () => {
   });
 
   test("не подставляет объект сам: ни основной, ни первый", () => {
-    // Владелец 2026-09-05: заполненной запись делает человек, а не форма.
+    // Заполненной запись делает человек, а не форма.
     for (const requested of [undefined, null, "deleted-location"]) {
       assert.deepEqual(resolveBookingClientPrefill(item, requested), {
         clientId: "client-1",
@@ -129,4 +129,15 @@ describe("quick client creation", () => {
       "legacy",
     );
   });
+});
+
+test("быстрый выбор по местному номеру — по стране команды, а не всегда Кипр", () => {
+  // Греческая команда набирает «6912345678»: без страны номер не разбирался,
+  // и шторка предлагала создать клиента вместо существующего.
+  const draft = buildQuickClientDraft("6912345678", "GR");
+  assert.equal(draft.phone_e164, "+306912345678");
+  const existing = { id: "c1", phone: "6912345678", phone_e164: null, deleted_at: null, locations: [] };
+  assert.equal(findQuickClientDuplicate([existing], draft.phone_e164, "GR")?.id, "c1");
+  // Без страны — прежнее правило (Кипр): номер не разбирается.
+  assert.equal(buildQuickClientDraft("6912345678").phone_e164, null);
 });

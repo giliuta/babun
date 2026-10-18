@@ -10,12 +10,10 @@ import { useToast } from "@/components/ui/Toast";
 import { GUTTER } from "@/components/ui/tokens";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
-import { TIER_LIMITS, tierName, workingTeamIds } from "./tiers";
+import { TIER_LIMITS, tierName, workingTeamIds } from "@/session/tiers";
 import { useChooseWorkingTeams, useTariff } from "./use-tariff";
 
-// КАБИНЕТ → ТАРИФ → РАБОЧИЕ КОМАНДЫ (владелец 01.10: «после Макса с
-// множеством команд — выбрать 5 рабочих, остальные не могут добавлять
-// клиентов»). Команд больше, чем даёт тариф: владелец отмечает, какие
+// КАБИНЕТ → ТАРИФ → РАБОЧИЕ КОМАНДЫ. Команд больше, чем даёт тариф: владелец отмечает, какие
 // работают; остальные только смотрят — новых клиентов и записей в них нет.
 // Правило то же, что `team_is_working` на сервере.
 

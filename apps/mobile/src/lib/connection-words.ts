@@ -1,6 +1,6 @@
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 
-// СЛОВА ЭКРАНА, КОГДА СЕРВЕР НЕ ОТВЕТИЛ (владелец 03.10, зависший сервер).
+// СЛОВА ЭКРАНА, КОГДА СЕРВЕР НЕ ОТВЕТИЛ (зависший сервер).
 // Под облаком стояло «listTransactionsForRange: TypeError: Network request
 // failed» — текст для программиста. Обрыв связи говорит по-человечески, как
 // «Не удалось загрузить календарь»; настоящий отказ сервера (права, данные)
@@ -44,7 +44,7 @@ export function loadErrorWords(
 /** То же для ДЕЙСТВИЯ (удалить, сохранить): обрыв — «Нет связи с сервером» и
  *  что именно не сделано, отказ сервера — своим текстом под словом неудачи.
  *  Под «Не удалось удалить» стояло «TypeError: Network request failed»
- *  (03.10, удаление клиента работодателя без сети). */
+ *  (удаление клиента работодателя без сети). */
 export function writeErrorWords(
   error: unknown,
   what: { failed: string; notDone: string },

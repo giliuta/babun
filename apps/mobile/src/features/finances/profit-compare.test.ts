@@ -84,3 +84,9 @@ describe("материалы периода", () => {
     assert.deepEqual(m, { amount: 0, appointmentCount: 0, costly: [] });
   });
 });
+
+test("рост от почти нуля не пугает процентом", () => {
+  assert.equal(changeOf(500, 0.4, true), null);
+  assert.equal(changeOf(3000, 3, true)?.text, "↑ > 999%");
+  assert.equal(changeOf(120, 100, true)?.text, "↑ 20%");
+});

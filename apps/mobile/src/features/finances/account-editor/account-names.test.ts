@@ -15,10 +15,18 @@ const acc = (name: string, over: Partial<NamedAccount> = {}): NamedAccount => ({
 });
 
 describe("ключ имени счёта", () => {
-  test("регистр, пробелы по краям, латиница и сдвоенные буквы не различают имён", () => {
+  test("регистр, пробелы, ё/е и латиница не различают имён", () => {
     assert.equal(nameKey(" Касса "), nameKey("касса"));
-    assert.equal(nameKey("Kasa"), nameKey("Касса"));
+    assert.equal(nameKey("Kassa"), nameKey("Касса"));
     assert.equal(nameKey("KARTA"), nameKey("Карта"));
+    assert.equal(nameKey("Ёлка"), nameKey("елка"));
+    assert.equal(nameKey("Касса   Юры"), nameKey("касса юры"));
+  });
+
+  test("повторы символов не схлопываются: «Касса 1», «Касса 11», «Касса 100» — разные", () => {
+    assert.notEqual(nameKey("Касса 1"), nameKey("Касса 11"));
+    assert.notEqual(nameKey("Касса 10"), nameKey("Касса 100"));
+    assert.notEqual(nameKey("Касса"), nameKey("Каса"));
   });
 
   test("разные слова остаются разными", () => {
@@ -28,10 +36,10 @@ describe("ключ имени счёта", () => {
 });
 
 describe("дубль имени", () => {
-  const accounts = [acc("Kasa"), acc("Карта", { brigade_id: "t2" })];
+  const accounts = [acc("Kassa"), acc("Карта", { brigade_id: "t2" })];
 
   test("то же имя у той же команды — дубль, даже набранное латиницей", () => {
-    assert.equal(findDuplicateName(accounts, "касса", "t1")?.name, "Kasa");
+    assert.equal(findDuplicateName(accounts, "касса", "t1")?.name, "Kassa");
   });
 
   test("то же имя у другой команды — не дубль", () => {
@@ -42,6 +50,11 @@ describe("дубль имени", () => {
   test("закрытый счёт держит имя", () => {
     const closed = [acc("Наличные", { is_active: false })];
     assert.equal(findDuplicateName(closed, "наличные", "t1")?.is_active, false);
+  });
+
+  test("«Касса 1» рядом с «Касса 11» — не дубль", () => {
+    assert.equal(findDuplicateName([acc("Касса 11")], "Касса 1", "t1"), null);
+    assert.equal(findDuplicateName([acc("Касса 100")], "Касса 10", "t1"), null);
   });
 
   test("пустое имя дублем не бывает", () => {

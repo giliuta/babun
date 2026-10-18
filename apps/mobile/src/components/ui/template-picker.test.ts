@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-// ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД — ВО ВСЕХ СПРАВОЧНИКАХ (владелец 11.10: «как с
-// услугами — со всеми: категории, метки и так далее»).
+// ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД — ВО ВСЕХ СПРАВОЧНИКАХ: как с услугами, категории, метки и так далее.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");
@@ -18,10 +18,20 @@ test("отбор шаблонов: другие команды, без заве�
   assert.match(src, /if \(!name \|\| here\.has\(name\) \|\| seen\.has\(name\)\) return false;/);
 });
 
+// Screens split into an entry and a parts folder (rule of 400 lines) are
+// read together with the folder: the sheet itself lives there.
+const PARTS: Record<string, string> = {
+  "../../features/reference/screens/LabelsScreen.tsx": "../../features/reference/screens/labels",
+  "../../features/clients/ObjectTypesScreen.tsx": "../../features/clients/object-types",
+  "../../../app/(dashboard)/clients/tags.tsx": "../../features/clients/tags-page",
+};
+const readWithParts = (rel: string) =>
+  readModuleSource(resolve(here, rel), PARTS[rel] && resolve(here, PARTS[rel]));
+
 const SHEETS: [string, string][] = [
   ["метки", "../../features/reference/screens/LabelsScreen.tsx"],
   ["типы событий", "../../features/reference/screens/EventTypeSheet.tsx"],
-  ["типы объектов", "../../features/reference/screens/ObjectTypesScreen.tsx"],
+  ["типы объектов", "../../features/clients/ObjectTypesScreen.tsx"],
   ["источники", "../../../app/(dashboard)/clients/sources.tsx"],
   ["теги", "../../../app/(dashboard)/clients/tags.tsx"],
   ["категории", "../../features/finances/CategoryEditorSheet.tsx"],
@@ -31,7 +41,7 @@ const SHEETS: [string, string][] = [
 
 for (const [name, path] of SHEETS) {
   test(`${name}: значок шаблонов в шапке шторки, список в той же шторке`, () => {
-    const src = read(path);
+    const src = readWithParts(path);
     assert.match(src, /<TemplatesHeaderButton picking=\{picking\}/);
     assert.match(src, /\{picking \? \(\s*<TemplateList/);
     assert.doesNotMatch(src, /chooseOption\(/);
@@ -42,12 +52,12 @@ test("шаблоны — только у владельца аккаунта", (
   for (const path of [
     "../../features/reference/screens/LabelsScreen.tsx",
     "../../features/reference/screens/EventTypesScreen.tsx",
-    "../../features/reference/screens/ObjectTypesScreen.tsx",
+    "../../features/clients/ObjectTypesScreen.tsx",
     "../../../app/(dashboard)/clients/sources.tsx",
     "../../../app/(dashboard)/clients/tags.tsx",
     "../../features/finances/CategoryEditorSheet.tsx",
     "../../features/sms/SmsTeamScreen.tsx",
   ]) {
-    assert.match(read(path), /const isOwner = useDataRole\(\)\.data === "owner";/, path);
+    assert.match(readWithParts(path), /const isOwner = useDataRole\(\)\.data === "owner";/, path);
   }
 });

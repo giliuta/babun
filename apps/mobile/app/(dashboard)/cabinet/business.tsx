@@ -18,7 +18,7 @@ import {
   countryDialCode,
   normalizeCountry,
   POPULAR_COUNTRIES,
-} from "@/features/clients/phone";
+} from "@/lib/phone";
 import { countryName } from "@/features/clients/use-phone-country";
 import { chooseValue } from "@/lib/choose";
 import { notify } from "@/lib/notify";
@@ -27,7 +27,7 @@ import {
   useCurrentRole,
   useTenant,
   useUpdateTenant,
-} from "@/features/settings/tenant";
+} from "@/session/tenant";
 
 type FormKey =
   | "name"
@@ -169,9 +169,8 @@ export default function BusinessScreen() {
         <SectionCard title="Компания" padded>
           <Field label="Название" value={form.name} onChangeText={set("name")} placeholder="Название компании" editable={owner} />
           <Field label="Город" value={form.city} onChangeText={set("city")} placeholder="Limassol" editable={owner} />
-          {/* КОД СТРАНЫ — свойство компании (владелец 2026-07-26: «чтобы он
-              ставил автоматически… в настройках можно было сразу выбирать»).
-              Не команда: номер принадлежит клиенту, а не команде; не
+          {/* КОД СТРАНЫ — свойство компании: ставится автоматически и
+              выбирается в настройках. Не команда: номер принадлежит клиенту, а не команде; не
               устройство: иначе у владельца и диспетчера новые клиенты
               заводились бы с разными кодами и ключ дедупа расходился бы. */}
           <Pressable

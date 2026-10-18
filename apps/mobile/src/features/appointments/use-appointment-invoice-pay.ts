@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getAppointment } from "@babun/shared/db/repositories/appointments";
@@ -7,13 +8,13 @@ import {
 } from "@babun/shared/local/finance/invoice-ledger";
 import { randomUuid } from "@babun/shared/sync";
 
-import { useInvoicePayments, useRecordInvoicePayment } from "@/features/invoices/queries";
+import { useInvoicePayments, useRecordInvoicePayment } from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { finishPayAttempt, payAttemptId, payAttemptKey, type PayAttempt } from "./invoice-pay-request";
 
-// ДЕНЬГИ ЗАПИСИ С ИНВОЙСОМ — В ИНВОЙС (владелец 04.10: «выставил инвойс, он
-// скинул предоплату, я нажал оплатить и сделал чек — а инвойс остался
-// неоплаченным; это расхождение во всех слоях финансов»). Пока по записи есть
+// ДЕНЬГИ ЗАПИСИ С ИНВОЙСОМ — В ИНВОЙС (иначе после предоплаты и чека инвойс
+// оставался бы неоплаченным — расхождение во всех слоях финансов). Пока по записи есть
 // выставленный неоплаченный инвойс, счёт клиенту — он: к оплате — его
 // остаток, плитка счёта записывает платёж ИНВОЙСА (`record_invoice_payment`),
 // сервер закрывает им и запись (`settle_appointment_from_invoice_payment`), а
@@ -34,6 +35,8 @@ export function useAppointmentInvoicePay(
   const qc = useQueryClient();
   const paymentsQuery = useInvoicePayments();
   const record = useRecordInvoicePayment(invoice?.id ?? "");
+  // Потерянный ответ не должен стать вторым платежом: id держится до успеха.
+  const attempt = useRef<PayAttempt | null>(null);
   const open = !!invoice && (invoice.kind ?? "invoice") === "invoice" && invoice.status === "issued";
   const settlement =
     open && invoice ? calculateInvoiceSettlement(invoice, paymentsQuery.data?.[invoice.id] ?? []) : null;
@@ -46,14 +49,20 @@ export function useAppointmentInvoicePay(
     businessToday: string;
   }): Promise<Appointment | null> => {
     if (!invoice) return null;
+    const requestId = payAttemptId(
+      attempt,
+      payAttemptKey({ invoiceId: invoice.id, accountId: input.accountId, amountCents: input.amountCents }),
+      randomUuid,
+    );
     await record.mutateAsync({
-      request_id: randomUuid(),
+      request_id: requestId,
       amount: input.amountCents / 100,
       account_id: input.accountId,
       payment_method: METHOD_BY_KIND[input.accountKind] ?? "other",
       occurred_on: input.businessToday,
       business_today: input.businessToday,
     });
+    finishPayAttempt(attempt);
     // Запись закрыл сервер зачётом — забираем её свежей.
     void qc.invalidateQueries({ queryKey: ["appointments"] });
     void qc.invalidateQueries({ queryKey: ["appointment-ledger"] });

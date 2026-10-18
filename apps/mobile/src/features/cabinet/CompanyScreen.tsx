@@ -10,13 +10,13 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { ROLE_LABELS } from "@/features/settings/role-policy";
-import { tierLine, tierOf, trialLeft } from "@/features/tariffs/tiers";
-import { useTenant } from "@/features/settings/tenant";
+import { ROLE_LABELS } from "@/session/role-policy";
+import { tierLine, tierOf, trialLeft } from "@/session/tiers";
+import { useTenant } from "@/session/tenant";
 import {
   useMyCalendars,
   useSwitchWorkspace,
-} from "@/features/settings/workspaces";
+} from "@/session/workspaces";
 import { notify } from "@/lib/notify";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { fetchQuotaUsage, type MobileQuotaKind } from "@/lib/quota";
@@ -28,8 +28,7 @@ import {
   quotaLine,
 } from "./companies";
 
-// СТРАНИЦА КОМПАНИИ ИЗ «МОИХ КОМПАНИЙ» (владелец 2026-09-15: Кабинет полноценный
-// и информативный). Здесь то, что человек может знать о своём членстве: роль,
+// СТРАНИЦА КОМПАНИИ ИЗ «МОИХ КОМПАНИЙ». Здесь то, что человек может знать о своём членстве: роль,
 // календари и что в каждом ему открыто. Владельцу АКТИВНОЙ компании — тариф и
 // сколько использовано лимитов: без цен и кнопок оплаты, подписка продаётся на
 // сайте (App Store 3.1.3(f)). Тариф другой компании сервер отдаёт только изнутри

@@ -224,7 +224,7 @@ create policy appointments_all_own on public.appointments for all
   with check (tenant_id = public.current_tenant_id());
 ```
 
-Migration file: `babun-crm/apps/web/supabase/migrations/20260429_001_appointments.sql`. Apply via Dashboard SQL Editor (same flow as STORY-038).
+Migration file: `babun-crm/apps/web/supabase/migrations/20260429000001_appointments.sql`. Apply via Dashboard SQL Editor (same flow as STORY-038).
 
 ### G2 — Regenerate `Database` types
 

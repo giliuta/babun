@@ -1,14 +1,13 @@
 // ЛИЧНОЕ — «День рождения | Источник» плитками (· «Кто привёл»), как «Метка |
-// Тег» наверху карточки (владелец 03.10).
+// Тег» наверху карточки.
 //
-// «Обращение» (`sms_name`) со страницы убрано 22.09 по слову владельца
-// («блок обращения давай уберём»): поле осталось в данных, и SMS-шаблоны
+// «Обращение» (`sms_name`) со страницы убрано: поле осталось в данных, и
+// SMS-шаблоны
 // по-прежнему подставляют его, если оно уже заполнено, — просто строки для
 // правки на карточке больше нет.
 //
-// Метка и теги с 22.09 живут наверху карточки двумя плитками, как «Команда |
-// Метка» в записи (`ClientLabelTags`; владелец: «сделаем вот такие блоки —
-// метка и теги… чтоб было более красиво»). Здесь остались справочные
+// Метка и теги живут наверху карточки двумя плитками, как «Команда |
+// Метка» в записи (`ClientLabelTags`). Здесь остались справочные
 // свойства человека — строками одного вида: значение справа, тап — выбор.
 
 import { useState } from "react";
@@ -18,7 +17,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { Cake, Circle, Users } from "lucide-react-native";
 import { GUTTER } from "@/components/ui/tokens";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
+import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { formatShortDateRu } from "@/features/clients/format";
@@ -61,8 +60,8 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
   const [referrerOpen, setReferrerOpen] = useState(false);
   const birthday = normalizeYMD(client.birthday);
   const router = useRouter();
-  // ИСТОЧНИК — СПРАВОЧНИК КОМАНДЫ КЛИЕНТА (владелец 03.10: готовые правятся
-  // и удаляются, как свои). Клиент без команды — у компании без команд —
+  // ИСТОЧНИК — СПРАВОЧНИК КОМАНДЫ КЛИЕНТА (готовые правятся и удаляются, как
+  // свои). Клиент без команды — у компании без команд —
   // берёт первую.
   const { data: sources = [] } = useClientSources();
   const { data: ownTeams = [] } = useTeams();
@@ -82,8 +81,7 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
 
   return (
     <>
-      {/* ДВЕ ПЛИТКИ, КАК «МЕТКА | ТЕГ» (владелец 03.10: «день рождения и
-          источник сделаем как метка и тег»). Ряд пополам, тот же
+      {/* ДВЕ ПЛИТКИ, КАК «МЕТКА | ТЕГ»: день рождения и источник. Ряд пополам, тот же
           `IdentityCard`; пустая плитка подписана словом и стоит со значком в
           кружке, как пустая «Метка». Пустая и «Только видит» — плитки нет:
           приглашать заполнить того, кто не может, незачем. */}
@@ -149,8 +147,7 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
           />
         </View>
       ) : null}
-      {/* «Присылать SMS» и «Имя для SMS» с 30.09 живут в блоке «SMS»
-          (владелец: «присылать или не присылать — в едином блоке SMS»). */}
+      {/* «Присылать SMS» и «Имя для SMS» живут в едином блоке «SMS». */}
 
       <PickerSheet
         visible={sourceOpen}
@@ -166,8 +163,8 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
         emptyText="Источников нет"
         // ШЕСТЕРЁНКА — В ИСТОЧНИКИ ТОЙ КОМАНДЫ, чьи предложены: там их
         // добавляют («могут самостоятельно добавить источник»). Дверь общая с
-        // «Связью»: у клиента чужого аккаунта и без права её нет (проверка
-        // 03.10 — вела в свои источники).
+        // «Связью»: у клиента чужого аккаунта и без права её нет (иначе вела
+        // бы в свои источники).
         onSettings={sourcesDoor ? () => router.push(sourcesDoor) : undefined}
         settingsLabel="Источники команды"
         onClose={() => setSourceOpen(false)}

@@ -26,7 +26,7 @@ const rows: Appointment[] = [
   apt({ id: "part", status: "completed", date: PAST, prepaid_amount: 40 }),
   // Выполнена и оплачена — не долг.
   apt({ id: "paid", status: "completed", date: PAST, prepaid_amount: 100 }),
-  // Прошла, бригада не отчиталась — долг всей суммой (владелец 2026-08-09).
+  // Прошла, бригада не отчиталась — долг всей суммой.
   apt({ id: "unclosed", status: "scheduled", date: PAST }),
   // Отменена — не долг, сколько бы ни стоила.
   apt({ id: "cancelled", status: "cancelled", date: PAST }),

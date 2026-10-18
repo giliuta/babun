@@ -18,133 +18,63 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
-import { useDataRole } from "@/features/settings/tenant";
-import { accessGate, moneyKey } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useDataRole } from "@/session/tenant";
+import { accessGate, moneyKey } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   appointmentsQueryKey,
   dayExtrasQueryKey,
 } from "@/lib/company-query-keys";
 
-// PostgREST silently caps every response at 1000 rows (Supabase default
-// max-rows), so an unordered, unlimited listAppointments truncates a busy
-// tenant's calendar without any error.
+// STORY-062 slice 5 — READS go through the offline-aware SWR wrapper
+// (appointmentsCached.listAppointments). The wrapper stores the FULL domain
+// Appointment and its background revalidate prunes server-deleted rows
+// (cacheReplaceTenant) and, on a real change, fires `revalidated`, which the
+// realtime bridge (SyncBridgeMount) turns into a react-query invalidate so
+// pull-to-refresh and focus refetch settle on fresh data. Warm cache serves
+// the last snapshot offline; a cold offline read raises a typed blocking
+// error so an unknown calendar cannot look free.
 //
-// STORY-062 slice 5 — READS now go through the offline-aware SWR wrapper
-// (appointmentsCached.listAppointments). The slice-4 blocker is closed: the
-// wrapper stores the FULL domain Appointment and its background revalidate
-// prunes server-deleted rows (cacheReplaceTenant) and, on a real change, fires
-// `revalidated`, which the realtime bridge (SyncBridgeMount) turns into a
-// react-query invalidate so pull-to-refresh and focus refetch settle on fresh
-// data. Warm cache serves the last snapshot offline; a cold offline read
-// raises a typed blocking error so an unknown calendar cannot look free.
-// Writes already go through the wrapper.
-//
-// PAGING is preserved by threading the self-paging shim BELOW into the wrapper
-// as its supabase client. `listAppointments` uses that client both for the
-// cold-cache read and the background revalidate, so every server list still
-// loops the 1000-row windows internally. The shim intercepts `from → select →
-// eq` (the exact chain repoListAppointments builds — the wrapper calls the
-// same repo under the hood) and throws on any other builder method so a
-// query-shape drift fails loudly instead of mis-paging.
-const APPT_PAGE_SIZE = 1000;
+// PAGING around PostgREST's silent 1000-row cap lives in the repository
+// itself (`listAppointments` in packages/shared/src/db/repositories/
+// appointments.ts) — every caller, cached or not, gets the whole list.
 
-type AnyResult = { data: any[] | null; error: unknown };
-
-// A client that resolves `from(t).select(cols).eq(col,val)` to ALL pages.
-// The returned object is thenable so both `await client.from()...eq()` and
-// `client.from()...eq().then()` (whatever the caller does) get the full set.
-/** Шим постраничного чтения поверх ЛЮБОГО клиента: обычного или привязанного
- *  к чужой компании (`bind-tenant.ts`) — прогрев читает записи им же. */
-export function pagingClient(base: typeof supabase = supabase): typeof supabase {
-  const runAllPages = async (
-    table: string,
-    columns: string,
-    column: string,
-    value: string,
-  ): Promise<AnyResult> => {
-    const all: unknown[] = [];
-    for (let offset = 0; ; offset += APPT_PAGE_SIZE) {
-      const { data, error } = await ((base.from as any)(table)
-        .select(columns)
-        .eq(column, value)
-        // date alone is not unique — without the id tiebreaker PostgREST
-        // paging can skip / duplicate rows across pages.
-        .order("date", { ascending: true })
-        .order("id", { ascending: true })
-        .range(offset, offset + APPT_PAGE_SIZE - 1) as PromiseLike<AnyResult>);
-      if (error) return { data: null, error };
-      const page = data ?? [];
-      all.push(...page);
-      if (page.length < APPT_PAGE_SIZE) break;
-    }
-    return { data: all as AnyResult["data"], error: null };
-  };
-
-  // Guard: any builder method the shim doesn't model (e.g. a future `.order`
-  // / `.range` / `.maybeSingle` added to repoListAppointments) throws a clear
-  // error instead of silently returning `undefined` — so a query-shape drift
-  // fails loudly at the exact call, not as a downstream «x is not a function».
-  const throwUnexpected = (method: string) => (): never => {
-    throw new Error(
-      `pagingClient: unexpected query method ".${method}" — the paging shim ` +
-        `only models from→select→eq; update the shim if the read chain changed.`,
-    );
-  };
-
+/** ВИД ТОЛЬКО ДЛЯ ЧТЕНИЯ поверх ЛЮБОГО клиента: обычного или привязанного к
+ *  чужой компании (`bind-tenant.ts`). Обёртка кэша подталкивает выгрузку
+ *  очереди тем клиентом, что ей дали; вид объявляет себя полем
+ *  `READ_ONLY_VIEW_FIELD`, и выгрузка идёт клиентом хоста (иначе правка
+ *  записи падала «update is not a function» и откатывалась). `select`
+ *  отдаётся настоящему билдеру целиком — фильтры, порядок и страницы
+ *  репозитория работают как есть; записи у вида нет. */
+export function readOnlyClient(base: typeof supabase = supabase): typeof supabase {
   return {
-    // ВИД ТОЛЬКО ДЛЯ ЧТЕНИЯ: обёртка подталкивает выгрузку очереди тем
-    // клиентом, что ей дали, а писать шиму нечем — выгрузка пойдёт клиентом
-    // хоста (`READ_ONLY_VIEW_FIELD`, 03.10: правка записи падала «update is
-    // not a function» и откатывалась).
     [READ_ONLY_VIEW_FIELD]: true,
-    from: (table: string) => ({
-      select: (columns: string) => ({
-        // Thenable + explicit throw-guards for every builder method the shim
-        // does NOT model. A repo read that appends `.order/.range/.limit/
-        // .maybeSingle/.is` after `.eq` would otherwise hit `undefined()`.
-        eq: (column: string, value: string) => ({
-          then: (
-            onFulfilled: ((value: AnyResult) => unknown) | null | undefined,
-            onRejected: ((e: unknown) => unknown) | null | undefined,
-          ) =>
-            runAllPages(table, columns, column, value).then(
-              onFulfilled ?? undefined,
-              onRejected ?? undefined,
-            ),
-          order: throwUnexpected("order"),
-          range: throwUnexpected("range"),
-          limit: throwUnexpected("limit"),
-          maybeSingle: throwUnexpected("maybeSingle"),
-          single: throwUnexpected("single"),
-          is: throwUnexpected("is"),
-        }),
-      }),
+    from: (table: Parameters<typeof base.from>[0]) => ({
+      select: (columns?: string) => base.from(table).select(columns),
     }),
   } as unknown as typeof supabase;
 }
 
 // All tenant appointments (RLS-scoped), read via the offline-aware SWR wrapper
-// and paged around the 1000-row cap by threading the shim above in as the
-// wrapper's supabase client. Retained name/signature: useClientAppointments
-// imports this.
+// through the read-only view above. Retained name/signature:
+// useClientAppointments imports this.
 //
 // КЛИЕНТ ПРИВЯЗАН К КОМПАНИИ КЛЮЧА, А НЕ К КОМПАНИИ УСТРОЙСТВА. Обёртка
-// отдаёт снимок SQLite и отпускает фоновое перечитывание, а шим читает
+// отдаёт снимок SQLite и отпускает фоновое перечитывание, а репозиторий читает
 // страницы одну за другой — по 2–6 с каждую в очереди бесплатного плана.
 // Глобальный клиент берёт заголовок на КАЖДЫЙ запрос: переход посреди чтения
 // отправлял бы вторую страницу под другой компанией, сервер отвечал нулём
 // строк, и `cacheReplaceTenant` стирал остаток записей этой компании с
 // меткой «сервер сказал: пусто». Привязанный клиент несёт заголовок `tenantId`
-// на всех страницах, в том числе у отпущенного перечитывания. Сам шим —
+// на всех страницах, в том числе у отпущенного перечитывания. Поверх него —
 // вид только для чтения: подталкивание очереди выгрузки им сливается
 // настоящим клиентом хоста (`writeClient` умолчаний реплеера).
 export async function listAppointmentsPaged(
   tenantId: string,
 ): Promise<Appointment[]> {
-  return listAppointmentsCached(pagingClient(tenantBoundClient(tenantId)), tenantId);
+  return listAppointmentsCached(readOnlyClient(tenantBoundClient(tenantId)), tenantId);
 }
 
 /** Ключ живёт в `lib/company-query-keys.ts`; реэкспорт для тех, кто уже
@@ -171,7 +101,7 @@ export function useAppointments() {
     // Fail closed: no broad cached list is mounted before the membership role
     // is confirmed. Masters always bypass the SQLite/SWR wrapper.
     enabled: !!tenantId && ready && role != null,
-    // БЕЗ СЕТИ ЧТЕНИЕ ВСЁ РАВНО ИДЁТ (аудит 03.10). По умолчанию react-query
+    // БЕЗ СЕТИ ЧТЕНИЕ ВСЁ РАВНО ИДЁТ. По умолчанию react-query
     // офлайн не зовёт `queryFn` вовсе — и обёртка кэша, которая как раз и
     // решает, что показать без сети (копию с устройства или честное «копии
     // нет»), не запускалась: компания, открытая без сети, рисовала пустую

@@ -4,7 +4,7 @@ import { Phone } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useThemeColors } from "@/theme/colors";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { newClientDraftHref } from "@/features/clients/ClientPeopleDoor";
 import {
   canSplitClient,

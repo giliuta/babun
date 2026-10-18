@@ -14,7 +14,8 @@
 > `bun run typecheck` = 0 перед любым «готово»; LOCKED-дизайны и стандарт «Добавить»
 > (во всём mobile UI запрещены floating FAB и голый «+»: действия создания всегда подписаны текстом; `+` допустим только как часть телефонного кода; календарная запись создаётся тапом по свободному времени);
 > mobile UI всегда светлый — без dark palette, системного переключения или настройки темы; дизайн-канон `apps/mobile/docs/DESIGN-SYSTEM.md`;
-> master только через PR. Текущий приоритет — `docs/roadmap.md`.
+> master только через PR. Приоритеты задаёт владелец в разговоре; оглавление
+> документов — [`docs/README.md`](docs/README.md).
 
 ## Identity
 CRM + скоро SaaS для сервисных бизнесов. Первый клиент — **AirFix** (кондиционеры, Кипр). Числа в базе на 2026-08-27: **2 клиента, 2 записи, 1 команда** — тенант `AirFix LTD`, заведён 2026-04-28. Прежняя формулировка «2 бригады, 903+ клиентов» описывала намерение, а не факт, и по ней уже принимались решения о нагрузке. Числа проверяются запросом, а не памятью. В будущем продаём как платформу другим сервисам.
@@ -34,7 +35,7 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 ## Stack (LOCKED — не менять без явного запроса)
 - **Framework:** Expo SDK 54 / React Native — один код на iOS, Android и Web
 - **Web:** React Native Web через `expo export --platform web` (Next.js снесён 2026-08-25)
-- **Monorepo:** bun workspaces (`apps/mobile`, `packages/shared`); turbo стоит в devDependencies, но установку и скрипты ведёт bun
+- **Monorepo:** bun workspaces (`apps/mobile`, `packages/shared`); установку и скрипты ведёт bun
 - **Language:** TypeScript strict mode
 - **Styling:** NativeWind (Tailwind v4 синтаксис поверх RN StyleSheet)
 - **DB:** Supabase (PostgreSQL + RLS + Auth + Realtime); SQLite/MMKV — offline-кэш и очередь
@@ -87,11 +88,18 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    отменяет push, если красное — ветка `master` кормит Vercel, то есть babun.app,
    и сломанный коммит там виден клиенту. Хуки включаются один раз:
    `git config core.hooksPath .githooks`. Обойти осознанно: `git push --no-verify`.
-   PR и деплой по-прежнему только по явной просьбе владельца.
+   Ручной push другой ветки, PR, слияние в `master` и деплой — только по
+   явной просьбе владельца.
 5.1 **ВЫБОР ГЛАЗАМИ, А НЕ СЛОВАМИ (LOCKED 2026-08-27).** Владелец: «прикольная идея, что ты сразу в приложении мне показываешь — так вот и делай». Когда решение визуальное и вариантов больше одного (радиус, кегль, оттенок, плотность, порядок блоков), НЕ описывай их словами и не проси представить. Собери варианты РЯДОМ на одном экране в симуляторе, подпиши каждый его числом и пришли скриншот. Причина: словами «менее круглое» описывается любое число от 4 до 24, и стоимость промаха — целый заход работы; сравнение вживую стоит одну минуту. Строительные леса (временный проп, экран-сравнение) сносятся тем же заходом и в коммит не уходят — если решение не принято сразу, они живут в рабочем дереве, а не в истории.
 6. **НИКОГДА** не используй `any` — если TypeScript ругается, разбирайся с типами, а не обходи
 7. **Максимум 400 строк** на компонент — если больше, разбивай на sub-components
-8. **RU в UI, EN в коде.** Переменные, функции, комментарии — только английский
+8. **RU в UI, EN в именах.** Переменные, функции, типы, файлы — английский.
+   Комментарии — на русском или английском, но про код, каким он есть сейчас:
+   ПОЧЕМУ так сделано и что сломается, если сделать иначе. Не пишем в код
+   историю — даты, «владелец сказал …», «раньше было …», номера сессий и
+   аудитов: это место коммита, `docs/` и памяти. Решение владельца, которое
+   надо уважать, формулируется как правило без даты и цитаты («нулевая
+   сумма не показывается: пустая строка лучше ложного „0 €"»).
 8.1 **ЯЗЫКИ ИНТЕРФЕЙСА — ПЕРЕВОД ПРИ СБОРКЕ (владелец 2026-10-03: «сделай
     систему мультиязычной… в кабинете страница „Языки"… переведи все
     страницы»).** Русский текст в коде остаётся ИСТОЧНИКОМ — пиши UI по-русски,
@@ -128,12 +136,6 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 10. **НИКОГДА** не ставь хуки, которые запускают `tsc` на каждую правку — наш tsc медленный, это убьёт сессию. Живут такие хуки в `.claude/settings.local.json` — файл локальный, в git его нет (`.gitignore`), правит его только владелец
 11. **НИКОГДА** не «улучшайзь» существующий UI без явного запроса. Refactor — да (если не виден пользователю). Redesign — нет.
 12. **НИКОГДА** не говори «готово» / «работает», если не открыл экран в симуляторе и не прошёл сценарий руками
-13. **БЕРИ ГОТОВОЕ, НЕ ПИШИ ВТОРОЕ.** Новый экран, блок, лист или ряд заводится
-    только после того, как поиском доказано, что готового нет. Одна сущность —
-    одно тело; вторая дверь — реэкспорт в 5 строк. Готовый код каждого блока и
-    его шторки — `apps/mobile/docs/BLOCKS.md`. Полный порядок и реестр канона —
-    раздел **Canon Reuse** ниже; он обязателен к чтению перед любой правкой UI
-
 12.1 **НА СИМУЛЯТОРЕ ДВА ПРИЛОЖЕНИЯ — СМОТРЕТЬ НАДО В `com.babun.crm.dev` (2026-08-27).**
     `com.babun.crm` («Babun») несёт ВШИТЫЙ бандл и от правок кода не меняется
     никогда. `com.babun.crm.dev` («Babun Dev») ходит в Metro — только он
@@ -175,6 +177,12 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
     (`curl "http://localhost:8081/node_modules/expo-router/entry.bundle?platform=ios&dev=true"`)
     и поискать в нём свою новую строку. Есть — виновато приложение, нет —
     Metro.
+
+13. **БЕРИ ГОТОВОЕ, НЕ ПИШИ ВТОРОЕ.** Новый экран, блок, лист или ряд заводится
+    только после того, как поиском доказано, что готового нет. Одна сущность —
+    одно тело; вторая дверь — реэкспорт в 5 строк. Готовый код каждого блока и
+    его шторки — `apps/mobile/docs/BLOCKS.md`. Полный порядок и реестр канона —
+    раздел **Canon Reuse** ниже; он обязателен к чтению перед любой правкой UI
 
 ## Canon Reuse — БЕРИ ГОТОВОЕ, НЕ ПИШИ ВТОРОЕ (LOCKED 2026-09-10)
 
@@ -281,28 +289,6 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    | снять выбранное | **«Убрать»** |
    | «Готово», «Сохранить», «Выбрать» в этой роли | НЕ бывает |
 
-5.4 **ДВЕРЬ В СПРАВОЧНИК: УХОДИТ ПОЛНОЦЕННО И ВОЗВРАЩАЕТ ОБРАТНО (LOCKED
-   2026-09-10).** Владелец: «если я нажимаю настройки, она должна перебрасывать
-   полноценно на настройки, потом я нажимаю назад — и оно должно перебрасывать
-   на ту операцию, которую я создавал… а так получается: шторка поднялась, но
-   страница открылась ЗА шторкой — бессмысленная кнопка».
-
-   Два условия, и оба обязательны:
-
-   1. **АДРЕС — ИЗ `useReferenceHref`.** Внутри своей вкладки — свой маршрут,
-      отовсюду ещё — общий из группы `app/(shared)/`. Экран вкладки, открытый с
-      чужой вкладки, кладёт поверх неё ВТОРУЮ копию табов: «назад» уводит на
-      календарь, а набранное исчезает. Так было у категорий из листа операции.
-   2. **ЛИСТ ПАРКУЕТСЯ, А НЕ ОСТАЁТСЯ СВЕРХУ** — `use-sheet-doorway`:
-      `visible={visible && !doorway.parked}`, дверь зовёт
-      `doorway.open(() => router.push(href))`. Лист — `Modal`, отдельное окно;
-      оставшись открытым, он накрывает страницу, куда только что ушли. Черновик
-      при парковке цел: состояние живёт в компоненте листа.
-
-   Дверь, которая уводит НАСОВСЕМ (открыть страницу закрытого счёта, уйти в
-   запись из шторки дня), закрывает лист явно — это не «дверь с возвратом», и
-   парковка ей не нужна.
-
 5.3 **ВИД СУЩНОСТИ — ОДИН БЛОК И ОДНА ШТОРКА (LOCKED 2026-09-10).**
    Владелец: «сделай цветовой блок и вставляй его во все, где это может
    использоваться; точно такой же блок с иконками — 40 иконок, то же самое,
@@ -339,6 +325,28 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
      чем в выборе.
    • Готовый код и «чего не делать» — `apps/mobile/docs/BLOCKS.md` §9.0.
 
+5.4 **ДВЕРЬ В СПРАВОЧНИК: УХОДИТ ПОЛНОЦЕННО И ВОЗВРАЩАЕТ ОБРАТНО (LOCKED
+   2026-09-10).** Владелец: «если я нажимаю настройки, она должна перебрасывать
+   полноценно на настройки, потом я нажимаю назад — и оно должно перебрасывать
+   на ту операцию, которую я создавал… а так получается: шторка поднялась, но
+   страница открылась ЗА шторкой — бессмысленная кнопка».
+
+   Два условия, и оба обязательны:
+
+   1. **АДРЕС — ИЗ `useReferenceHref`.** Внутри своей вкладки — свой маршрут,
+      отовсюду ещё — общий из группы `app/(shared)/`. Экран вкладки, открытый с
+      чужой вкладки, кладёт поверх неё ВТОРУЮ копию табов: «назад» уводит на
+      календарь, а набранное исчезает. Так было у категорий из листа операции.
+   2. **ЛИСТ ПАРКУЕТСЯ, А НЕ ОСТАЁТСЯ СВЕРХУ** — `use-sheet-doorway`:
+      `visible={visible && !doorway.parked}`, дверь зовёт
+      `doorway.open(() => router.push(href))`. Лист — `Modal`, отдельное окно;
+      оставшись открытым, он накрывает страницу, куда только что ушли. Черновик
+      при парковке цел: состояние живёт в компоненте листа.
+
+   Дверь, которая уводит НАСОВСЕМ (открыть страницу закрытого счёта, уйти в
+   запись из шторки дня), закрывает лист явно — это не «дверь с возвратом», и
+   парковка ей не нужна.
+
 6. **РЯД — ТОЛЬКО `card-rows` И `SectionCard`.** `FieldRow`, `ChoiceRow`,
    `NavRow`, `ChooseRow`, `ActionRow`, `SwipeRow`, `ReorderList`. Подпись
    ВНУТРИ карточки — `SectionCard`; подпись НАД карточкой — `RowGroup`. В
@@ -365,6 +373,11 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
     выросли сразу обе: `AddRow` внизу списка и кнопка ПОСЕРЕДИНЕ пустого
     экрана.
 
+8. **МЁРТВОЕ СНОСИТСЯ В ТОМ ЖЕ ЗАХОДЕ.** Компонент без импортов врёт: он
+   выглядит каноном и им не является (так `RefListScreen` и
+   `InlineServiceCreate` пролежали мёртвыми, пока их комментарии обещали
+   «один экран на все справочники»). Нашёл — либо подключи, либо удали.
+
 9. **КРОМКА СВАЙПА ЗАКРЕПЛЕНА ЗА СМЫСЛОМ, ТАП — ЗА ПРАВКОЙ** (владелец
    2026-08-29: «удалить справа, скрыть слева, а не наоборот»; 2026-09-10:
    «свайп вправо — это удалить, а не скрыть»; «тап на категорию — это идёт
@@ -382,10 +395,6 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    Скрытая строка не исчезает, а падает в конец списка, и в листах выбора её
    нет — кроме той, что уже стоит в операции или шаблоне. Держит
    `apps/mobile/src/components/ui/swipe-edge-contract.test.ts`.
-8. **МЁРТВОЕ СНОСИТСЯ В ТОМ ЖЕ ЗАХОДЕ.** Компонент без импортов врёт: он
-   выглядит каноном и им не является (так `RefListScreen` и
-   `InlineServiceCreate` пролежали мёртвыми, пока их комментарии обещали
-   «один экран на все справочники»). Нашёл — либо подключи, либо удали.
 
 10. **У КАЖДОГО БЛОКА ЕСТЬ ПРАВА, И ОНИ ОБЪЯВЛЯЮТСЯ ВМЕСТЕ С НИМ (LOCKED
     2026-09-12).** Владелец: «мы полностью каждый блок, каждую кнопку
@@ -435,20 +444,20 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 
 | Сущность | Единственное тело | Двери (реэкспорт) |
 |---|---|---|
-| Клиент (карточка = создание) | `app/(dashboard)/clients/[id].tsx` | `app/(shared)/client.tsx` |
+| Клиент (карточка = создание) | `src/features/clients/card/ClientDetailScreen.tsx` (страница — `card/ClientCardPage.tsx`, проводка — `card/use-client-card.ts`) | `app/(dashboard)/clients/[id].tsx` (маршрут вкладки), `app/(shared)/client.tsx` |
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
-| Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
-| Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |
-| Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
+| Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` (карта — `object-fields/ObjectMapPanel.tsx`) | — |
+| Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` (лист — `labels/LabelEditSheet.tsx`, строка — `labels/LabelRow.tsx`, правила — `labels/label-rules.ts`, запись — `labels/use-label-actions.ts`) | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |
+| Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` (тело — `src/features/services/price-list/ServicesList.tsx`) | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
-| Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `(shared)/` |
+| Типы объектов | `src/features/clients/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `cabinet/`, `clients/`, `(shared)/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
-| Запись и событие (форма) | `app/book/index.tsx` | — |
-| Настройки страницы записи | `app/(dashboard)/cabinet/booking-record.tsx` | `calendar/booking-record.tsx` |
-| Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
+| Запись и событие (форма) | `app/book/index.tsx` (тело — `src/features/appointments/book-form/`, проводка — `use-book-form.ts`) | — |
+| Вид и состав записи и события («Записи») | `src/features/calendar/design/DesignScreen.tsx` | `app/(dashboard)/(home)/calendar/design.tsx` |
 | Счёт (создание = правка) | страница «Счета» `app/accounts/settings.tsx` (строки `finances/accounts-page/AccountRow.tsx`, порядок, «Скрыть»/«Показать», «Удалить», «Добавить счёт») + «Удалённые счета» `app/accounts/trash.tsx` + «Выписка» `app/accounts/[id]/statement.tsx`; ОДИН лист создания и правки `finances/account-editor/AccountEditorSheet.tsx` (блоки-плашки, «Применить») | Ползунки панели «Счета» и шестерёнка «Финансов» ведут на одну страницу; `app/accounts/index.tsx` — указатель на панель «Счета», `[id]/index.tsx` и `[id]/settings.tsx` — редиректы на «Счета» с `?edit=<id>`; вид — общий блок. «Скрыть» (03.10) — скрытый счёт: работает, виден только владельцу и только на «Счетах» (`is_hidden`); «Удалить» — в «Удалённые счета» на 30 дней (`deleted_at`), с историей не стирается |
 | «Удалённые операции» | `src/features/finances/DeletedOperationsScreen.tsx` (строка — `RecordRowView` ленты, «Вернуть» / «Удалить» насовсем); ящик на сервере — таблица `deleted_operations` (снимок строки, 30 дней), удаление — `delete_operation`, возврат — `restore_deleted_operation` | `app/(dashboard)/finances/deleted.tsx` — дверь шестерёнки «Финансов», блок «Деньги» (03.10). Лента, остатки и аналитика ящик не читают; переводы в него не идут — у них своя отмена |
+| «Удалённые записи» | `src/features/calendar/DeletedAppointmentsScreen.tsx` (строка — `SelectRow` как запись в истории клиента, день — `VisitDayHeader`; «Вернуть» / «Удалить» насовсем); ящик на сервере — таблица `deleted_appointments` (снимок строки + фото, ссылка клиента, отвязанные SMS; 30 дней), удаление — `delete_appointment`, возврат — `restore_deleted_appointment` (сотрудник — `member_appointment_restore`) | `app/(dashboard)/(home)/calendar/deleted.tsx` — дверь шестерёнки календаря (`DeletedAppointmentsDoor`, 16.10). Запись с деньгами не удаляется вовсе; личное событие без календаря удаляется насовсем, как раньше; откат только что созданного (тост «Отменить») идёт мимо ящика (`useDeleteAppointment`) |
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
 | Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `cabinet/requisites.tsx` (с 03.10 — Кабинет, строка «Реквизиты»: «единый блок на все компании»), `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
@@ -484,37 +493,48 @@ Babun/
 │   └── mobile/                  # Expo SDK 54 / React Native — ЕДИНСТВЕННОЕ приложение
 │       ├── app/                 # expo-router: экраны и маршруты
 │       ├── src/components/      # UI-примитивы (BottomSheet, PickerSheet, SwipeRow …)
+│       │   └── blocks/          # блоки, общие для нескольких фич (ActionMenuSheet, InlineNoteField …)
+│       ├── src/session/         # кто вошёл и что ему можно: компания, роль, права, «его глазами»
+│       ├── src/lib/             # общие помощники без фич (период, телефон, бумага документов …)
 │       ├── src/features/        # calendar, clients, finances, services, invoices …
 │       ├── docs/DESIGN-SYSTEM.md# Дизайн-канон «Halo Cobalt»
 │       ├── .env.example         # Шаблон EXPO_PUBLIC_* → копировать в .env.local
 │       └── ios/  android/       # Генерируются `expo prebuild` — в git НЕ лежат
 ├── packages/
-│   └── shared/                  # Типы БД, доменные хелперы, offline cache/sync
+│   └── shared/                  # Типы БД, доменные правила (`local/`), репозитории,
+│                                #   offline cache/sync; свой tsconfig и eslint
 ├── supabase/
-│   ├── migrations/              # 121 SQL-миграция — единственный источник схемы
-│   ├── functions/               # Edge-функции (7 шт)
+│   ├── migrations/              # SQL-миграции — история схемы (число — `ls | wc -l`)
+│   ├── parked/                  # Черновики миграций, НЕ накаченные (см. README там)
+│   ├── functions/               # Edge-функции (Deno)
 │   └── config.toml
 ├── docs/                        # architecture, stories, adr, audit, plans
 ├── mockups/                     # HTML-прототипы экранов
-└── .github/workflows/ci.yml     # Должен гонять `bun install --frozen-lockfile` + typecheck / test / lint / build:web
+└── .github/workflows/ci.yml     # bun install --frozen-lockfile + typecheck / test / lint / build:web
 ```
 
-CI обязан повторять те же гейты, что и локальный `/test`: bun, а не npm;
-`bun test`, а не vitest; `bun run build:web`, а не `next build`. **Пока файл не
-переписан владельцем, он остался от Next.js-эпохи и в этом дереве не работает —
-проверь `head .github/workflows/ci.yml` прежде чем на него полагаться, и в любом
-случае гоняй гейты локально: зелёный CI не отменяет правило 12.**
+**Слои (2026-10-13).** Фича берёт из `session/`, `lib/`, `components/` — те
+из фич не берут ничего (исключения названы в тесте ниже). Две фичи не
+импортируют друг друга в обе стороны: общий кусок уезжает вниз — в
+`session/`, `lib/`, `components/blocks/` или в ту фичу, что ниже. Сторож —
+`apps/mobile/src/lib/feature-cycles.test.ts`: новая пара валит тест, а пара
+из его списка `ALLOWED`, которой больше нет, — тоже (список только сжимается).
 
-Тесты гоняет `bun test` из корня (раннер `bun:test`; файлы `*.test.ts` лежат
-рядом с кодом). Числа здесь не записаны — они устаревают за день; их печатает
-сам раннер последней строкой («Ran N tests across M files»). Отдельного конфига
-нет — vitest в проекте не используется.
+CI повторяет те же гейты, что и локальный `/test`, и все четыре блокируют:
+`bun run typecheck` (приложение и отдельно весь `packages/shared` с тестами),
+`bun test`, `bun run lint` (оба пакета, `--max-warnings 0`: новое
+предупреждение валит так же, как ошибка), `bun run build:web`. Зелёный CI не отменяет правило 12.
+
+Тесты гоняет `bun test` из корня; файлы `*.test.ts` лежат рядом с кодом и
+пишутся на `node:test` + `node:assert/strict` (часть старых — на `bun:test`,
+раннер понимает оба). Числа здесь не записаны — они устаревают за день; их
+печатает сам раннер последней строкой («Ran N tests across M files»).
 
 ## Workflow — Plan-then-Code
 
 ### Фаза 1: Планирование (ОБЯЗАТЕЛЬНО перед кодом)
-1. Прочитай `docs/architecture.md` и `docs/coding-patterns.md`
-2. Прочитай актуальный `docs/roadmap.md`
+1. Прочитай `docs/architecture.md` и `docs/db/README.md` (схема базы)
+2. Оглавление остальных документов — `docs/README.md`
 3. Создай `docs/stories/STORY-NNN.md` через `/plan {feature}`
 4. **НЕ ПИШИ КОД пока план не записан.** Показываем план — ждём «ок».
 
@@ -523,7 +543,8 @@ CI обязан повторять те же гейты, что и локаль�
 2. Порядок: **миграции → types → shared → repositories → components → UI**
 3. `bun run typecheck` после основных изменений
 4. Коммит по смыслу (не «10 файлов за раз если они не связаны»)
-5. Push/PR/deploy только по явной просьбе владельца
+5. Коммит уезжает на GitHub сам (Golden Rule 5). Ручной push другой ветки,
+   PR, слияние в `master` и deploy — только по явной просьбе владельца
 
 ### Фаза 3: Верификация
 1. `bun run typecheck` зелёный
@@ -535,7 +556,7 @@ CI обязан повторять те же гейты, что и локаль�
 ## Context Management
 - **Новая большая фича → новая сессия** с `/clear`
 - Перед `/clear` — сохрани прогресс в соответствующую `STORY-NNN.md`
-- При возврате к проекту: прочитай AGENTS.md → свежий `docs/HANDOFF-*.md` → docs/roadmap.md → текущую STORY → `git log --oneline -5`
+- При возврате к проекту: прочитай AGENTS.md → `docs/architecture.md` → текущую STORY → `git log --oneline -5`
 
 ## Critical Known Issues
 - **НАТИВНЫЙ МОДУЛЬ, ДОБАВЛЕННЫЙ ПОСЛЕ СБОРКИ КЛИЕНТА, РОНЯЕТ ЭКРАН ЦЕЛИКОМ.**
@@ -611,7 +632,7 @@ When element context arrives from the browser bridge:
    - Colours come from `apps/mobile/docs/DESIGN-SYSTEM.md` and the tokens in
      `apps/mobile/global.css` (brand `#2c5be0`) — never hardcode a new hue
    - Components max 400 lines, split if needed
-   - RU strings in UI, EN in code/comments
+   - RU strings in UI, EN names; comments explain why, never history (rule 8)
    - TypeScript strict, no `any`
    - Named exports (route files under `apps/mobile/app/**` are the one exception —
      expo-router requires a default export)

@@ -84,7 +84,7 @@ describe("the removal runs in the owner's order", () => {
   // словаря, который его запрещает; новый сторож встаёт до сноса старого;
   // функции, возвращавшие строку таблицы, — до таблицы; сторож — последним.
   test("data first, then the new guard, then the old objects, then the guard block", () => {
-    const steps: ReadonlyArray<readonly [string, number]> = [
+    const steps: readonly (readonly [string, number])[] = [
       [
         "levels of the block",
         statementAt(/delete from public\.member_access ma\s+where ma\.block = 'finance\.close_day';/, "levels delete"),

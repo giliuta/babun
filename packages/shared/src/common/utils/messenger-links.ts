@@ -18,9 +18,22 @@ export function dialableDigits(phone: string | null | undefined): string {
   return raw.startsWith("+") ? `+${digits}` : digits;
 }
 
-function stripAt(handle: string | null | undefined): string {
-  return (handle ?? "").replace(/^@+/, "").trim();
+/** Ник из того, что вписали в поле: «@ник», «ник» или ссылка на профиль.
+ *  «Поделиться профилем» в Instagram и Telegram отдаёт ссылку, и записанная
+ *  как ник она давала адрес «instagram.com/https://…». Снимаем адрес сайта,
+ *  хвост «?…» и завершающий «/», затем «@». */
+export function normalizeHandle(handle: string | null | undefined): string {
+  return (handle ?? "")
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|t\.me|telegram\.me)\//i, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "")
+    .replace(/^@+/, "")
+    .trim();
 }
+
+const stripAt = normalizeHandle;
 
 export function whatsappUrl(phone: string | null | undefined): string | null {
   const digits = phoneDigits(phone);
@@ -71,17 +84,3 @@ export function smsUrl(phone: string | null | undefined): string | null {
   return dialable ? `sms:${dialable}` : null;
 }
 
-// Single source of truth for the «SMS о долге» wording (previously
-// duplicated + drifted between the client card and the debtors list).
-// Neutral text — Babun is a SaaS, no vertical/brand in the default.
-// `name` = first name (optional), `visitDate` = «DD.MM» (optional).
-// C1 will replace this with a user-editable «debt» template.
-export function debtReminderSms(opts: {
-  amount: string;
-  name?: string | null;
-  visitDate?: string | null;
-}): string {
-  const greet = opts.name?.trim() ? `Здравствуйте, ${opts.name.trim()}!` : "Здравствуйте!";
-  const visit = opts.visitDate ? ` за визит ${opts.visitDate}` : "";
-  return `${greet} Напоминаем об оплате ${opts.amount}${visit}. Спасибо!`;
-}

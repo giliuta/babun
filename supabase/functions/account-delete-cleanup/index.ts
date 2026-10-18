@@ -1,5 +1,6 @@
 // deno-lint-ignore no-import-prefix -- Supabase Edge Functions resolve this URL import at deploy time.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { cancelSoleOwnedSubscriptions } from "../_shared/subscriptions.ts";
 
 type CleanupStatus =
   | "requested"
@@ -224,6 +225,14 @@ async function processClaim(
       "tenant_cleanup_failed",
       "AUTH_USER_LOOKUP_FAILED",
     );
+  }
+
+  // Подписка уходит раньше данных и на фоновом пути: сбой отмены — повтор
+  // позже, а не удаление аккаунта, за который Stripe продолжит списывать.
+  if (status !== "tenant_data_deleted" && status !== "pending_auth_delete") {
+    if (!(await cancelSoleOwnedSubscriptions(service, claim.userId))) {
+      return releaseFailure(service, claim, status, "SUBSCRIPTION_CANCEL_FAILED");
+    }
   }
 
   const isSoftDeleted = typeof user.deleted_at === "string" &&

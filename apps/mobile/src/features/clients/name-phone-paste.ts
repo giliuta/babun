@@ -1,5 +1,5 @@
 import type { CountryCode } from "libphonenumber-js";
-import { formatPhoneAsYouType, tryToE164 } from "./phone";
+import { formatPhoneAsYouType, tryToE164 } from "@/lib/phone";
 
 // «МАРИЯ +357 99 123456» В ПОЛЕ ИМЕНИ НОВОГО КЛИЕНТА.
 //

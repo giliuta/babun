@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { bookFormSource } from "../appointments/book-form/source-for-tests";
 
-// АУДИТ 11.10 «СОТРУДНИК ВИДИТ НЕ ТО» (владелец: «проверь всё, что может быть
-// в таком плане… убедись, что во всех страницах такого рода бага не будет»).
-// Каждая находка сверена на боевой от лица партнёра (giluta.d в AirFix).
+// «СОТРУДНИК ВИДИТ НЕ ТО»: на всех страницах такого рода бага быть не должно.
+// Каждая находка сверена на боевой от лица партнёра.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");
@@ -29,12 +30,12 @@ test("«Типы объектов» из записи — по праву стр
 });
 
 test("правка клиента из записи — по блоку клиента, как пустит сервер", () => {
-  const book = read("../../../app/book/index.tsx");
+  const book = bookFormSource();
   assert.match(book, /const clientCan = useClientCardWritable\(client\);/);
   assert.doesNotMatch(book, /\bclientWritable\b/);
 });
 
 test("суммы в повестке — по праву «Сумма», а не по роли", () => {
-  const home = read("../../../app/(dashboard)/(home)/index.tsx");
+  const home = calendarScreenSource();
   assert.match(home, /showAmounts=\{isCrew \? amountVisible : true\}/);
 });

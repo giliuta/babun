@@ -95,8 +95,8 @@ describe("градация по услугам", () => {
   test("штуки складываются, записи считаются по разу, крупные сверху", () => {
     const rows = serviceBreakdown(
       [
-        appt({ id: "1", services: [line("clean", 3, 45, "A/C Чистка"), line("gas", 1, 60)] as never }),
-        appt({ id: "2", services: [line("clean", 2, 50, "A/C Чистка")] as never }),
+        appt({ id: "1", total_amount: 195, services: [line("clean", 3, 45, "A/C Чистка"), line("gas", 1, 60)] as never }),
+        appt({ id: "2", total_amount: 100, services: [line("clean", 2, 50, "A/C Чистка")] as never }),
       ],
       new Map([["gas", "Заправка"]]),
     );
@@ -104,6 +104,21 @@ describe("градация по услугам", () => {
       { id: "clean", name: "A/C Чистка", quantity: 5, records: 2, amount: 235 },
       { id: "gas", name: "Заправка", quantity: 1, records: 1, amount: 60 },
     ]);
+  });
+
+  test("общая скидка записи раскладывается по строкам — услуги сходятся с «Работ на»", () => {
+    // Две услуги по €100, скидка записи 10%: к оплате 180, не 200.
+    const records = [
+      appt({ id: "1", total_amount: 180, services: [line("a", 1, 100), line("b", 1, 100)] as never }),
+      // Неровная доля: 100 / 3 строки — центы не теряются и не множатся.
+      appt({ id: "2", total_amount: 100, services: [line("a", 1, 50), line("b", 1, 50), line("c", 1, 50)] as never }),
+      // Полный возврат работу не оплачивает.
+      appt({ id: "3", total_amount: 40, payment_status: "refunded", services: [line("a", 1, 40)] as never }),
+    ];
+    const rows = serviceBreakdown(records, new Map());
+    const sum = Math.round(rows.reduce((total, r) => total + r.amount, 0) * 100);
+    assert.equal(sum, 28000);
+    assert.equal(rows.find((r) => r.id === "a")?.amount, 123.34);
   });
 
   test("удалённая услуга без снимка имени не теряется", () => {
@@ -167,7 +182,7 @@ describe("итоги работы", () => {
     });
   });
 
-  // Аудит финансов 03.10: строки услуг не знают общей скидки записи.
+  // Строки услуг не знают общей скидки записи.
   test("оплаченный визит со скидкой на запись — без «не оплачено»", () => {
     const w = workTotals([
       appt({ services: [line("c", 1, 100)] as never, total_amount: 90, prepaid_amount: 90 }),
@@ -362,6 +377,19 @@ describe("прибыль по услугам", () => {
     assert.equal(rows[0].amount, 150);
     assert.ok(rows[0].materials >= 0);
     assert.equal(rows[0].profit, 150 - rows[0].materials);
+  });
+});
+
+describe("прибыль по услугам: материалы как у «Расхода»", () => {
+  test("прошедшая незакрытая запись материалов не списывает", () => {
+    const svc = [{ id: "c", name: "Чистка", materials: [{ name: "Химия", cost: 10 }] } as never];
+    const row = [{ id: "c", name: "Чистка", quantity: 3, records: 1, amount: 150 }];
+    const frozen = [{ serviceId: "c", serviceName: "Чистка", quantity: 3, unitCost: 10, totalCost: 30 }];
+    const open = serviceProfit(row, [appt({ id: "1", status: "scheduled", material_lines: frozen } as never)], svc);
+    const done = serviceProfit(row, [appt({ id: "1", status: "completed", material_lines: frozen } as never)], svc);
+    assert.equal(open[0].materials, 0);
+    assert.equal(done[0].materials, 30);
+    assert.equal(done[0].profit, 120);
   });
 });
 

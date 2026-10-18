@@ -90,7 +90,7 @@ export async function shareCsvFile(input: {
     ]);
   } catch {
     throw new Error(
-      "Модуль экспорта ещё не установлен в текущую сборку. Обновите iOS-приложение и попробуйте снова.",
+      "Модуль экспорта ещё не установлен в текущую сборку. Обновите приложение и попробуйте снова.",
     );
   }
 
@@ -98,7 +98,28 @@ export async function shareCsvFile(input: {
     throw new Error("Системное меню экспорта на этом устройстве недоступно.");
   }
 
-  const file = new FileSystem.File(FileSystem.Paths.cache, filename);
+  // ФАЙЛ ЖИВЁТ ДО СЛЕДУЮЩЕГО ЭКСПОРТА, А НЕ ДО КОНЦА `shareAsync`. На
+  // Android промис отвечает сразу, как только получатель открылся своей
+  // задачей (Telegram, файловый менеджер), — раньше, чем он прочитал файл, и
+  // удаление в `finally` отправляло пустое или битое вложение. Свой подкаталог
+  // кэша чистится перед новым экспортом; кэш и так в руках системы.
+  const dir = new FileSystem.Directory(FileSystem.Paths.cache, "exports");
+  try {
+    if (dir.exists) {
+      for (const entry of dir.list()) {
+        try {
+          entry.delete();
+        } catch {
+          // Файл прошлого экспорта ещё держит получатель — не страшно.
+        }
+      }
+    } else {
+      dir.create({ intermediates: true, idempotent: true });
+    }
+  } catch {
+    // Без подкаталога — в корень кэша, как раньше.
+  }
+  const file = new FileSystem.File(dir.exists ? dir : FileSystem.Paths.cache, filename);
 
   try {
     file.create({ overwrite: true });
@@ -112,12 +133,5 @@ export async function shareCsvFile(input: {
     const detail =
       error instanceof Error && error.message ? ` ${error.message}` : "";
     throw new Error(`Не удалось создать или отправить CSV.${detail}`);
-  } finally {
-    try {
-      if (file.exists) file.delete();
-    } catch {
-      // A stale cache file is harmless; cleanup must not mask a successful
-      // system share operation.
-    }
   }
 }

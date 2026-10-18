@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 
-// Список чеков читается страницами (аудит финансов 2026-09-30): PostgREST
+// Список чеков читается страницами: PostgREST
 // отдаёт не больше тысячи строк, и без цикла тысяча первый чек молча
 // пропадал из «Документов».
 
-const source = readFileSync(join(__dirname, "receipts-queries.ts"), "utf8").replace(/\s+/g, " ");
+const source = readFileSync(join(__dirname, "../finances/receipts-queries.ts"), "utf8").replace(/\s+/g, " ");
 
 describe("чеки — постранично", () => {
   test("цикл по страницам в тысячу строк до неполной страницы", () => {

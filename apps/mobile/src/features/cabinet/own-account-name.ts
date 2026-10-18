@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useMirror } from "@/features/access/mirror/mirror-state";
-import { useMyMemberships } from "@/features/settings/my-memberships";
+import { useMirror } from "@/session/mirror-state";
+import { useMyMemberships } from "@/session/my-memberships";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 
-// ИМЯ СВОЕГО АККАУНТА — «КОМПАНИЯ» НА КАРТЕ ЧЕЛОВЕКА И В «ПРОФИЛЕ» (владелец
-// 06.10: «ваше имя, имя вашей компании»). Регистрация пишет одно поле «Имя
+// ИМЯ СВОЕГО АККАУНТА — «КОМПАНИЯ» НА КАРТЕ ЧЕЛОВЕКА И В «ПРОФИЛЕ» (имя
+// человека и имя его компании). Регистрация пишет одно поле «Имя
 // или название компании» и в имя человека, и в `tenants.name`; здесь их
 // разводят. Это то имя, которое видят партнёры в блоке пригласившего.
 //

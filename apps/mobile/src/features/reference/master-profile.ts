@@ -14,15 +14,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
-  defaultPermissionsForRole,
-  mergePermissions,
   type Master as SharedMaster,
-  type MasterPermissions,
-  type MasterRole,
 } from "@babun/shared/local/masters";
-import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import type { Master } from "./queries";
+import { referenceKeys } from "@/features/reference/query-keys";
+import { toJson } from "@babun/shared/db/json";
 
 // The rich fields that ride inside `profile`. Everything the shared Master
 // carries beyond the flat `masters` columns. All optional — a legacy/blank
@@ -52,48 +49,6 @@ export function getMasterProfile(m: Master): MasterProfile {
   return {};
 }
 
-/** The master's system role, narrowed from the flat text column. Falls back
- *  to "helper" (the least-privileged baseline) on an unknown/empty value. */
-export function getMasterRole(m: Master): MasterRole {
-  const r = m.role;
-  if (r === "admin" || r === "dispatcher" || r === "lead" || r === "helper") {
-    return r;
-  }
-  return "helper";
-}
-
-/** Resolved permissions. RISK-4: a legacy master whose profile has no
- *  `permissions` (or a partial set) must NOT read as "everything off" —
- *  mergePermissions layers the stored flags over the role baseline so
- *  missing keys inherit the role default. */
-export function getMasterPermissions(m: Master): MasterPermissions {
-  const role = getMasterRole(m);
-  const stored = getMasterProfile(m).permissions;
-  if (!stored) return defaultPermissionsForRole(role);
-  return mergePermissions(role, stored);
-}
-
-export interface MasterContacts {
-  phone: string;
-  whatsapp?: string;
-  telegram?: string;
-  email?: string;
-  address?: string;
-}
-
-/** Contact bundle for the info hub. `phone` comes off the flat column; the
- *  rest live in the profile. */
-export function getMasterContacts(m: Master): MasterContacts {
-  const p = getMasterProfile(m);
-  return {
-    phone: m.phone ?? "",
-    whatsapp: p.whatsapp,
-    telegram: p.telegram,
-    email: p.email,
-    address: p.address,
-  };
-}
-
 // ─── Profile patch writer ────────────────────────────────────────────
 // RISK-3 (races) + no-clobber: the generic useUpdateMaster overwrites whole
 // columns, which for `profile` would drop keys the caller didn't include.
@@ -113,11 +68,11 @@ export function useUpdateMasterProfile() {
     }) => {
       const { error } = await supabase.rpc("patch_master_profile", {
         p_master_id: id,
-        p_patch: patch as unknown as Json,
+        p_patch: toJson(patch),
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["masters"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: referenceKeys.masterAll() }),
     meta: { errorHandled: true },
   });
 }

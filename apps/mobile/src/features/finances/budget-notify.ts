@@ -11,15 +11,17 @@ import {
   calendarSettingsQueryKey,
   teamsQueryKey,
 } from "@/lib/company-query-keys";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import {
   budgetAlerts,
+  budgetMonthFor,
   hasBudget,
+  keepBudgetSeen,
   monthOf,
   monthSpendByCategory,
   type BudgetSeen,
 } from "./category-budget";
-import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
+import { readTeamNotifyPrefs } from "@/lib/notification-prefs-cache";
 
 // УВЕДОМЛЕНИЕ О БЮДЖЕТЕ — КОМУ, КОГДА И СКОЛЬКО РАЗ.
 //
@@ -106,20 +108,23 @@ export function runBudgetAlerts(
   spend: ReadonlyMap<string, number>,
   monthKey: string,
   teamNames?: ReadonlyMap<string, string>,
+  /** Текущий месяц компании; проверяют прошлый — его память не стирается. */
+  currentMonthKey: string = monthKey,
 ): Promise<void> {
   return enqueue(async () => {
-    // «Бюджет категорий» — у команды категории (Кабинет → Уведомления,
-    // 03.10): выключенные команды не сообщают, и их пороги не помечаются —
+    // «Бюджет категорий» — у команды категории (Кабинет → Уведомления):
+    // выключенные команды не сообщают, и их пороги не помечаются —
     // включили обратно, сообщится текущее.
+    const seen = readSeen(tenantId);
     const { notices, next } = budgetAlerts(
       categories.filter((c) => readTeamNotifyPrefs(c.team_id ?? null).budget),
       spend,
-      readSeen(tenantId),
+      seen,
       monthKey,
       (n) => money(n),
       teamNames,
     );
-    writeSeen(tenantId, next);
+    writeSeen(tenantId, keepBudgetSeen(seen, next, monthKey, currentMonthKey));
     for (const n of notices) await presentNow(n.title, n.body);
   });
 }
@@ -129,6 +134,8 @@ export function runBudgetAlerts(
 export function checkBudgetsAfterWrite(
   qc: QueryClient,
   tenantId: string | null,
+  /** День записанной операции; неизвестен — сегодняшний. */
+  occurredOn?: string | null,
 ): void {
   if (!tenantId) return;
   if (qc.getQueryData(currentRoleQueryKey(tenantId)) !== "owner") return;
@@ -138,11 +145,13 @@ export function checkBudgetsAfterWrite(
   if (budgeted.length === 0) return;
   // Месяц — по часам компании, как у сторожа на экране
   // (`use-category-budget.ts`): около полуночи телефон в другом поясе считал
-  // соседний месяц и переписывал «уже сообщено» (аудит 2026-09-30).
+  // соседний месяц и переписывал «уже сообщено».
   const tz = qc.getQueryData<{ timezone?: string }>(
     calendarSettingsQueryKey(tenantId, "owner"),
   )?.timezone;
-  const month = monthOf(todayYmd(tz ?? "Europe/Nicosia"));
+  const today = todayYmd(tz ?? "Europe/Nicosia");
+  // Расход прошлым числом тратит бюджет СВОЕГО месяца.
+  const month = budgetMonthFor(occurredOn, today);
   const teams =
     qc.getQueryData<{ id: string; name: string }[]>(teamsQueryKey(tenantId, "owner", true)) ?? [];
   const teamNames = new Map(teams.map((team) => [team.id, team.name]));
@@ -151,7 +160,14 @@ export function checkBudgetsAfterWrite(
     categoryIds: budgeted.map((c) => c.id),
   })
     .then((rows) =>
-      runBudgetAlerts(tenantId, categories, monthSpendByCategory(rows), month.key, teamNames),
+      runBudgetAlerts(
+        tenantId,
+        categories,
+        monthSpendByCategory(rows),
+        month.key,
+        teamNames,
+        monthOf(today).key,
+      ),
     )
     .catch(() => {});
 }

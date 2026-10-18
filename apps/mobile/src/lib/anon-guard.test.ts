@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { anonymousRequestError, isAnonymousDataRequest } from "./anon-guard";
 
-// ЗАПРОС К ДАННЫМ БЕЗ ТОКЕНА ВОШЕДШЕГО НЕ УХОДИТ (аудит 04.10). Минуту после
+// ЗАПРОС К ДАННЫМ БЕЗ ТОКЕНА ВОШЕДШЕГО НЕ УХОДИТ. Минуту после
 // неудачного обновления токена supabase-js шлёт запросы публичным ключом, и
 // RLS отвечает анониму «200, пусто»: сверка стирала кэш календаря, перенос
 // записи убирал её как «удалённую», напоминания снимались.
@@ -96,7 +96,7 @@ describe("клиент Supabase зовёт заслонку до отправк�
     assert.ok(firstFetch > guard, "запрос уходит раньше заслонки");
     assert.match(body, /authorization: headers\.get\("Authorization"\)/);
     // Не `getActiveUserId`: на выходе тот гаснет раньше, чем экраны уходят
-    // на логин, и календарь успевал перечитать метки анонимом (06.10).
+    // на логин, и календарь успевал перечитать метки анонимом.
     assert.match(body, /signedInUserId: getSignedInUserId\(\)/);
   });
 });

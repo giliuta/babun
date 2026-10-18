@@ -5,8 +5,7 @@ import { describe, test } from "node:test";
 
 import { isGoneInvitationMessage } from "./invitation-flow";
 
-// ОТОЗВАННОЕ ПРИГЛАШЕНИЕ НЕ ДОЛЖНО ОТКРЫВАТЬСЯ ВЕЧНО (владелец 15.09: «вечная
-// хуета открывается… почему кнопка не внизу»). Экран тянет react-native и под
+// ОТОЗВАННОЕ ПРИГЛАШЕНИЕ НЕ ДОЛЖНО ОТКРЫВАТЬСЯ ВЕЧНО. Экран тянет react-native и под
 // раннером не поднимается, поэтому его устройство проверяется по исходнику.
 
 describe("ответ сервера «приглашения нет»", () => {
@@ -34,8 +33,7 @@ const screen = readFileSync(join(__dirname, "../../../app/invite/[token].tsx"), 
 
 describe("экран приглашения", () => {
   test("ссылка забывается, когда приглашения нет или срок истёк", () => {
-    // Уже принятое — тоже «нет»: сервер отдаёт его с `state: "accepted"`
-    // (аудит Кабинета 03.10).
+    // Уже принятое — тоже «нет»: сервер отдаёт его с `state: "accepted"`.
     assert.match(
       screen,
       /const gone =\s*preview\.error instanceof InvitationGoneError \|\| preview\.data\?\.state === "accepted";/,
@@ -68,7 +66,7 @@ describe("экран приглашения", () => {
 
   test("приём по ссылке не уводит владельца в чужой аккаунт (аудит Кабинета 03.10)", () => {
     // Как у «Приглашений»: своё место на устройстве есть — команды встают
-    // в ленту, перехода нет (владелец 01.10).
+    // в ленту, перехода нет.
     const raw = readFileSync(join(__dirname, "../../../app/invite/[token].tsx"), "utf8");
     assert.match(raw, /const stay = Boolean\(getActiveTenantId\(\)\);/);
     assert.match(raw, /acceptAndActivateInvitation\(token, preview\.data\?\.role, \{ stay \}\)/);

@@ -19,9 +19,9 @@ Feature code:
 - `apps/mobile/src/features/calendar/WeekView.tsx`, `DayView.tsx`, `MonthView.tsx`, `AgendaView.tsx`
 - `apps/mobile/src/features/calendar/CalendarHeader.tsx`, `date-header.tsx`, `MiniCalendar.tsx`, `pager.tsx`, `zoom.tsx`
 - `apps/mobile/src/features/calendar/BookSlotSheet.tsx`, `DayLabelSheet.tsx`, `RescheduleSheet.tsx`, `HourRangeSheet.tsx`, `TeamScheduleSheet.tsx`
-- `apps/mobile/src/features/calendar/layout.ts`, `window.ts`, `week.ts`, `free-slots.ts`, `schedule-days.ts`, `day-cities.ts`
+- `apps/mobile/src/features/calendar/layout.ts`, `window.ts`, `week.ts`, `free-slots.ts`; `schedule-days.ts` and `day-cities.ts` live in `apps/mobile/src/features/reference/`
 - `apps/mobile/src/features/calendar/queries.ts`, `mutations.ts`, `master-appointments.ts`
-- `apps/mobile/src/features/calendar/reminders.ts`, `reminder-time.ts`, `reschedule-warning.ts`, `status-colors.ts`
+- `apps/mobile/src/features/calendar/reminders.ts`, `reschedule-warning.ts` (reminder offsets — `apps/mobile/src/lib/reminder-time.ts`), `status-colors.ts`
 - `packages/shared/src/local/calendar-settings.ts`, `packages/shared/src/local/schedule.ts`
 
 ## Critical invariants (do not violate)

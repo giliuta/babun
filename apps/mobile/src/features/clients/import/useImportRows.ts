@@ -16,8 +16,8 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import type { supabase } from "@/lib/supabase";
 import { assertQuotaAvailable } from "@/lib/quota";
-import { useScopeCompany } from "@/features/clients/company-scope";
-import { tryToE164 } from "../phone";
+import { useScopeCompany } from "@/session/company-scope";
+import { tryToE164 } from "@/lib/phone";
 import type { CountryCode } from "libphonenumber-js";
 import type { MappedRow } from "./csv-validate";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -27,6 +27,7 @@ import {
   type ImportResumeState,
 } from "./resume";
 import { importClientId, rowToClient } from "./import-client";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // Parallel round-trips per chunk. Same 10 the existing importer uses — the
 // repo has no array-insert, so «batch» on mobile = a bounded Promise.all.
@@ -56,7 +57,7 @@ export interface ImportRowsArgs {
   defaultCountry: CountryCode;
   /** Optional tag applied to every imported client. */
   tagId?: string | null;
-  /** Команда, в которую заводятся клиенты (30.09). */
+  /** Команда, в которую заводятся клиенты. */
   teamId?: string | null;
   /** File metadata for the resume record. */
   fileHash: string;
@@ -108,7 +109,7 @@ async function createImportClient(
 
 export function useImportRows() {
   // КОМПАНИЯ ИМПОРТА — КОМПАНИЯ ВКЛАДКИ «КЛИЕНТЫ», чьи команда и теги выбраны в
-  // мастере, а не открытая в календаре (03.10): при команде партнёра каждая
+  // мастере, а не открытая в календаре: при команде партнёра каждая
   // строка отбивалась «client team does not belong to the active tenant».
   const { tenantId, client: db } = useScopeCompany();
   const qc = useQueryClient();
@@ -204,7 +205,7 @@ export function useImportRows() {
     },
     // Refresh the list even on partial failure so the rows that WERE created
     // show up (and a retry sees them as duplicates).
-    onSettled: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: clientKeys.all() }),
     meta: { errorHandled: true }, // the wizard surfaces errors in its result step
   });
 }

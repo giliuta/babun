@@ -29,6 +29,7 @@ import { createClientTag, listClientTags } from "./tagsCached";
 
 const TENANT_A = "11111111-1111-1111-1111-111111111111";
 const TENANT_B = "22222222-2222-2222-2222-222222222222";
+const TEAM = "33333333-3333-4333-8333-333333333333";
 
 class OnlineNetwork implements NetworkAdapter {
   isOnline(): boolean {
@@ -69,7 +70,7 @@ function tagStub(rowsByTenant: Record<string, CachedTag[]>) {
       };
       return chain;
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
   } as any;
 }
 
@@ -78,12 +79,13 @@ const tag = (id: string, name = id, color = "#000"): CachedTag => ({
   tenant_id: TENANT_A,
   name,
   color,
-  // Значок у тега появился 2026-09-10; строка кэша обязана совпадать со
+  // Значок у тега: строка кэша обязана совпадать со
   // строкой базы поле в поле, иначе сторож цикла видит разницу там, где её
   // нет, и ревалидация эмитит на каждом ровном ответе сервера.
   icon: null,
   position: 0,
   hidden: false,
+  team_id: TEAM,
 });
 
 beforeEach(() => {
@@ -102,7 +104,7 @@ describe("cacheReplaceTenant", () => {
     await cacheBulkUpsert("tags", [
       tag("t1"),
       tag("t2"),
-      { id: "tb", tenant_id: TENANT_B, name: "b", color: "#111" },
+      { ...tag("tb", "b", "#111"), tenant_id: TENANT_B },
     ]);
 
     // Server now only has t1 for tenant A → t2 must be pruned.
@@ -178,7 +180,7 @@ describe("revalidate bridge (tags wrapper)", () => {
     setNetwork(new OfflineNetwork());
     const created = await createClientTag(
       {} as never,
-      { name: "Оффлайн", color: "#3366ff" },
+      { name: "Оффлайн", color: "#3366ff", team_id: TEAM },
       TENANT_A,
     );
     setNetwork(new OnlineNetwork());

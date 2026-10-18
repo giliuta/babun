@@ -58,6 +58,16 @@ function bytesToUuidV4(bytes: Uint8Array): string {
 /** Generate a RFC-4122 v4 UUID that works on web AND React Native. Always
  *  returns a valid uuid so the replayer's UUID-guard never strands an
  *  offline-created row. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True for a canonical uuid. The replayer permanently fails any queued
+ *  op whose row id is not one, so every id the offline layer mints or
+ *  accepts is checked with this. */
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
 export function randomUuid(): string {
   const c = typeof crypto !== "undefined" ? crypto : undefined;
   if (c && typeof c.randomUUID === "function") {

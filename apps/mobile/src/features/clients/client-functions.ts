@@ -3,8 +3,8 @@ import { useScopeDisabledFeatures } from "@/features/settings/company-features";
 import { useDesignBase } from "@/features/appointments/booking-prefs";
 import { useSaveTeamDesign, useTeamDesign } from "@/features/appointments/team-design";
 
-// ФУНКЦИИ КЛИЕНТОВ — У КОМАНДЫ (владелец 30.09: «люди, связи, реквизиты,
-// файлы — всё закреплено за командой»). Ключ лежит в `team_design.disabled_blocks`
+// ФУНКЦИИ КЛИЕНТОВ — У КОМАНДЫ: люди, связи, реквизиты, файлы закреплены за
+// командой. Ключ лежит в `team_design.disabled_blocks`
 // команды. Выключатель компании (STORY-088) по-прежнему главнее: выключенное
 // у компании не включит ни одна команда. К клиенту применяется команда
 // клиента.
@@ -35,7 +35,7 @@ export function useClientFunctionOn(
 ): boolean {
   // Выключатель компании есть только у трёх ключей; «Заметку» и прочие
   // компания не выключает. Компания — та же, что у «Дизайна» команды ниже:
-  // компания экрана (у строки работодателя — его, 03.10).
+  // компания экрана (у строки работодателя — его).
   const disabled = useScopeDisabledFeatures();
   const companyOn =
     !COMPANY_KEYS.has(key) || isFeatureOn(disabled, key as CompanyFeatureKey);

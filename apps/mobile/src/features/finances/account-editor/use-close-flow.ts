@@ -7,7 +7,7 @@ import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import {
-  useRestoreAccount,
+  useUndoAccountTrash,
   useTrashAccount,
   type AccountWithBalance,
 } from "../accounts";
@@ -24,15 +24,15 @@ import type { AlertError } from "./types";
 
 // РАЗГОВОР О ЗАКРЫТИИ СЧЁТА ИЗ ЛИСТА.
 //
-// ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос рисует
+// ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (правило дизайн-системы): вопрос рисует
 // хост приложения, а лист — отдельное окно `Modal`, и iOS отвечает «already
 // presenting». Поэтому лист на время разговора УЕЗЖАЕТ (паркуется), вопрос
 // звучит по `onExited`, перевод остатка открывается, когда уехал вопрос, а
-// после перевода вопрос повторяется по свежему остатку (закрытие — один заход,
-// аудит 2026-09-10). Отказ на любом шаге возвращает лист; закрыли или удалили
+// после перевода вопрос повторяется по свежему остатку (закрытие — один заход).
+// Отказ на любом шаге возвращает лист; закрыли или удалили
 // — лист закрывается совсем.
 //
-// РАЗГОВОР ЗДЕСЬ — ТОЛЬКО ОБ «УДАЛИТЬ СЧЁТ» (владелец 03.10): счёт уходит в
+// РАЗГОВОР ЗДЕСЬ — ТОЛЬКО ОБ «УДАЛИТЬ СЧЁТ»: счёт уходит в
 // «Удалённые счета», как свайп «Удалить» и как клиенты; удалить можно только
 // пустой — деньги сначала уводятся переводом. «Скрыть счёт» вопроса не
 // задаёт: скрытый счёт работает, лист прячет его сразу (`EditAccountSheet`).
@@ -55,7 +55,7 @@ function questionText(
   accounts: readonly AccountWithBalance[] = [],
 ) {
   // Последний открытый счёт команды — вопрос говорит, что команда останется
-  // без счёта (аудит 2026-09-30).
+  // без счёта.
   const last = target.is_active && isLastOpenOfTeam(target, accounts);
   if (decision.kind === "trash") {
     return trashAccountAlert(target.name, last);
@@ -87,8 +87,8 @@ export function useCloseFlow({
   const qc = useQueryClient();
   const tenantId = useTenantId();
   const trashAcc = useTrashAccount();
-  const restoreAcc = useRestoreAccount();
-  // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА (живой прогон 2026-09-23): свайп «Скрыть»
+  const undoTrash = useUndoAccountTrash();
+  // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА: свайп «Скрыть»
   // говорил «Счёт скрыт», а кнопка листа то же действие делала молча.
   const toast = useToast();
 
@@ -154,7 +154,7 @@ export function useCloseFlow({
           toast(`Счёт «${target.name}» удалён`, "success", {
             label: "Отменить",
             onPress: () =>
-              restoreAcc.mutate(target.id, {
+              undoTrash.mutate(target, {
                 onError: (e) => toast(`Не удалось вернуть счёт: ${e.message}`, "error"),
               }),
           });
@@ -194,7 +194,7 @@ export function useCloseFlow({
   };
 
   /**
-   * «ПЕРЕВЕСТИ» ИЗ ЛИСТА СЧЁТА (владелец 2026-09-23, идея из отчёта по
+   * «ПЕРЕВЕСТИ» ИЗ ЛИСТА СЧЁТА (идея из отчёта по
    * счетам: «сдать наличные на карту» — самое частое действие со счётом, а
    * дверь к нему была только на «Финансах»). Лист уезжает с дороги (два листа
    * в одном кадре iOS не покажет), открывается тот же лист перевода, что в

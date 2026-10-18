@@ -11,7 +11,7 @@
 import type { CountryCode } from "libphonenumber-js";
 import type { ParsedRow } from "./csv-parse";
 import type { ImportableField } from "./csv-mapping";
-import { tryToE164 } from "../phone";
+import { tryToE164 } from "@/lib/phone";
 
 export type RowReason =
   | "пустое имя"
@@ -142,11 +142,10 @@ export function mapAndValidate(opts: MapAndValidateOptions): MapAndValidateResul
 /** Decide which rows go to the INSERT batch. Drops rows flagged «пустое
  *  имя», «битый телефон», «дубликат в файле» and «дубликат в базе».
  *
- *  ДУБЛЬ ИЗ БАЗЫ ВЫБОРА НЕ ИМЕЕТ (аудит 2026-10-03). Был вариант
- *  «Импортировать» — но номер у клиента уникален (закон владельца
- *  2026-07-25, индекс `clients_tenant_phone_e164_idx`), и база отбивала
- *  каждую такую строку английским `duplicate key…`, а «Повторить неуд.»
- *  повторял тот же отказ. */
+ *  ДУБЛЬ ИЗ БАЗЫ ВЫБОРА НЕ ИМЕЕТ. Варианта «Импортировать» нет: номер у
+ *  клиента уникален (индекс `clients_tenant_phone_e164_idx`), и база
+ *  отбивала бы каждую такую строку английским `duplicate key…`, а
+ *  «Повторить неуд.» повторял бы тот же отказ. */
 export function selectImportable(mapped: MappedRow[]): {
   keep: MappedRow[];
   drop: MappedRow[];

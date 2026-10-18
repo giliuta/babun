@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { uiLocale } from "@babun/shared/i18n/locale";
@@ -14,7 +14,7 @@ import { useThemeColors } from "@/theme/colors";
 import { fillLegal, LEGAL_SHORT, LEGAL_TEXTS, LEGAL_TEXTS_APP, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
 import { LEGAL_OPERATOR, legalEmail } from "./operator";
 
-// ДОКУМЕНТ — ПОЛИТИКА, УСЛОВИЯ, УДАЛЕНИЕ АККАУНТА (04.10, выпуск в магазины).
+// ДОКУМЕНТ — ПОЛИТИКА, УСЛОВИЯ, УДАЛЕНИЕ АККАУНТА (выпуск в магазины).
 //
 // Открывается без входа (babun.app/privacy и т. д. — ссылки из карточек App
 // Store и Google Play, с экрана регистрации и из «Помощи»). Шапка — короткое
@@ -45,9 +45,11 @@ export function LegalScreen({ doc }: { doc: LegalDocId }) {
 
   return (
     <Screen edges={["top"]}>
-      <Head>
-        <title>{`${title} · Babun`}</title>
-      </Head>
+      {Platform.OS === "web" ? (
+        <Head>
+          <title>{`${title} · Babun`}</title>
+        </Head>
+      ) : null}
       <ScreenHeader
         title={LEGAL_SHORT[doc][lang]}
         right={

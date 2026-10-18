@@ -20,33 +20,33 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useClients } from "@/features/clients/queries";
-import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
+import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
 import {
   useIssueReceiptCreditNote,
   useReceipt,
   useReceiptTransaction,
   useRefundReceipt,
-} from "@/features/documents/receipts-queries";
+} from "@/features/finances/receipts-queries";
 import { AmountBlock } from "@/features/finances/AmountBlock";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
-import { buildInvoiceDocument } from "@/features/invoices/document";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { buildInvoiceDocument } from "@/lib/paper/document";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import {
   formatInvoiceMoney,
   parseMoneyAmount,
   todayYmd,
-} from "@/features/invoices/format";
+} from "@/lib/paper/format";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
-import { useNextInvoiceSeries } from "@/features/invoices/queries";
+import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
 import { useReceiptRefunds } from "@/features/documents/use-receipt-refunds";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// ВОЗВРАТ ПО ЧЕКУ — ФОРМА → ПРЕВЬЮ → «ВЫПИСАТЬ» (владелец 2026-10-04:
-// «оплатил, получил чек — вернули деньги, нужен документ»). Та же архитектура,
+// ВОЗВРАТ ПО ЧЕКУ — ФОРМА → ПРЕВЬЮ → «ВЫПИСАТЬ»: деньги вернули,
+// нужен документ. Та же архитектура,
 // что у кредит-ноты к инвойсу: реквизиты с номером CN, клиент, что
 // возвращаем, сумма, причина. Сервер (`refund_receipt`) одним движением
 // пишет возврат на счёт чека и выписывает кредит-ноту: к чеку — на сумму

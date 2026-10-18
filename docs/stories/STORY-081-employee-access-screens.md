@@ -118,7 +118,7 @@
    Правка лежит ненакатанной: `20260914220000_master_invited_into_calendar_without_card.sql`.
 2. У приглашённого «Приглашения» не грузятся: `my_invitations`,
    `accept_invitation_by_id`, `decline_invitation` и сигнала `invitations_changed`
-   на боевой нет — `20260914240000_invitations_inbox.sql` не накатан.
+   на боевой нет — `20260914235900_invitations_inbox.sql` не накатан.
 3. Даже после двух накатов мастер без карточки в Команде 1 только смотрит.
    Статус, заметку и фото сервер пускает по карточке
    (`update_master_appointment_safe`, `current_user_can_mutate_appointment_photo`:

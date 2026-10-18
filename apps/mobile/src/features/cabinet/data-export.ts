@@ -1,18 +1,16 @@
-import type { Database, Json } from "@babun/shared/db/database.types";
+import type { Json } from "@babun/shared/db/database.types";
 import { getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
 import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
 import { TX_TYPE_LABEL } from "@babun/shared/local/finance/transaction";
 import { csvAmount } from "@/lib/csv-amount";
 import { csvCell, csvDocument, csvTextCell } from "@/lib/share-csv";
 
-// ВЫГРУЗКА ВСЕХ ДАННЫХ (Кабинет, владелец 03.10: «выгрузить все данные можно,
-// но только из своих личных команд, нельзя выгрузить, допустим, с какой-то
-// другой командой»).
+// ВЫГРУЗКА ВСЕХ ДАННЫХ (Кабинет): только из своих личных команд, не из чужой.
 //
 // Здесь только чистая часть: превратить прочитанные строки в CSV и назвать
 // файл. Чтение базы и «Поделиться» — в `use-data-export.ts`, право — там же.
 //
-// ФОРМАТ (был общим с выгрузкой для бухгалтера, удалённой 03.10):
+// ФОРМАТ:
 // разделитель «;», BOM, CRLF, суммы числами с запятой («1234,50»). Excel с
 // русской или кипрской локалью открывает файл сразу, а сумму можно сложить.
 // Текст пользователя (имена, заметки, адреса) проходит `csvTextCell`: ячейка,
@@ -20,77 +18,27 @@ import { csvCell, csvDocument, csvTextCell } from "@/lib/share-csv";
 //
 // ДАТЫ — КАК ЛЕЖАТ В БАЗЕ, `ГГГГ-ММ-ДД`: Excel читает их датой при любой
 // локали, а по алфавиту они совпадают с хронологией.
+//
+// Export kinds and row shapes live in `./data-export/types.ts`.
 
-type Row<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Row"];
+import type {
+  AccountRef,
+  AppointmentExportRow,
+  ClientExportRow,
+  ExportKind,
+  Names,
+  SourceRef,
+  TransactionExportRow,
+} from "./data-export/types";
 
-export type ExportKind = "clients" | "appointments" | "finances";
-
-export const EXPORT_KINDS: readonly ExportKind[] = ["clients", "appointments", "finances"];
-
-// ─── Строки, которые читает хук (колонки — те же, что в его select) ─────────
-
-export type ClientExportRow = Pick<
-  Row<"clients">,
-  | "id"
-  | "full_name"
-  | "phone"
-  | "email"
-  | "team_id"
-  | "city"
-  | "acquisition_source"
-  | "birthday"
-  | "comment"
-  | "notes"
-  | "created_at"
->;
-
-export type AppointmentExportRow = Pick<
-  Row<"appointments">,
-  | "id"
-  | "date"
-  | "time_start"
-  | "time_end"
-  | "kind"
-  | "team_id"
-  | "client_id"
-  | "status"
-  | "services"
-  | "total_amount"
-  | "paid_amount"
-  | "prepaid_amount"
-  | "payment_status"
-  | "payments"
-  | "payment"
-  | "address"
-  | "comment"
-  | "event_notes"
->;
-
-export type TransactionExportRow = Pick<
-  Row<"finance_transactions">,
-  | "id"
-  | "type"
-  | "amount"
-  | "occurred_on"
-  | "occurred_time"
-  | "category_id"
-  | "account_id"
-  | "team_id"
-  | "client_id"
-  | "notes"
-  | "vat_amount"
-  | "vat_mode"
-  | "created_at"
->;
-
-export type SourceRef = Pick<Row<"client_sources">, "id" | "name" | "key" | "team_id">;
-
-/** Счёт с командой, на которую он записан: по нему находятся операции без
- *  команды (см. `financeTeamFilter`). */
-export type AccountRef = Pick<Row<"accounts">, "id" | "name" | "brigade_id">;
-
-type Names = ReadonlyMap<string, string>;
+export {
+  type AccountRef,
+  type AppointmentExportRow,
+  type ClientExportRow,
+  type ExportKind,
+  type SourceRef,
+  type TransactionExportRow,
+} from "./data-export/types";
 
 // ─── Мелочи ─────────────────────────────────────────────────────────────────
 
@@ -105,10 +53,10 @@ function word(dictionary: Readonly<Record<string, string>>, key: string): string
   return Object.prototype.hasOwnProperty.call(dictionary, key) ? dictionary[key] : key;
 }
 
-/** ЗАМЕТКА КЛИЕНТА — ВСЕ ЕГО ЗАМЕТКИ (аудит Кабинета 03.10). С 06.09 они
+/** ЗАМЕТКА КЛИЕНТА — ВСЕ ЕГО ЗАМЕТКИ. Они
  *  живут списком `notes[]`; старое поле `comment` держит только текст из
- *  импорта. Выгрузка читала одно `comment`, и всё, что набрано в карточке
- *  или в записи, уходило пустой ячейкой. Порядок — как писали, каждая
+ *  импорта. Чтение одного `comment` отдало бы пустую ячейку вместо всего,
+ *  что набрано в карточке или в записи. Порядок — как писали, каждая
  *  заметка своей строкой; текст импорта, если он не повторён заметкой, —
  *  первым. */
 export function clientNotesText(c: Pick<ClientExportRow, "comment" | "notes">): string {
@@ -188,7 +136,7 @@ export function clientsToCsv(
       csvTextCell(clientNotesText(c)),
       // День создания — по часам телефона, как дата в имени файла: срез
       // строки давал UTC, и клиент, заведённый в 01:30 на Кипре, числился
-      // вчерашним (аудит Кабинета 03.10).
+      // вчерашним.
       csvCell(c.created_at ? dateStamp(new Date(c.created_at)) : ""),
     ]);
   }
@@ -204,7 +152,7 @@ const APPOINTMENT_HEADER = [
   "Вид",
   "Команда",
   "Клиент",
-  // Статуса записи больше нет (владелец 03.10) — колонка говорит только об
+  // Статуса записи больше нет — колонка говорит только об
   // отмене.
   "Отмена",
   "Услуги",
@@ -222,7 +170,7 @@ function kindWord(kind: string): string {
 }
 
 /** Имена услуг записи. Имя на день записи лежит в самой строке
- *  (`serviceName`); у записей старше 2026-08-25 его нет — тогда из
+ *  (`serviceName`); у старых записей его нет — тогда из
  *  справочника по `serviceId`. Ни там, ни там — услугу пропускаем. */
 export function serviceNames(services: Json, catalog: Names): string {
   if (!Array.isArray(services)) return "";
@@ -279,8 +227,8 @@ export function appointmentsToCsv(
       // У личного события денег нет: «0,00» в каждой строке обеда — шум.
       csvAmount(isWork ? a.total_amount : null),
       // «Оплачено» — та же формула, что в записи и долгах: аванс плюс
-      // доплата, полный возврат — ноль (проверка системы 03.10: голая
-      // колонка paid_amount не знала аванса и писала «0,00» оплаченным).
+      // доплата, полный возврат — ноль (голая колонка paid_amount
+      // не знала аванса и писала бы «0,00» оплаченным).
       csvAmount(isWork ? paidOf(a) : null),
       csvTextCell(a.address),
       csvTextCell(note),
@@ -354,8 +302,8 @@ export function transactionsToCsv(
 
 /** ОТБОР ОПЕРАЦИЙ ОДНОЙ КОМАНДЫ ДЛЯ `postgrest.or(...)` — тот же, что на экране
  *  «Финансов»: строки команды ПЛЮС строки без команды, чьи деньги лежат на её
- *  счетах. Только по `team_id` выгрузка команды теряла вторые и не сходилась с
- *  экраном (аудит 2026-10-03).
+ *  счетах. Только по `team_id` выгрузка команды теряла бы вторые и не сходилась с
+ *  экраном.
  *
  *  Идентификаторы вклеиваются в строку фильтра, поэтому пропускаются только
  *  безопасные символы: запятая или скобка в id сломала бы фильтр целиком. */

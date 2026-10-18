@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-// ВЛАДЕЛЕЦ 11.10: «брат создал клиента — у него не появилось, у меня
-// появилось; потом пишет „клиент с этим номером есть“; запись залагала».
-// Сотрудник завёл клиента из формы записи (создание шло окном сотрудника и
+// СОТРУДНИК СОЗДАЛ КЛИЕНТА — И ОН ДОЛЖЕН ПОЯВИТЬСЯ У НЕГО: иначе следующая
+// попытка заводит дубль («клиент с этим номером есть»). Сотрудник завёл клиента из формы записи (создание шло окном сотрудника и
 // прошло), а форма искала его «клиентами его записей» — у нового клиента
-// записей нет, и форма его не находила. Сверено на боевой от лица брата:
+// записей нет, и форма его не находила. Сверено на боевой от лица сотрудника:
 // `list_member_clients` отдаёт клиента, `list_master_clients_safe` — нет.
 
 const here = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(resolve(here, "queries.ts"), "utf8");
+const src = readModuleSource(resolve(here, "queries.ts"));
 
 test("вне вкладки сотрудник с открытой базой читает окном сотрудника плюс клиентов своих записей", () => {
   assert.match(src, /if \(!mirror && activeTenantId && activeRole === "master"\) \{/);

@@ -1,11 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
   effectiveVatSettings,
   summarizeVat,
   type VatMode,
   type VatSettings,
-  type VatSummary,
 } from "@babun/shared/local/finance/vat";
 
 import { accountVatDueQueryKey } from "@/lib/company-query-keys";
@@ -20,7 +19,7 @@ import { useTenantId } from "@/lib/tenant";
 // «какая ставка у этой команды» не получило три разных ответа.
 //
 // На уровне КОМПАНИИ vat_exemption_note и document_language из клиентского
-// контура убраны (аудит 2026-08-16, U39/U103): ни ввода, ни печати у них не
+// контура убраны: ни ввода, ни печати у них не
 // было — колонки в БД остаются, вернуть поля можно вместе с их UI. На уровне
 // команды exemptionNote остаётся: экран НДС команды сознательно проносит его
 // через свой upsert, не затирая чужое значение.
@@ -38,7 +37,7 @@ export function useVatSettings() {
     queryKey: ["vat-settings", tenantId],
     enabled: !!tenantId,
     queryFn: async (): Promise<VatSettings> => {
-      // СОТРУДНИКУ ТАБЛИЦА КОМПАНИИ ЗАКРЫТА (аудит 11.10): `.single()` по
+      // СОТРУДНИКУ ТАБЛИЦА КОМПАНИИ ЗАКРЫТА: `.single()` по
       // нулю строк бросал, и новый инвойс партнёра падал на загрузке, а в
       // записи и чеке ставка выходила 0 %. Строки нет — ставка из безопасного
       // профиля компании (`current_tenant_profile_safe` отдаёт её всем членам).
@@ -61,32 +60,6 @@ export function useVatSettings() {
         mode: (row.vat_mode ?? "off") as VatMode,
         rate: Number(row.vat_rate ?? 0),
       };
-    },
-  });
-}
-
-export function useSaveVatSettings() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    // Каждый вызов говорит об ошибке сам (`onError`): без метки глобальный
-    // обработчик добавлял второе окно поверх (аудит 2026-09-30).
-    meta: { errorHandled: true },
-    mutationFn: async (patch: Partial<Pick<VatSettings, "mode" | "rate">>) => {
-      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
-      const { error } = await supabase
-        .from("tenants")
-        .update({
-          ...(patch.mode !== undefined ? { vat_mode: patch.mode } : {}),
-          ...(patch.rate !== undefined ? { vat_rate: patch.rate } : {}),
-        })
-        .eq("id", tenantId);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["vat-settings"] });
-      // Ставка меняет то, как считается цена «плюс НДС» на новых операциях.
-      void qc.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
@@ -114,8 +87,8 @@ export function useTeamVatOverrides() {
 
 /** СТАВКА КОМАНДЫ ИЗ НАСТРОЕК — умолчание для нового документа, пока человек
  *  не написал свою (`useRememberedVatRate`). 0 — настройка ещё едет или
- *  ставки нет. Режим компании не гасит ставку: тумблера VAT больше нет
- *  (владелец 2026-09-30: «должно быть всё включено»), налог выбирают клавишей
+ *  ставки нет. Режим компании не гасит ставку: тумблера VAT нет
+ *  (всё включено), налог выбирают клавишей
  *  в самом документе. */
 export function useTeamVatRate(teamId: string | null | undefined): number {
   const vat = useVatSettings().data;
@@ -128,75 +101,17 @@ export function useTeamVatRate(teamId: string | null | undefined): number {
   return settings.rate > 0 ? settings.rate : 0;
 }
 
-export function useSaveTeamVat() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    // Каждый вызов говорит об ошибке сам (`onError`): без метки глобальный
-    // обработчик добавлял второе окно поверх (аудит 2026-09-30).
-    meta: { errorHandled: true },
-    mutationFn: async (input: TeamVatOverride) => {
-      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
-      // Пустое переопределение — это «наследовать компанию», а не «нули».
-      const empty =
-        input.mode === null && input.rate === null && !input.exemptionNote;
-      if (empty) {
-        const { error } = await supabase
-          .from("team_finance_settings")
-          .delete()
-          .eq("tenant_id", tenantId)
-          .eq("team_id", input.teamId);
-        if (error) throw new Error(error.message);
-        return;
-      }
-      const { error } = await supabase.from("team_finance_settings").upsert(
-        {
-          tenant_id: tenantId,
-          team_id: input.teamId,
-          vat_mode: input.mode,
-          vat_rate: input.rate,
-          vat_exemption_note: input.exemptionNote,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "tenant_id,team_id" },
-      );
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["vat-team-overrides"] });
-    },
-  });
-}
-
 // Резолвер действующего НДС живёт в shared рядом с остальной математикой
 // налога — там он тестируется как чистая функция (зеркало серверного
 // fill_transaction_vat). Здесь только реэкспорт для экранов.
 export { effectiveVatSettings } from "@babun/shared/local/finance/vat";
 
-export const VAT_MODE_LABELS: Record<VatMode, string> = {
-  off: "Без VAT",
-  inclusive: "VAT включён в цену",
-  exclusive: "VAT плюсом к цене",
-};
-
-/** Подпись под строкой настройки: показывает действующее значение, чтобы не
- *  проваливаться внутрь ради проверки. */
-export function vatSummaryLine(v: VatSettings | undefined): string {
-  if (!v) return "Загрузка…";
-  if (v.mode === "off") return "Без VAT";
-  // Налог включён, а ставки нет: клавиш VAT в операциях не будет, и строка
-  // «VAT включён · 0%» молчала о том, что настройка не закончена (аудит
-  // 2026-09-30). Говорим, чего не хватает.
-  if (!(v.rate > 0)) return "Укажите ставку";
-  return `${VAT_MODE_LABELS[v.mode]} · ${v.rate}%`;
-}
-
 /** Сколько проводок читать за один заход: предел PostgREST — тысяча строк. */
 const VAT_PAGE = 1000;
 
 /**
- * VAT К УПЛАТЕ ПО СЧЁТУ (владелец 2026-09-23: «общая сумма, а в скобочках —
- * сколько VAT мы должны будем заплатить с этого счёта»). Та же формула, что у
+ * VAT К УПЛАТЕ ПО СЧЁТУ: общая сумма, а в скобочках — сколько VAT мы должны будем
+ * заплатить с этого счёта. Та же формула, что у
  * отчёта по налогу (`summarizeVat`): собранное с клиентов минус уплаченное
  * поставщикам; переводы и «Без VAT» не считаются. Читаются только проводки с
  * налогом — остальные в сумму ничего не дают.
@@ -230,41 +145,3 @@ export function useAccountVatDue(accountId: string, enabled: boolean) {
   });
 }
 
-/**
- * VAT ЗА ПЕРИОД ПО КОМПАНИИ (прогон финансов 2026-09-24). Плашку «НДС к
- * уплате» владелец снял с главного экрана 2026-08-15: «эту информацию
- * переместим в другое место» — место так и не появилось. Налог — квартальный
- * вопрос, поэтому он живёт на странице VAT, а считает его та же
- * `summarizeVat`, что и скобку «(VAT €x)» у счёта. Ключ под «accounts»:
- * любая денежная правка, сбрасывающая остатки, сбрасывает и его.
- */
-export function useVatSummaryForRange(from: string, to: string, enabled: boolean) {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["accounts", tenantId, "vat-summary", from, to],
-    enabled: enabled && !!tenantId,
-    queryFn: async (): Promise<VatSummary> => {
-      const rows: FinanceTransaction[] = [];
-      for (let start = 0; ; start += VAT_PAGE) {
-        const { data, error } = await supabase
-          .from("finance_transactions")
-          .select("id, type, amount, vat_mode, vat_amount")
-          .eq("tenant_id", tenantId as string)
-          .gte("occurred_on", from)
-          .lte("occurred_on", to)
-          .not("vat_amount", "is", null)
-          .order("id")
-          .range(start, start + VAT_PAGE - 1);
-        if (error) throw new Error(error.message);
-        const page = (data ?? []).map((r) => ({
-          ...r,
-          amount: Number(r.amount),
-          vat_amount: r.vat_amount == null ? null : Number(r.vat_amount),
-        })) as unknown as FinanceTransaction[];
-        rows.push(...page);
-        if (page.length < VAT_PAGE) break;
-      }
-      return summarizeVat(rows);
-    },
-  });
-}

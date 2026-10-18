@@ -1,8 +1,8 @@
 // КАКОГО ЦВЕТА ЭТА ЗАПИСЬ — ОДНО ПРАВИЛО НА ПРОДУКТ.
 //
-// Владелец 2026-09-05: «хочу, чтоб в настройках была цветовая палитра: если
-// нет клиента — тогда цвет такой-то, тапаю, могу выбрать любой; если нет
-// объекта — тогда цвет такой-то… чтобы человек один раз настроил, и всё».
+// В настройках задаётся цветовая палитра: если нет клиента — цвет такой-то
+// (любой на выбор), если нет объекта — такой-то…; человек настраивает один
+// раз, и всё.
 //
 // Цвет записи перестал быть украшением: он ОТВЕЧАЕТ НА ВОПРОС «чего этой
 // работе не хватает». В календаре день читается одним взглядом — вот эти
@@ -63,6 +63,8 @@ export function recordFilled(
     kind?: string | null;
     status?: string | null;
     date?: string | null;
+    time_start?: string | null;
+    time_end?: string | null;
     client_id?: string | null;
     location_id?: string | null;
     address?: string | null;
@@ -77,6 +79,7 @@ export function recordFilled(
     payment?: { cashAmount: number; cardAmount: number } | null;
   },
   todayYmd?: string,
+  nowMinutes?: number | null,
 ): { client: boolean; object: boolean; services: boolean; paid: boolean } {
   return {
     client: !!apt.client_id,
@@ -87,22 +90,41 @@ export function recordFilled(
       (apt.services?.length ?? 0) > 0 ||
       !!apt.custom_total ||
       Number(apt.total_amount ?? 0) > 0,
-    paid: !owesAfterVisit(apt, todayYmd),
+    paid: !owesAfterVisit(apt, todayYmd, nowMinutes),
   };
 }
 
-/** «НЕ ОПЛАЧЕНО» = ДОЛГ ПОСЛЕ ВИЗИТА (владелец 25.09: «когда долг у клиента —
- *  свой цвет»). Визит состоялся — выполнен или его день прошёл, — а получено
- *  меньше суммы. Будущая запись не оплачена по определению, и красить её
- *  «долгом» значило бы красить весь план. Сумма «получено» — та же, что у
- *  долга в финансах (`getPaidAmount`: аванс + леджер/зеркало веба). */
+/** Минуты от полуночи у «ЧЧ:ММ»; не время — `null`. */
+function hmToMinutes(hm: string | null | undefined): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hm ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+/** «НЕ ОПЛАЧЕНО» = ДОЛГ ПОСЛЕ ВИЗИТА (у долга свой цвет). Визит состоялся —
+ *  выполнен, его день прошёл или сегодня кончилось его время, — а получено
+ *  меньше суммы. Ждать завтрашнего дня нельзя: прошедшая неоплаченная запись
+ *  весь вечер стояла в цвете команды, как будто с ней всё в порядке. Будущая
+ *  запись не оплачена по определению, и красить её «долгом» значило бы
+ *  красить весь план. Конец — как у раскладки и просрочки: не раньше
+ *  15 минут от начала. Сумма «получено» — та же, что у долга в финансах
+ *  (`getPaidAmount`: аванс + леджер/зеркало веба). */
 function owesAfterVisit(
   apt: Parameters<typeof recordFilled>[0],
   todayYmd?: string,
+  nowMinutes?: number | null,
 ): boolean {
+  const start = hmToMinutes(apt.time_start);
+  const end = hmToMinutes(apt.time_end);
+  const endMinutes =
+    start == null ? end : Math.max(end ?? start, start + 15);
   const happened =
     apt.status === "completed" ||
-    (!!todayYmd && !!apt.date && apt.date < todayYmd);
+    (!!todayYmd && !!apt.date && apt.date < todayYmd) ||
+    (!!todayYmd &&
+      apt.date === todayYmd &&
+      nowMinutes != null &&
+      endMinutes != null &&
+      endMinutes <= nowMinutes);
   if (!happened) return false;
   if (apt.payment_status === "refunded" || apt.payment_status === "paid") {
     return false;
@@ -121,14 +143,15 @@ function owesAfterVisit(
 
 /** То же, что `recordFilled`, но для того, кто не видит оплату записи: тогда
  *  про оплату сказать нечего, и дырой «не оплачено» она не считается
- *  (повторный аудит 03.10: у партнёра без «Оплаты» каждая прошедшая запись
- *  горела «нет оплаты»). */
+ *  (у партнёра без «Оплаты» каждая прошедшая запись
+ *  горела бы «нет оплаты»). */
 export function recordFilledFor(
   apt: Parameters<typeof recordFilled>[0],
   todayYmd?: string,
   paymentHidden?: boolean,
+  nowMinutes?: number | null,
 ): ReturnType<typeof recordFilled> {
-  const filled = recordFilled(apt, todayYmd);
+  const filled = recordFilled(apt, todayYmd, nowMinutes);
   return paymentHidden ? { ...filled, paid: true } : filled;
 }
 

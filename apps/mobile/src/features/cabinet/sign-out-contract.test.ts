@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-// «ВЫЙТИ» — ТОЛЬКО С ЭТОГО УСТРОЙСТВА (владелец 2026-09-15: «чтоб ничего не
-// повторялось»). Каждая «Выйти» в приложении шла через
-// `signOutScopeAndWipe("global")`: выход на одном телефоне гасил сессии аккаунта
-// на всех остальных, а «Выйти» и «Выйти со всех устройств» делали одно и то же.
+// «ВЫЙТИ» — ТОЛЬКО С ЭТОГО УСТРОЙСТВА. Через `signOutScopeAndWipe("global")`
+// выход на одном телефоне гасил бы сессии аккаунта на всех остальных, а
+// «Выйти» и «Выйти со всех устройств» делали бы одно и то же.
 // Глобальный выход остаётся одной явной строкой в «Вход и безопасность»,
 // обычная «Выйти» — одна, внизу Кабинета.
 
@@ -27,7 +27,7 @@ function functionBody(source: string, declaration: string): string {
 describe("выход из аккаунта", () => {
   test("обычная «Выйти» гасит только сессию этого устройства", () => {
     const body = functionBody(
-      read("../../lib/auth-clear.ts"),
+      readModuleSource(resolve(here, "../../lib/auth-clear.ts")),
       "export async function signOutAndWipe()",
     );
     assert.match(body, /signOutScopeAndWipe\("local"\)/);
@@ -35,7 +35,8 @@ describe("выход из аккаунта", () => {
   });
 
   test("в «Вход и безопасность» нет второй «Выйти», выход со всех устройств — явной строкой", () => {
-    const account = read("../../../app/(dashboard)/cabinet/account.tsx");
+    // The page is the thin route plus `account/`.
+    const account = readModuleSource(resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"), resolve(here, "account"));
     assert.doesNotMatch(account, /\bsignOutAndWipe\b/);
     assert.match(account, /await signOutScopeAndWipe\("global"\)/);
   });
@@ -43,7 +44,10 @@ describe("выход из аккаунта", () => {
   test("«Выйти из аккаунта» в Кабинете всегда спрашивает (аудит 03.10)", () => {
     const cabinet = read("../../../app/(dashboard)/cabinet/index.tsx");
     assert.match(cabinet, /onPress=\{\(\) => void confirmAndSignOut\(\)\}/);
-    const body = functionBody(read("../../lib/auth-clear.ts"), "export async function confirmAndSignOut()");
+    const body = functionBody(
+      readModuleSource(resolve(here, "../../lib/auth-clear.ts")),
+      "export async function confirmAndSignOut()",
+    );
     assert.match(body, /confirmAction\("Выйти из аккаунта\?"/);
     assert.match(body, /signOutScopeAndWipe\("local"\)/);
     assert.doesNotMatch(body, /"global"/);

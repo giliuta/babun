@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -12,7 +12,7 @@ import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
@@ -28,9 +28,8 @@ import {
 } from "./sms-account";
 import { openSms, useSmsServiceFor, type SmsContext } from "./SmsCompose";
 
-// «SMS» У ТРУБКИ КЛИЕНТА — ЕДИНСТВЕННАЯ ДВЕРЬ ОТПРАВКИ (STORY-089; владелец
-// 03.10: «SMS отправляется исключительно, если нажать на трубку клиента…
-// чётко выбираешь шаблон, оно отмечается, и внизу кнопка „Отправить“»).
+// «SMS» У ТРУБКИ КЛИЕНТА — ЕДИНСТВЕННАЯ ДВЕРЬ ОТПРАВКИ (шаблон отмечается,
+// внизу кнопка «Отправить»).
 // Внизу записи и карточки клиента — только история, кнопки там нет.
 //
 //   • ШТОРКА ШАБЛОНОВ — только шаблоны команды строками: значок и цвет шаблона,
@@ -38,19 +37,17 @@ import { openSms, useSmsServiceFor, type SmsContext } from "./SmsCompose";
 //     не хватает данных («нет записи»), погашен. Кнопок здесь нет: откуда
 //     отправлять, решается потом. «Своего SMS» нет — «чтоб случайно не
 //     тыкали».
-//   • Справа в шапке — «палочки с кружочками»: шаблоны команды (владелец:
-//     «справа поставить, чтоб сразу переходила в шаблоны»). Страница — общим
+//   • Справа в шапке — «палочки с кружочками»: шаблоны команды (сразу переход в шаблоны). Страница — общим
 //     адресом над табами (`/sms-templates`): «назад» вернёт в запись.
-//   • ТАП ПО ШАБЛОНУ — ВТОРАЯ ШТОРКА ПОВЕРХ (владелец 03.10: «выбираю шаблон
-//     — появляется новая шторка, как будет выглядеть SMS, и там уже две
-//     кнопки: отправить через компанию или со своего телефона»): шапка — имя
+//   • ТАП ПО ШАБЛОНУ — ВТОРАЯ ШТОРКА ПОВЕРХ (как будет выглядеть SMS и две
+//     кнопки: отправить через компанию или со своего телефона): шапка — имя
 //     шаблона, поле с готовым текстом (правится, уходит ровно то, что в поле),
 //     «N знаков · M SMS»; внизу «Со своего телефона» («Сообщения» телефона,
 //     бесплатно) и под ней синяя «Отправить от <имя отправителя>» (сервис, с
 //     баланса). Сервиса нет — одна «Со своего телефона», синей. Закрыли вторую
 //     — снова шаблоны.
 //   • «От команды» — строкой над шаблонами, только без записи и когда команд с
-//     именем отправителя несколько (владелец 30.09).
+//     именем отправителя несколько.
 
 export function SmsSendSheet({
   visible,
@@ -79,7 +76,7 @@ export function SmsSendSheet({
   const { data: teams = [] } = useTeams();
   const role = useCurrentRole().data;
 
-  // ОТ КАКОЙ КОМАНДЫ (владелец 30.09): у записи — её команда; без записи —
+  // ОТ КАКОЙ КОМАНДЫ: у записи — её команда; без записи —
   // команда клиента, если у неё есть имя отправителя, иначе первая с именем.
   // Клиент чужой компании (своя, пока в календаре команда партнёра): от её
   // команды и с её шаблонами — сервис другой компании здесь не участвует.
@@ -91,7 +88,7 @@ export function SmsSendSheet({
     context.teamId && service.senders[context.teamId] ? context.teamId : (service.senderTeams[0] ?? context.teamId ?? null);
   const fromTeam = fixedTeam ?? pickedTeam ?? defaultTeam;
   const fetched = useTeamTemplates(given ? null : fromTeam, foreign ? context.tenantId : null).data;
-  const templates = given ?? fetched ?? [];
+  const templates = useMemo(() => given ?? fetched ?? [], [given, fetched]);
 
   const needsLink = templates.some((tpl) => wantsLink(tpl.body));
   const link = useAppointmentLink(context.appointmentId, visible && needsLink).data ?? null;
@@ -147,8 +144,14 @@ export function SmsSendSheet({
     setTimeout(onClose, SHEET_EXIT_MS);
   };
 
+  // Шторка уезжает ~260 мс, и её футер всё это время нажимается: без флага
+  // второй тап отправил бы вторую платную SMS. Ref, а не `isPending`, —
+  // состояние мутации доходит до кнопки только следующим рендером.
+  const sendingRef = useRef(false);
   const sendFromCompany = () => {
     if (!body) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     haptics.tap();
     closeAll();
     send.mutate(
@@ -163,6 +166,9 @@ export function SmsSendSheet({
       {
         onSuccess: () => toast("SMS отправляется", "success"),
         onError: (e) => notify("SMS не отправлена", smsErrorText(e)),
+        onSettled: () => {
+          sendingRef.current = false;
+        },
       },
     );
   };
@@ -294,7 +300,7 @@ export function SmsSendSheet({
               <Button
                 label={senderName ? `Отправить от ${senderName}` : "Отправить"}
                 onPress={sendFromCompany}
-                disabled={!body}
+                disabled={!body || send.isPending}
               />
             ) : null}
           </View>

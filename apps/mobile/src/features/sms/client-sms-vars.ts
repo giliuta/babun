@@ -1,7 +1,7 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import { formatDateKey } from "@babun/shared/common/utils/date-utils";
-import { addressedAs, firstName } from "@/features/clients/sms-name";
+import { addressedAs, firstName } from "@/lib/sms-name";
 import { smsVars, type SmsVars } from "./sms-compose";
 
 // ШАБЛОН SMS ИЗ КАРТОЧКИ КЛИЕНТА (STORY-089, волна 1).
@@ -21,7 +21,7 @@ type AppointmentLike = Pick<
  *
  *  `nowHm` — часы бизнеса: сегодняшняя запись, время которой уже прошло, а
  *  статус всё ещё «запланирована», ближайшей не считается — [Дата] и
- *  [Время] из карточки описывали бы прошедший визит (аудит 03.10). */
+ *  [Время] из карточки описывали бы прошедший визит. */
 export function nextScheduledWork<T extends AppointmentLike>(
   appointments: readonly T[],
   today: string,
@@ -70,8 +70,7 @@ export function clientSmsVars(input: {
   });
 }
 
-/** Поля SMS о ЗАПИСИ из календаря (владелец 03.10: «зажимаю запись в
- *  календаре — в шторке сразу „Отправить SMS“»): как к клиенту обращаться
+/** Поля SMS о ЗАПИСИ из календаря (долгое нажатие на запись): как к клиенту обращаться
  *  (его «Имя для SMS», нет — первое слово имени), дата, время, команда,
  *  услуги, адрес. Сумма — только тому, кому деньги записи видны. */
 export function appointmentSmsVars(input: {

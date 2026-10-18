@@ -2,7 +2,7 @@ import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { money } from "@babun/shared/common/utils/money";
 import type { SmsHistoryItem } from "./sms-model";
 
-// СЛОВА СТРАНИЦЫ SMS (STORY-089). Баланс и цены SMS — в евро всегда: сервис
+// СЛОВА СТРАНИЦЫ SMS. Баланс и цены SMS — в евро всегда: сервис
 // берёт деньги в евро, а валюта компании про записи, а не про SMS.
 
 export const euro = (cents: number): string => money(cents / 100, "EUR");
@@ -49,7 +49,7 @@ const STATUS: Record<SmsHistoryItem["status"], string> = {
   // Сервер ставит «blocked» и без денег: страна номера, SMS не настроены,
   // отправка остановлена. Причину говорит строка ошибки под словом —
   // «Не хватило баланса» рядом с «Страна номера не разрешена» звало
-  // пополнять счёт, который ни при чём (аудит 03.10).
+  // пополнять счёт, который ни при чём.
   blocked: "Не отправлено",
 };
 

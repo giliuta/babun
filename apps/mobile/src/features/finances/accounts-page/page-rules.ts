@@ -5,11 +5,13 @@ import {
   type CloseDecision,
 } from "../close-decision";
 import { routeParam } from "../finance-route";
+import { sumAccountBalances } from "../accounts-sections";
+import { isUuid } from "@babun/shared/sync/uuid";
 
 // СТРАНИЦА «СЧЕТА» ЗА ШЕСТЕРЁНКОЙ — ЕЁ РЕШЕНИЯ ЧИСТЫМИ ФУНКЦИЯМИ.
 //
-// Владелец 2026-09-15: «…и влево свайп — скрыть; и можно их перетаскивать,
-// менять местами; внизу кнопка „Добавить счёт“». Всё, что страница решает, а не
+// Свайп влево — скрыть; счета можно перетаскивать, менять местами; внизу кнопка
+// «Добавить счёт». Всё, что страница решает, а не
 // рисует, лежит здесь: что ответить на «Скрыть», какой счёт открыть по адресу и
 // какую команду предложить новому счёту.
 
@@ -20,7 +22,7 @@ export type HideDecision = Exclude<
 >;
 
 /**
- * «СКРЫТЬ» — ЭТО ЗАКРЫТЬ, И НИКОГДА НЕ «УДАЛИТЬ» (разбор 2026-09-15).
+ * «СКРЫТЬ» — ЭТО ЗАКРЫТЬ, И НИКОГДА НЕ «УДАЛИТЬ».
  *
  * `closeDecision` отвечает «удалить насовсем» счёту без операций: так ведёт
  * себя «Удалить счёт» закрытого счёта в архиве. У свайпа
@@ -57,7 +59,7 @@ export function hideDecisionAfterTransfer<A extends ClosableAccount>(
 
 /**
  * «УДАЛИТЬ» — ТЕ ЖЕ ШАГИ, ЧТО «СКРЫТЬ», НО В КОНЦЕ СЧЁТ УХОДИТ В «УДАЛЁННЫЕ
- * СЧЕТА» (владелец 03.10). Сервер принимает только пустой счёт
+ * СЧЕТА». Сервер принимает только пустой счёт
  * (`account_trash_rules`), поэтому деньги сначала уводятся переводом — ровно
  * как у «Скрыть»; ноль — вопрос «Удалить счёт?».
  */
@@ -84,8 +86,6 @@ export function trashDecisionAfterTransfer<A extends ClosableAccount>(
   };
 }
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Счёт из `?edit=<uuid>`: так на страницу с открытой шторкой правки приводят
@@ -97,13 +97,13 @@ export function accountEditParam(
   param: string | string[] | undefined,
 ): string | null {
   const value = routeParam(param);
-  return value && UUID.test(value) ? value : null;
+  return value && isUuid(value) ? value : null;
 }
 
 /**
  * ТИХАЯ МЕТКА СТРОКИ СЧЁТА — то, что иначе видно только внутри правки:
- * счёт не стоит в оплате записи. «Основного» счёта больше нет (владелец
- * 2026-09-29): первым в оплате и первым среди касс стоит тот, что выше в
+ * счёт не стоит в оплате записи. «Основного» счёта нет:
+ * первым в оплате и первым среди касс стоит тот, что выше в
  * списке, и отдельное слово об этом не нужно.
  */
 export function accountRowMark(account: {
@@ -124,4 +124,41 @@ export function presetTeamFor(
 ): string | null {
   const live = teams.filter((team) => team.is_active);
   return live.length === 1 ? live[0].id : null;
+}
+
+/**
+ * Подытог группы счетов. Скрытый и закрытый счета в сумму не входят — как на
+ * плитке «Счета». Хоть у одного счёта остаток неизвестен (нет права на деньги
+ * команды) — подытога нет вовсе, `null`: сумма из выдуманных нулей врала бы.
+ */
+export function groupBalanceTotal(
+  accounts: readonly {
+    balance: number;
+    balance_known: boolean;
+    is_active: boolean;
+    is_hidden?: boolean | null;
+  }[],
+): number | null {
+  const counted = accounts.filter((account) => account.is_active && !account.is_hidden);
+  if (counted.some((account) => !account.balance_known)) return null;
+  return sumAccountBalances(counted);
+}
+
+/**
+ * Оптимистичные позиции после ответа сервера: снимаются у тех счетов, которых
+ * больше не касался более поздний перенос. Позиция, оставленная после успеха,
+ * перекрывала бы свежую с сервера (порядок поменял другой телефон), а
+ * сброшенная вслепую съела бы позицию второго переноса, ещё летящего в сеть.
+ */
+export function clearSettledMoves(
+  moved: Readonly<Record<string, number>>,
+  ids: readonly string[],
+  latest: ReadonlyMap<string, number>,
+  seq: number,
+): Record<string, number> {
+  const next = { ...moved };
+  for (const id of ids) {
+    if (latest.get(id) === seq) delete next[id];
+  }
+  return next;
 }

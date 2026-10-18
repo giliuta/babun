@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "./module-source";
 
 // СТОРОЖ: ЧТЕНИЯ SQLite-ОБЁРТОК ИДУТ КЛИЕНТОМ, ПРИВЯЗАННЫМ К КОМПАНИИ КЛЮЧА.
 //
@@ -27,19 +27,19 @@ function stripComments(source: string): string {
 
 /** Код без комментариев и с одним пробелом вместо любых отступов. */
 const flat = (rel: string): string =>
-  stripComments(readFileSync(join(here, rel), "utf8")).replace(/\s+/g, " ");
+  stripComments(readModuleSource(join(here, rel))).replace(/\s+/g, " ");
 
 describe("SQLite-обёртки читают под компанией ключа", () => {
   test("записи: все страницы и отпущенное перечитывание — привязанным клиентом", () => {
     const calendar = flat("../features/calendar/queries.ts");
     assert.match(
       calendar,
-      /listAppointmentsCached\(pagingClient\(tenantBoundClient\(tenantId\)\), tenantId\)/,
+      /listAppointmentsCached\(readOnlyClient\(tenantBoundClient\(tenantId\)\), tenantId\)/,
     );
     assert.doesNotMatch(
       calendar,
-      /listAppointmentsCached\(pagingClient\(\)/,
-      "шим поверх глобального клиента берёт заголовок на каждую страницу",
+      /listAppointmentsCached\(readOnlyClient\(\)/,
+      "вид поверх глобального клиента берёт заголовок на каждую страницу",
     );
   });
 

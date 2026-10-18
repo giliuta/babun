@@ -21,6 +21,7 @@ import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
+import { clientKeys } from "@/lib/client-query-keys";
 
 const BUCKET = "client-attachments";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -245,7 +246,7 @@ export interface AttachmentsData {
 export function useClientAttachments(clientId: string) {
   const tenantId = useTenantId();
   return useQuery<AttachmentsData>({
-    queryKey: ["client-attachments", tenantId, clientId],
+    queryKey: clientKeys.attachments(tenantId, clientId),
     enabled: !!tenantId && !!clientId,
     // Signed URLs die after 5 min — keep the cache honest.
     staleTime: 4 * 60 * 1000,
@@ -290,7 +291,7 @@ export function useUploadAttachments(
     // files that WERE uploaded.
     onSettled: () =>
       qc.invalidateQueries({
-        queryKey: ["client-attachments", tenantId, clientId],
+        queryKey: clientKeys.attachments(tenantId, clientId),
       }),
     onError: (e) => {
       notify(
@@ -312,7 +313,7 @@ export function useDeleteAttachment(clientId: string) {
     },
     onSuccess: () =>
       qc.invalidateQueries({
-        queryKey: ["client-attachments", tenantId, clientId],
+        queryKey: clientKeys.attachments(tenantId, clientId),
       }),
     onError: (e) => {
       notify(

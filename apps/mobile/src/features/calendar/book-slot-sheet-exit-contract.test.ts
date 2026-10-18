@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// СЛОТ → «КЛИЕНТ» → /book: ФОРМА ОТКРЫВАЕТСЯ ПОСЛЕ УХОДА ЛИСТА (04.10).
+// СЛОТ → «КЛИЕНТ» → /book: ФОРМА ОТКРЫВАЕТСЯ ПОСЛЕ УХОДА ЛИСТА.
 //
 // Блокер проверки App Store: тап по свободному времени, в листе «Client», и
 // форма новой записи открывалась мёртвой — ни один тап, даже «Отмена». На

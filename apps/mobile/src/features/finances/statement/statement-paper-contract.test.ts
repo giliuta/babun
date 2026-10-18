@@ -4,8 +4,8 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// ЛИСТ НА ЭКРАНЕ = ФАЙЛ, КОТОРЫЙ УЙДЁТ (владелец 03.10: «сначала создаётся
-// превью файла, а потом уже можно только передавать это»). Тот же приём, что
+// ЛИСТ НА ЭКРАНЕ = ФАЙЛ, КОТОРЫЙ УЙДЁТ: сначала создаётся превью файла, а потом его
+// можно только передавать. Тот же приём, что
 // у чека (`documents/receipt-paper-contract.test.ts`): оба рендера сверяются
 // по исходному тексту — каждое поле модели читают оба и в одном порядке.
 
@@ -41,6 +41,7 @@ describe("бумага выписки и PDF печатают одну моде�
     assert.deepEqual(fields, [
       "accountName",
       "teamName",
+      "notice",
       "period",
       "opening",
       "days",

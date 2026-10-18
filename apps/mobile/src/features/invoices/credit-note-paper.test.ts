@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
-import { buildInvoiceDocument } from "./document";
-import { buildInvoicePdfHtml } from "./pdf";
+import { buildInvoiceDocument } from "@/lib/paper/document";
+import { buildInvoicePdfHtml } from "@/lib/paper/pdf";
 
-// КРЕДИТ-НОТА ПЕЧАТАЛАСЬ СЛОМАННЫМ «INVOICE» (аудит 03.10): сервер
+// КРЕДИТ-НОТА ПЕЧАТАЛАСЬ СЛОМАННЫМ «INVOICE»: сервер
 // (`_issue_credit_note`) пишет только суммы с минусом и русскую причину —
 // бумага говорила «INVOICE», «No lines yet», «Subtotal −€84.03», «Total
 // −€100.00» без строки VAT (минус уходил в ветку «без налога») и без ссылки на
@@ -97,5 +97,30 @@ describe("кредит-нота на бумаге", () => {
     const invoice = buildInvoiceDocument({ ...input, creditNote: null, invoice: { ...note, number: "INV-1", subtotal_net: 84.03, vat_amount: 15.97, total: 100, notes: "" } });
     assert.equal(invoice.title, "INVOICE");
     assert.equal(invoice.reference, null);
+  });
+});
+
+describe("полная кредит-нота с позициями инвойса", () => {
+  // Сервер копирует позиции с минусом: услуга −€120, скидка инвойса +€20.
+  const full = buildInvoiceDocument({
+    ...input,
+    invoice: {
+      ...note,
+      lines: [
+        { id: "l1", invoice_id: "cn-1", position: 0, title: "Cleaning", qty: 2, unit_price: -60, total: -120, description: null, unit: null },
+        { id: "l2", invoice_id: "cn-1", position: 1, title: "Discount", qty: 1, unit_price: 20, total: 20, description: null, unit: null },
+      ],
+    } as InvoiceLedgerWithLines,
+  });
+
+  it("таблица печатает позиции ноты, а не пустоту", () => {
+    assert.deepEqual(full.lines.map((line) => line.title), ["Cleaning", "Discount"]);
+    assert.match(full.lines[0]?.total ?? "", /120\.00/);
+  });
+
+  it("минусовые позиции не выдаются за скидку", () => {
+    const labels = full.totals.map((row) => row.label).join(" | ");
+    assert.doesNotMatch(labels, /Discount/);
+    assert.ok(!full.totals.some((row) => /^€?0\.00$/.test(row.value.replace(/[^0-9.€]/g, ""))), labels);
   });
 });

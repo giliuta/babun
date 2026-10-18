@@ -57,10 +57,9 @@ import {
 
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 
-// ПЛИТКА СТРОКИ ПРАВА (владелец 29.09, на настройках календаря: «вот так»).
-// Права команды стоят теми же строками, что настройки календаря: цветная
+// ПЛИТКА СТРОКИ ПРАВА. Права команды стоят теми же строками, что настройки календаря: цветная
 // плитка со значком, имя, под ним — ступень. Значок и цвет — те же, что у
 // самого блока в продукте: «Услуги» — синий портфель, как в настройках
 // календаря, «Метка» — лиловая, как справочник меток, «Отмена и удаление» —
@@ -111,11 +110,11 @@ const LOOK: Record<string, RightLook> = {
   "finance.expense": { icon: TrendingDown, tile: SETTINGS_TILE.red },
   "finance.accounts": { icon: Landmark, tile: SETTINGS_TILE.indigo },
   "finance.debts": { icon: HandCoins, tile: SETTINGS_TILE.orange },
-  // Плитки «Документы» и «Прибыль» (03.10).
+  // Плитки «Документы» и «Прибыль».
   "finance.documents": { icon: FileText, tile: SETTINGS_TILE.blue },
   "finance.profit": { icon: PiggyBank, tile: SETTINGS_TILE.purple },
   "finance.window": { icon: CalendarClock, tile: SETTINGS_TILE.teal },
-  // Строки шестерёнки финансов — её значками (03.10).
+  // Строки шестерёнки финансов — её значками.
   "finance.settings_accounts": { icon: Wallet, tile: SETTINGS_TILE.blue },
   "finance.settings_trash": { icon: Trash2, tile: SETTINGS_TILE.red },
   "finance.settings_categories_income": { icon: HandCoins, tile: SETTINGS_TILE.green },
@@ -125,7 +124,7 @@ const LOOK: Record<string, RightLook> = {
   "finance.settings_requisites": { icon: Building2, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.blue },
   "clients.scope": { icon: UserCheck, tile: SETTINGS_TILE.teal },
-  // «Создание клиента» и «Меню клиента» (02.10).
+  // «Создание клиента» и «Меню клиента».
   "clients.create": { icon: UserPlus, tile: SETTINGS_TILE.green },
   "clients.menu": { icon: Ellipsis, tile: SETTINGS_TILE.indigo },
   "clients.delete": { icon: Trash2, tile: SETTINGS_TILE.red },
@@ -133,14 +132,14 @@ const LOOK: Record<string, RightLook> = {
   "clients.people": { icon: Users, tile: SETTINGS_TILE.indigo },
   "clients.objects": { icon: House, tile: SETTINGS_TILE.green },
   // Метка — закладка, тег — ярлыки: те же значки, что у плиток «Метка | Тег»
-  // на карточке клиента (03.10, права разделены).
+  // на карточке клиента (права разделены).
   "clients.labels": { icon: Bookmark, tile: SETTINGS_TILE.teal },
   "clients.tags": { icon: Tags, tile: SETTINGS_TILE.purple },
   "clients.personal": { icon: UserRound, tile: SETTINGS_TILE.blue },
   "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
-  // Здание, как плашка реквизитов на карточке (03.10); банк — у счетов.
+  // Здание, как плашка реквизитов на карточке; банк — у счетов.
   "clients.requisites": { icon: Building2, tile: SETTINGS_TILE.teal },
-  // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
+  // Блоки «Клиент», «История», «SMS» — как на странице клиента.
   "clients.client": { icon: Contact, tile: SETTINGS_TILE.blue },
   "clients.history": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
   "clients.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
@@ -152,7 +151,7 @@ const LOOK: Record<string, RightLook> = {
   "clients.settings_tags": { icon: Tags, tile: SETTINGS_TILE.purple },
   "clients.settings_sources": { icon: Megaphone, tile: SETTINGS_TILE.orange },
   "company.sms_templates": { icon: MessageSquare, tile: SETTINGS_TILE.green },
-  // Кабинет (04.10) — значками строк Кабинета.
+  // Кабинет — значками строк Кабинета.
   "cabinet.tariff": { icon: BadgeCheck, tile: SETTINGS_TILE.blue },
   "cabinet.tariff_payments": { icon: Receipt, tile: SETTINGS_TILE.blue },
   "cabinet.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
@@ -169,15 +168,13 @@ export function rightLook(key: string): RightLook {
   return LOOK[key] ?? FALLBACK;
 }
 
-export const LOOKED_KEYS: readonly string[] = Object.keys(LOOK);
-
 /** Плитка строки РАЗДЕЛА в блоке «Доступ» — по разделу приложения. */
 const SECTION_LOOK: Record<string, RightLook> = {
   calendar: { icon: CalendarDays, tile: SETTINGS_TILE.blue },
   record: { icon: ClipboardList, tile: SETTINGS_TILE.teal },
   finance: { icon: Wallet, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.indigo },
-  // «Кабинет» (04.10) — значком вкладки «Кабинет».
+  // «Кабинет» — значком вкладки «Кабинет».
   company: { icon: LayoutGrid, tile: SETTINGS_TILE.orange },
 };
 
@@ -185,8 +182,7 @@ export function sectionLook(key: string): RightLook {
   return SECTION_LOOK[key] ?? FALLBACK;
 }
 
-/** ЗНАЧОК СТУПЕНИ В ШТОРКЕ (владелец 29.09: «не видит, видит, меняет — как-то
- *  по-другому, или значками»). Одна пара «значок + цвет» на смысл во всех
+/** ЗНАЧОК СТУПЕНИ В ШТОРКЕ (вместо слов «не видит, видит, меняет»). Одна пара «значок + цвет» на смысл во всех
  *  правах: закрыто — перечёркнутый глаз, смотрит — глаз, меняет — карандаш,
  *  правит всё — щит с восклицанием. */
 const STEP_LOOK: Partial<Record<AccessLevel, RightLook>> = {
@@ -194,7 +190,7 @@ const STEP_LOOK: Partial<Record<AccessLevel, RightLook>> = {
   read: { icon: Eye, tile: SETTINGS_TILE.blue },
   write: { icon: PencilLine, tile: SETTINGS_TILE.green },
   full: { icon: ShieldAlert, tile: SETTINGS_TILE.orange },
-  // «Без ограничения» у «Ограничений» (02.10) — бесконечность.
+  // «Без ограничения» у «Ограничений» — бесконечность.
   own: { icon: InfinityIcon, tile: SETTINGS_TILE.blue },
   all: { icon: Users, tile: SETTINGS_TILE.green },
   week: { icon: CalendarClock, tile: SETTINGS_TILE.teal },

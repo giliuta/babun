@@ -22,6 +22,8 @@
 // Секреты (заводит владелец): STRIPE_SECRET_KEY.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
+import { serviceClient } from "../_shared/service-client.ts";
+import { json as jsonResponse } from "../_shared/http.ts";
 
 /** Сумма пополнения — любая целыми евро от €5 до €500 (владелец 30.09:
  *  «вписываю туда сумму и нажимаю оплатить»). Те же пределы держит база
@@ -51,11 +53,7 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const json = (status: number, body: unknown): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "content-type": "application/json" },
-  });
+const json = (status: number, body: unknown): Response => jsonResponse(status, body, cors);
 
 /** Публичный ключ проекта: новый `SUPABASE_PUBLISHABLE_KEYS` (JSON), а
  *  устаревший `SUPABASE_ANON_KEY` — только запасным. */
@@ -77,24 +75,6 @@ function publishableKey(): string | undefined {
 
 /** Служебный клиент — только чтобы найти Stripe-клиента компании для
  *  автопополнения (функция базы закрыта от вошедших людей). */
-function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL");
-  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
-  let serviceKey: string | undefined;
-  if (secretKeysJson) {
-    try {
-      const keys = Object.values(JSON.parse(secretKeysJson) as Record<string, unknown>).filter(
-        (v): v is string => typeof v === "string" && v.length > 20,
-      );
-      serviceKey = keys.find((v) => v.startsWith("sb_secret_")) ?? keys[0];
-    } catch {
-      // запасной ключ ниже
-    }
-  }
-  serviceKey ??= Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || undefined;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-}
 
 /** Пороги автопополнения, центы EUR. */
 const THRESHOLDS = [500, 1000, 2500];

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { moreLabel } from "./more-label";
+import { moreLabel } from "@/lib/more-label";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -27,7 +27,7 @@ describe("«Ещё N» в шапке блока карточки (03.10)", () =>
 describe("блок «SMS» — мини-история в самом блоке (03.10)", () => {
   const block = () => read("../sms/SmsClientBlock.tsx");
   test("настройки — на блоке; три последних — плашками; тап — само сообщение", () => {
-    // С 03.10 — плашки со значком (вариант 1 владельца), имя — в сером поле.
+    // Плашки со значком, имя — в сером поле.
     assert.match(block(), /title="Присылать SMS"/);
     assert.match(block(), /title="Имя для SMS"/);
     assert.match(block(), /onBlur=\{saveName\}/);

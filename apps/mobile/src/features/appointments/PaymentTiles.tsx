@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Check } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AddRow } from "@/components/ui/AddRow";
@@ -7,11 +6,9 @@ import { GUTTER } from "@/components/ui/tokens";
 import { TARIFF_LOCKED_HINT } from "@/features/tariffs/use-tariff";
 import { useThemeColors } from "@/theme/colors";
 
-// ПЛИТКИ БЛОКА «ОПЛАТА» — только вид (STORY-065, выбор владельца 2026-09-06:
-// «плитки Б2, компактнее; предоплата и инвойс — маленькие иконки справа;
-// сумму в шапке не дублировать»). Логика денег живёт в PaymentBlock.
-// Та же плитка — счёт в форме операции и в панели «Счета» на «Финансах»
-// (владелец 2026-09-15: «как в счёт оплаты»): счёт узнают по плитке всюду.
+// ПЛИТКИ БЛОКА «ОПЛАТА» — только вид (STORY-065): компактные плитки, предоплата и инвойс — маленькие иконки
+// справа, сумму в шапке не дублировать. Логика денег живёт в PaymentBlock.
+// Та же плитка — счёт в форме операции и в панели «Счета» на «Финансах»: счёт узнают по плитке всюду.
 
 export const TILE_GAP = 8;
 const TILE_HEIGHT = 48;
@@ -48,25 +45,22 @@ export function PaymentTile({
   label: string;
   /** Цвет глифа в покое — цвет счёта из финансов либо чернила. */
   color: string;
-  /** Цвет счёта для заливки плитки (владелец 2026-09-06: «подсвечивать
-   *  блок, как указано в счёте»); null — нейтральная заливка `fill`. */
+  /** Цвет счёта для заливки плитки (блок подсвечивается, как указано в счёте); null — нейтральная заливка `fill`. */
   tint?: string | null;
   width: number;
   state: PaymentTileState;
   /** ВЫБРАН, А НЕ ОПЛАЧЕН. В записи плитка — действие: тап принимает деньги,
    *  и «выбранного» состояния у неё нет. В форме операции счёт ВЫБИРАЮТ, и
    *  метка выбора обязана оставить плитке её собственный цвет: перекрашенная
-   *  в акцент, она теряла то, чем счёт узнают (владелец 2026-09-10). */
+   *  в акцент, она теряла бы то, чем счёт узнают. */
   selected?: boolean;
   /** Сумма под именем: полученная на счёт (`paid`) либо остаток счёта в
    *  панели «Счета» на «Финансах». */
   amount?: string;
   /** Цвет суммы вне `paid`: минус — `danger`, ноль — тише живых денег. */
   amountColor?: string;
-  /** Значок в строку с именем, сумма под ними — 44pt вместо 56. Владелец
-   *  2026-09-15: панель «Счета» — «ещё немножечко компактней», затем форма
-   *  операции и оплата записи — «чтоб иконка была слева… одной плашкой».
-   *  У оплаченной плитки на месте значка галка. */
+  /** Значок в строку с именем, сумма под ними — 44pt вместо 56 (панель «Счета», форма операции и оплата записи — одной
+   *  плашкой, иконка слева). У оплаченной плитки на месте значка галка. */
   compact?: boolean;
   disabled?: boolean;
   onPress: () => void;
@@ -141,8 +135,7 @@ export function PaymentTile({
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.3}
-            // ДЛИННОЕ ИМЯ СНАЧАЛА УЖИМАЕТСЯ, ПОТОМ РЕЖЕТСЯ (прогон 2026-09-23:
-            // «Revolut Busi…» в трёх плитках на ряд). До 85 % — ещё читается
+            // ДЛИННОЕ ИМЯ СНАЧАЛА УЖИМАЕТСЯ, ПОТОМ РЕЖЕТСЯ («Revolut Busi…» в трёх плитках на ряд). До 85 % — ещё читается
             // и не выпадает из ряда соседей.
             adjustsFontSizeToFit
             minimumFontScale={0.85}
@@ -206,7 +199,7 @@ export function ModeIconButton({
   icon: LucideIcon;
   label: string;
   active?: boolean;
-  /** Серая, но нажимается — закрыто тарифом: тап поднимает плашку (1.10). */
+  /** Серая, но нажимается — закрыто тарифом: тап поднимает плашку. */
   dimmed?: boolean;
   onPress: () => void;
 }) {
@@ -233,147 +226,7 @@ export function ModeIconButton({
     </Pressable>
   );
 }
-
-/** ОДНА строка под малой надписью карточки: слева состояние денег («Долг
- *  €135», «Оплачено») либо — по кнопке суммы — поле «€ Сумма» с остатком,
- *  справа иконки режимов. Блок от нажатия кнопки не растёт (владелец
- *  2026-09-06: «чтобы всё в одной строчке, компактно и красиво»). */
-export interface StateRowAmount {
-  symbol: string;
-  value: string;
-  onChangeText: (next: string) => void;
-  hint: string;
-  hintTone?: "neutral" | "danger";
-}
-
-export function PaymentStateRow({
-  caption,
-  captionColor,
-  captionTone = "neutral",
-  amount,
-  right,
-}: {
-  caption?: string;
-  captionColor?: string;
-  /** Денежное состояние печатается крупно, подсказка — тише. */
-  captionTone?: "neutral" | "money";
-  /** Открытое поле суммы занимает место подписи. */
-  amount?: StateRowAmount;
-  right?: ReactNode;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      className="flex-row items-center"
-      style={{ paddingHorizontal: 16, minHeight: 40, gap: 10 }}
-    >
-      {amount ? (
-        <>
-          <View
-            className="flex-row items-center"
-            style={{
-              flex: 1,
-              height: 36,
-              borderRadius: t.radius.input,
-              borderCurve: "continuous",
-              backgroundColor: t.fill,
-              paddingHorizontal: 10,
-              gap: 4,
-            }}
-          >
-            <Text
-              accessible={false}
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.faint }}
-            >
-              {amount.symbol}
-            </Text>
-            <TextInput
-              value={amount.value}
-              onChangeText={amount.onChangeText}
-              autoFocus
-              keyboardType="decimal-pad"
-              placeholder="Сумма"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              accessibilityLabel="Сумма"
-              maxFontSizeMultiplier={1.2}
-              style={{
-                flex: 1,
-                padding: 0,
-                fontSize: 16,
-                fontWeight: "600",
-                color: t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            />
-          </View>
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              flexShrink: 0,
-              fontSize: 13,
-              fontWeight: "600",
-              color: amount.hintTone === "danger" ? t.danger : t.sub,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {amount.hint}
-          </Text>
-        </>
-      ) : (
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
-          style={{
-            flex: 1,
-            fontSize: captionTone === "money" ? 17 : 15,
-            fontWeight: captionTone === "money" ? "600" : "500",
-            color: captionColor ?? t.sub,
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {caption ?? ""}
-        </Text>
-      )}
-      {right ? (
-        <View className="flex-row items-center" style={{ gap: 2 }}>
-          {right}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-/** Тихая текстовая ссылка под сеткой («Внести часть» / «Вся сумма»). */
-export function QuietLink({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      className="flex-row justify-end"
-      style={{ paddingHorizontal: 16, paddingBottom: 8, marginTop: -4 }}
-    >
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        hitSlop={8}
-        style={{ minHeight: 32, justifyContent: "center" }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-          {label}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
+export { PaymentStateRow, type StateRowAmount } from "./payment-tiles/PaymentStateRow";
 
 /** У команды нет касс: владельцу — дверь создания, остальным — слова. */
 export function NoAccountsNotice({

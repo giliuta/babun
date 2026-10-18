@@ -17,7 +17,7 @@ import {
 import { type ScheduleMap, type TeamSchedule } from "@babun/shared/local/schedule";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { allTeamSchedulesQueryKey } from "@/lib/company-query-keys";
 import {
   pickTeamSchedule,
@@ -31,7 +31,7 @@ import {
  *  its workStartHour/EndHour fallback. Callers pick their own fallback
  *  (grid → global work hours, hub editor → DEFAULT_SCHEDULE).
  *
- *  КЛЮЧ — КАРТА КОМПАНИИ, А НЕ КОМАНДЫ (2026-09-15). Запрос и так приносит
+ *  КЛЮЧ — КАРТА КОМПАНИИ, А НЕ КОМАНДЫ. Запрос и так приносит
  *  графики всех команд; ключ по команде заставлял первый тап по соседнему
  *  календарю снова идти за той же картой, и сетка ждала сеть скелетом.
  *  Теперь карта одна на компанию и роль, команда выбирается `select`. */
@@ -67,6 +67,25 @@ export function useAllTeamSchedules() {
   });
 }
 
+/** Апсерты графика компании — строго по очереди. Апсерт ЗАМЕНЯЕТ
+ *  весь блоб, а «Сб» и «Вс» подряд, два выходных на даты или тики колеса
+ *  уходили параллельно: оба читали один и тот же свежий график, и сервер
+ *  оставлял только последнюю правку (на бесплатной базе запрос идёт 2–6 с —
+ *  окно широкое). В очередь встаёт только сеть: оптимистичный кэш
+ *  (`onMutate`) пишется сразу, экран отвечает в том же кадре. */
+const scheduleWrites = new Map<string, Promise<unknown>>();
+
+function afterPreviousScheduleWrite<T>(tenantId: string, run: () => Promise<T>): Promise<T> {
+  const previous = scheduleWrites.get(tenantId) ?? Promise.resolve();
+  const next = previous.then(run, run);
+  scheduleWrites.set(tenantId, next);
+  const forget = () => {
+    if (scheduleWrites.get(tenantId) === next) scheduleWrites.delete(tenantId);
+  };
+  next.then(forget, forget);
+  return next;
+}
+
 /** Insert-or-replace the schedule for a single team. The caller passes the
  *  full TeamSchedule (merge nested fields client-side first). */
 export function useUpsertTeamSchedule() {
@@ -83,24 +102,25 @@ export function useUpsertTeamSchedule() {
       /** Весь график — или правка поверх него (`(current) => next`). Правку
        *  сервер получает поверх СВЕЖЕГО графика: «Выходной» на дату собирал
        *  весь блоб из кэша телефона и молча затирал правку графика,
-       *  сделанную на другом телефоне после загрузки (аудит 03.10). */
+       *  сделанную на другом телефоне после загрузки. */
       schedule: TeamSchedule | ((current: TeamSchedule | null) => TeamSchedule);
-    }) => {
+    }) =>
       // Кто может — решает сервер: график пишет владелец и тот, кому дали
       // «График: Меняет» (`team_schedules_write_access`). Ворота «только
       // владелец» отбивали партнёра — выходной на дату и правка часов из
-      // шторки дня падали «Не удалось сохранить» (аудит 2026-10-03).
-      const next =
-        typeof schedule === "function"
-          ? schedule(
-              pickTeamSchedule(
-                await listScheduleEntries(supabase, tenantId as string),
-                teamId,
-              ),
-            )
-          : schedule;
-      await upsertScheduleEntry(supabase, tenantId as string, teamId, next);
-    },
+      // шторки дня падали «Не удалось сохранить».
+      afterPreviousScheduleWrite(tenantId as string, async () => {
+        const next =
+          typeof schedule === "function"
+            ? schedule(
+                pickTeamSchedule(
+                  await listScheduleEntries(supabase, tenantId as string),
+                  teamId,
+                ),
+              )
+            : schedule;
+        await upsertScheduleEntry(supabase, tenantId as string, teamId, next);
+      }),
     // Оптимистичный мерж здесь ОБЯЗАТЕЛЕН, а не украшение: апсерт ЗАМЕНЯЕТ
     // весь блоб, а редактор дня строит следующий блоб от того, что лежит в
     // кэше. Без него правка «Начало», сделанная до приземления рефетча,

@@ -4,13 +4,14 @@ import {
   useTemplatePicking,
   type TemplateItem,
 } from "@/components/ui/TemplatePicker";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Keyboard, ScrollView, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Bell, CalendarCheck, CalendarClock, CalendarPlus, CalendarSync, CalendarX, Hand, Repeat } from "lucide-react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NameColorField } from "@/components/ui/picker-fields";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
@@ -42,9 +43,8 @@ import {
 import { SmsTermSheet, type SmsTermKind } from "./SmsTermSheet";
 import { SmsTextBlock } from "./SmsTextField";
 
-// ШАБЛОН SMS — ШТОРКА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (STORY-089; владелец 03.10:
-// «зачем отдельная страница — давай шторка… топаю ещё раз на выбор, как
-// отправлять, и открывается ещё одна шторка… как объекты: выбор типа объекта»).
+// ШАБЛОН SMS — ШТОРКА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (выбор «когда отправлять»
+// открывает ещё одну шторку, как выбор типа объекта).
 //
 // Тело — язык страницы на прохладном фоне (как `ObjectSheet`): блоки с шапкой,
 // в блоке дверь, по двери — своя шторка поверх этой. Лист в листе законен:
@@ -59,12 +59,10 @@ import { SmsTextBlock } from "./SmsTextField";
 //     сколько», «через сколько» и «окно отправки»; тап — барабан в своей
 //     шторке (`SmsTermSheet`). У ручного шаблона блока нет;
 //   • ТЕКСТ — поле, счёт знаков и SMS, дверь «Вставить поле» (своя шторка).
-//     Блока «Клиент увидит» и подсказок нет (владелец 03.10: «не надо, и так
-//     понятно… не ставь вообще подсказки»);
+//     Блока «Клиент увидит» и подсказок нет;
 //   • «Создать» / «Сохранить» — футер листа, одна кнопка.
 
-// Строки — только имя, значок и цвет: подсказок под именем нет (владелец
-// 03.10: «не ставь вообще подсказки»).
+// Строки — только имя, значок и цвет: подсказок под именем нет.
 const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string }> = {
   manual: { icon: Hand, color: SETTINGS_TILE.blue },
   created: { icon: CalendarPlus, color: SETTINGS_TILE.green },
@@ -76,8 +74,7 @@ const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string }> = {
   repeat: { icon: Repeat, color: SETTINGS_TILE.purple },
 };
 
-/** «КОГДА ОТПРАВЛЯТЬ» — шторка выбора с «Применить» (владелец 03.10:
- *  «отрегулировать шторку… чтоб появилась кнопка применить»). Тап отмечает
+/** «КОГДА ОТПРАВЛЯТЬ» — шторка выбора с «Применить». Тап отмечает
  *  вариант, кнопка применяет; шторка высотой во все восемь строк, чтобы
  *  последние не уходили за край. */
 function SmsWhenSheet({
@@ -144,7 +141,7 @@ function hoursValue(h: number | null): string {
   const days = Math.floor(h / 24);
   const rest = h % 24;
   // «1 день 6 ч», а не «24 ч 6 ч»: фишка срока пишет дни только с 48 ч
-  // (повторный аудит 03.10).
+  //.
   if (days && rest) return `${formatCountRu(days, ["день", "дня", "дней"])} ${rest} ч`;
   return days ? hoursChip(h) : `${h} ч`;
 }
@@ -182,6 +179,19 @@ export function SmsTemplateSheet({
   }
   const [whenOpen, setWhenOpen] = useState(false);
   const [term, setTerm] = useState<SmsTermKind | null>(null);
+  // ЧТО МЕШАЕТ СОХРАНИТЬ — ПЛАШКОЙ ЛИСТА, А НЕ ТОСТОМ: тост живёт в
+  // провайдере приложения, а лист — отдельное окно, и подсказка всплывала
+  // под ним. Держится столько же, сколько тост.
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showHint = (text: string) => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    setHint(text);
+    hintTimer.current = setTimeout(() => setHint(null), 2200);
+  };
+  useEffect(() => () => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+  }, []);
 
   const set = (patch: Partial<TemplateDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const problem = draftProblem(draft);
@@ -200,8 +210,8 @@ export function SmsTemplateSheet({
     setTerm(kind);
   };
 
-  // Тап по фону и свайп вниз не выбрасывают набранный шаблон (аудит
-  // 2026-10-03): следующее открытие засевает черновик заново.
+  // Тап по фону и свайп вниз не выбрасывают набранный шаблон:
+  // следующее открытие засевает черновик заново.
   const guard = useGuardedClose({
     dirty:
       JSON.stringify(draft) !==
@@ -236,6 +246,7 @@ export function SmsTemplateSheet({
       padded={false}
       maxHeightRatio={0.92}
       avoidKeyboard
+      banner={hint ? <NoticeBar tone="info" message={hint} /> : undefined}
       footer={picking ? undefined : (<View
           style={{
             paddingHorizontal: GUTTER,
@@ -254,7 +265,7 @@ export function SmsTemplateSheet({
               problem
                 ? () => {
                     haptics.warning();
-                    toast(problem, "info");
+                    showHint(problem);
                   }
                 : undefined
             }

@@ -1,4 +1,4 @@
-import { Linking, Text, View } from "react-native";
+import { Linking, Platform, Text, View } from "react-native";
 import { Redirect, useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { CircleCheck, CircleX } from "lucide-react-native";
@@ -9,12 +9,12 @@ import { GUTTER } from "@/components/ui/tokens";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
-// «ОПЛАТА ПРОШЛА» — СТРАНИЦА ВОЗВРАТА ИЗ STRIPE (STORY-089; владелец 30.09:
-// «пополнить баланс просто и легко для клиента»). Человек платил из
+// «ОПЛАТА ПРОШЛА» — СТРАНИЦА ВОЗВРАТА ИЗ STRIPE (STORY-089): пополнить
+// баланс должно быть просто и легко. Человек платил из
 // приложения в браузере телефона; здесь одна мысль — деньги дойдут сами,
 // вернитесь в приложение. Внизу одно действие — открыть приложение.
 //
-// ТАРИФ (01.10): сюда же возвращает оплата тарифа (`?tariff=paid|cancelled`)
+// ТАРИФ: сюда же возвращает оплата тарифа (`?tariff=paid|cancelled`)
 // и «Управление подпиской» (`?tariff=portal`) — слова свои, кнопка ведёт в
 // Кабинет → Тариф.
 //
@@ -42,9 +42,13 @@ function PayDone() {
       : { title: "Оплата прошла", body: "Баланс SMS пополнится через минуту. Вернитесь в приложение Babun." };
   return (
     <Screen edges={["top", "bottom"]}>
-      <Head>
-        <title>{`${words.title} · Babun`}</title>
-      </Head>
+      {/* Заголовок вкладки — только сайту. На iOS `Head` регистрирует Handoff и
+          без origin в конфиге показывает человеку технический алерт. */}
+      {Platform.OS === "web" ? (
+        <Head>
+          <title>{`${words.title} · Babun`}</title>
+        </Head>
+      ) : null}
       <View style={{ alignItems: "center", paddingTop: 16 }}>
         <BrandLockup />
       </View>

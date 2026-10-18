@@ -1,21 +1,26 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { durationForQuantity, pricePerUnit } from "./services";
+import {
+  durationForQuantity,
+  pricePerUnit,
+  type DurationTier,
+  type PriceTier,
+} from "./services";
 
 // ЛЕСТНИЦА КОЛИЧЕСТВА — ядро прайса: по ней считается и сумма записи, и время
 // в календаре. Ошибка здесь не видна на экране настроек, а вылезает опозданием
 // команды на вечерний адрес, поэтому примеры взяты живые — те, что диктовал
-// владелец 2026-08-18.
+// владелец.
 
 const duration = (
   base: number,
-  tiers: { min_qty: number; duration_minutes: number }[] | null,
+  tiers: DurationTier[] | undefined,
 ) => ({ duration_minutes: base, duration_tiers: tiers });
 
 const price = (
   base: number,
-  tiers: { min_qty: number; price_per_unit: number }[] | null,
+  tiers: PriceTier[] | undefined,
 ) => ({
   price: base,
   price_tiers: tiers,
@@ -46,7 +51,7 @@ describe("цена от количества", () => {
 
 describe("время от количества", () => {
   test("без ступеней время просто множится", () => {
-    assert.equal(durationForQuantity(duration(45, null), 3), 135);
+    assert.equal(durationForQuantity(duration(45, undefined), 3), 135);
   });
 
   test("между якорями время идёт по прямой, а не скачком", () => {

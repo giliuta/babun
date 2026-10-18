@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { draftLevel, emptyMasterDraft, withLevel } from "./master-draft";
 import { levelChanges, rightsSections } from "./rights-rows";
 
-// ЦЕПОЧКА БЛОКОВ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»).
-// Реестр — копия живых строк `access_blocks` на 30.09.
+// ЦЕПОЧКА БЛОКОВ ЗАПИСИ. Реестр — копия живых строк `access_blocks`.
 
 const block = (key: string, levels: AccessLevel[], position: number): AccessBlock => ({
   key,

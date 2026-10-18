@@ -5,84 +5,27 @@
 // shared and serve the teams listed in `account_teams` (surfaced here as
 // Account.team_ids). Soft close via `is_active=false` keeps the history.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
-import type {
-  Account,
-  AccountKind,
-  AccountScope,
-} from "../../local/finance/account";
+import type { Account, AccountKind } from "../../local/finance/account";
 import {
   accountWriteErrorMessage,
   duplicateAccountNameMessage,
-  type DatabaseErrorLike,
 } from "../../local/finance/integrity";
+import {
+  assertAccountWritten,
+  compareAccounts,
+  rowToAccount,
+  type DbSupabase,
+  type Row,
+} from "./accounts/rows";
 
-type DbSupabase = SupabaseClient<Database>;
-type Row = Database["public"]["Tables"]["accounts"]["Row"];
-
-/**
- * Разбор ответа на запись по счёту.
- *
- * PostgREST на отказ RLS не ругается: невидимая политике строка просто не
- * находится, и `update`/`delete` отчитывается успехом с пустым телом. Отсюда
- * требование `.select("id")` у каждой записи — без него «удалили» и «не имеем
- * права» выглядят одинаково, экран схлопывается, а счёт остаётся.
- */
-function assertAccountWritten(
-  result: { data: { id: string } | null; error: DatabaseErrorLike | null },
-  texts: { fallback: string; duplicate?: string },
-): void {
-  if (result.error) {
-    throw new Error(accountWriteErrorMessage(result.error, texts));
-  }
-  if (!result.data) {
-    throw new Error("Счёт не найден или недоступен — обновите список счетов");
-  }
-}
-
-// Порядок строк задаёт только `position`, а до 2026-08-10 он писался нулём
-// всем счетам: при равных значениях Postgres волен вернуть любой порядок, и
-// список перетасовывался между рефетчами и устройствами. Имя сравниваем
-// по-русски и без учёта регистра, id — последняя добивка ради детерминизма.
-const accountOrder = new Intl.Collator("ru", { sensitivity: "base" });
-
-function compareAccounts(a: Account, b: Account): number {
-  return (
-    a.position - b.position
-    || accountOrder.compare(a.name, b.name)
-    || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
-  );
-}
-
-function rowToAccount(r: Row, teamIds: string[] = []): Account {
-  const scope = (r.scope as AccountScope) ?? "team";
-  return {
-    id: r.id,
-    tenant_id: r.tenant_id,
-    scope,
-    brigade_id: r.brigade_id,
-    team_ids: scope === "company" ? teamIds : [],
-    name: r.name,
-    kind: r.kind as AccountKind,
-    owner_master_id: r.owner_master_id,
-    opening_balance: Number(r.opening_balance ?? 0),
-    icon: r.icon,
-    color: r.color,
-    position: r.position,
-    vat_mode: (r.vat_mode as Account["vat_mode"]) ?? null,
-    is_primary: r.is_primary,
-    show_in_payments: r.show_in_payments,
-    is_active: r.is_active,
-    is_hidden: r.is_hidden ?? false,
-    note: r.note ?? null,
-    deleted_at: r.deleted_at ?? null,
-    purge_at: r.purge_at ?? null,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  };
-}
+export {
+  deleteAccount,
+  listDeletedAccounts,
+  restoreAccount,
+  trashAccount,
+} from "./accounts/trash";
 
 export async function listAccounts(
   supabase: DbSupabase,
@@ -102,17 +45,17 @@ export async function listAccounts(
   if (!options.includeInactive) q = q.eq("is_active", true);
   const { data, error } = await q.order("position", { ascending: true });
   if (error) throw new Error(`listAccounts: ${error.message}`);
-  // «УДАЛЁННЫЕ СЧЕТА» В ОБЫЧНЫХ СПИСКАХ НЕ ЖИВУТ (владелец 03.10). Отсев —
+  // «УДАЛЁННЫЕ СЧЕТА» В ОБЫЧНЫХ СПИСКАХ НЕ ЖИВУТ. Отсев —
   // здесь, по полю строки, а не фильтром запроса: так список не падает и на
   // базе, где колонки `deleted_at` ещё нет.
   const rows = ((data ?? []) as Row[]).filter((r) => options.includeDeleted || !r.deleted_at);
 
   // ПРИВЯЗКИ ЧИТАЕМ, ТОЛЬКО ЕСЛИ ЕСТЬ КОМУ. `account_teams` — историческая
-  // таблица общего счёта: схема «счёт принадлежит ОДНОЙ команде» снесла его
-  // 2026-08-15, и с тех пор живой продукт её не пишет
+  // таблица общего счёта: схема «счёт принадлежит ОДНОЙ команде» её отменила,
+  // и живой продукт её не пишет
   // (`20260815150000_accounts_belong_to_one_team.sql`). Второй сетевой запрос
   // всё равно уходил на КАЖДОЕ открытие счетов и возвращал пусто: в базе ноль
-  // строк и ноль счетов со `scope = 'company'` (проверено 2026-09-12).
+  // строк и ноль счетов со `scope = 'company'`.
   // Легаси-строки при этом не теряются: у счёта такого охвата запрос по-прежнему
   // выполняется.
   const teamsByAccount = new Map<string, string[]>();
@@ -136,11 +79,10 @@ export async function listAccounts(
 }
 
 export interface AccountDraft {
-  scope: AccountScope;
-  /** Required for scope === "team", must be null for "company". */
-  brigade_id: string | null;
-  /** Teams attached to a company account; ignored for scope === "team". */
-  team_ids?: string[];
+  /** Always "team": the database CHECK rejects anything else. */
+  scope: "team";
+  /** Owning team. NOT NULL in the database. */
+  brigade_id: string;
   name: string;
   kind: AccountKind;
   owner_master_id?: string | null;
@@ -176,23 +118,14 @@ function assertOpeningBalance(amount: number | undefined): void {
   }
 }
 
-function assertScopeConsistency(
-  scope: AccountScope,
-  brigadeId: string | null,
-): void {
-  if (scope === "team" && !brigadeId) {
-    throw new Error("Выберите команду счёта");
-  }
-  if (scope === "company" && brigadeId) {
-    throw new Error("У счёта нескольких команд не бывает команды-владельца");
-  }
+function assertAccountTeam(brigadeId: string): void {
+  if (!brigadeId) throw new Error("Выберите команду счёта");
 }
 
 /**
  * Следующая позиция в пределах (тенант, команда) — счёт встаёт в конец своего
- * списка. У каждой команды нумерация своя, у счетов компании (brigade_id NULL)
- * — отдельная: список сгруппирован по командам, и сквозной счёт по тенанту
- * перемешивал бы соседние секции.
+ * списка. У каждой команды нумерация своя: список сгруппирован по командам, и
+ * сквозной счёт по тенанту перемешивал бы соседние секции.
  *
  * Два устройства, создающие счёт одновременно, получат одну позицию — их
  * разведёт вторичный ключ сортировки, см. {@link compareAccounts}.
@@ -200,19 +133,16 @@ function assertScopeConsistency(
 async function nextAccountPosition(
   supabase: DbSupabase,
   tenantId: string,
-  brigadeId: string | null,
+  brigadeId: string,
 ): Promise<number> {
-  const scoped = supabase
+  const { data, error } = await supabase
     .from("accounts")
     .select("position")
     .eq("tenant_id", tenantId)
+    .eq("brigade_id", brigadeId)
     .order("position", { ascending: false })
-    .limit(1);
-  const { data, error } = await (
-    brigadeId === null
-      ? scoped.is("brigade_id", null)
-      : scoped.eq("brigade_id", brigadeId)
-  ).maybeSingle();
+    .limit(1)
+    .maybeSingle();
   if (error) throw new Error(`nextAccountPosition: ${error.message}`);
   // Закрытые счета из нумерации не выпадают: их можно открыть обратно.
   return (data?.position ?? -1) + 1;
@@ -224,7 +154,7 @@ export async function insertAccount(
   draft: AccountDraft,
 ): Promise<Account> {
   assertOpeningBalance(draft.opening_balance);
-  assertScopeConsistency(draft.scope, draft.brigade_id);
+  assertAccountTeam(draft.brigade_id);
   const position = draft.position
     ?? (await nextAccountPosition(supabase, tenantId, draft.brigade_id));
   const { data, error } = await supabase
@@ -255,20 +185,7 @@ export async function insertAccount(
       }),
     );
   }
-  const account = rowToAccount(data as Row);
-  const teamIds = draft.scope === "company" ? (draft.team_ids ?? []) : [];
-  if (teamIds.length === 0) return account;
-  try {
-    return {
-      ...account,
-      team_ids: await setAccountTeams(supabase, tenantId, account.id, teamIds),
-    };
-  } catch (attachError) {
-    // A company account without its teams is unusable and invisible to
-    // payment pickers — roll the fresh row back instead of leaving it.
-    await supabase.from("accounts").delete().eq("id", account.id);
-    throw attachError;
-  }
+  return rowToAccount(data as Row);
 }
 
 export async function updateAccount(
@@ -308,71 +225,13 @@ export async function updateAccount(
 }
 
 /**
- * Replace the team membership of a company account (diff-based: the
- * `account_teams` rows themselves are immutable). Returns the final list.
- */
-async function setAccountTeams(
-  supabase: DbSupabase,
-  tenantId: string,
-  accountId: string,
-  teamIds: string[],
-): Promise<string[]> {
-  const target = [...new Set(teamIds)];
-  const { data, error } = await supabase
-    .from("account_teams")
-    .select("team_id")
-    .eq("account_id", accountId);
-  if (error) {
-    throw new Error(
-      accountWriteErrorMessage(error, {
-        fallback: "Не удалось прочитать команды счёта",
-      }),
-    );
-  }
-  const current = new Set((data ?? []).map((r) => r.team_id));
-  const toAdd = target.filter((teamId) => !current.has(teamId));
-  const toRemove = [...current].filter((teamId) => !target.includes(teamId));
-  if (toAdd.length > 0) {
-    const { error: addError } = await supabase.from("account_teams").insert(
-      toAdd.map((teamId) => ({
-        account_id: accountId,
-        tenant_id: tenantId,
-        team_id: teamId,
-      })),
-    );
-    if (addError) {
-      throw new Error(
-        accountWriteErrorMessage(addError, {
-          fallback: "Не удалось подключить команду к счёту",
-        }),
-      );
-    }
-  }
-  if (toRemove.length > 0) {
-    const { error: removeError } = await supabase
-      .from("account_teams")
-      .delete()
-      .eq("account_id", accountId)
-      .in("team_id", toRemove);
-    if (removeError) {
-      throw new Error(
-        accountWriteErrorMessage(removeError, {
-          fallback: "Не удалось отключить команду от счёта",
-        }),
-      );
-    }
-  }
-  return target;
-}
-
-/**
  * Назначить счёт основным для его группы (команды или счетов компании).
  *
  * ДВА ЗАПРОСА, А НЕ ОДИН. Уникальный частичный индекс
  * `ux_accounts_primary_per_brigade` проверяется построчно, поэтому пометить
  * новый счёт, не сняв флаг со старого, физически нельзя — снимаем первым.
  * Обрыв между шагами оставляет группу без основного счёта: резолверы при этом
- * возвращаются к порядку строк (поведение до 2026-08-10), деньги никуда не
+ * возвращаются к порядку строк, деньги никуда не
  * уезжают, а экран показывает ошибку.
  */
 export async function setPrimaryAccount(
@@ -441,82 +300,6 @@ export async function reopenAccount(
     .select("id")
     .maybeSingle();
   assertAccountWritten({ data, error }, { fallback: "Не удалось открыть счёт" });
-}
-
-/** «Удалённые счета» компании — новые сверху. */
-export async function listDeletedAccounts(
-  supabase: DbSupabase,
-  tenantId: string,
-): Promise<Account[]> {
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .not("deleted_at", "is", null)
-    .order("deleted_at", { ascending: false });
-  if (error) throw new Error(`listDeletedAccounts: ${error.message}`);
-  return ((data ?? []) as Row[]).map((r) => rowToAccount(r));
-}
-
-/**
- * «УДАЛИТЬ» — В «УДАЛЁННЫЕ СЧЕТА» (владелец 03.10: «попадают в папку
- * „Удалённые счета" на 30 дней, как клиенты»). Время ставит сервер
- * (`account_trash_rules`): он же закрывает счёт, отказывает счёту с деньгами
- * и назначает срок стирания пустому.
- */
-export async function trashAccount(
-  supabase: DbSupabase,
-  id: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("accounts")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id)
-    .select("id")
-    .maybeSingle();
-  assertAccountWritten({ data, error }, { fallback: "Не удалось удалить счёт" });
-}
-
-/** Вернуть из «Удалённых счетов»: открытый счёт, срок снят (сервер). */
-export async function restoreAccount(
-  supabase: DbSupabase,
-  id: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("accounts")
-    .update({ deleted_at: null })
-    .eq("id", id)
-    .select("id")
-    .maybeSingle();
-  assertAccountWritten(
-    { data, error },
-    {
-      fallback: "Не удалось вернуть счёт",
-      duplicate: "В команде уже есть счёт с таким именем — переименуйте его и верните этот",
-    },
-  );
-}
-
-/**
- * Удаление счёта, у которого нет истории (описка сразу после создания).
- *
- * Серверный триггер guard_account_delete_with_history отклоняет счёт с
- * операциями, чеками или оплатами заявок. До 2026-08-10 этого триггера НЕ БЫЛО,
- * а комментарий здесь обещал обратное: все ссылки стоят с `on delete set null`,
- * поэтому удаление молча обнуляло привязку — операции оставались в «Финансах»,
- * но пропадали из всех балансов.
- */
-export async function deleteAccount(
-  supabase: DbSupabase,
-  id: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("accounts")
-    .delete()
-    .eq("id", id)
-    .select("id")
-    .maybeSingle();
-  assertAccountWritten({ data, error }, { fallback: "Не удалось удалить счёт" });
 }
 
 // Пикер «куда принять деньги» здесь НЕ живёт: у него свой RPC

@@ -8,11 +8,13 @@ import {
   formatPhoneForDisplay,
   groupCyprusDigits,
   tryToE164,
-} from "./phone";
+} from "@/lib/phone";
 import { withHomeCode } from "./use-phone-country";
+import { readModuleSource } from "../../lib/module-source";
+import { clientsListSource } from "./list/source-for-tests";
 
-// НОМЕР И КНОПКА СВЯЗИ (владелец 22.09: «как правильно писать номер»,
-// «звоночек справа должен открывать, как я хочу связаться»).
+// НОМЕР И КНОПКА СВЯЗИ: номер пишется в правильном виде, а кнопка справа
+// открывает выбор способа связи.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -47,12 +49,12 @@ describe("кнопка связи у номера", () => {
   });
   test("заголовок листа — номер для глаз, а не сырой из базы", () => {
     assert.match(button(), /title=\{channels\.length > 0 \? formatPhoneForDisplay\(number, country\)/);
-    // Instagram — способ связи и без номера (владелец 12.10).
+    // Instagram — способ связи и без номера.
     assert.match(button(), /instagramDmUrl\(instagramUsername\)/);
     assert.match(button(), /if \(channels\.length === 0 && !instagram\) return null;/);
   });
-  // 03.10: строка работодателя в общем списке жила в компании экрана — лист
-  // читал набор телефона, а шестерёнки не было вовсе.
+  // Строка работодателя в общем списке не должна жить в компании экрана:
+  // лист читал бы набор телефона, а шестерёнки не было бы вовсе.
   test("клиент другой компании — набор и шестерёнка его компании", () => {
     assert.match(
       button(),
@@ -61,7 +63,7 @@ describe("кнопка связи у номера", () => {
     );
     assert.match(read("ClientRow.tsx"), /<PhoneChannelButton[^>]*source=\{source\}/, "строка не передаёт компанию кнопке");
     assert.match(
-      read("../../../app/(dashboard)/clients/index.tsx"),
+      clientsListSource(),
       /<ClientRow[^>]*source=\{guest\}/,
       "список не передаёт строке компанию работодателя",
     );
@@ -92,7 +94,8 @@ describe("код страны — в самом поле (владелец 12.10
   });
   test("строки номера без выбора страны: код начинает поле", () => {
     const header = read("ClientHeader.tsx");
-    const extras = read("ClientExtraContacts.tsx");
+    // Entry + parts folder: the messenger rows live in `extra-contacts/`.
+    const extras = readModuleSource(resolve(here, "ClientExtraContacts.tsx"), resolve(here, "extra-contacts"));
     for (const src of [header, extras]) {
       assert.doesNotMatch(src, /onPrefixPress|CountryPickerSheet|prefix=\{/);
     }
@@ -101,7 +104,8 @@ describe("код страны — в самом поле (владелец 12.10
     assert.match(extras, /seed=\{dialPrefix\(country\)\}/);
     assert.doesNotMatch(read("use-phone-country.tsx"), /CountryPickerSheet/);
     // Один оставленный код номером не считается — строка сохраняется пустой.
-    const row = read("../../components/ui/card-rows.tsx");
+    // `card-rows.tsx` is a barrel; the rows live in `card-rows/`.
+    const row = readModuleSource(resolve(here, "../../components/ui/card-rows.tsx"));
     assert.match(row, /return seed && typed === seed\.trim\(\) \? "" : typed;/);
   });
 });

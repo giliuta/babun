@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 import type { Client } from "@babun/shared/local/clients";
 import { useToast } from "@/components/ui/Toast";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
-import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useClientsScopeOrNull } from "@/session/company-scope";
+import { useMirror } from "@/session/mirror-state";
 import { memberClientContacts } from "@/features/clients/queries";
-import { rememberContacts } from "@/features/clients/revealed-contacts";
+import { rememberContacts } from "@/session/revealed-contacts";
 import { haptics } from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";

@@ -17,9 +17,10 @@ Routes (`apps/mobile/app/(dashboard)/clients/`):
 Feature code (`apps/mobile/src/features/clients/`):
 - List and card: `ClientRow.tsx`, `ClientHeader.tsx`, `ClientDetailChrome.tsx`, `ClientProfileBlocks.tsx`, `card-rows.tsx`, `blocks/*`
 - Filters and sorting: `ClientsFilterBar.tsx`, `ClientsFilterSheet.tsx`, `useClientFilters.ts`, `filter.ts`, `filter-pref.ts`, `sort-pref.ts`
-- Contact and objects: `ClientContactRow.tsx`, `PhoneChannelButton.tsx`, `contact-channels.ts`, `phone.ts`, `ObjectSheet.tsx`, `ObjectEditSheet.tsx`, `object-address.ts`, `object-types.ts`
+- Contact and objects: `ClientContactRow.tsx`, `PhoneChannelButton.tsx`, `contact-channels.ts`, `ObjectSheet.tsx`, `ObjectEditSheet.tsx`, `object-address.ts`, `object-types.ts`
 - Lifecycle: `archive-undo.ts`, `merge-clients.ts`, `repeat-visit.ts`, `service-plan.ts`, `timeline.ts`, `debt-reminder.ts`, `reminders.ts`
 - Import: `import/*` (CSV + iOS contacts)
+- Phone parsing shared by every feature: `apps/mobile/src/lib/phone.ts`
 - Data: `queries.ts`, `packages/shared/src/local/clients.ts`, `packages/shared/src/db/repositories/clients.ts`, `packages/shared/src/sync/clientsCached.ts`
 
 ## Domain model

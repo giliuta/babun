@@ -8,54 +8,52 @@ import {
 } from "@/features/clients/contact-channels";
 import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay, tryToE164 } from "@/lib/phone";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
-import { ClientsScopeProvider } from "@/features/clients/company-scope";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import { ClientsScopeProvider } from "@/session/company-scope";
+import type { ClientsScope } from "@/session/clients-company";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useSmsComposeContext } from "@/features/sms/SmsCompose";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // КНОПКА У КОНКРЕТНОГО НОМЕРА: ТАП — «СВЯЗАТЬСЯ», УДЕРЖАНИЕ — ЗВОНОК.
 //
-// Владелец 2026-09-22: «звоночек справа должен открывать, как я хочу
-// связаться». Это разворот его же закона от 2026-09-06 (тап звонил, лист
-// способов был за удержанием): номер ведёт то в WhatsApp, то в Telegram, и
-// угадывать за него способ хуже, чем показать все. Поэтому тап открывает
+// Номер ведёт то в WhatsApp, то в Telegram, и угадывать за человека способ
+// хуже, чем показать все. Поэтому тап открывает
 // лист «Связаться» в постоянном порядке «Способов связи» (рука запоминает
 // место строки), а удержание — прежний звонок в одно движение. Способ
 // один (включён только звонок) — листа нет, тап сразу звонит: шторка из
 // одной строки — лишний этап.
 //
-// Канал — свойство НОМЕРА, а не клиента (владелец 2026-07-26): у мужа
+// Канал — свойство НОМЕРА, а не клиента: у мужа
 // WhatsApp, у жены Viber, и звонить надо ровно на тот номер, у которого
 // нажали. Поэтому кнопка живёт в хвосте каждой строки-номера и знает только
-// свой номер. Лист — ТОТ ЖЕ, что у «Добавить» (владелец 2026-08-02):
+// свой номер. Лист — ТОТ ЖЕ, что у «Добавить»:
 // значок канала слева, шестерёнка в углу ведёт в настройки способов связи.
 
 interface ChannelButtonProps {
   number: string;
   /** @username клиента — только у основного номера. */
   telegramUsername?: string | null;
-  /** Instagram клиента — только у основного номера (владелец 12.10:
-   *  «нажимаю вызов, а добавлен Instagram — сразу видит Instagram и можно
-   *  туда перейти, написать»). Есть Instagram, а номера нет — кнопка всё
-   *  равно стоит: связаться можно. */
+  /** Instagram клиента — только у основного номера: нажали вызов, а добавлен
+   *  Instagram — он сразу виден, можно перейти и написать. Есть Instagram,
+   *  а номера нет — кнопка всё равно стоит: связаться можно. */
   instagramUsername?: string | null;
   /** Для озвучки: «Связаться · Жена». */
   label?: string;
   /** Чей номер, если не клиента страницы: [Имя] в шаблоне SMS — его. */
   smsName?: string | null;
-  /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
+  /** Команда клиента — её «Способы связи» (у каждой команды свои);
    *  нет — набор компании. */
   teamId?: string | null;
 }
 
-// КЛИЕНТ ДРУГОЙ КОМПАНИИ — ЕЁ НАБОР И ЕЁ ШЕСТЕРЁНКА (03.10). Строка
+// КЛИЕНТ ДРУГОЙ КОМПАНИИ — ЕЁ НАБОР И ЕЁ ШЕСТЕРЁНКА. Строка
 // работодателя в общем списке клиентов стоит под источником экрана — своей
 // компании: команда клиента там не находится, и лист читал набор телефона, а
 // шестерёнки не было вовсе. С `source` кнопка живёт в компании строки: набор
@@ -73,6 +71,14 @@ export default function PhoneChannelButton({
     <ClientsScopeProvider scope={source}>
       <ChannelButton {...props} />
     </ClientsScopeProvider>
+  );
+}
+
+/** Открыть мессенджер или звонилку. Приложения нет (Viber, Instagram) —
+ *  `openURL` отказывает, и тап молча ничего бы не делал. */
+function openChannel(url: string, label: string): void {
+  Linking.openURL(url).catch(() =>
+    notify("Не удалось открыть", `${label}: приложение не установлено или ссылка не открывается.`),
   );
 }
 
@@ -113,12 +119,12 @@ function ChannelButton({
     color: c.color,
     // Все каналы НОМЕРА — внешние ссылки: внутренний чат ведётся с клиентом,
     // а не с номером, и в этот список не попадает (contact-channels.ts).
-    // «SMS» — единственная дверь отправки (владелец 03.10): шаблон галкой,
+    // «SMS» — единственная дверь отправки: шаблон галкой,
     // внизу «Отправить от …» и «Со своего телефона».
     onPress:
       c.id === "sms" && smsContext
         ? () => setSmsOpen(true)
-        : () => void Linking.openURL(c.url),
+        : () => openChannel(c.url, c.label),
   }));
   if (instagram) {
     items.push({
@@ -126,7 +132,7 @@ function ChannelButton({
       label: "Instagram",
       icon: Instagram,
       color: MOBILE_CHANNEL_COLORS.instagram,
-      onPress: () => void Linking.openURL(instagram),
+      onPress: () => openChannel(instagram, "Instagram"),
     });
   }
 
@@ -141,7 +147,7 @@ function ChannelButton({
       items[0]!.onPress();
       return;
     }
-    void Linking.openURL(callUrl);
+    openChannel(callUrl, "Звонок");
   };
   const openChannels = () => {
     haptics.tap();
@@ -152,9 +158,8 @@ function ChannelButton({
     <>
       <RowActionButton
         icon={Phone}
-        // Акцент, как у маршрута и всех действий в хвосте строки (аудит
-        // 2026-09-06): зелёный звонок рядом с синим маршрутом читался как
-        // два разных предмета.
+        // Акцент, как у маршрута и всех действий в хвосте строки: зелёный
+        // звонок рядом с синим маршрутом читался бы как два разных предмета.
         color={t.accent}
         label={label ? `Связаться · ${label}` : "Связаться"}
         hint={single ? undefined : "Удерживайте, чтобы сразу позвонить"}

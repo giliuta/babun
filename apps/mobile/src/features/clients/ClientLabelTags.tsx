@@ -4,12 +4,13 @@ import { Pressable, View } from "react-native";
 import { Bookmark, Settings2, Tags } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
+import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { GUTTER, ICON } from "@/components/ui/tokens";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { TagPickerSheet } from "@/features/clients/TagPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { tagsOfferedFor } from "@/features/clients/picker-tags";
+import { useReferenceHref } from "@/lib/reference-href";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useCities } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
@@ -17,8 +18,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 
 // МЕТКА И ТЕГИ КЛИЕНТА — ДВУМЯ ПЛИТКАМИ, КАК «КОМАНДА | МЕТКА» В ЗАПИСИ
-// (владелец 22.09: «сделаем вот такие блоки — метка и теги… чтоб было более
-// красиво»). Та же `IdentityCard`, что в шапке записи: белая карточка,
+// Та же `IdentityCard`, что в шапке записи: белая карточка,
 // плитка цвета значения, пустое — кружок-приглашение акцентом.
 //
 // МЕТКА ЗАХОДИТ САМА. Запись в день с меткой переносит её на клиента, пока
@@ -35,7 +35,7 @@ export function ClientLabelTags({
   labelOn = true,
   tagOn = true,
 }: {
-  /** Блоки «Метка» и «Тег» — у команды раздельно (03.10). */
+  /** Блоки «Метка» и «Тег» — у команды раздельно. */
   labelOn?: boolean;
   tagOn?: boolean;
   client: Client;
@@ -44,8 +44,8 @@ export function ClientLabelTags({
   tags: ClientTag[];
   /** Нет права менять метку — её плитка только читается. */
   readOnly?: boolean;
-  /** Своё «только читать» у тега: у метки и тега разные выключатели команды
-   *  (03.10), и выключенная метка не должна запирать тег. Нет — как метка. */
+  /** Своё «только читать» у тега: у метки и тега разные выключатели команды,
+   *  и выключенная метка не должна запирать тег. Нет — как метка. */
   tagReadOnly?: boolean;
 }) {
   const t = useThemeColors();
@@ -72,17 +72,6 @@ export function ClientLabelTags({
   const doorway = useSheetDoorway();
   const teamParams = client.team_id ? { team: client.team_id } : undefined;
   const tagsDoor = useClientSettingsDoor("tags", client.team_id ?? null);
-  // ТЕГИ — КОМАНДЫ КЛИЕНТА (владелец 30.09: «теги закреплены за командой»).
-  // Предлагаются теги его команды; уже стоящий тег другой команды на плитке
-  // остаётся виден (он берётся из всего каталога ниже).
-  const teamTags = useMemo(
-    () =>
-      client.team_id
-        ? tags.filter((tag) => !tag.team_id || tag.team_id === client.team_id)
-        : tags,
-    [tags, client.team_id],
-  );
-
   const label = client.city.trim();
   const labelColor = cities.find((c) => c.name === label)?.color ?? getAvatarColor(label);
   const labelAuto = !!label && !client.city_manual;
@@ -94,9 +83,14 @@ export function ClientLabelTags({
   );
   const [shownTags, setShownTags] = useState<string[]>(client.tag_ids);
   useEffect(() => setShownTags(client.tag_ids), [client.tag_ids]);
-  // ТЕГОВ НЕСКОЛЬКО (владелец 15.10): шторка отдаёт весь набор по
-  // «Применить», карточка показывает его сразу и откатывает, если запись не
-  // прошла.
+  // ТЕГИ — КОМАНДЫ КЛИЕНТА (закреплены за командой): в шторке теги его
+  // команды и уже стоящие на нём теги других команд (`picker-tags.ts`).
+  const offeredTags = useMemo(
+    () => tagsOfferedFor(tags, client.team_id ?? null, shownTags),
+    [tags, client.team_id, shownTags],
+  );
+  // ТЕГОВ НЕСКОЛЬКО: шторка отдаёт весь набор по «Применить», карточка
+  // показывает его сразу и откатывает, если запись не прошла.
   const applyTags = (next: string[]) => {
     const before = shownTags;
     if (next.length === before.length && next.every((id, i) => id === before[i])) return;
@@ -116,7 +110,7 @@ export function ClientLabelTags({
   const tagsTitle = chosen[0]?.name ?? null;
   const tagsMore = chosen.length > 1 ? `+${chosen.length - 1}` : undefined;
 
-  // ПУСТАЯ ПЛИТКА ТОЛЬКО ДЛЯ ТОГО, КТО МОЖЕТ ЕЁ ЗАПОЛНИТЬ (владелец 01.10).
+  // ПУСТАЯ ПЛИТКА ТОЛЬКО ДЛЯ ТОГО, КТО МОЖЕТ ЕЁ ЗАПОЛНИТЬ.
   // «Только видит» и значения нет — плитка-приглашение была бы кнопкой в
   // никуда: её нет, а обе пустые — нет и ряда.
   const showLabel = labelOn && (!readOnly || !!label);
@@ -181,9 +175,7 @@ export function ClientLabelTags({
         value={label || null}
         onPick={(name) => update({ city: name, city_manual: true })}
         onClear={() => update({ city: "", city_manual: false })}
-        // ШЕСТЕРЁНКА ВЕДЁТ В СПРАВОЧНИК (владелец 22.09: «справа вверху
-        // настройки — оно сразу может перекидывать в настройки этой метки»).
-        // Та же дверь, что у метки дня и у способов связи.
+        // ШЕСТЕРЁНКА ВЕДЁТ В СПРАВОЧНИК: сразу в настройки этой метки. Та же дверь, что у метки дня и у способов связи.
         onSettings={
           <Pressable
             onPress={() =>
@@ -202,12 +194,13 @@ export function ClientLabelTags({
       />
       <TagPickerSheet
         visible={tagsOpen && !doorway.parked}
-        tags={teamTags}
+        open={tagsOpen}
+        tags={offeredTags}
         selected={shownTags}
         onApply={applyTags}
         // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены. Дверь
         // общая с «Связью»: у клиента чужого аккаунта и без права её нет
-        // (проверка 03.10 — вела в свои теги).
+        // (иначе вела бы в свои теги).
         onSettings={tagsDoor ? () => doorway.open(() => router.push(tagsDoor)) : undefined}
         onClose={() => setTagsOpen(false)}
       />

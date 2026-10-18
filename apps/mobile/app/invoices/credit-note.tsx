@@ -21,11 +21,12 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useClients } from "@/features/clients/queries";
-import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
-import { buildInvoiceDocument } from "@/features/invoices/document";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
-import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/features/invoices/format";
+import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
+import { buildInvoiceDocument } from "@/lib/paper/document";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
+import { creditNoteLeftToPay } from "@/features/invoices/credit-note-amounts";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import {
@@ -34,19 +35,20 @@ import {
   useInvoicePayments,
   useIssuePartialCreditNote,
   useNextInvoiceSeries,
-} from "@/features/invoices/queries";
+} from "@/features/finances/invoices-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
+import { persistInvoiceLanguage } from "@/features/finances/persist-invoice-language";
 import { useThemeColors } from "@/theme/colors";
 
-// КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК (владелец 2026-10-04:
-// «сначала превью, отредактировать, и она закрепляется чётко за инвойсом —
-// в одном файле»). Форма → превью → «Выписать». Реквизиты и серия — инвойса:
+// КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК: сначала превью с
+// правкой, закрепляется за инвойсом. Форма → превью → «Выписать». Реквизиты и серия — инвойса:
 // CN выдаётся из серии его юрлица, дата — сегодняшний день компании.
 //
-// СУММА — ВСЯ ИЛИ ЧАСТЬ (04.10). Вся — инвойс отменяется (`cancel_invoice`,
+// СУММА — ВСЯ ИЛИ ЧАСТЬ. Вся — инвойс отменяется (`cancel_invoice`,
 // строки инвойса с минусом); часть — инвойс остаётся в силе, к оплате —
 // остаток (`issue_partial_credit_note`), а если получено больше, разница
 // возвращается клиенту тем же движением.
@@ -54,7 +56,14 @@ export default function CreditNoteScreen() {
   const t = useThemeColors();
   const router = useRouter();
   // `amount` — с «Вернуть» платежа инвойса: форма открывается на его сумме.
-  const { invoiceId, amount: amountParam } = useLocalSearchParams<{ invoiceId: string; amount?: string }>();
+  const { invoiceId, amount: amountParam, paymentId: paymentParam } = useLocalSearchParams<{
+    invoiceId: string;
+    amount?: string;
+    paymentId?: string;
+  }>();
+  // «Вернуть» на конкретном платеже: деньги уходят с него и его счёта, а не с
+  // самых новых платежей инвойса.
+  const paymentId = paymentParam && /^[0-9a-f-]{36}$/i.test(paymentParam) ? paymentParam : null;
   const original = useInvoice(invoiceId);
   const clients = useClients();
   const tenant = useTenant();
@@ -76,14 +85,17 @@ export default function CreditNoteScreen() {
   const issued = useRef<string | null>(null);
 
   const row = original.data ?? null;
+  // ГОД НОТЫ — ГОД СЕГОДНЯШНЕГО ДНЯ КОМПАНИИ, а не инвойса: сервер нумерует
+  // ноту по дате выпуска. Декабрьский инвойс, отменённый в январе, показывал
+  // в превью «CN-2025-…», а выходил «CN-2026-0001».
+  const noteYear = Number(businessToday.slice(0, 4));
   const series = useNextInvoiceSeries(
-    row?.year ?? new Date().getFullYear(),
+    noteYear,
     row?.company_id ?? null,
     !!row,
     "credit_note",
   );
-  // По умолчанию — английский (владелец 04.10: «делай пока что всё на
-  // английском»); русский — разовым выбором в превью.
+  // По умолчанию — английский; русский — разовым выбором в превью.
   const paperLanguage: InvoiceLanguage = language ?? "en";
   const client =
     (clients.data ?? []).find((c) => c.id === row?.client_id) ?? null;
@@ -195,13 +207,22 @@ export default function CreditNoteScreen() {
             amount: value,
             reason: reason.trim() || null,
             language: paperLanguage,
+            paymentId,
           });
       // Язык — вторым шагом, как у инвойса: сервер копирует язык инвойса.
-      // Не записался — нота остаётся на языке инвойса и меняется в «⋯».
+      // Не записался — нота остаётся на языке инвойса, и человек узнаёт об
+      // этом сразу: документ уже выписан, а язык бумаги у кредит-ноты потом
+      // не меняется.
       if (paperLanguage !== row.language) {
-        await setInvoiceLanguage(supabase, note.id, paperLanguage).catch(
-          () => undefined,
+        const saved = await persistInvoiceLanguage(() =>
+          setInvoiceLanguage(supabase, note.id, paperLanguage),
         );
+        if (!saved) {
+          notify(
+            "Кредит-нота выписана, язык бумаги не сохранился",
+            "Документ остался на языке инвойса.",
+          );
+        }
       }
       haptics.success();
       issued.current = note.id;
@@ -231,7 +252,7 @@ export default function CreditNoteScreen() {
               row.company_id
                 ? {
                     companyId: row.company_id,
-                    year: row.year,
+                    year: noteYear,
                     next: series.data
                       ? { ...series.data, canSetStart: false }
                       : null,
@@ -263,7 +284,7 @@ export default function CreditNoteScreen() {
                     : { text: "Вся сумма — инвойс будет отменён" }
                   : toRefund > 0
                     ? { text: `Часть — инвойс остаётся, клиенту вернётся ${formatInvoiceMoney(toRefund, row.currency)}` }
-                    : { text: `Часть — инвойс остаётся, к оплате ${formatInvoiceMoney(Math.max(0, due - value), row.currency)}` }
+                    : { text: `Часть — инвойс остаётся, к оплате ${formatInvoiceMoney(creditNoteLeftToPay(due, paid, value), row.currency)}` }
             }
           />
 

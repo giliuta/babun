@@ -1,6 +1,5 @@
-// БЮДЖЕТ КАТЕГОРИИ НА МЕСЯЦ — ЧИСТАЯ ЛОГИКА (владелец 2026-09-24: «когда
-// создам категорию, выставить бюджет по этой категории, и потом она просто
-// пришлёт уведомление, что перевалил лимит»).
+// БЮДЖЕТ КАТЕГОРИИ НА МЕСЯЦ — ЧИСТАЯ ЛОГИКА. Бюджет задают при создании
+// категории; при превышении лимита приходит уведомление.
 //
 // Бюджет — свойство категории (`finance_categories.monthly_budget`), месяц —
 // календарный месяц компании. Потрачено = сумма расходов этой категории за
@@ -54,10 +53,20 @@ export function monthOf(ymd: string): { from: string; to: string; key: string } 
   return { from: `${key}-01`, to: `${key}-${pad(last)}`, key };
 }
 
+/** Месяц бюджета для операции — месяц её дня: расход прошлым числом тратит
+ *  бюджет прошлого месяца, а не сегодняшнего. Дня нет — сегодняшний
+ *  (`today` — по часам компании). */
+export function budgetMonthFor(
+  occurredOn: string | null | undefined,
+  today: string,
+): { from: string; to: string; key: string } {
+  return monthOf(occurredOn ?? today);
+}
+
 /** Есть ли у категории действующий бюджет. Бюджет бывает только у расхода. */
 export function hasBudget(c: BudgetCategory): c is BudgetCategory & { monthly_budget: number } {
   // Скрытая категория не считается: в справочнике и в двери у неё бюджета
-  // «нет», а уведомления продолжали приходить (аудит 2026-09-30).
+  // «нет», а уведомления продолжали приходить.
   return (
     c.type === "expense" &&
     !c.is_system &&
@@ -168,6 +177,23 @@ export function budgetAlerts(
     if (level !== 0) next[key] = level;
   }
   return { notices, next };
+}
+
+/** Что запомнить после проверки месяца `monthKey`. Свежие пороги этого
+ *  месяца — всегда; проверяли прошлый (расход прошлым числом) — память
+ *  ТЕКУЩЕГО месяца остаётся, иначе следующий взгляд на «Финансы» сообщил бы
+ *  его пороги второй раз. Прочие месяцы уходят. */
+export function keepBudgetSeen(
+  seen: BudgetSeen,
+  next: BudgetSeen,
+  monthKey: string,
+  currentMonthKey: string,
+): BudgetSeen {
+  if (monthKey === currentMonthKey) return next;
+  const current = Object.fromEntries(
+    Object.entries(seen).filter(([key]) => key.endsWith(`:${currentMonthKey}`)),
+  );
+  return { ...current, ...next };
 }
 
 /** Поле «Бюджет в месяц»: пусто или ноль — бюджета нет; иначе число.

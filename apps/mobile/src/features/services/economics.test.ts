@@ -67,8 +67,8 @@ describe("service tier compatibility", () => {
 
 describe("сумма за строку ходит туда и обратно без потерь", () => {
   test("«100 за три» возвращается ровно сотней, а не 99,99", () => {
-    // Круг, ради которого вся правка и затевалась (владелец 2026-08-21:
-    // «3 комнаты стоит 100 — это им надо вписать 33.33, неудобно»).
+    // Круг, ради которого вся правка и затевалась: клининговой компании «3
+    // комнаты стоит 100» неудобно вписывать как 33.33.
     const typed = {
       tiers: [
         {
@@ -271,10 +271,11 @@ describe("время новой строки продолжает шаг (вла
 });
 
 test("барабан времени у строки посередине не уносит лист вниз (11.10)", async () => {
-  const { readFileSync } = await import("node:fs");
   const { dirname, resolve } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
-  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "ServiceSheet.tsx"), "utf8");
+  const { readModuleSource } = await import("@/lib/module-source");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readModuleSource(resolve(here, "ServiceSheet.tsx"), resolve(here, "service-sheet"));
   assert.match(src, /const lastId = economics\.tiers\[economics\.tiers\.length - 1\]\?\.id \?\? "base";\s*if \(id && id === lastId\) \{/);
   assert.match(src, /if \(id\) Keyboard\.dismiss\(\);/);
 });
@@ -283,27 +284,29 @@ test("барабан времени у строки посередине не у
 test("«Убрать» строку количества убирает сразу — без вопроса поверх листа (11.10)", async () => {
   // Вопрос рисуется своим Modal поверх Modal листа услуги — iOS его не
   // показывает, и кнопка молчала. Строка — черновик листа, спрашивать незачем.
-  const { readFileSync } = await import("node:fs");
   const { dirname, resolve } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
-  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "ServiceLadder.tsx"), "utf8");
+  const { readModuleSource } = await import("@/lib/module-source");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readModuleSource(resolve(here, "ServiceLadder.tsx"), resolve(here, "service-ladder"));
   assert.doesNotMatch(src, /confirmThen\(|confirmAction\(|chooseOption\(/);
   assert.match(src, /onAction=\{\(\) => onRemove\(id\)\}/);
 });
 
 test("шаблоны новой услуги — значком в шапке ЛИСТА, список и заполнение в том же листе (11.10)", async () => {
-  // Владелец: «значок в самой шторке справа — нажимаю шаблон, и в этой же
-  // шторке появляется вся услуга». Второе окно поверх листа iOS не показывает.
-  const { readFileSync } = await import("node:fs");
+  // Значок в самой шторке справа: нажал шаблон — и в этой же шторке
+  // появляется вся услуга. Второе окно поверх листа iOS не показывает.
   const { dirname, resolve } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const here = dirname(fileURLToPath(import.meta.url));
-  const page = readFileSync(resolve(here, "../../../app/(dashboard)/cabinet/services.tsx"), "utf8");
+  const { readModuleSource } = await import("@/lib/module-source");
+  // The route is a door; the price list lives in `price-list/`.
+  const page = readModuleSource(resolve(here, "../../../app/(dashboard)/cabinet/services.tsx"), resolve(here, "price-list"));
   assert.match(page, /const isOwner = useDataRole\(\)\.data === "owner";/);
   assert.match(page, /if \(!isOwner \|\| !activeTeamId\) return \[\];/);
   assert.match(page, /templates=\{readOnly \? undefined : templates\}/);
   assert.doesNotMatch(page, /CopyPlus|chooseOption\(/);
-  const sheet = readFileSync(resolve(here, "ServiceSheet.tsx"), "utf8");
+  const sheet = readModuleSource(resolve(here, "ServiceSheet.tsx"), resolve(here, "service-sheet"));
   assert.match(sheet, /const canPickTemplate = !service && \(templates\?\.length \?\? 0\) > 0;/);
   assert.match(sheet, /\{picking \? \(\s*<TemplateList/);
   assert.match(sheet, /<TemplatesHeaderButton picking=\{picking\}/);

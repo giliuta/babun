@@ -6,12 +6,12 @@
 // почта — логин аккаунта. У старых аккаунтов имени нет: тогда на месте имени
 // стоит почта, а второй раз её не печатаем.
 //
-// КАРТА — ПОЛНАЯ ВИЗИТКА (владелец 06.10: «имя, имя компании, почта, номер,
-// дата рождения — чтобы в шапке была чёткая информация»). Под именем —
+// КАРТА — ПОЛНАЯ ВИЗИТКА: имя, имя компании, почта, номер, дата рождения.
+// Под именем —
 // компания (имя своего аккаунта), ниже — факты значком и значением, без
 // подписей: значок и есть подпись. Пустое не печатается.
 
-import { formatPhoneForDisplay } from "../clients/phone";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 export type PersonFactKind = "email" | "phone" | "birthday";
 
@@ -46,8 +46,7 @@ export function personCardView(user: UserLike, accountName?: string | null): Per
   const birthday = birthdayText(clean(user?.user_metadata?.birthday));
   const title = name || email || "Аккаунт";
   const account = clean(accountName);
-  // Регистрация кладёт одно поле «Ваше имя» (до 11.10 — «Имя или название
-  // компании») и в имя, и в аккаунт — пока их не развели в «Профиле», второй
+  // Регистрация кладёт одно поле «Ваше имя» и в имя, и в аккаунт — пока их не развели в «Профиле», второй
   // раз то же слово не печатаем.
   const company =
     account && account.toLocaleLowerCase() !== title.toLocaleLowerCase() ? account : null;

@@ -1,4 +1,4 @@
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { CabinetPreview } from "./CabinetPreviews";
 import { CalendarPreview } from "./CalendarPreviews";
 import { ClientCardPreview } from "./ClientCardPreviews";

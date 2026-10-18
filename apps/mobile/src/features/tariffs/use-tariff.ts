@@ -4,11 +4,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
-import { useAccountProfile, useAccountScope } from "@/features/cabinet/account-scope";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useAccountProfile, useAccountScope } from "@/session/account-scope";
+import { useCurrentRole } from "@/session/tenant";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { TENANT_HEADER } from "@/lib/tenant-header";
-import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "./tiers";
+import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "@/session/tiers";
 
 // ТАРИФ АККАУНТА — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ `tiers.ts`.
 //
@@ -34,7 +34,7 @@ interface TariffProfile {
 }
 
 export function useTariff() {
-  // Тариф АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта в
+  // Тариф АККАУНТА СТРАНИЦЫ: в блоке пригласившего аккаунта в
   // Кабинете — его тариф, а не того, что открыт на телефоне.
   const tenant = useAccountProfile();
   const profile = (tenant.data ?? null) as TariffProfile | null;
@@ -71,7 +71,7 @@ type TariffRpc = {
     args: { p_tier: string } | { p_team_ids: string[] },
   ) => PromiseLike<{ error: { message?: string } | null }>;
 };
-/** Двери тарифа — под заголовком аккаунта СТРАНИЦЫ (04.10): свой аккаунт,
+/** Двери тарифа — под заголовком аккаунта СТРАНИЦЫ: свой аккаунт,
  *  открытый из Кабинета, пока на телефоне чужой, пробует и выбирает команды
  *  у себя, а не у того, что открыт. */
 const tariffRpcOf = (client: typeof supabase) => client as unknown as TariffRpc;
@@ -155,7 +155,7 @@ async function openPage(url: string, web: boolean): Promise<void> {
 export async function openTariffCheckout(
   tier: Exclude<Tier, "free">,
   /** Аккаунт, ЗА КОТОРЫЙ платят (блок аккаунта в Кабинете), — явно, а не
-   *  тот, что открыт на телефоне (04.10). */
+   *  тот, что открыт на телефоне. */
   tenantId?: string | null,
   /** Сколько календарей оплатить: предложение «Новый календарь» платит и
    *  за тот, что заводят (живые + 1); сервер не даст больше. */
@@ -196,7 +196,7 @@ export async function openTariffPortal(tenantId?: string | null): Promise<void> 
  *  оплачивают, и звать к покупке нельзя (App Store 3.1.3(f), `pay-here.ts`). */
 export const TARIFF_LOCKED_HINT = CAN_PAY_HERE ? "Нужно изменить тариф" : "Недоступно для этого аккаунта";
 
-/** ПЛАШКА «НУЖНО ИЗМЕНИТЬ ТАРИФ» (владелец 01.10): закрытое тарифом видно
+/** ПЛАШКА «НУЖНО ИЗМЕНИТЬ ТАРИФ»: закрытое тарифом видно
  *  серым, тап поднимает плашку сверху. Владельцу — с кнопкой «Тариф»;
  *  партнёру в чужой команде менять нечего — тариф у хозяина команды. В
  *  приложении из магазина — одна спокойная фраза, без кнопки «Тариф». */

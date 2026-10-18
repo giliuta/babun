@@ -20,8 +20,8 @@ import { receiptClientName, type Receipt } from "@babun/shared/local/finance/rec
 export type DocumentKind = "invoice" | "receipt";
 
 /**
- * Сегмент над списком — ровно вид документа, третьего значения нет (владелец
- * 2026-08-12: «есть только два подраздела — инвойсы и чеки»). Общий сегмент
+ * Сегмент над списком — ровно вид документа, третьего значения нет (только два подраздела
+ * — инвойсы и чеки). Общий сегмент
  * «Все» смешивал в одну ленту счёт на оплату и подтверждение приёма денег:
  * бумаги разной природы, и главное действие внизу экрана у них тоже разное.
  */
@@ -39,7 +39,7 @@ export interface FinanceDocument {
   currency: string;
   /** «Оплачен» / «К оплате» / «Просрочен» / «Аннулирован». null — состояния
    *  нет вовсе: выданный чек ничего не ждёт. Состояние говорит СЛОВОМ, а не
-   *  цветом (владелец 2026-08-15: неоплаченный документ — не тревога). */
+   *  цветом (неоплаченный документ — не тревога). */
   state: string | null;
   /** Документ аннулирован или отменён. Из списка он не пропадает: номер занят,
    *  и проверяющий обязан видеть, почему. Строка гаснет, а не исчезает. */
@@ -47,7 +47,7 @@ export interface FinanceDocument {
   /** Кредит-нота: в списке видна, в числе документов плитки не считается. */
   creditNote?: boolean;
   /** Команда документа (инвойс — `brigade_id`, чек — команда того, за что
-   *  выдан). По ней партнёр с «Документы: Видит» читает документ (03.10).
+   *  выдан). По ней партнёр с «Документы: Видит» читает документ.
    *  `null` — общий, без команды. */
   teamId: string | null;
   /** Предсобранная строка поиска: номер, клиент, сумма. Собирается один раз на
@@ -81,13 +81,27 @@ export interface DocumentSources {
  *  при каждом рефетче. */
 export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
   const docs: FinanceDocument[] = [];
-  // Номер кредит-ноты ищется по её инвойсу: своей строки у ноты нет.
-  const noteNumberOf = new Map<string, string>();
-  // Чеки с возвратом (04.10): нота к самому чеку или к его инвойсу.
+  // Номера кредит-нот ищутся по их инвойсу: своей строки у ноты нет. ВСЕ
+  // номера, а не последний записанный: у инвойса с двумя частичными нотами
+  // поиск «CN-…-0002» не находил ничего.
+  const noteNumbersOf = new Map<string, string[]>();
+  // Инвойсы, отменённые ЦЕЛИКОМ: возвращено всё, и каждый их чек тоже.
+  const fullyCredited = new Set<string>();
+  // Проводки, с которых деньги вернули (`refund_of_id` возврата).
+  const refundedPayments = new Set<string>();
+  for (const rows of Object.values(sources.payments)) {
+    for (const row of rows) {
+      if (row.type === "refund" && row.refund_of_id) refundedPayments.add(row.refund_of_id);
+    }
+  }
+  // Чеки с нотой к самому чеку.
   const receiptNotes = new Map<string, string>();
   for (const invoice of sources.invoices) {
     if (invoice.kind === "credit_note" && invoice.credit_note_of_id) {
-      noteNumberOf.set(invoice.credit_note_of_id, invoice.number);
+      const numbers = noteNumbersOf.get(invoice.credit_note_of_id) ?? [];
+      numbers.push(invoice.number);
+      noteNumbersOf.set(invoice.credit_note_of_id, numbers);
+      if (!invoice.credit_partial) fullyCredited.add(invoice.credit_note_of_id);
     }
     if (invoice.kind === "credit_note" && invoice.credit_note_of_receipt_id) {
       receiptNotes.set(invoice.credit_note_of_receipt_id, invoice.number);
@@ -114,12 +128,11 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       invoice.client_snapshot?.full_name?.trim() ||
       sources.clientName(invoice.client_id) ||
       "Без клиента";
-    // КРЕДИТ-НОТА — ЧАСТЬ СВОЕГО ИНВОЙСА, А НЕ ОТДЕЛЬНАЯ СТРОКА (владелец
-    // 2026-10-04: «она не должна быть отдельным списком… это по сути один
-    // файл: инвойс становится серым, как отменённый»). Нота живёт на странице
+    // КРЕДИТ-НОТА — ЧАСТЬ СВОЕГО ИНВОЙСА, А НЕ ОТДЕЛЬНАЯ СТРОКА: это по сути один
+    // файл, инвойс становится серым, как отменённый. Нота живёт на странице
     // инвойса; в списке — только он, погасший, и её номер находит его поиском.
     if (invoice.kind === "credit_note") continue;
-    const noteNumber = noteNumberOf.get(invoice.id);
+    const noteNumbers = noteNumbersOf.get(invoice.id) ?? [];
     docs.push({
       id: invoice.id,
       kind: "invoice",
@@ -136,7 +149,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
           ? "Оплачен"
           // Частично оплаченный — тем же словом, что на странице инвойса
           // (`invoiceDisplayStatus`: частичная оплата важнее просрочки), а
-          // не «К оплате», как нетронутый (аудит 03.10).
+          // не «К оплате», как нетронутый.
           : settlement.isPartial
             ? "Частично оплачен"
             : overdue
@@ -145,7 +158,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       dead,
       teamId: invoice.brigade_id ?? null,
       search: searchKey(
-        noteNumber ? `${invoice.number} ${noteNumber}` : invoice.number,
+        [invoice.number, ...noteNumbers].join(" "),
         clientName,
         invoice.total,
       ),
@@ -169,12 +182,17 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       // только у аннулированного — иначе непонятно, почему строка потухла.
       // Слово то же, что у инвойса: «погашен» в финансах значит «оплачен»,
       // и потухший чек сообщал бы противоположное случившемуся.
-      // ВОЗВРАТ — СЛОВОМ (04.10): погашенный возвратом — «Возвращён», частично —
+      // ВОЗВРАТ — СЛОВОМ: погашенный возвратом — «Возвращён», частично —
       // «Частично возвращён»; номер ноты находит чек поиском.
       state: (() => {
+        // ВОЗВРАЩЁН ИМЕННО ЭТОТ ЧЕК: нота к нему самому, отмена всего
+        // инвойса или возврат с его платежа. Любая частичная нота инвойса
+        // («Вернуть» с другого платежа, снятие неоплаченной части) метила
+        // «Частично возвращён» каждый его чек.
         const returned =
           receiptNotes.has(receipt.id)
-          || (!!receipt.invoice_id && noteNumberOf.has(receipt.invoice_id));
+          || (!!receipt.invoice_id && fullyCredited.has(receipt.invoice_id))
+          || (!!receipt.transaction_id && refundedPayments.has(receipt.transaction_id));
         if (receipt.status === "void") return returned ? "Возвращён" : "Аннулирован";
         return returned ? "Частично возвращён" : null;
       })(),

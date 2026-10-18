@@ -12,8 +12,7 @@ import { RECOVERY_LINK_REDIRECT } from "@/components/auth/EmailCodeCard";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { supabase } from "@/lib/supabase";
 
-// «Сброс пароля»: почта → код из письма Babun (владелец 04.10: «сброс пароля
-// идёт тем же кодом»). Код вводится на экране нового пароля — там же сессия
+// «Сброс пароля»: почта → код из письма Babun (тот же код, что при входе). Код вводится на экране нового пароля — там же сессия
 // восстановления переживает гейт входа. Ответ один и тот же, есть такой адрес
 // или нет (anti-enumeration). Кнопка в письме ведёт туда же ссылкой.
 export default function ForgotPasswordScreen() {

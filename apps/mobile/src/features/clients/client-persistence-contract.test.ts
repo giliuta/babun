@@ -3,10 +3,20 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
+import { clientCardSource } from "./card/source-for-tests";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) =>
   readFileSync(resolve(here, relative), "utf8");
+// Components split into an entry and a parts folder (rule of 400 lines):
+// negative guards read both, so moved code stays guarded.
+const PARTS: Record<string, string> = {
+  "blocks/ObjectsBlock.tsx": "blocks/objects-block",
+  "ClientExtraContacts.tsx": "extra-contacts",
+};
+const readWithParts = (relative: string) =>
+  readModuleSource(resolve(here, relative), PARTS[relative] && resolve(here, PARTS[relative]));
 
 describe("client native persistence contract", () => {
   test("attachments use UUIDs, tenant-scoped cache keys and DB-returned delete paths", () => {
@@ -24,20 +34,19 @@ describe("client native persistence contract", () => {
     );
     assert.match(
       source,
-      /queryKey: \["client-attachments", tenantId, clientId\]/,
+      /queryKey: clientKeys\.attachments\(tenantId, clientId\)/,
     );
   });
 
   test("inline note and object editors clear only after a confirmed save", () => {
-    const screen = read("../../../app/(dashboard)/clients/[id].tsx");
+    const screen = clientCardSource();
     const notes = read("blocks/NotesBlock.tsx");
-    // Страницы объекта и техники удалены (2026-08-06): правка объекта живёт
-    // листом, уровень техники снесён целиком. Правило осталось прежним и
-    // проверяется на листе правки.
+    // Страниц объекта и техники нет: правка объекта живёт листом, уровня
+    // техники нет. Правило проверяется на листе правки.
     const objectSheet = read("ObjectEditSheet.tsx");
     assert.match(screen, /Promise<boolean>/);
     assert.match(screen, /await updateClient\.mutateAsync\(patch\)/);
-    // Заметка клиента — ОДНО поле (2026-09-06), привязанное к последней записи
+    // Заметка клиента — ОДНО поле, привязанное к последней записи
     // журнала: пишет тем же писателем «свежайший массив + очередь» через
     // applyNoteEdit, а черновик держит useInlineNote — коммит на уходе с поля
     // и с экрана, набранное не теряется и не пишется дважды.
@@ -48,19 +57,18 @@ describe("client native persistence contract", () => {
     // Лист правки объекта пишет ТЕМ ЖЕ писателем и удаляет с подтверждением.
     assert.match(objectSheet, /writer: LocationWriter/);
     assert.match(objectSheet, /Удалить объект/);
-    // Создание объекта уехало со страницы в лист снизу (2026-07-27). Правило
-    // то же: форма пустеет ТОЛЬКО после подтверждённой записи, иначе набранный
-    // адрес исчезал вместе с неудавшимся PATCH-ем.
+    // Создание объекта — лист снизу. Форма пустеет ТОЛЬКО после подтверждённой
+    // записи, иначе набранный адрес исчезал бы вместе с неудавшимся PATCH-ем.
     const sheet = read("ObjectSheet.tsx");
     assert.match(sheet, /const id = await writer\.addLocation\(/);
     assert.match(sheet, /if \(!id\) \{/);
     // Отказ записи выходит РАНЬШЕ очистки формы: сама очистка (сброс адреса и
     // заметки с сохранением выбранного типа) стоит уже за этой веткой.
-    // ФОРМА ОБЪЕКТА ОДНА НА СОЗДАНИЕ И НА ПРАВКУ (2026-09-10). Блоки живут в
+    // ФОРМА ОБЪЕКТА ОДНА НА СОЗДАНИЕ И НА ПРАВКУ. Блоки живут в
     // `ObjectFields`, листы — тонкие двери со своим способом записи. Второй
-    // формы того же объекта в продукте быть не должно: именно так «добавить» и
-    // «править» разошлись до этого — до разных примитивов, разной подписи типа
-    // и карты только в одном из двух.
+    // формы того же объекта в продукте быть не должно: иначе «добавить» и
+    // «править» разойдутся — до разных примитивов, разной подписи типа и
+    // карты только в одном из двух.
     const fields = read("ObjectFields.tsx");
     assert.match(sheet, /<ObjectFields/);
     assert.match(objectSheet, /<ObjectFields/);
@@ -71,8 +79,8 @@ describe("client native persistence contract", () => {
     }
     // Поля формы ОБЯЗАНЫ быть live: кнопка живёт в футере и фокус не снимает,
     // поэтому коммит по blur не наступает — набранный адрес не доезжал до
-    // черновика, кнопка оставалась серой, «Готово» молча выбрасывало работу
-    // (регресс 2026-07-27, найден прогоном персонажей).
+    // черновика, кнопка оставалась бы серой, «Готово» молча выбрасывало бы
+    // работу.
     const addressRow = fields.slice(
       fields.indexOf('label="Адрес"'),
       fields.indexOf("<AddressDetailsToggle"),
@@ -97,7 +105,7 @@ describe("client native persistence contract", () => {
     // Источник — свежайшее значение очереди, записи — цепочкой.
     assert.match(writer, /fn\(storeRef\.current\.latest\)/);
     assert.match(writer, /st\.chain = run/);
-    // ОЧЕРЕДЬ ОДНА НА КЛИЕНТА И ПОЛЕ (аудит 23.09): карточка и страница «Все
+    // ОЧЕРЕДЬ ОДНА НА КЛИЕНТА И ПОЛЕ: карточка и страница «Все
     // объекты» / «Все реквизиты» пишут один массив — очередь модульная.
     assert.match(writer, /const SHARED = new Map</);
     assert.match(read("use-location-writer.ts"), /ownerKey, "locations"\)/);
@@ -106,7 +114,7 @@ describe("client native persistence contract", () => {
     // Экраны и блоки не собирают массив сами.
     assert.doesNotMatch(read("ObjectEditSheet.tsx"), /update\(\{\s*locations:/);
     assert.doesNotMatch(
-      read("blocks/ObjectsBlock.tsx"),
+      readWithParts("blocks/ObjectsBlock.tsx"),
       /update\(\{\s*locations:/,
     );
     assert.match(read("use-location-writer.ts"), /useJsonArrayWriter/);
@@ -123,20 +131,18 @@ describe("client native persistence contract", () => {
     // сторож по слову молчал бы при удалённой механике.
     assert.match(read("ClientExtraContacts.tsx"), /useJsonArrayWriter<PhoneEntry>\(/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /update\(\{\s*phones:/);
-    // ЛЮДЕЙ ВНУТРИ КАРТОЧКИ БОЛЬШЕ НЕТ (STORY-085, вариант 3 владельца
-    // 2026-09-21: «все — клиенты, связаны друг с другом»). Прежний список
-    // `client.people` со своим писателем снесён целиком; связь живёт у самого
-    // человека (`client.memberships`), и писать её будет блок связей, когда
-    // владелец утвердит вид. Сторож на здесь не про «как пишем», а про «не
-    // вернулось»: список людей внутри карточки — это копия чужих контактов,
+    // ЛЮДЕЙ ВНУТРИ КАРТОЧКИ НЕТ (STORY-085: все — клиенты, связаны друг с
+    // другом). Списка `client.people` со своим писателем нет; связь живёт у
+    // самого человека (`client.memberships`), и пишет её блок связей. Сторож
+    // здесь не про «как пишем», а про «не вернулось»: список людей внутри карточки — это копия чужих контактов,
     // из-за которой номер жены жил в двух местах сразу.
     for (const file of ["ClientHeader.tsx", "ClientExtraContacts.tsx"]) {
-      assert.doesNotMatch(read(file), /update\(\{\s*people:/);
+      assert.doesNotMatch(readWithParts(file), /update\(\{\s*people:/);
     }
     // Теги и заметки — те же jsonb-массивы: собственных копий механики быть
     // не должно, иначе расхождение вернётся с другой стороны.
-    // Теги переехали в «Личное» (владелец 2026-07-26: «теги на уровне
-    // Личное, как метки»), заметки — там же внизу. Механика та же.
+    // Теги стоят наверху карточки, как метки, заметки — внизу. Механика та
+    // же.
     assert.match(read("ClientLabelTags.tsx"), /useJsonArrayWriter/);
     assert.match(read("blocks/NotesBlock.tsx"), /useJsonArrayWriter/);
     // Признак снимка рендера — сборка набора из client.tag_ids прямо в
