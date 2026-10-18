@@ -39,6 +39,14 @@ export function invitationShareUrl(token: string): string {
   return `https://babun.app${invitationPath(token)}`;
 }
 
+/** Кто может звать, править приглашения и убирать партнёров — тот же порог,
+ *  что у сервера: владелец или «Партнёры: Управляет». `manages` — ответ
+ *  `access_company('company.partners', 'write')`; всё, кроме `true`, —
+ *  отказ. */
+export function canManagePartners(role: unknown, manages: unknown): boolean {
+  return role === "owner" || manages === true;
+}
+
 export function invitationErrorMessage(message: string): string {
   // Отказы про календарь — раньше общих «истёк» и «не найдено»: строка
   // `calendar not found or archived` иначе читалась как «приглашение не

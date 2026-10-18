@@ -20,6 +20,8 @@
 
 /** Функции, которые только читают: `provolatile = 's'` на 20.09.2026. */
 export const READ_RPCS: ReadonlySet<string> = new Set([
+  // Право компании (директор «Партнёры: Управляет»): `stable`.
+  "access_company",
   "account_balances",
   "appointment_link_lookup",
   // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
@@ -30,6 +32,10 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   // STORY-086: `stable` объявлено в `20260922010000_client_members_read.sql`;
   // в боевой базе её ещё нет — сверить `provolatile` после наката.
   "list_client_members",
+  // Журнал изменений с маской блоков для партнёра: `stable` в объявлении.
+  "list_change_log",
+  // «Удалённые записи»: снимок с маской прав, `stable` в объявлении.
+  "list_deleted_appointments",
   "list_dispatcher_services_safe",
   "list_master_appointments_safe",
   "list_master_clients_safe",

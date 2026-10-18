@@ -3,19 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { useMirror } from "@/session/mirror-state";
 import { useAccountGate, useAccountScope } from "@/session/account-scope";
 import { periodRange, type ChangeLogRow, type HistoryPeriod } from "./change-log";
+import { readChangeLog } from "./change-log/read";
 import { HISTORY_KEY, historyRowVisible } from "./history-access";
 
-// ЖУРНАЛ ИЗМЕНЕНИЙ — чтение `change_log` (свежие сверху). Пишет только
-// сервер. Аккаунт — СТРАНИЦЫ (`useAccountScope`): свой или пригласивший, из
-// блока которого открыли. Владелец аккаунта читает весь журнал;
-// партнёр с правом «История изменений» — его команды в открытых ему разделах
-// (политика `change_log_select_partner`). «Посмотреть его глазами» читает
-// вашим токеном — строки режутся его картой прав (`history-access.ts`).
+// ЖУРНАЛ ИЗМЕНЕНИЙ — чтение `change_log` (свежие сверху) функцией
+// `list_change_log` (`change-log/read.ts`). Пишет только сервер. Аккаунт —
+// СТРАНИЦЫ (`useAccountScope`): свой или пригласивший, из блока которого
+// открыли. Владелец аккаунта читает весь журнал; партнёр с правом «История
+// изменений» — его команды в открытых ему разделах, без полей скрытых от
+// него блоков. «Посмотреть его глазами» читает вашим токеном — строки
+// режутся его картой прав (`history-access.ts`).
 
 const PAGE = 1000;
 const MAX_ROWS = 3000;
-const COLUMNS =
-  "id, team_id, actor_id, actor_name, entity, entity_id, action, label, meta, changes, created_at";
 
 export const changeLogKey = (tenantId: string | null) => ["change-log", tenantId] as const;
 
@@ -53,18 +53,7 @@ export function useChangeLogPeriod(period: HistoryPeriod) {
       const rows: ChangeLogRow[] = [];
       let before: number | null = null;
       while (rows.length < MAX_ROWS) {
-        let q = client
-          .from("change_log")
-          .select(COLUMNS)
-          .eq("tenant_id", tenantId as string)
-          .order("id", { ascending: false })
-          .limit(PAGE);
-        if (from) q = q.gte("created_at", from);
-        if (to) q = q.lt("created_at", to);
-        if (before != null) q = q.lt("id", before);
-        const { data, error } = await q;
-        if (error) throw new Error(`change_log: ${error.message}`);
-        const page = (data ?? []) as ChangeLogRow[];
+        const page = await readChangeLog(client, { from, to, before, limit: PAGE });
         rows.push(...page);
         if (page.length < PAGE) return { rows, capped: false };
         before = page[page.length - 1].id;
@@ -96,22 +85,10 @@ export function useChangeLogToday() {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const [today, recent] = await Promise.all([
-        client
-          .from("change_log")
-          .select("team_id, entity, created_at")
-          .eq("tenant_id", tenantId as string)
-          .gte("created_at", start.toISOString())
-          .limit(PAGE),
-        client
-          .from("change_log")
-          .select("team_id, entity, created_at")
-          .eq("tenant_id", tenantId as string)
-          .order("id", { ascending: false })
-          .limit(50),
+        readChangeLog(client, { from: start.toISOString(), limit: PAGE }),
+        readChangeLog(client, { limit: 50 }),
       ]);
-      if (today.error) throw new Error(`change_log: ${today.error.message}`);
-      if (recent.error) throw new Error(`change_log: ${recent.error.message}`);
-      return { today: (today.data ?? []) as TodayRow[], recent: (recent.data ?? []) as TodayRow[] };
+      return { today, recent };
     },
   });
 }
@@ -137,24 +114,10 @@ export function useActorChanges(actorId: string | null) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const [today, recent] = await Promise.all([
-        client
-          .from("change_log")
-          .select("team_id, entity, created_at")
-          .eq("tenant_id", tenantId as string)
-          .eq("actor_id", actorId as string)
-          .gte("created_at", start.toISOString())
-          .limit(PAGE),
-        client
-          .from("change_log")
-          .select("team_id, entity, created_at")
-          .eq("tenant_id", tenantId as string)
-          .eq("actor_id", actorId as string)
-          .order("id", { ascending: false })
-          .limit(20),
+        readChangeLog(client, { from: start.toISOString(), actor: actorId, limit: PAGE }),
+        readChangeLog(client, { actor: actorId, limit: 20 }),
       ]);
-      if (today.error) throw new Error(`change_log: ${today.error.message}`);
-      if (recent.error) throw new Error(`change_log: ${recent.error.message}`);
-      return { today: (today.data ?? []) as TodayRow[], recent: (recent.data ?? []) as TodayRow[] };
+      return { today, recent };
     },
   });
 }
