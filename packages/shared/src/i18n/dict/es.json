@@ -5006,5 +5006,10 @@
  "＋ Перерыв после услуги": "＋ Descanso tras el servicio",
  "＋ По дням недели": "＋ Por días de la semana",
  "Сначала выберите клиента": "Primero elija un cliente",
- "Открывает объекты клиента": "Abre los inmuebles del cliente"
+ "Открывает объекты клиента": "Abre los inmuebles del cliente",
+ "Сохранить изменения?": "¿Guardar los cambios?",
+ "Сохранить запись?": "¿Guardar la cita?",
+ "Не сохранять": "No guardar",
+ "Вы изменили запись.": "Ha cambiado la cita.",
+ "Запись ещё не создана.": "La cita aún no está creada."
 }

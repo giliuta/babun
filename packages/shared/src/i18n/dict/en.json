@@ -5006,5 +5006,10 @@
  "＋ Перерыв после услуги": "＋ Break after service",
  "＋ По дням недели": "＋ By weekday",
  "Сначала выберите клиента": "Choose a client first",
- "Открывает объекты клиента": "Opens the client's properties"
+ "Открывает объекты клиента": "Opens the client's properties",
+ "Сохранить изменения?": "Save changes?",
+ "Сохранить запись?": "Save the appointment?",
+ "Не сохранять": "Don't save",
+ "Вы изменили запись.": "You changed the appointment.",
+ "Запись ещё не создана.": "The appointment isn't created yet."
 }

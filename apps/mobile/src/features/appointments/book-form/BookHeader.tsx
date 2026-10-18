@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
-import { Bell, BellRing } from "lucide-react-native";
+import { Bell, BellRing, ChevronLeft } from "lucide-react-native";
+import { ICON } from "@/components/ui/tokens";
 import { Halo } from "@/components/ui/Halo";
 import { colorName } from "@babun/shared/common/utils/colors";
 import { selfReminderLabel } from "@/lib/reminder-time";
@@ -7,7 +8,7 @@ import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
 import type { BookModel } from "./use-book-form";
 
-/** Header: Отмена · title · bell (remind myself) · record colour swatch. */
+/** Header: back · title · bell (remind myself) · record colour swatch. */
 export function BookHeader({ form }: { form: BookModel }) {
   const {
     t,
@@ -15,7 +16,6 @@ export function BookHeader({ form }: { form: BookModel }) {
     headerBorder,
     identityC,
     requestClose,
-    isEdit,
     title,
     setReminderSheetOpen,
     selfReminder,
@@ -25,7 +25,7 @@ export function BookHeader({ form }: { form: BookModel }) {
     hasColor,
   } = form;
   return (
-    // шапка: Отмена · заголовок · Цвет записи — на identity-подложке;
+    // шапка: назад · заголовок · Цвет записи — на identity-подложке;
     // выбор цвета живо подсвечивает шапку (halo), фон и CTA.
     <View
       style={{
@@ -36,16 +36,22 @@ export function BookHeader({ form }: { form: BookModel }) {
     >
       <Halo color={identityC} intensity={0.16} />
       <View className="flex-row items-center px-3" style={{ height: 48 }}>
+        {/* СТРЕЛКА «НАЗАД», КАК У ВСЕХ СТРАНИЦ, а не «Отмена»: запись —
+            страница, открытая поверх, и уходят с неё назад. Ничего не
+            меняли — уход молча; меняли — вопрос «Сохранить?». */}
         <Pressable
           onPress={requestClose}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={
-            isEdit ? "Закрыть запись" : "Отменить создание записи"
-          }
-          style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
+          accessibilityLabel="Назад"
+          style={({ pressed }) => ({
+            minWidth: 72,
+            minHeight: 44,
+            justifyContent: "center",
+            opacity: pressed ? 0.5 : 1,
+          })}
         >
-          <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
+          <ChevronLeft color={t.body} size={ICON.md} />
         </Pressable>
         <Text
           className="flex-1 text-center"

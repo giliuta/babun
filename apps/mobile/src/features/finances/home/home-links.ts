@@ -1,7 +1,6 @@
 // Addresses the «Финансы» home screen leaves through. Pure, so the exact
 // strings stay pinned by tests.
 
-import { financesFrom } from "@/features/appointments/return-to";
 import { NO_TEAM } from "../accounts-sections";
 
 /** Real team of the chip: the «Без команды» pseudo-scope carries none. */
@@ -21,20 +20,12 @@ export function newInvoiceHref(scope: string | null): string {
   return team ? `/invoices/new?teamId=${encodeURIComponent(team)}` : "/invoices/new";
 }
 
-/** Адрес записи в календаре — тот же, каким её открывают из карточки клиента
- *  и из пуша: календарь сам встаёт на её день и её команду. */
-export function appointmentHref(
-  target: { id: string; date: string; team_id?: string | null },
-  back: { view: string; account: string | null; team: string | null },
-): string {
-  return (
-    `/(dashboard)?appointmentId=${target.id}&date=${target.date}` +
-    (target.team_id ? `&teamId=${target.team_id}` : "") +
-    // Дорога назад: закрыв запись, человек возвращается в ленту денег, а не
-    // остаётся в календаре — и в ТОТ ЖЕ разрез, из
-    // которого ушёл: вкладка пересоздаётся, и «Доход» сбрасывался на «Все».
-    // И в ту же команду чипа: без неё вкладка вставала
-    // на первую команду.
-    `&from=${encodeURIComponent(financesFrom(back.view, { account: back.account, team: back.team }))}`
-  );
+/** Адрес страницы записи — ПОВЕРХ денег, а не через календарь. Прежде запись
+ *  открывалась через вкладку календаря: экран переключался, календарь
+ *  перестраивал день, и только потом выезжала запись, а закрытие заменяло её
+ *  пересозданной вкладкой денег — всё прыгало. Теперь запись выезжает справа
+ *  над лентой, «назад» уводит её обратно, а лента остаётся как была: тот же
+ *  разрез, та же команда, та же прокрутка. */
+export function appointmentHref(target: { id: string }): string {
+  return `/book?appointmentId=${encodeURIComponent(target.id)}`;
 }
