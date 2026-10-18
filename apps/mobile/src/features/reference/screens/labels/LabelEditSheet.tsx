@@ -19,6 +19,7 @@ import type { City } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 import {
   blockedDayNote,
+  savableWeekdays,
   FALLBACK_COLOR,
   type DayOwners,
   type Editing,
@@ -137,7 +138,15 @@ export function LabelEditSheet({
           <Button
             label={isEdit ? "Сохранить" : "Создать"}
             onPress={() => {
-              const draft: LabelDraft = { name, color, weekdays, tintDay };
+              // Сохраняются только дни, которые плитки показывают своими:
+              // выходной команды или чужой день, оставшийся в метке с прошлого
+              // раза, иначе держался бы молча.
+              const draft: LabelDraft = {
+                name,
+                color,
+                weekdays: savableWeekdays(weekdays, { takenBy, daysOff, ownName, typedName: name }),
+                tintDay,
+              };
               if (isEdit) onUpdate(editing.city, draft);
               else onCreate(draft);
             }}

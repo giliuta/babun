@@ -24,17 +24,21 @@ import { asServerReadError, serverOperationError } from "./server-error";
 // ─── Personal event types (personal_event_types, row per type) ───────
 type EventTypeRow = Database["public"]["Tables"]["personal_event_types"]["Row"];
 
-function safeLoadPersonalEventTypes(): PersonalEventType[] {
+function safeLoadPersonalEventTypes(tenantId: string | null): PersonalEventType[] {
+  if (!tenantId) return [];
   try {
-    return loadPersonalEventTypes();
+    return loadPersonalEventTypes(tenantId);
   } catch {
     return [];
   }
 }
 
-function safeSavePersonalEventTypes(types: PersonalEventType[]): void {
+function safeSavePersonalEventTypes(
+  types: PersonalEventType[],
+  tenantId: string,
+): void {
   try {
-    savePersonalEventTypes(types);
+    savePersonalEventTypes(types, tenantId);
   } catch {
     // Canonical query data remains usable even if MMKV is unavailable.
   }
@@ -81,10 +85,10 @@ export function usePersonalEventTypes(teamId?: string | null) {
     // успешное сохранение), поэтому он и есть первый кадр. `placeholderData`,
     // а не `initialData`: запрос всё равно уходит и заменяет список свежим,
     // просто человек этого не видит.
-    placeholderData: () => safeLoadPersonalEventTypes(),
+    placeholderData: () => safeLoadPersonalEventTypes(tenantId),
     queryFn: async (): Promise<PersonalEventType[]> => {
-      const cached = safeLoadPersonalEventTypes();
       const activeTenantId = tenantId as string;
+      const cached = safeLoadPersonalEventTypes(activeTenantId);
       try {
         // Fetch ALL rows (active + soft-deleted): an empty ACTIVE set is
         // ambiguous — «never synced» (→ device seeds) vs «user deleted
@@ -105,7 +109,7 @@ export function usePersonalEventTypes(teamId?: string | null) {
           const list = (data ?? [])
             .filter((row) => row.deleted_at == null)
             .map(rowToEventType);
-          safeSavePersonalEventTypes(list);
+          safeSavePersonalEventTypes(list, activeTenantId);
           return list;
         }
         // No rows at all — the local cache/seeds bootstrap the first save.
@@ -207,7 +211,7 @@ export function useSavePersonalEventTypes() {
           );
         }
       }
-      return { list: list.map((t) => ({ ...t, teamId })), teamId };
+      return { list: list.map((t) => ({ ...t, teamId })), teamId, tenantId };
     },
     // ОПТИМИСТИЧНО (без этого создание типа крутится секундами): список на
     // экране меняется сразу, сервер догоняет; отказ возвращает прежний.
@@ -224,12 +228,12 @@ export function useSavePersonalEventTypes() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(mutationKey, ctx.prev);
     },
-    onSuccess: ({ list, teamId }) => {
+    onSuccess: ({ list, teamId, tenantId: savedTenantId }) => {
       // Cache writes happen only after every canonical server write succeeds.
       // В кэше справочник ВСЕЙ компании: заменяем типы только этой команды.
       const all = qc.getQueryData<PersonalEventType[]>(mutationKey) ?? [];
       const next = [...all.filter((t) => t.teamId && t.teamId !== teamId), ...list];
-      safeSavePersonalEventTypes(next);
+      safeSavePersonalEventTypes(next, savedTenantId);
       qc.setQueryData(mutationKey, next);
     },
     onSettled: () => {

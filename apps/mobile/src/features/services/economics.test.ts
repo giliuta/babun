@@ -11,6 +11,7 @@ import {
   parsePriceTiers,
   validateServiceEconomics,
 } from "./economics";
+import { costPerUnit } from "@babun/shared/local/services";
 
 describe("service tier compatibility", () => {
   test("reads current and legacy JSON while ignoring malformed rows", () => {
@@ -143,6 +144,51 @@ describe("расход ступени — за одну, туда и обрат�
   });
 });
 
+describe("нулевой расход ступени — явный ноль, а не «как выше»", () => {
+  test("набранный 0 сохраняется ступенью и обнуляет расход на этом количестве", () => {
+    const saved = validateServiceEconomics({
+      tiers: [
+        { id: "a", minQuantity: "3", rowPrice: "120", rowCost: "0", totalDuration: "" },
+      ],
+    }).value;
+    assert.deepEqual(saved?.cost_tiers, [{ min_qty: 3, cost_per_unit: 0 }]);
+    const service = {
+      cost_per_unit: 5,
+      cost_tiers: saved?.cost_tiers,
+      price_tiers: saved?.price_tiers,
+    };
+    assert.equal(costPerUnit(service, 3), 0);
+    assert.equal(costPerUnit(service, 2), 5);
+    assert.equal(economicsDraftFromService(service).tiers[0]?.rowCost, "0");
+  });
+
+  test("ступень без своего расхода открывается действующим расходом, а не нулём", () => {
+    // Иначе лист показал бы «0», а пересохранение без единой правки
+    // записало бы ноль вместо унаследованного расхода.
+    const service = {
+      cost_per_unit: 5,
+      cost_tiers: [],
+      price_tiers: [{ min_qty: 3, price_per_unit: 40 }],
+    };
+    const draft = economicsDraftFromService(service);
+    assert.equal(draft.tiers[0]?.rowCost, "5");
+    const resaved = validateServiceEconomics(draft).value;
+    assert.equal(
+      costPerUnit({ ...service, cost_tiers: resaved?.cost_tiers }, 3),
+      costPerUnit(service, 3),
+    );
+  });
+
+  test("стёртый расход ступени — «как выше», ступень расхода не пишется", () => {
+    const saved = validateServiceEconomics({
+      tiers: [
+        { id: "a", minQuantity: "3", rowPrice: "120", rowCost: "", totalDuration: "" },
+      ],
+    }).value;
+    assert.deepEqual(saved?.cost_tiers, []);
+  });
+});
+
 describe("service economics validation", () => {
   test("rejects duplicate thresholds, negative values, and empty tiers", () => {
     const result = validateServiceEconomics({
@@ -187,14 +233,14 @@ describe("service economics validation", () => {
           id: "five",
           minQuantity: "5",
           rowPrice: "40",
-          rowCost: "0",
+          rowCost: "",
           totalDuration: "",
         },
         {
           id: "three",
           minQuantity: "3",
           rowPrice: "",
-          rowCost: "0",
+          rowCost: "",
           totalDuration: "90",
         },
       ],

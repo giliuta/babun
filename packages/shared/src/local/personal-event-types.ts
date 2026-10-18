@@ -1,4 +1,4 @@
-// Personal-calendar event types. Persisted in localStorage.
+// Personal-calendar event types. Cached on the device per company.
 //
 // User-configurable list of "kinds" of events that show up as a tile
 // grid in the new PersonalEventSheet. Each type carries an icon, a
@@ -41,6 +41,13 @@ export interface PersonalEventType {
 
 const STORAGE_KEY = "babun2:settings:personal-event-types";
 
+/** КЭШ — ПО КОМПАНИИ. Он первый кадр списка до ответа сервера; общий на
+ *  телефон ключ показывал бы в одной компании типы другой (и предлагал бы
+ *  их шаблонами). Старый общий ключ не читается: чей он — не знает никто. */
+function scopedStorageKey(tenantId: string): string {
+  return `${STORAGE_KEY}:tenant:${tenantId}`;
+}
+
 /** Id пяти прежних заготовок (Обед, Встреча, Выезд в офис, Выходной, Отпуск).
  *  На сервер они не уезжали ни у кого (в базе строк не было), но лежат
  *  в памяти телефонов; загрузка их выбрасывает. Свои типы (id `pet-…`) не
@@ -53,7 +60,7 @@ const RETIRED_SEED_IDS = new Set([
   "ev-vacation",
 ]);
 
-export function loadPersonalEventTypes(): PersonalEventType[] {
+export function loadPersonalEventTypes(tenantId: string): PersonalEventType[] {
   // DATA-LOSS GUARD (offline-fallback resurrection fix): distinguish
   // «key never written» (first run → empty list; заготовок нет)
   // from «key written as an empty list» (the user deleted
@@ -64,9 +71,10 @@ export function loadPersonalEventTypes(): PersonalEventType[] {
   // them as live rows. Online sync (usePersonalEventTypes) already
   // disambiguates via soft-deleted rows — this only fixes the loader
   // it falls back to. Same pattern as services.ts / expense-categories.
-  const raw = getStorage().getRaw(STORAGE_KEY);
+  const key = scopedStorageKey(tenantId);
+  const raw = getStorage().getRaw(key);
   if (raw === null) return [];
-  const parsed = getStorage().get<PersonalEventType[]>(STORAGE_KEY);
+  const parsed = getStorage().get<PersonalEventType[]>(key);
   if (!Array.isArray(parsed)) {
     // Corrupt / non-array payload — пустой список, как у первого запуска.
     return [];
@@ -90,8 +98,11 @@ export function loadPersonalEventTypes(): PersonalEventType[] {
       .sort((a, b) => a.order - b.order);
 }
 
-export function savePersonalEventTypes(types: PersonalEventType[]): void {
-  getStorage().set(STORAGE_KEY, types);
+export function savePersonalEventTypes(
+  types: PersonalEventType[],
+  tenantId: string,
+): void {
+  getStorage().set(scopedStorageKey(tenantId), types);
 }
 
 export function generatePersonalEventTypeId(): string {

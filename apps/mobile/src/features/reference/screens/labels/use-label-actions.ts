@@ -9,7 +9,14 @@ import {
 } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
-import { reviveIfGone, type Editing, type LabelDraft } from "./label-rules";
+import { WEEKDAY_LABELS } from "@babun/shared/local/services";
+import {
+  daysHeldByOthers,
+  labelAddPlan,
+  reviveIfGone,
+  type Editing,
+  type LabelDraft,
+} from "./label-rules";
 
 /** Writes of `LabelsScreen`: create, edit (with merge and rename cascade),
  *  deferred delete, hide/show/restore and reorder. */
@@ -38,17 +45,19 @@ export function useLabelActions({
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      const existing = cities.find(
-        (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
-      );
-      if (existing) {
-        // Уже в библиотеке — обновляем вид. Совпала СКРЫТАЯ или УДАЛЁННАЯ
-        // (список держит и их) — возвращаем в живые тем же патчем, что
-        // «Вернуть»: иначе тост «Метка добавлена», а метки нет ни в выборе
-        // дня, ни среди живых.
+      const plan = labelAddPlan(cities, trimmed);
+      if (plan.kind === "exists") {
+        // Шит остаётся открытым: имя можно поправить, набранное не теряется.
+        notify("Такая метка уже есть", `«${plan.city.name}» уже в списке — откройте её, чтобы изменить.`);
+        return;
+      }
+      if (plan.kind === "revive") {
+        // Совпала СКРЫТАЯ или УДАЛЁННАЯ (список держит и их) — возвращаем в
+        // живые тем же патчем, что «Вернуть»: иначе тост «Метка добавлена», а
+        // метки нет ни в выборе дня, ни среди живых.
         await updateCity.mutateAsync({
-          id: existing.id,
-          patch: { color, weekdays, tint_day: tintDay, ...reviveIfGone(existing) },
+          id: plan.city.id,
+          patch: { color, weekdays, tint_day: tintDay, ...reviveIfGone(plan.city) },
         });
       } else {
         if (!teamId) return;
@@ -152,21 +161,37 @@ export function useLabelActions({
   const toggleState = (city: City) => {
     const deleted = !!city.deleted_at;
     const hidden = !city.is_active && !deleted;
+    // У ДНЯ ОДНА МЕТКА. Пока метка была не в живых, её дни недели мог занять
+    // кто-то другой; вернуть их вместе с ней — значит дать дню две метки, и
+    // какая покрасит колонку, решал бы порядок строк из базы.
+    const reviving = deleted || hidden;
+    const lost = reviving ? daysHeldByOthers(city, cities) : [];
+    const weekdaysPatch =
+      lost.length > 0
+        ? { weekdays: (city.weekdays ?? []).filter((d) => !lost.includes(d)) }
+        : {};
+    const lostDays = lost.map((d) => WEEKDAY_LABELS[d as keyof typeof WEEKDAY_LABELS]).join(", ");
     updateCity.mutate(
       {
         id: city.id,
         patch: deleted
-          ? { deleted_at: null, is_active: true }
-          : { is_active: !hidden },
+          ? { deleted_at: null, is_active: true, ...weekdaysPatch }
+          : hidden
+            ? { is_active: true, ...weekdaysPatch }
+            : { is_active: false },
       },
       {
         onSuccess: () =>
           toast(
-            deleted
-              ? "Метка возвращена"
-              : hidden
-                ? "Метка показана"
-                : "Метка скрыта",
+            lost.length > 0
+              ? deleted
+                ? `Метка возвращена без дней ${lostDays}: их держат другие метки`
+                : `Метка показана без дней ${lostDays}: их держат другие метки`
+              : deleted
+                ? "Метка возвращена"
+                : hidden
+                  ? "Метка показана"
+                  : "Метка скрыта",
           ),
         onError: alertError,
       },
