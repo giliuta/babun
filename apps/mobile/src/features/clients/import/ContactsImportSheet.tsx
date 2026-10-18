@@ -76,15 +76,15 @@ export function ContactsImportSheet({
   const known = useMemo(() => {
     const set = new Set<string>();
     for (const c of clients) {
-      const k = phoneKey(c.phone);
+      const k = phoneKey(c.phone_e164 ?? c.phone, country);
       if (k) set.add(k);
       for (const p of c.phones ?? []) {
-        const pk = phoneKey(p.number);
+        const pk = phoneKey(p.number, country);
         if (pk) set.add(pk);
       }
     }
     return set;
-  }, [clients]);
+  }, [clients, country]);
 
   // `known` НЕ в зависимостях: он пересобирается на каждое создание клиента
   // (инвалидация `["clients"]`), и эффект перезапускался прямо посреди
@@ -123,7 +123,7 @@ export function ContactsImportSheet({
       const list: Row[] = [];
       for (const c of data) {
         const raw = c.phoneNumbers?.[0]?.number ?? "";
-        const key = phoneKey(raw);
+        const key = phoneKey(raw, country);
         if (!key || key.length < 5 || seen.has(key)) continue;
         seen.add(key);
         list.push({

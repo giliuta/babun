@@ -23,6 +23,8 @@ export interface LeaveGuardInput {
   /** What a NEW record counts as typed (everything but the notes). */
   draft: Omit<DraftDirtyInput, "notesDirty">;
   from: string | undefined;
+  /** Сохранить сейчас можно (всё обязательное есть, тариф позволяет). */
+  saveable: boolean;
   navigation: { dispatch: (action: NavigationAction) => void };
   router: ReturnType<typeof useRouter>;
 }
@@ -37,6 +39,7 @@ export function useLeaveGuard({
   eventObjectNote,
   draft,
   from,
+  saveable,
   navigation,
   router,
 }: LeaveGuardInput) {
@@ -107,6 +110,21 @@ export function useLeaveGuard({
   // этого хука, поэтому приходит ссылкой (`saveRef`).
   const saveRef = useRef<(() => void | Promise<void>) | null>(null);
   const confirmDiscard = (onDiscard: () => void) => {
+    // СОХРАНИТЬ НЕЛЬЗЯ — НЕ ПРЕДЛАГАЕМ. Без услуги или без тарифа
+    // «Сохранить» только показывал плашку и оставлял на форме: человек
+    // хотел уйти, а вопрос возвращал его назад. Тогда вопрос один — уйти без них.
+    if (!saveable) {
+      void chooseOption(
+        "Закрыть без сохранения?",
+        [{ label: "Не сохранять", destructive: true }],
+        { message: isEdit ? "Изменения не сохранятся." : "Введённое не сохранится." },
+      ).then((index) => {
+        if (index !== 0) return;
+        discardNotes();
+        onDiscard();
+      });
+      return;
+    }
     void chooseOption(
       isEdit ? "Сохранить изменения?" : "Сохранить запись?",
       [{ label: "Сохранить" }, { label: "Не сохранять", destructive: true }],

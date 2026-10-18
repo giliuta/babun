@@ -62,6 +62,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   onEdit,
   deckIndex,
   deckSize,
+  clashMore,
   onMenu,
   onReschedule,
 }: AppointmentBlockProps) {
@@ -80,6 +81,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     offLabelColor,
     deckIndex,
     deckSize,
+    clashMore,
     editing,
     overdue,
     reschedulable: !!onReschedule,
@@ -295,7 +297,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
           {cancelled ? null : <BlockGlass />}
           {liveStart ? <LiveTimeBadge liveStart={liveStart} /> : null}
           {deckMore > 0 ? (
-            <DeckBadge deckMore={deckMore} deckBadgeLow={deckBadgeLow} color={colors.solid} />
+            <DeckBadge
+              deckMore={deckMore}
+              deckBadgeLow={deckBadgeLow}
+              color={colors.solid}
+              clash={(clashMore ?? 0) > 0}
+            />
           ) : null}
           {showStatus && textW >= 24 ? (
             <StatusRow

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useFocusEffect, type useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
@@ -40,7 +40,10 @@ export interface RecordPicksInput {
   masterId: string | null;
   setMasterId: Setter<string | null>;
   setClientId: Setter<string | null>;
+  locationId: string | null;
   setLocationId: Setter<string | null>;
+  setCity: Setter<string | null>;
+  setCityTouched: Setter<boolean>;
   setAddress: Setter<string>;
   setEventAddress: Setter<string>;
   clientLocations: Location[];
@@ -71,7 +74,10 @@ export function useRecordPicks({
   masterId,
   setMasterId,
   setClientId,
+  locationId,
   setLocationId,
+  setCity,
+  setCityTouched,
   setAddress,
   setEventAddress,
   clientLocations,
@@ -91,6 +97,13 @@ export function useRecordPicks({
       services,
       masters,
     });
+    // МЕТКА — СВОЯ У КАЖДОЙ КОМАНДЫ. Метка прежней команды в новой не
+    // существует: она серела в шапке и уезжала в запись. Новая команда —
+    // метка «как у дня» этой команды.
+    if (nextTeamId !== teamId) {
+      setCity(null);
+      setCityTouched(false);
+    }
     setTeamId(nextTeamId);
     setServiceIds(next.serviceIds);
     setMasterId(next.masterId);
@@ -119,12 +132,30 @@ export function useRecordPicks({
   // закрытие выглядело бы сломанным. Это состояние, а не ref: второе звено
   // ждёт, пока доедет прайс, а ref эффект не будит.
   const [chainStep, setChainStep] = useState<ChainStep>("idle");
+  // Мастер, которого подставил любимый клиента (а не рука человека).
+  const favouriteSetRef = useRef<string | null>(null);
+  // ОБЪЕКТ УХОДИТ ВМЕСТЕ С КЛИЕНТОМ — И ЕГО АДРЕС ТОЖЕ. Выбор объекта пишет
+  // его адрес снимком (`pickLocation`), а смена или снятие клиента гасили
+  // только ссылку: у события оставалась строка «Адрес» с домом прежнего
+  // клиента и сохранялась в него.
+  const dropClientObject = () => {
+    if (locationId == null) return;
+    setLocationId(null);
+    setAddress("");
+    if (kind === "event") setEventAddress("");
+  };
+  const clearClient = () => {
+    setClientId(null);
+    dropClientObject();
+    if (masterId != null && masterId === favouriteSetRef.current) setMasterId(null);
+    favouriteSetRef.current = null;
+  };
   const pickClient = (c: Client) => {
     // У СОБЫТИЯ КЛИЕНТ — ТОЛЬКО ЧЕЛОВЕК (клиент и объект у события независимы): команда, объект и любимый мастер за ним не
     // подтягиваются, цепочка «клиент → услуги» не запускается.
     if (kind === "event") {
+      if (c.id !== clientId) dropClientObject();
       setClientId(c.id);
-      setLocationId(null);
       haptics.tap();
       return;
     }
@@ -138,16 +169,23 @@ export function useRecordPicks({
     setClientId(prefill.clientId);
     setLocationId(prefill.locationId);
     setAddress(prefill.address);
-    if (
+    const favourite =
       !isEdit &&
       prefill.masterId &&
       isMasterAllowedForTeam(
         masters.find((candidate) => candidate.id === prefill.masterId),
         targetTeam,
       )
-    ) {
-      setMasterId(prefill.masterId);
+        ? prefill.masterId
+        : null;
+    if (favourite) {
+      setMasterId(favourite);
+    } else if (masterId != null && masterId === favouriteSetRef.current) {
+      // Мастер, подставленный любимым ПРЕЖНЕГО клиента, не остаётся у
+      // нового: его никто не выбирал. Выбранного руками не трогаем.
+      setMasterId(null);
     }
+    favouriteSetRef.current = favourite;
     haptics.tap();
     // ЗА КЛИЕНТОМ СРАЗУ ИДУТ УСЛУГИ — второе звено цепочки. Только на СВЕЖЕЙ записи и ровно один раз:
     // человек, который вернулся сменить клиента у собранной записи, не должен
@@ -257,6 +295,7 @@ export function useRecordPicks({
     chainStep,
     setChainStep,
     pickClient,
+    clearClient,
     moneyHoldsClient,
     pickClientOrOpenCard,
     openClientCard,

@@ -55,9 +55,9 @@ export function useCalendarController() {
   const visible = useVisibleAppointments(coloured);
   const listed = { ...coloured, ...notice, ...visible };
 
-  const { createFirstCalendar } = useFirstCalendar(listed);
+  const firstCalendar = useFirstCalendar(listed);
   const actions = useRecordActions(listed);
-  const acting = { ...listed, ...actions, createFirstCalendar };
+  const acting = { ...listed, ...actions, ...firstCalendar };
   const quick = useQuickEvents(acting);
   const headerNav = useCalendarHeaderNav(acting);
   const grid = useCalendarGrid(acting);

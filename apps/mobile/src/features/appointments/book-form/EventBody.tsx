@@ -47,8 +47,7 @@ export function EventBody({ form }: { form: BookModel }) {
     pickClientOrOpenCard,
     moneyHoldsClient,
     openClientCard,
-    setClientId,
-    setLocationId,
+    clearClient,
     clientNoteOn,
     clientNote,
     clientNoteWritable,
@@ -163,14 +162,7 @@ export function EventBody({ form }: { form: BookModel }) {
                   onPick={can.editClient ? pickClientOrOpenCard : undefined}
                   pickOpensCard={moneyHoldsClient}
                   onOpenCard={openClientCard}
-                  onClear={
-                    can.editClient
-                      ? () => {
-                          setClientId(null);
-                          setLocationId(null);
-                        }
-                      : undefined
-                  }
+                  onClear={can.editClient ? clearClient : undefined}
                   note={
                     clientNoteOn ? (
                       <InlineNoteField

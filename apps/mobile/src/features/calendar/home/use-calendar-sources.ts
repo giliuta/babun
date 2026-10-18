@@ -10,7 +10,7 @@ import { useQuietUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useServices } from "@/features/services/queries";
 import { useCalendarVisibility } from "@/session/workspaces";
-import { useCreateFirstCalendar, useTeams } from "@/features/reference/queries";
+import { useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCurrentRole } from "@/session/tenant";
 import { useMyAccess } from "@/session/access-queries";
@@ -72,7 +72,6 @@ export function useCalendarSources() {
   // Без подписки на состояние мутации: экран её не читает, а каждый шаг
   // (ожидание → успех) перерисовывал бы весь календарь на переносе.
   const updateAppt = useQuietUpdateAppointment();
-  const createFirstCalendarMutation = useCreateFirstCalendar();
   const toast = useToast();
   const t = useThemeColors();
 
@@ -109,7 +108,7 @@ export function useCalendarSources() {
     servicesQuery, clients, teamsAll, teamsLoading, teamsPending, teamsFetching,
     teamsError, teamsLoadError, teamsQueryError, refetchTeams, calendarVisibility,
     visibilityTenantId, teams, ownAllHidden, calSettingsQuery, calSettings, roleQuery,
-    role, myAccessQuery, session, updateAppt, createFirstCalendarMutation, toast, t,
+    role, myAccessQuery, session, updateAppt, toast, t,
     onRefresh, pull, silentRevalidating,
   };
 }

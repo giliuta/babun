@@ -104,14 +104,22 @@ export function LiveTimeBadge({ liveStart }: { liveStart: string }) {
 
 // «+N» СТОПКИ — справа вверху верхней карточки: под ней ещё записи
 // на то же время; тап откроет их списком.
+// НАКЛАДКА — КРАСНЫМ. Две рабочие записи на одно время — то, что
+// диспетчер обязан увидеть сразу: белое «+1» читалось как «тут ещё что-то»,
+// а не «здесь две бригады в одно время».
+/** Заливка значка накладки — красный «опасности» продукта. */
+const CLASH_FILL = "#D92D20";
+
 export function DeckBadge({
   deckMore,
   deckBadgeLow,
   color,
+  clash = false,
 }: {
   deckMore: number;
   deckBadgeLow: boolean;
   color: string;
+  clash?: boolean;
 }) {
   return (
     <View
@@ -123,13 +131,15 @@ export function DeckBadge({
         ...(deckBadgeLow ? { bottom: 4 } : { top: 2 }),
         right: 2,
         zIndex: 3,
-        minWidth: 18,
+        minWidth: clash ? 22 : 18,
         height: 16,
         paddingHorizontal: 3,
         borderRadius: 8,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(255,255,255,0.92)",
+        backgroundColor: clash ? CLASH_FILL : "rgba(255,255,255,0.92)",
+        borderWidth: clash ? 1 : 0,
+        borderColor: "#FFFFFF",
       }}
     >
       <Text
@@ -138,7 +148,7 @@ export function DeckBadge({
           fontSize: 11,
           lineHeight: 13,
           fontWeight: "800",
-          color,
+          color: clash ? "#FFFFFF" : color,
           fontVariant: ["tabular-nums"],
         }}
       >

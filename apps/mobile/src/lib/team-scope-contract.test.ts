@@ -26,6 +26,7 @@ const EXEMPT: Record<string, string> = {
   tenant_members: "членство в компании: роль и подписка",
   billing_events: "Stripe — платёж компании",
   push_subscriptions: "устройство человека",
+  onboarding_progress: "обучение человека в аккаунте, не данные команды",
   _finance_write_context: "технический пропуск, закрыт RLS",
   service_variants: "команда через services",
   appointment_photos: "команда через appointments",

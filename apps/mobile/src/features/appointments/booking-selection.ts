@@ -62,3 +62,21 @@ export function reconcileBookingSelection({
         : null,
   };
 }
+
+/** УСЛУГИ ЗАПИСИ ДЕРЖАТ ЕЁ В КОМАНДЕ. У каждой услуги прайса одна команда:
+ *  запись, увезённая в другую команду переносом или копией, несла бы чужой
+ *  прайс — сумму и состав, которых у новой команды нет. Страница записи при
+ *  смене команды снимает такие услуги на глазах (`reconcileBookingSelection`),
+ *  а перенос по сетке этого показать не может — поэтому он отказывает. */
+export function servicesBlockTeamMove(
+  serviceIds: readonly string[],
+  services: readonly BookingServiceRef[],
+  toTeam: string | null,
+): boolean {
+  const byId = new Map(services.map((service) => [service.id, service]));
+  return serviceIds.some((id) => {
+    if (isCustomServiceId(id)) return false;
+    const service = byId.get(id);
+    return service != null && !isServiceAllowedForTeam(service, toTeam);
+  });
+}

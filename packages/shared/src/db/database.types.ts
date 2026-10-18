@@ -6071,6 +6071,7 @@ export type Database = {
       my_access_map: { Args: never; Returns: Json }
       my_calendar_feed: { Args: never; Returns: Json }
       my_invitations: { Args: never; Returns: Json }
+      my_onboarding: { Args: never; Returns: string[] }
       next_document_number: {
         Args: {
           p_doc_type: string
@@ -6088,6 +6089,7 @@ export type Database = {
         Args: { p_tag_ids: string[]; p_tenant_id: string }
         Returns: string[]
       }
+      onboarding_done: { Args: { p_chapter: string }; Returns: string[] }
       partners_card_manageable: {
         Args: { p_master_id: string }
         Returns: boolean

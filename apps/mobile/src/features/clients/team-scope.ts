@@ -78,3 +78,15 @@ export function teamForNewClient(
   if (choice !== ALL_TEAMS && teamIds.includes(choice)) return choice;
   return teamIds[0] ?? null;
 }
+
+/** Ссылка «Создать клиента» с командой чипа. Без `team` карточка выбирала
+ *  команду по сохранённому чипу ЭТОЙ компании, и у чужой (партнёрской)
+ *  команды клиент заводился в первую команду — не в ту, что на экране.
+ *  «Все» команду не называет: решает прежнее правило. */
+export function withNewClientTeam<P extends { params: object }>(
+  href: P,
+  choice: ClientsTeamChoice,
+): P {
+  if (choice === ALL_TEAMS) return href;
+  return { ...href, params: { ...href.params, team: choice } };
+}

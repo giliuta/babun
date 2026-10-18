@@ -3,14 +3,14 @@ import { Text, View } from "react-native";
 import { Users } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { useClientsScopeOrNull } from "@/session/company-scope";
-import { phoneKey } from "@/features/clients/merge-clients";
+import { phoneKey, phoneTail, samePhone } from "@/features/clients/merge-clients";
 import { GUTTER } from "@/components/ui/tokens";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { useDefaultCountry } from "@/features/reference/default-country";
-import { formatPhoneForDisplay } from "@/lib/phone";
+import { formatPhoneForDisplay, tryToE164 } from "@/lib/phone";
 
 // «ПОХОЖЕ, ЭТО ОДИН ЧЕЛОВЕК».
 //
@@ -29,10 +29,11 @@ import { formatPhoneForDisplay } from "@/lib/phone";
 // (`useAppointments`) ради одного сравнения — на тысяче клиентов это
 // страница, которая ждёт два списка, чтобы почти всегда не показать ничего.
 // Спрашиваем у сервера ровно то, что нужно: есть ли ЖИВАЯ чужая карточка с
-// таким же хвостом номера.
+// тем же номером. Сравнение — по E.164 целиком: хвост из 8 цифр склеивал
+// +7 916 … с +7 926 … и обвинял разных людей в одном лице. Хвост остался
+// только для старых строк, у которых `phone_e164` пуст.
 
-/** Последние 8 цифр — тот же ключ, что у слияния и импорта: «+357 99 12 34
- *  56» и «99123456» один человек. Короче восьми цифр ключа нет: по четырём
+/** Короче восьми цифр у неразобранного номера ключа нет: по четырём
  *  совпадёт пол-базы. */
 const KEY_DIGITS = 8;
 
@@ -60,9 +61,12 @@ function useDuplicateHit(client: Client | null | undefined): DuplicateHit | null
   const tenantId = scope?.tenantId ?? activeTenantId;
   const db = scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
 
+  const country = useDefaultCountry(client?.team_id ?? null);
   const clientId = client?.id ?? "";
-  const key = !client || client.deleted_at ? "" : phoneKey(client.phone);
-  const searchable = key.length >= KEY_DIGITS;
+  const live = !!client && !client.deleted_at;
+  const key = live ? phoneKey(client.phone, country) : "";
+  const e164 = live ? tryToE164(client.phone ?? "", country) : null;
+  const searchable = e164 !== null || key.length >= KEY_DIGITS;
 
   const { data: dup = null } = useQuery({
     // Ключ несёт компанию: у клиента работодателя и своего совпадение хвостов
@@ -74,18 +78,29 @@ function useDuplicateHit(client: Client | null | undefined): DuplicateHit | null
       // ТОЛЬКО ПО НОМЕРУ. Дубли ловятся и по имени (`findClientByPhoneE164`
       // умеет иначе), но за этой подсказкой стоит НЕОБРАТИМОЕ слияние: двух
       // разных Марий с разными телефонами оно предложило бы склеить.
-      const { data, error } = await db
-        .from("clients")
-        .select("id, full_name, phone")
-        .eq("tenant_id", tenantId as string)
-        .like("phone_e164", `%${key}`)
-        .neq("id", clientId)
-        .is("deleted_at", null)
-        .limit(1);
-      // Нет сети — нет и подсказки: плашка не обвиняет карточку в дубле по
-      // догадке, и молчание здесь безопаснее выдумки.
+      const liveRows = () =>
+        db
+          .from("clients")
+          .select("id, full_name, phone")
+          .eq("tenant_id", tenantId as string)
+          .neq("id", clientId)
+          .is("deleted_at", null);
+      if (e164) {
+        const { data, error } = await liveRows().eq("phone_e164", e164).limit(1);
+        // Нет сети — нет и подсказки: плашка не обвиняет карточку в дубле по
+        // догадке, и молчание здесь безопаснее выдумки.
+        if (error) return null;
+        if (data?.[0]) return data[0];
+      }
+      // Старые строки без `phone_e164`: их единицы, читаем целиком и сверяем
+      // в приложении (`samePhone`: разобранный номер — целиком, иначе хвост).
+      const { data: legacy, error } = await liveRows().is("phone_e164", null).neq("phone", "");
       if (error) return null;
-      return data?.[0] ?? null;
+      return (
+        legacy?.find((row) =>
+          e164 ? samePhone(row.phone, e164, country) : phoneTail(row.phone) === key,
+        ) ?? null
+      );
     },
   });
   return dup;

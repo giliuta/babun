@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ScrollView, Text } from "react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -11,6 +12,7 @@ import { CalendarReferenceRows } from "./CalendarReferenceRows";
 import { CalendarSettingsSheets } from "./CalendarSettingsSheets";
 import { CalendarTeamRows } from "./CalendarTeamRows";
 import { useCalendarSettingsScreen } from "./use-calendar-settings-screen";
+import { TourScrollProvider } from "@/components/tour/TourTarget";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -30,6 +32,9 @@ export function CalendarSettingsScreen() {
   const t = useThemeColors();
   const screen = useCalendarSettingsScreen();
   const { settingsQuery, teams, teamsLoading, savedTick, team, rows, canLeave } = screen;
+  // Обучение докручивает к строке, которую объясняет.
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
 
   if (teamsLoading || settingsQuery.isLoading) {
     return (
@@ -75,7 +80,16 @@ export function CalendarSettingsScreen() {
           настройки каждой команды правятся не выходя с экрана. */}
       <CalendarChipsBar screen={screen} />
       {rows.any || canLeave ? (
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+        <TourScrollProvider scrollRef={scrollRef} scrollY={scrollY}>
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 32 }}
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            scrollY.current = e.nativeEvent.contentOffset.y;
+          }}
+        >
           {team ? <CalendarTeamRows screen={screen} team={team} /> : null}
 
           <CalendarReferenceRows screen={screen} />
@@ -99,6 +113,7 @@ export function CalendarSettingsScreen() {
             </SectionCard>
           ) : null}
         </ScrollView>
+        </TourScrollProvider>
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело
         // говорит одной строкой — без подписи и без кнопки (канон пустых

@@ -124,8 +124,12 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(src, /\(params\.appointmentId && \(appointmentsQuery\.isPending \|\| error\)\)/);
   });
 
-  test("«Личный» не заводится на паузе без сети", () => {
-    assert.match(screen(), /if \(teamsPending \|\| teamsFetching \|\| teamsError\) return;/);
+  test("без сети кнопка первого календаря не встаёт вместо календаря", () => {
+    // Пока список календарей не пришёл (пауза без сети — тоже «не пришёл»),
+    // экран показывает скелет сетки, а не «Создать календарь».
+    const src = screen();
+    assert.match(src, /!roleQuery\.isError && \(teamsPending \|\| chipsLoading \|\| !calendarVisibility\.known\)/);
+    assert.match(src, /\{calendarsUnknown \|\| ownAllHidden \? \(/);
   });
 
   test("оплаченная — только в своём дне: и пальцем, и кубиком", () => {
