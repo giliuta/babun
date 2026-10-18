@@ -8,6 +8,7 @@ import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import type { BookModel } from "./use-book-form";
+import { SETTLED_STAYS, settledVisit } from "@/features/calendar/home/appointment-rules";
 
 /** Sheets that pick what the record is about: time, object, client, services. */
 export function BookPickSheets({ form }: { form: BookModel }) {
@@ -59,7 +60,7 @@ export function BookPickSheets({ form }: { form: BookModel }) {
     clients,
     recentClientIds,
     clientId,
-    setClientId,
+    clearClient,
     pickClient,
     teamId,
     chainStep,
@@ -88,6 +89,14 @@ export function BookPickSheets({ form }: { form: BookModel }) {
         // (`MINUTE_STEP`, DS §5), и попап знает его сам. Почему это НЕ
         // «Длительность записи» тенанта — записано в шапке попапа.
         onCommit={(next) => {
+          // ОПЛАЧЕННУЮ — ТОЛЬКО В ЕЁ ДНЕ, как в календаре: сервер
+          // (`protect_paid_appointment_finance`) отклонил бы сохранение, и с
+          // ним пропали бы все остальные правки этого «Сохранить».
+          const editing = form.editing;
+          if (editing && settledVisit(editing) && next.date !== editing.date) {
+            toast(SETTLED_STAYS, "info");
+            return;
+          }
           dateTouchedRef.current = true;
           setDate(next.date);
           setTimeStart(next.timeStart);
@@ -207,8 +216,7 @@ export function BookPickSheets({ form }: { form: BookModel }) {
         // ПОВТОРНЫЙ ТАП ПО ВЫБРАННОМУ СНИМАЕТ ЕГО.
         // Объект уходит вместе с клиентом: чужому он не принадлежит.
         onDeselect={() => {
-          setClientId(null);
-          setLocationId(null);
+          clearClient();
           setClientPickerOpen(false);
         }}
         // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ

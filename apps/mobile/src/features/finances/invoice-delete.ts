@@ -28,3 +28,14 @@ export function invoiceDeleteBlock(
   );
   return later ? "not-last" : null;
 }
+
+/** Вернётся ли номер в серию. `delete_invoice` откатывает счётчик серии, только
+ *  когда тот стоит ровно на этом номере: ушёл дальше (номер подняли руками) —
+ *  номер пропадает. `next` — следующий номер серии этих реквизитов и года
+ *  (`peek_document_number`); без реквизитов серию не узнать — не обещаем. */
+export function deleteFreesNumber(
+  invoice: Pick<InvoiceLedger, "seq" | "company_id">,
+  next: { seq: number } | null | undefined,
+): boolean {
+  return !!invoice.company_id && next?.seq === invoice.seq + 1;
+}

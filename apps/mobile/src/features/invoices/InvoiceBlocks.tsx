@@ -54,6 +54,7 @@ export function InvoiceBlocks({
   onClientRequisitesChange,
   issuedOn,
   dueOn,
+  today,
   onIssuedOnChange,
   onDueOnChange,
   companyId,
@@ -91,6 +92,8 @@ export function InvoiceBlocks({
   onClientRequisitesChange: (id: string | null) => void;
   issuedOn: string;
   dueOn: string | null;
+  /** Сегодня бизнеса — предел барабана «Выставлен». */
+  today: string;
   /** `null` барабан даты выставления не отдаёт (строка не `optional`), но тип
    *  общий на обе даты — так его принимает `InvoiceDatesBlock`. */
   onIssuedOnChange: (ymd: string | null) => void;
@@ -226,6 +229,7 @@ export function InvoiceBlocks({
         <InvoiceDatesBlock
           issuedOn={issuedOn}
           dueOn={dueOn}
+          today={today}
           onIssuedOnChange={onIssuedOnChange}
           onDueOnChange={onDueOnChange}
         />

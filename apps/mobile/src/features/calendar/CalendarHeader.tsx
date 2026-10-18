@@ -3,6 +3,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { Calendar, ChevronDown, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ViewModeDropdown, type CalMode } from "@/features/calendar/ViewModeDropdown";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 // Web-parity calendar top bar: gear · «{Month} {Year} ⌄» · today · view dropdown.
 // Title tap opens the MiniCalendar date jumper (web Header.tsx), the
@@ -45,6 +46,7 @@ export function CalendarHeader({
         backgroundColor: t.surface,
       }}
     >
+      <TourTarget id="calendar.gear">
       <Pressable
           onPress={onGear}
           hitSlop={6}
@@ -61,7 +63,9 @@ export function CalendarHeader({
         >
           <Settings color={t.sub} size={21} strokeWidth={2} />
       </Pressable>
+      </TourTarget>
 
+      <TourTarget id="calendar.title" flex>
       <Pressable
         onPress={onTitlePress}
         accessibilityRole="button"
@@ -96,6 +100,7 @@ export function CalendarHeader({
         </Animated.View>
         <ChevronDown color={t.faint} size={16} strokeWidth={2.5} />
       </Pressable>
+      </TourTarget>
 
       {!isOnToday ? (
         <Pressable
@@ -131,7 +136,9 @@ export function CalendarHeader({
         </Pressable>
       ) : null}
 
-      <ViewModeDropdown mode={mode} onChange={onModeChange} />
+      <TourTarget id="calendar.view">
+        <ViewModeDropdown mode={mode} onChange={onModeChange} />
+      </TourTarget>
     </View>
   );
 }

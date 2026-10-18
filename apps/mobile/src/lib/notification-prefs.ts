@@ -149,10 +149,16 @@ const PAYMENT_FIELDS = new Set([
 ]);
 
 /** Какое это событие для уведомлений, или `null` — не о чем сообщать.
- *  Только записи (не личные события) и входящие деньги. */
+ *  Только записи (не личные события) и деньги клиента: доход и возврат.
+ *
+ *  Оплату и возврат в записи сервер пишет в журнал дважды — правкой записи и
+ *  операцией. Новость о деньгах — операция (у неё и заголовок «Доход» /
+ *  «Возврат»); правка записи одними полями денег — та же новость второй раз,
+ *  поэтому молчит. */
 export function activityKind(row: Pick<ChangeLogRow, "entity" | "action" | "meta" | "changes">): ActivityKind | null {
   if (row.entity === "finance_transactions") {
-    return row.action === "insert" && row.meta?.type === "income" ? "payment" : null;
+    const type = row.meta?.type;
+    return row.action === "insert" && (type === "income" || type === "refund") ? "payment" : null;
   }
   if (row.entity !== "appointments") return null;
   if (row.meta?.kind === "event" || row.meta?.kind === "personal") return null;
@@ -163,7 +169,7 @@ export function activityKind(row: Pick<ChangeLogRow, "entity" | "action" | "meta
   const status = changes.status;
   if (Array.isArray(status) && status[1] === "cancelled") return "cancel";
   const fields = Object.keys(changes);
-  if (fields.length > 0 && fields.every((f) => PAYMENT_FIELDS.has(f))) return "payment";
+  if (fields.length > 0 && fields.every((f) => PAYMENT_FIELDS.has(f))) return null;
   return "change";
 }
 

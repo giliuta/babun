@@ -67,7 +67,9 @@ export function cardMenuActions(card: ClientCard, c: Client) {
   // (имя + телефон). ДОБАВЛЕНИЕ этого шага больше не требует: оно живёт в
   // листе снизу и пишет объект в тот же черновик.
 
-  const onBack = () => router.back();
+  // Карточку, открытую по прямому адресу (F5 на вебе, ссылка), «назад»
+  // уводит в список: пустая история сделала бы стрелку мёртвой.
+  const onBack = () => (router.canGoBack() ? router.back() : router.replace("/clients"));
 
   // МЕНЮ КЛИЕНТА ПАРТНЁРА: «Меню клиента» — всё меню, кроме
   // «Удалить»: Записать, Поделиться, Напомнить, В чёрный список; «Удаление
@@ -117,7 +119,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
         async () => {
           try {
             await trashAsPartner.mutateAsync(c.id);
-            router.back();
+            onBack();
           } catch (e) {
             // Обрыв — словами, а не «TypeError: Network request failed».
             const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
@@ -145,7 +147,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
       async () => {
         try {
           const res = await deleteWithUndo([c]);
-          if (res.archived > 0) router.back();
+          if (res.archived > 0) onBack();
         } catch (e) {
           const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
           notify(words.title, words.subtitle);

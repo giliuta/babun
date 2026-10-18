@@ -172,7 +172,9 @@ export function MapPicker({
               style={{
                 width: 18,
                 height: 18,
-                marginBottom: 18,
+                // Кружок стоит ЦЕНТРОМ на центре карты — сохраняется именно
+                // центр (`getCenter`). Отступ снизу, как у капли на телефоне,
+                // поднимал его на 9 px над сохраняемой точкой.
                 borderRadius: 9,
                 border: `3px solid ${t.accent}`,
                 backgroundColor: "#fff",

@@ -9,10 +9,12 @@ import { NameColorField } from "@/components/ui/picker-fields";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
+  useCreateFirstCalendar,
   useCreateTeam,
   type Team,
 } from "@/features/reference/queries";
 import { tDynamic } from "@babun/shared/i18n/runtime";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 // СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ НА ВЕСЬ ПРОДУКТ.
 //
@@ -37,6 +39,8 @@ export function CalendarCreateSheet({
   onCreated,
   teams,
   note,
+  first = false,
+  onExisting,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -46,10 +50,18 @@ export function CalendarCreateSheet({
   teams: Team[];
   /** Тихая строка над кнопкой: цена календаря в подписке. */
   note?: string;
+  /** ПЕРВЫЙ КАЛЕНДАРЬ АККАУНТА. Заводит его `create_first_calendar`: он
+   *  бесплатный и под замком аккаунта — второе устройство на том же пустом
+   *  аккаунте второго календаря не заведёт, а получит ответ «уже есть». */
+  first?: boolean;
+  /** Первый календарь успело завести другое устройство: перечитать список. */
+  onExisting?: () => void;
 }) {
   const t = useThemeColors();
   const online = useIsOnline();
   const create = useCreateTeam();
+  const createFirst = useCreateFirstCalendar();
+  const pending = first ? createFirst.isPending : create.isPending;
 
   // Первый свободный цвет рабочей палитры — чтобы чипы календарей
   // оставались различимы, а первый календарь не рождался вишнёвым.
@@ -85,10 +97,10 @@ export function CalendarCreateSheet({
   // повторяла словами то, что и так видно, и висела всё время, пока человек
   // не начал печатать, — то есть с первой секунды открытия листа.
   const offline = !online;
-  const canSave = !offline && name.trim().length > 0 && !create.isPending;
+  const canSave = !offline && name.trim().length > 0 && !pending;
   const footerNote =
     failure ??
-    (create.isPending || !offline ? (note ?? null) : "Нет связи — календарь не создать");
+    (pending || !offline ? (note ?? null) : "Нет связи — календарь не создать");
 
   const submit = async () => {
     // Сеть проверяется В МОМЕНТ нажатия, а не только реактивным `online`:
@@ -100,7 +112,18 @@ export function CalendarCreateSheet({
     setFailure(null);
     let team: Team;
     try {
-      team = await create.mutateAsync({ name: name.trim(), color: color ?? undefined });
+      const input = { name: name.trim(), color: color ?? undefined };
+      if (first) {
+        const made = await createFirst.mutateAsync(input);
+        if (!made) {
+          onExisting?.();
+          onClose();
+          return;
+        }
+        team = made;
+      } else {
+        team = await create.mutateAsync(input);
+      }
     } catch (e) {
       // Отказ (тариф, права) — текстом функции базы: переводим при показе.
       setFailure(e instanceof Error ? tDynamic(e.message) : "Не удалось создать календарь");
@@ -131,12 +154,14 @@ export function CalendarCreateSheet({
               {footerNote}
             </Text>
           ) : null}
-          <GradientButton
-            label="Создать календарь"
-            onPress={submit}
-            disabled={!canSave}
-            loading={create.isPending}
-          />
+          <TourTarget id="calendar.create-submit">
+            <GradientButton
+              label="Создать календарь"
+              onPress={submit}
+              disabled={!canSave}
+              loading={pending}
+            />
+          </TourTarget>
         </View>
       }
     >
@@ -161,6 +186,7 @@ export function CalendarCreateSheet({
             color={color}
             onColorChange={(hex) => setColor(hex)}
             autoFocus
+            tourIds={{ name: "calendar.create-name", color: "calendar.create-color" }}
           />
         </SectionCard>
       </View>

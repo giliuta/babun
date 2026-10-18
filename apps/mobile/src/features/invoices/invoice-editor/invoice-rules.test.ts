@@ -9,7 +9,6 @@ import {
   appointmentVatOf,
   discountAmountOf,
   existingDiscountOf,
-  firstIssuedOnFor,
   incomeAmountOf,
   initialInvoiceVatMode,
   invoiceReason,
@@ -170,14 +169,7 @@ describe("дата выставления в миг выставления", () 
     dueOn: "2027-01-07",
     issuedTouched: false,
     dueTouched: false,
-    sourceIssuedOn: null,
   };
-
-  test("первая дата — не раньше сегодня; будущий визит остаётся своей датой", () => {
-    assert.equal(firstIssuedOnFor("2026-12-01", "2026-12-31"), "2026-12-31");
-    assert.equal(firstIssuedOnFor("2027-02-01", "2026-12-31"), "2027-02-01");
-    assert.equal(firstIssuedOnFor(null, "2026-12-31"), "2026-12-31");
-  });
 
   test("не трогали — после полуночи документ выходит новым днём и годом, срок держит отступ", () => {
     assert.deepEqual(rolledIssueDates({ ...base, today: "2027-01-01" }), {
@@ -211,11 +203,32 @@ describe("дата выставления в миг выставления", () 
     );
   });
 
-  test("будущий визит не двигается часами", () => {
+  // СЕРВЕР НЕ ВЫСТАВЛЯЕТ ДОКУМЕНТ БУДУЩИМ ЧИСЛОМ (`issue_invoice`: «Документ
+  // нельзя датировать будущим числом»): нетронутая дата — всегда сегодня, даже
+  // у счёта по визиту на следующей неделе.
+  test("нетронутая будущая дата сходит на сегодня", () => {
     assert.deepEqual(
-      rolledIssueDates({ ...base, issuedOn: "2027-02-01", dueOn: null, sourceIssuedOn: "2027-02-01", today: "2027-01-01" }),
-      { issuedOn: "2027-02-01", dueOn: null },
+      rolledIssueDates({ ...base, issuedOn: "2027-02-01", dueOn: null, today: "2027-01-01" }),
+      { issuedOn: "2027-01-01", dueOn: null },
     );
+  });
+
+  test("новый счёт рождается сегодняшним днём, а не днём визита", () => {
+    const draft = readFileSync(resolve(here, "use-invoice-draft.ts"), "utf8");
+    assert.match(draft, /useState\(existing\?\.issued_on \?\? businessToday\)/);
+    assert.doesNotMatch(draft, /seed\?\.issuedOn|prefill\?\.issuedOn/);
+  });
+
+  test("барабан «Выставлен» не крутится дальше сегодня", () => {
+    const block = readFileSync(resolve(here, "../InvoiceDatesBlock.tsx"), "utf8");
+    assert.match(
+      block,
+      /value=\{parseYMD\(draftIssued\)\}\s*maximumDate=\{parseYMD\(today\)\}/,
+    );
+    const blocks = readFileSync(resolve(here, "../InvoiceBlocks.tsx"), "utf8");
+    assert.match(blocks, /<InvoiceDatesBlock[^>]*today=\{today\}/);
+    const editor = readFileSync(resolve(here, "../InvoiceEditor.tsx"), "utf8");
+    assert.match(editor, /today=\{businessToday\}/);
   });
 
   test("редактор берёт даты на момент выставления, а черновик не считает сдвиг правкой", () => {

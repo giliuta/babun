@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   isServiceAllowedForTeam,
   reconcileBookingSelection,
+  servicesBlockTeamMove,
 } from "./booking-selection";
 
 // Услуга принадлежит РОВНО одной команде: «услуги, доступные
@@ -60,5 +61,19 @@ describe("booking team invariants", () => {
       }).masterId,
       "floating",
     );
+  });
+});
+
+describe("servicesBlockTeamMove", () => {
+  const services = [
+    { id: "a", team_id: "t1" },
+    { id: "b", team_id: "t2" },
+  ];
+  test("услуга прайса старой команды держит запись", () => {
+    assert.equal(servicesBlockTeamMove(["a"], services, "t2"), true);
+  });
+  test("услуги новой команды и свои строки — не держат", () => {
+    assert.equal(servicesBlockTeamMove(["b"], services, "t2"), false);
+    assert.equal(servicesBlockTeamMove([], services, "t2"), false);
   });
 });

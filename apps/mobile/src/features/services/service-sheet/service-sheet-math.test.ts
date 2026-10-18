@@ -60,6 +60,10 @@ describe("baseFieldErrors", () => {
   test("negative price and fractional time are errors", () => {
     assert.deepEqual(baseFieldErrors("-1", "1.5"), { price: "Цена от 0", duration: "Поставьте время" });
   });
+  test("price above the column limit is an error, not a raw overflow", () => {
+    assert.deepEqual(baseFieldErrors("10000000000", "60"), { price: "Цена не больше 9 999 999 999,99" });
+    assert.deepEqual(baseFieldErrors("9999999999,99", "60"), {});
+  });
 });
 
 describe("firstServiceError", () => {

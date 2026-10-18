@@ -4,6 +4,7 @@ import type { Database } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { sendInvitationEmail } from "@/features/settings/invitation-email";
+import { requirePartnersManager } from "@/features/settings/team-access";
 
 import {
   createInvitationArgs,
@@ -49,22 +50,12 @@ type InvitationRpc = {
 
 const invitationRpc = supabase.rpc.bind(supabase) as unknown as InvitationRpc;
 
-/** Та же проверка, что у прежних приглашений (`team-access.ts`): сервер и сам
- *  откажет не владельцу, но так отказ приходит словами, а не строкой базы. */
-async function requireOwner(): Promise<void> {
-  const { data, error } = await supabase.rpc("current_user_role");
-  if (error) throw new Error(error.message);
-  if (data !== "owner") {
-    throw new Error("Управлять доступом может только владелец.");
-  }
-}
-
 /** «Пригласить» на карточке нового мастера. */
 export function useCreateMasterInvitation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (request: MasterInvitationRequest): Promise<SavedMasterInvitation> => {
-      await requireOwner();
+      await requirePartnersManager();
       // Кнопку и так держит `inviteBlockers`; строка сервера — чтобы отказ
       // назвал `invitationErrorMessage`, если сюда всё же дошли без календаря.
       if (request.teamIds.length === 0) {
@@ -104,7 +95,7 @@ export function useUpdateMasterInvitation() {
       invitationId: string;
       request: MasterInvitationRequest;
     }): Promise<SavedMasterInvitation> => {
-      await requireOwner();
+      await requirePartnersManager();
       const { data, error } = await invitationRpc(
         "update_invitation",
         updateInvitationArgs(invitationId, request),

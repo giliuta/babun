@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
+import type { RecordInvoicePaymentDraft } from "@babun/shared/db/repositories/invoice-payments";
+import { randomUuid } from "@babun/shared/sync";
 import {
   paymentsAwaitingReceipt,
   receiptRefusal,
@@ -27,6 +29,7 @@ import {
 } from "@/features/finances/invoices-queries";
 import { shareInvoicePdf } from "../share-pdf";
 import { earliestPayment } from "./payment-meta";
+import { sendPayment } from "./payment-request";
 
 /** Queries, sheet state and the PDF / receipt actions of the invoice page. */
 export function useInvoiceDetail() {
@@ -73,6 +76,17 @@ export function useInvoiceDetail() {
       ? { originalNumber: noteReceipt?.number ?? null, ofReceipt: true }
       : null;
   const pay = useRecordInvoicePayment(id);
+  // Id платежа живёт на странице, а не в листе: закрыть и открыть лист после
+  // потерянного ответа — тот же платёж, а не второй (`sendPayment`).
+  const paymentRequestId = useRef(randomUuid());
+  const submitPayment = (value: Omit<RecordInvoicePaymentDraft, "request_id">) =>
+    sendPayment(
+      paymentRequestId,
+      async (requestId) => {
+        await pay.mutateAsync({ ...value, request_id: requestId });
+      },
+      randomUuid,
+    );
   const invoiceMenu = useInvoiceMenu();
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -209,6 +223,7 @@ export function useInvoiceDetail() {
     noteReceipt,
     creditNote,
     pay,
+    submitPayment,
     invoiceMenu,
     sheetMenu,
     setSheetMenu,

@@ -33,6 +33,22 @@ export interface RefundInvoicePaymentDraft {
 
 const PAGE_SIZE = 1000;
 
+/** Отказ `record_invoice_payment` на повтор id с другими данными. Сравнивается
+ *  с ответом сервера, поэтому литерал не переводится. */
+const REUSED_PAYMENT_ID =
+  /* i18n-ignore */ "Идентификатор платежа уже использован с другими данными";
+
+/** ПЛАТЁЖ ЭТОГО ЗАПРОСА УЖЕ ЗАПИСАН. Ответ на первую попытку потерялся,
+ *  человек поправил сумму или счёт и повторил тем же id — сервер узнал id и
+ *  отказал. Значит, первый платёж в журнале: экран говорит об этом словами и
+ *  следующий платёж заводит новым id, иначе отказ повторялся бы вечно. */
+export class InvoicePaymentAlreadyRecordedError extends Error {
+  constructor() {
+    super("Этот платёж уже записан — проверьте оплаты инвойса");
+    this.name = "InvoicePaymentAlreadyRecordedError";
+  }
+}
+
 /** Ровно те колонки, что нужны InvoicePaymentLedger: остальная строка журнала
  *  (снимок НДС, заметки триггеров, receipt_url…) в оплатах инвойса не
  *  используется и раньше гоняла `select *` по всей истории тенанта. */
@@ -165,7 +181,11 @@ export async function recordInvoicePayment(
       p_notes: draft.notes?.trim() || null,
     }),
   );
-  if (error) throw new Error(`recordInvoicePayment: ${error.message}`);
+  if (error) {
+    if (error.message === REUSED_PAYMENT_ID) throw new InvoicePaymentAlreadyRecordedError();
+    // Текст отказа читает человек под кнопкой — без имени функции.
+    throw new Error(error.message);
+  }
   if (
     !data
     || data.id !== draft.request_id
@@ -215,7 +235,7 @@ export async function refundInvoicePayment(
       p_notes: draft.notes?.trim() || null,
     }),
   );
-  if (error) throw new Error(`refundInvoicePayment: ${error.message}`);
+  if (error) throw new Error(error.message);
   if (
     !data ||
     data.id !== draft.request_id ||

@@ -52,6 +52,7 @@ export function blockLayout({
   deckIndex,
   overdue,
   deckSize,
+  clashMore = 0,
   editing,
   reschedulable,
 }: {
@@ -66,6 +67,8 @@ export function blockLayout({
   offLabelColor: string | null;
   deckIndex?: number;
   deckSize?: number;
+  /** Верхняя карточка накладки без стопки — значок «+N» и у неё. */
+  clashMore?: number;
   editing: boolean;
   /** Не закрыта в срок — время жирное, и шире. */
   overdue: boolean;
@@ -90,8 +93,9 @@ export function blockLayout({
     deckSize && deckSize > 1 ? { index: deckIndex ?? 0, size: deckSize } : undefined,
   );
   // Верхняя карточка стопки несёт «+N» — сколько записей под ней.
+  // Накладка вне стопки (Неделя «веером», День «рядом») — тот же значок.
   const deckMore =
-    deckSize && deckSize > 1 && deckIndex === deckSize - 1 ? deckSize - 1 : 0;
+    deckSize && deckSize > 1 && deckIndex === deckSize - 1 ? deckSize - 1 : clashMore;
   const deckBadgeW = deckMore > 0 ? 20 : 0;
   const { left, width } = frame;
   const cancelled = apt.status === "cancelled";

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { NameColorField } from "@/components/ui/picker-fields";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 // ИМЯ И ЦВЕТ КАЛЕНДАРЯ ПРАВЯТСЯ ПРЯМО В СТРОКЕ, без нижнего листа с кнопкой «Применить» и без шеврона,
 // раскрывающего палитру: это лишний шаг ради двух правок, которые правятся на
@@ -43,6 +44,7 @@ export function CalendarIdentityCard({
 
   return (
     <SectionCard>
+      <TourTarget id="settings.name">
       <NameColorField
         bare
         label={null}
@@ -52,6 +54,7 @@ export function CalendarIdentityCard({
         color={team.color}
         onColorChange={(hex) => onPatch({ color: hex })}
       />
+      </TourTarget>
     </SectionCard>
   );
 }

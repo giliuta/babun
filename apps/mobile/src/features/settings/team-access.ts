@@ -5,6 +5,7 @@ import { useTenantId } from "@/lib/tenant";
 import { sendInvitationEmail } from "@/features/settings/invitation-email";
 import { useSession } from "@/providers/SessionProvider";
 import {
+  canManagePartners,
   isInvitableRole,
   normalizeInvitationEmail,
   type InvitableRole,
@@ -43,11 +44,18 @@ function parseCreatedInvitation(value: Json | null): CreatedInvitation {
   return row as unknown as CreatedInvitation;
 }
 
-async function requireOwner(): Promise<void> {
-  const { data, error } = await supabase.rpc("current_user_role");
-  if (error) throw new Error(error.message);
-  if (data !== "owner") {
-    throw new Error("Управлять доступом может только владелец.");
+/** Порог сервера, спрошенный заранее: сервер и сам откажет, но так отказ
+ *  приходит словами, а не строкой базы. Проверка «только владелец» здесь
+ *  отказывала директору в том, что сервер ему разрешает. */
+export async function requirePartnersManager(): Promise<void> {
+  const [role, manages] = await Promise.all([
+    supabase.rpc("current_user_role"),
+    supabase.rpc("access_company", { p_block: "company.partners", p_min: "write" }),
+  ]);
+  if (role.error) throw new Error(role.error.message);
+  if (manages.error) throw new Error(manages.error.message);
+  if (!canManagePartners(role.data, manages.data)) {
+    throw new Error("Управлять партнёрами может владелец или директор.");
   }
 }
 
@@ -92,7 +100,7 @@ export function useCreateInvitation() {
       fullName?: string | null;
       phone?: string | null;
     }): Promise<CreatedInvitation> => {
-      await requireOwner();
+      await requirePartnersManager();
       // В календарь мастера зовут по почте и без карточки («Мастера → Добавить
       // мастера», STORY-081); карточку требует только приглашение без календаря.
       if (role === "master" && !masterId && !teamId) {
@@ -128,7 +136,7 @@ export function useRemoveTenantMember() {
       if (session?.user.id === userId) {
         throw new Error("Свой доступ нельзя удалить с этого экрана.");
       }
-      await requireOwner();
+      await requirePartnersManager();
       const { data, error } = await supabase
         .from("tenant_members")
         .delete()
@@ -150,7 +158,7 @@ export function useRevokeInvitation() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
-      await requireOwner();
+      await requirePartnersManager();
       const { data, error } = await supabase
         .from("invitations")
         .delete()

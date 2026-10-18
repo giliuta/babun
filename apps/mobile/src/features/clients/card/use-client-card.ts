@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import type { Client } from "@babun/shared/local/clients";
 import { useThemeColors } from "@/theme/colors";
 import { PEOPLE_ON_CARD, useClientPeople } from "@/features/clients/ClientPeopleDoor";
@@ -110,6 +111,7 @@ export function useClientCard() {
   // уже создан.
   const navigation = useNavigation();
   const leavingRef = useRef(false);
+  useBeforeUnloadWhileDirty(isDraft && isDraftDirty);
   usePreventRemove(isDraft && isDraftDirty, ({ data }) => {
     if (leavingRef.current || isSavingNow()) {
       navigation.dispatch(data.action);

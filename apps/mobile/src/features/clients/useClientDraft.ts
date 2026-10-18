@@ -313,7 +313,8 @@ export function useClientDraft(
       // похода за клиентом.
       if (forBooking) {
         deliverCreatedClient(created.id);
-        router.back();
+        if (router.canGoBack()) router.back();
+        else router.replace("/book");
         return created.id;
       }
       // ЧЕРНОВИК СО СВЯЗЬЮ ВОЗВРАЩАЕТСЯ ТУДА, ГДЕ ЕГО ЗАВЕЛИ (ТЗ, сценарий г-б).

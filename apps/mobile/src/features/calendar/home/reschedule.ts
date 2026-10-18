@@ -11,7 +11,8 @@ import {
 } from "@/features/calendar/reminders";
 import { isCalendarEvent } from "@/features/calendar/event-access";
 import { serverReason } from "@/features/calendar/server-reason";
-import { SETTLED_STAYS, settledVisit } from "./appointment-rules";
+import { SERVICES_HOLD_TEAM, SETTLED_STAYS, settledVisit } from "./appointment-rules";
+import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
 import { startOfDay } from "./dates";
 import { scheduleWarning } from "./work-band";
 import type { CalendarGrid } from "./use-calendar-grid";
@@ -24,7 +25,7 @@ import type { VisibleAppointments } from "./use-visible-appointments";
 
 type CreateRescheduleDeps =
   Pick<CalendarRights, "isCrew" | "workInPlan" | "nudgeTariff" | "canMoveAppointment">
-  & Pick<CalendarSources, "toast" | "updateAppt" | "teams" | "visibilityTenantId">
+  & Pick<CalendarSources, "toast" | "updateAppt" | "teams" | "visibilityTenantId" | "servicesQuery">
   & Pick<VisibleAppointments, "visibleAppts" | "weekYmds">
   & Pick<CalendarGrid, "workBandFor" | "bufferMinutes">
   & Pick<CalendarView, "mode" | "setDay">
@@ -37,7 +38,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
   const {
     isCrew, toast, workInPlan, nudgeTariff, canMoveAppointment, visibleAppts,
     workBandFor, bufferMinutes, mode, weekYmds, setDay, editingApt, setEditingApt,
-    updateAppt, appointmentTimeZone, teams, visibilityTenantId,
+    updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery,
   } = deps;
   const reschedule = (
     apt: Appointment,
@@ -85,6 +86,14 @@ export function createReschedule(deps: CreateRescheduleDeps) {
     // на новую неделю, и запись пропала бы с глаз.
     if ((dateMoves || teamMoves) && settledVisit(apt)) {
       toast(SETTLED_STAYS, "info");
+      return;
+    }
+    if (
+      teamMoves &&
+      !isCalendarEvent(apt) &&
+      servicesBlockTeamMove(apt.service_ids ?? [], servicesQuery.data ?? [], teamId)
+    ) {
+      toast(SERVICES_HOLD_TEAM, "info");
       return;
     }
     // Виртуальное вхождение повтора двигать нельзя — правится только seed

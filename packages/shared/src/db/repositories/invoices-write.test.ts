@@ -14,7 +14,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IssueInvoiceDraft } from "./invoices";
-import { issueInvoice } from "./invoices";
+import { InvoiceAlreadyIssuedError, issueInvoice } from "./invoices";
 
 const TENANT = "11111111-1111-4111-8111-111111111111";
 const REQUEST_ID = "33333333-3333-4333-8333-333333333333";
@@ -237,7 +237,7 @@ describe("подтверждение записи сервером", () => {
         TENANT,
         issueDraft,
       ),
-    ).rejects.toThrow("создание не подтверждено сервером");
+    ).rejects.toThrow("Создание инвойса не подтверждено сервером");
   });
 
   it("отказывает, если RPC вернула не тот запрос", async () => {
@@ -247,7 +247,7 @@ describe("подтверждение записи сервером", () => {
         TENANT,
         issueDraft,
       ),
-    ).rejects.toThrow("создание не подтверждено сервером");
+    ).rejects.toThrow("Создание инвойса не подтверждено сервером");
   });
 
   it("доносит текст ошибки сервера наружу", async () => {
@@ -260,4 +260,75 @@ describe("подтверждение записи сервером", () => {
     ).rejects.toThrow("нет прав");
   });
 
+});
+
+describe("текст отказа — для человека", () => {
+  it("без служебного имени функции", async () => {
+    const error = await issueInvoice(
+      fakeSupabase({ rpc: { data: null, error: { message: "Документ нельзя датировать будущим числом" } } }),
+      TENANT,
+      issueDraft,
+    ).catch((e: Error) => e);
+    expect((error as Error).message).toBe("Документ нельзя датировать будущим числом");
+  });
+});
+
+// ПОВТОР ПОСЛЕ ПОТЕРЯННОГО ОТВЕТА: инвойс уже создан тем же id запроса.
+// Сервер на повтор отдаёт ПРЕЖНИЙ документ, и если между попытками человек
+// поправил форму, контрольное чтение не сходилось на каждом нажатии, а уход
+// со страницы и новая попытка рождали второй счёт. Повтор сперва смотрит,
+// нет ли уже документа с этим id, и ведёт на него.
+describe("повтор выставления", () => {
+  function repeatSupabase(existing: Record<string, unknown> | null, calls: string[]) {
+    return {
+      rpc(name: string) {
+        calls.push(name);
+        return Promise.resolve({ data: invoiceRow(), error: null });
+      },
+      from(table: string) {
+        if (table === "invoice_lines") {
+          const lineBuilder = {
+            select: () => lineBuilder,
+            eq: () => lineBuilder,
+            order: () => Promise.resolve({ data: [lineRow()], error: null }),
+          };
+          return lineBuilder;
+        }
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          // До выставления — то, что лежит в базе; после — созданный счёт.
+          maybeSingle: () => {
+            calls.push("read");
+            const created = calls.includes("issue_invoice");
+            return Promise.resolve({ data: created ? invoiceRow() : existing, error: null });
+          },
+        };
+        return builder;
+      },
+    } as never;
+  }
+
+  it("документ с этим id уже есть — отдаёт его, не вызывая выставление", async () => {
+    const calls: string[] = [];
+    const edited = { ...issueDraft, notes: "Поправил после сбоя" };
+    const error = await issueInvoice(repeatSupabase(invoiceRow(), calls), TENANT, edited, { repeat: true })
+      .catch((e: Error) => e);
+    expect(error).toBeInstanceOf(InvoiceAlreadyIssuedError);
+    expect((error as InvoiceAlreadyIssuedError).invoice.id).toBe(REQUEST_ID);
+    expect(calls).not.toContain("issue_invoice");
+  });
+
+  it("документа нет — выставляет как обычно", async () => {
+    const calls: string[] = [];
+    const saved = await issueInvoice(repeatSupabase(null, calls), TENANT, issueDraft, { repeat: true });
+    expect(saved.id).toBe(REQUEST_ID);
+    expect(calls).toContain("issue_invoice");
+  });
+
+  it("первая попытка не тратит чтение на проверку", async () => {
+    const calls: string[] = [];
+    await issueInvoice(repeatSupabase(invoiceRow(), calls), TENANT, issueDraft);
+    expect(calls[0]).toBe("issue_invoice");
+  });
 });

@@ -4,6 +4,7 @@ import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { randomUuid } from "@babun/shared/sync";
 import { RowCaption } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -230,6 +231,7 @@ export default function NewReceiptScreen() {
   };
   const navigation = useNavigation();
   const leavingRef = useRef(false);
+  useBeforeUnloadWhileDirty(dirty);
   usePreventRemove(dirty, ({ data }) => {
     if (leavingRef.current) {
       navigation.dispatch(data.action);

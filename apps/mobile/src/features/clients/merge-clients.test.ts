@@ -11,6 +11,9 @@ import {
   mergeLocations,
   paidVisitsBlocker,
   phoneKey,
+  teamTagIds,
+  phoneTail,
+  samePhone,
 } from "./merge-clients";
 
 // Слияние необратимо для записей (они меняют владельца), поэтому правило
@@ -207,10 +210,55 @@ describe("слияние дублей", () => {
     assert.equal(phoneKey("+357 99 12 34 56"), phoneKey("99123456"));
     assert.equal(phoneKey("0035799123456"), phoneKey("+357 99123456"));
   });
+
+  test("кипрские записи одного номера сходятся, разные коды — нет", () => {
+    const same = ["+357 97 469998", "+357 97469998", "97469998"].map((n) => phoneKey(n, "CY"));
+    assert.equal(new Set(same).size, 1);
+    // Хвост из 8 цифр у них общий, но это двое разных людей.
+    assert.notEqual(phoneKey("+79161234567"), phoneKey("+79261234567"));
+    assert.equal(phoneTail("+79161234567"), phoneTail("+79261234567"));
+  });
+
+  test("samePhone: разобранные — целиком, неразобранные — по хвосту", () => {
+    assert.equal(samePhone("+79161234567", "+79261234567"), false);
+    assert.equal(samePhone("97469998", "+357 97 469998", "CY"), true);
+    // Российский «8…» без страны не разбирается — остаётся хвост.
+    assert.equal(samePhone("89161234567", "8 916 123-45-67", "CY"), true);
+  });
+
+  test("слияние: разные номера с общим хвостом остаются двумя", () => {
+    const patch = mergeClientPatch(
+      client({ id: "p", phone: "+79161234567" }),
+      client({ id: "d", phone: "+79261234567" }),
+    );
+    assert.equal(patch.phones?.length, 1);
+  });
 });
 
 describe("слияние: теги складываются, реквизиты переезжают", () => {
   const base = (over: Partial<Client>): Client => ({ ...createBlankClient({ full_name: "x" }), ...over });
+  test("теги складываются: основная впереди, без повторов", () => {
+    assert.equal(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["a"] })).tag_ids, undefined);
+    assert.deepEqual(mergeClientPatch(base({ tag_ids: [] }), base({ tag_ids: ["b", "c"] })).tag_ids, ["b", "c"]);
+    assert.deepEqual(
+      mergeClientPatch(base({ tag_ids: ["a", "b"] }), base({ tag_ids: ["c", "b", "d"] })).tag_ids,
+      ["a", "b", "c", "d"],
+    );
+  });
+  test("теги дубля из чужой команды не переносятся", () => {
+    const tags = [
+      { id: "a", team_id: "t1" },
+      { id: "c", team_id: "t1" },
+      { id: "x", team_id: "t2" },
+      { id: "g", team_id: null },
+    ];
+    const allowed = teamTagIds(tags, "t1");
+    assert.deepEqual(
+      mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["x", "c", "g"] }), allowed).tag_ids,
+      ["a", "c", "g"],
+    );
+    assert.equal(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["x"] }), allowed).tag_ids, undefined);
+  });
   test("теги дубля добавляются к основным без повторов, основные первыми", () => {
     assert.deepEqual(mergeClientPatch(base({ tag_ids: ["a"] }), base({ tag_ids: ["b"] })).tag_ids, ["a", "b"]);
     assert.deepEqual(mergeClientPatch(base({ tag_ids: [] }), base({ tag_ids: ["b", "c"] })).tag_ids, ["b", "c"]);

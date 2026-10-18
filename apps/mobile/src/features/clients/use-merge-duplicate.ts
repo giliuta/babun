@@ -13,10 +13,12 @@ import {
   mergeClientPatch,
   mergeLocations,
   paidVisitsBlocker,
+  teamTagIds,
 } from "@/features/clients/merge-clients";
 import {
   useArchiveClients,
   useClient,
+  useClientTags,
   useClientsSourceScope,
   useUpdateClientById,
 } from "@/features/clients/queries";
@@ -94,6 +96,7 @@ export function useMergeDuplicate({
   const dup = useClient(dupId ?? "").data ?? null;
   const members = useClientMembers(dupId);
   const dupAppts = useClientAppointments(dupId ?? "");
+  const tagsQuery = useClientTags();
   const updateById = useUpdateClientById();
   const updateAppt = useUpdateAppointment();
   const archive = useArchiveClients();
@@ -118,7 +121,9 @@ export function useMergeDuplicate({
       //    всегда брало бы снимок. Берём самый свежий из совпавших по началу
       //    ключа.
       const fresh = freshestClient(qc, primary.id) ?? primary;
-      const patch = mergeClientPatch(fresh, dupRow);
+      // Справочник не загрузился — теги дубля берём как есть, а не теряем.
+      const allowedTags = tagsQuery.data ? teamTagIds(tagsQuery.data, fresh.team_id) : null;
+      const patch = mergeClientPatch(fresh, dupRow, allowedTags);
       // Объект дубля, совпавший с объектом основной, уходит в него — и
       // визиты на нём переезжают на объект основной.
       const { remap } = mergeLocations(fresh, dupRow);

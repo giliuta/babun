@@ -3,7 +3,6 @@ import { Text, View } from "react-native";
 import type { PaymentMethod } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { formatMoneyForInput } from "@babun/shared/common/utils/money";
-import { randomUuid } from "@babun/shared/sync";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { DateSpinner } from "@/components/ui/DateSpinner";
@@ -56,8 +55,8 @@ export function InvoicePaymentSheet({
    *  на нём, если он жив и служит команде. */
   preferredAccountId?: string | null;
   submitting: boolean;
+  /** Id запроса держит страница (`sendPayment`): он живёт дольше листа. */
   onSubmit: (value: {
-    request_id: string;
     amount: number;
     account_id: string;
     payment_method: PaymentMethod;
@@ -72,7 +71,6 @@ export function InvoicePaymentSheet({
   const [amount, setAmount] = useState("");
   const [occurredOn, setOccurredOn] = useState(businessToday);
   const [dateOpen, setDateOpen] = useState(false);
-  const [requestId, setRequestId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const initializedForOpen = useRef(false);
 
@@ -98,7 +96,6 @@ export function InvoicePaymentSheet({
     setAmount(formatMoneyForInput(remaining));
     setOccurredOn(businessToday);
     setDateOpen(false);
-    setRequestId(randomUuid());
     setError(null);
   }, [visible, usable, preferredAccountId, remaining, businessToday]);
 
@@ -113,11 +110,10 @@ export function InvoicePaymentSheet({
   };
 
   const submit = async () => {
-    if (!account || !requestId || !validAmount) return;
+    if (!account || !validAmount) return;
     setError(null);
     try {
       await onSubmit({
-        request_id: requestId,
         amount: paymentAmount,
         account_id: account.id,
         payment_method: paymentMethodForAccountKind(account.kind) as PaymentMethod,

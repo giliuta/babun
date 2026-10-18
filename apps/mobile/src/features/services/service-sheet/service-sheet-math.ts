@@ -50,6 +50,9 @@ export function toggleWeekday(weekdays: readonly number[], day: number): number[
   return next.length === 7 ? [] : next;
 }
 
+/** Потолок колонки `services.price` — numeric(12,2). */
+const MAX_PRICE = 9_999_999_999.99;
+
 export type ServiceBaseErrors = { price?: string; duration?: string };
 
 /** Errors of the base row (price and time) of the form. */
@@ -69,6 +72,10 @@ export function baseFieldErrors(price: string, duration: string): ServiceBaseErr
   // сделана, денег нет. Заставлять писать «0» ради проформы незачем.
   if (price.trim() !== "" && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
     nextBaseErrors.price = "Цена от 0";
+  } else if (parsedPrice > MAX_PRICE) {
+    // Иначе сохранение упирается в колонку и человек видит сырое
+    // «numeric field overflow» вместо понятной причины.
+    nextBaseErrors.price = "Цена не больше 9 999 999 999,99";
   }
   // НУЛЕВОЕ ВРЕМЯ РАЗРЕШЕНО: гарантия или диагностика добавляется в запись, и
   // структура времени не должна ломаться; ноль евро, ноль по времени, а в счёт

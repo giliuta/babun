@@ -4,6 +4,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { useThemeColors } from "@/theme/colors";
 import {
+  clashBadgeHolders,
   decksFor,
   layoutDay,
   type PlacedAppt,
@@ -111,6 +112,7 @@ export const DayColumn = memo(function DayColumn({
   );
 
   const decks = useMemo(() => decksFor(placements, laneW), [placements, laneW]);
+  const clashBadges = useMemo(() => clashBadgeHolders(placements, decks), [placements, decks]);
   const openDeck = (apt: Appointment) => {
     const deck = decks.get(apt.id);
     if (!deck) return onEdit(apt);
@@ -224,6 +226,7 @@ export const DayColumn = memo(function DayColumn({
               placed={p}
               deckIndex={deck?.index}
               deckSize={deck?.size}
+              clashMore={clashBadges.get(p.apt.id)}
               hourH={hourH}
               laneW={laneW}
               startHour={startHour}

@@ -94,3 +94,49 @@ export function blockedDayNote(day: number, reason: "off" | { holder: string }):
     ? `${WEEKDAY_FULL_BY_ISO[day]} — выходной у команды`
     : `${WEEKDAY_FULL_BY_ISO[day]} занят меткой «${reason.holder}». У дня одна метка.`;
 }
+
+/** Дни метки, которые уже держит ДРУГАЯ живая метка. Скрытая и удалённая
+ *  дней не держат, поэтому пока метка была не в живых, её дни могли уйти
+ *  другой; при возврате их надо снять, иначе у дня окажутся две метки. */
+export function daysHeldByOthers(
+  city: Pick<City, "id" | "weekdays">,
+  cities: readonly City[],
+): number[] {
+  const others = labelDayOwners(cities.filter((c) => c.id !== city.id));
+  return (city.weekdays ?? []).filter((d) => others.has(d));
+}
+
+/** Дни, которые лист вправе сохранить: без выходных команды и без дней,
+ *  занятых чужой меткой. Сохранённый день держался бы молча — плитка его не
+ *  показывает, а календарь им красит. «Своя» метка узнаётся по имени, как в
+ *  `WeekProjection`: у новой — по набранному. */
+export function savableWeekdays(
+  weekdays: readonly number[],
+  {
+    takenBy,
+    daysOff,
+    ownName,
+    typedName = "",
+  }: { takenBy: DayOwners; daysOff: Set<number>; ownName: string | null; typedName?: string },
+): number[] {
+  const mine = ownName ?? typedName.trim();
+  return weekdays.filter((d) => {
+    if (daysOff.has(d)) return false;
+    const holder = takenBy.get(d);
+    return !holder || holder.name === mine;
+  });
+}
+
+/** Что делает «Добавить метку» с этим именем. Совпала живая — отказ:
+ *  молча переписать её цвет и дни значило бы потерять чужую настройку под
+ *  тостом «Метка добавлена». Совпала скрытая или удалённая — возврат. */
+export function labelAddPlan(
+  cities: readonly City[],
+  name: string,
+): { kind: "create" } | { kind: "exists" | "revive"; city: City } {
+  const key = name.trim().toLowerCase();
+  const existing = cities.find((c) => c.name.toLowerCase() === key);
+  if (!existing) return { kind: "create" };
+  const live = existing.is_active && !existing.deleted_at;
+  return { kind: live ? "exists" : "revive", city: existing };
+}

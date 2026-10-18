@@ -43,6 +43,7 @@ export const TENANT_SCOPED_KEY_PREFIXES: readonly string[] = [
   "babun:accounts:snapshot",
   "babun2:settings:calendar:operational",
   "babun2:settings:location-labels",
+  "babun2:settings:personal-event-types:tenant:",
   // «Дизайн» команд компании (team_design).
   "babun-team-design",
   // Штамп «эта компания прошла онбординг» — он и так именной, и переживать

@@ -174,6 +174,20 @@ export async function uploadAppointmentAssets(args: {
   return uploaded;
 }
 
+/** Фото записи читают два экрана: сама запись и страница файлов клиента
+ *  (`client-visit-photos`, кэш на четыре минуты). Сбрасываются оба, иначе
+ *  у клиента до истечения кэша стоит удалённый снимок и нет нового. Ждём
+ *  только запись: перечитка страницы клиента подписывает все его файлы и не
+ *  должна держать крутилку загрузки. */
+function settlePhotos(
+  queryClient: ReturnType<typeof useQueryClient>,
+  tenantId: string | null,
+  appointmentId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: ["client-visit-photos", tenantId] });
+  return queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) });
+}
+
 export function useUploadAppointmentPhotos(appointmentId: string) {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
@@ -182,8 +196,7 @@ export function useUploadAppointmentPhotos(appointmentId: string) {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       return uploadAppointmentAssets({ tenantId, appointmentId, input });
     },
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) }),
+    onSettled: () => settlePhotos(queryClient, tenantId, appointmentId),
     meta: { errorHandled: true },
   });
 }
@@ -202,8 +215,7 @@ export function useDeleteAppointmentPhoto(appointmentId: string) {
         (current) => current?.filter((photo) => photo.id !== removed.id) ?? [],
       );
     },
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) }),
+    onSettled: () => settlePhotos(queryClient, tenantId, appointmentId),
     meta: { errorHandled: true },
   });
 }

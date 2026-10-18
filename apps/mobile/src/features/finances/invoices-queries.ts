@@ -93,22 +93,30 @@ export function useNextInvoiceSeries(
     enabled: !!tenantId && enabled,
     // Свежесть важнее кэша: номер меняется от каждого выставленного счёта.
     staleTime: 0,
-    queryFn: async (): Promise<NextInvoiceNumber | null> => {
-      const { data, error } = await supabase.rpc(
-        "peek_document_number",
-        rpcArgs<"peek_document_number">({
-          p_legal_entity_id: companyId ?? null,
-          p_doc_type: docType,
-          p_year: year,
-        }),
-      );
-      if (error) throw new Error(error.message);
-      const row = Array.isArray(data) ? data[0] : null;
-      return row
-        ? { seq: row.seq, number: row.number, canSetStart: row.can_set_start }
-        : null;
-    },
+    queryFn: () => peekNextDocumentNumber(year, companyId ?? null, docType),
   });
+}
+
+/** Следующий номер серии прямо сейчас — для места, которому хук не годится
+ *  (вопрос перед удалением строится в момент нажатия). */
+export async function peekNextDocumentNumber(
+  year: number,
+  companyId: string | null,
+  docType: "invoice" | "receipt" | "credit_note" = "invoice",
+): Promise<NextInvoiceNumber | null> {
+  const { data, error } = await supabase.rpc(
+    "peek_document_number",
+    rpcArgs<"peek_document_number">({
+      p_legal_entity_id: companyId,
+      p_doc_type: docType,
+      p_year: year,
+    }),
+  );
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : null;
+  return row
+    ? { seq: row.seq, number: row.number, canSetStart: row.can_set_start }
+    : null;
 }
 
 /** Только строка номера — для мест, где счётчик не правят. */
@@ -232,12 +240,15 @@ export function useIssueInvoice() {
     // несёт язык, который реально записан, и экран говорит о расхождении.
     // Вторая попытка — на случай одного моргания сети; «записан» — только
     // после сверки строки (`setInvoiceLanguage`), а не по отсутствию ошибки.
+    // `repeat` — этот id запроса уже уходил: документ им, возможно, создан
+    // (`InvoiceAlreadyIssuedError`).
     mutationFn: async ({
       language,
+      repeat,
       ...draft
-    }: IssueInvoiceDraft & { language?: InvoiceLanguage }) => {
+    }: IssueInvoiceDraft & { language?: InvoiceLanguage; repeat?: boolean }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
-      const invoice = await issueInvoice(supabase, tenantId, draft);
+      const invoice = await issueInvoice(supabase, tenantId, draft, { repeat });
       if (language && language !== "ru") {
         const saved = await persistInvoiceLanguage(() =>
           setInvoiceLanguage(supabase, invoice.id, language),

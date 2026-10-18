@@ -72,8 +72,21 @@ describe("что происходит в команде", () => {
     assert.equal(activityKind(row({ action: "update", changes: { time_start: ["09:30", "10:00"] } })), "change");
     assert.equal(activityKind(row({ action: "update", changes: { status: ["scheduled", "cancelled"], cancel_reason: [null, "x"] } })), "cancel");
     assert.equal(activityKind(row({ action: "delete" })), "cancel");
-    assert.equal(activityKind(row({ action: "update", changes: { prepayments: "*", paid_amount: [0, 50] } })), "payment");
     assert.equal(activityKind(row({ entity: "finance_transactions", meta: { type: "income", amount: 50 } })), "payment");
+  });
+
+  test("оплата — одно уведомление, возврат — тоже оплата", () => {
+    // Оплату в записи сервер пишет двумя строками журнала: правка записи и
+    // доход. Новость — доход; правка записи одними полями денег — не вторая.
+    assert.equal(activityKind(row({ action: "update", changes: { prepayments: "*", paid_amount: [0, 50] } })), null);
+    assert.equal(activityKind(row({ action: "update", changes: { payment_status: ["paid", "refunded"] } })), null);
+    assert.equal(activityKind(row({ entity: "finance_transactions", meta: { type: "refund", amount: -50 } })), "payment");
+    assert.equal(
+      activityNotification(row({ entity: "finance_transactions", label: null, meta: { type: "refund", amount: -50 } }), "Y&D", null).title,
+      "Возврат создан · Y&D",
+    );
+    // Правка записи вместе с оплатой — всё ещё «изменена».
+    assert.equal(activityKind(row({ action: "update", changes: { paid_amount: [0, 50], time_start: ["09:30", "10:00"] } })), "change");
   });
 
   test("события, расходы и справочники — не новости", () => {

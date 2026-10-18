@@ -2,15 +2,21 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
+import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
+import {
+  closeFirstCalendarSheet,
+  openFirstCalendarSheet,
+  useFirstCalendarSheetOpen,
+} from "@/features/calendar/first-calendar-sheet";
 import type { CalendarController } from "./use-calendar-controller";
 
 /** Body of the screen while this account has no own calendar to show. */
 export function CalendarFirstRunGate({ c }: { c: CalendarController }) {
   const {
     chipItems, pendingChipId, pickCalendar, calendarsUnknown, ownAllHidden, teamsError,
-    refetchTeams, role, firstCalendarFailed, setFirstCalendarFailed,
-    createFirstCalendar, createFirstCalendarMutation,
+    refetchTeams, role, onFirstCalendarCreated, onFirstCalendarExisting,
   } = c;
+  const sheetOpen = useFirstCalendarSheetOpen();
   return (
     <>
       {/* ЛЕНТА ОСТАЁТСЯ И ЗДЕСЬ. Мастер, которому в этой компании ещё не
@@ -54,20 +60,20 @@ export function CalendarFirstRunGate({ c }: { c: CalendarController }) {
               : "Первый календарь создаёт владелец аккаунта."
           }
         />
-      ) : firstCalendarFailed ? (
-        // Запасной выход. В обычной жизни сюда не попадают: календарь
-        // заводится сам эффектом выше.
-        <FirstRunCalendarChoice
-          onCreate={() => {
-            setFirstCalendarFailed(false);
-            createFirstCalendar();
-          }}
-          creating={createFirstCalendarMutation.isPending}
-        />
       ) : (
-        // Календарь уже создаётся — показываем скелет сетки, а не кнопку:
-        // человек пришёл в календарь, и ждать он должен календарь.
-        <CalendarSkeleton mode="week" />
+        // ВЛАДЕЛЕЦ ПУСТОГО АККАУНТА: пустая сетка и одна кнопка внизу. Имя
+        // календарю даёт он сам — шторкой с полем названия.
+        <>
+          <FirstRunCalendarChoice onCreate={openFirstCalendarSheet} />
+          <CalendarCreateSheet
+            first
+            visible={sheetOpen}
+            onClose={closeFirstCalendarSheet}
+            onCreated={onFirstCalendarCreated}
+            onExisting={onFirstCalendarExisting}
+            teams={[]}
+          />
+        </>
       )}
     </>
   );

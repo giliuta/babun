@@ -3,10 +3,13 @@ import { describe, test } from "node:test";
 import type { City } from "@/features/reference/queries";
 import {
   blockedDayNote,
+  daysHeldByOthers,
+  labelAddPlan,
   labelDayOwners,
   labelUsage,
   orderLabels,
   reviveIfGone,
+  savableWeekdays,
   teamDaysOff,
 } from "./label-rules";
 
@@ -91,5 +94,56 @@ describe("blockedDayNote", () => {
   test("names the day and the reason", () => {
     assert.equal(blockedDayNote(4, "off"), "Четверг — выходной у команды");
     assert.equal(blockedDayNote(1, { holder: "Греция" }), "Понедельник занят меткой «Греция». У дня одна метка.");
+  });
+});
+
+describe("daysHeldByOthers", () => {
+  test("возвращаемая метка теряет дни, которые уже держит другая живая", () => {
+    const back = city("back", { weekdays: [1, 2, 3], is_active: false });
+    const all = [
+      city("A", { weekdays: [2] }),
+      city("hidden", { weekdays: [3], is_active: false }),
+      back,
+    ];
+    assert.deepEqual(daysHeldByOthers(back, all), [2]);
+  });
+
+  test("свои дни своими не считаются", () => {
+    const live = city("A", { weekdays: [1] });
+    assert.deepEqual(daysHeldByOthers(live, [live]), []);
+  });
+});
+
+describe("savableWeekdays", () => {
+  const takenBy = labelDayOwners([city("A", { weekdays: [2] }), city("B", { weekdays: [5] })]);
+
+  test("выходные команды и чужие дни не сохраняются", () => {
+    assert.deepEqual(
+      savableWeekdays([1, 2, 4, 5], { takenBy, daysOff: new Set([4]), ownName: "B" }),
+      [1, 5],
+    );
+  });
+
+  test("у новой метки своё имя берётся из набранного", () => {
+    assert.deepEqual(
+      savableWeekdays([1, 5], { takenBy, daysOff: new Set(), ownName: null, typedName: " B " }),
+      [1, 5],
+    );
+  });
+});
+
+describe("labelAddPlan", () => {
+  test("имя живой метки — отказ, а не перезапись", () => {
+    const plan = labelAddPlan([city("Греция")], "греция");
+    assert.equal(plan.kind, "exists");
+  });
+
+  test("имя скрытой или удалённой — возврат, новое — создание", () => {
+    assert.equal(labelAddPlan([city("Кипр", { is_active: false })], "Кипр").kind, "revive");
+    assert.equal(
+      labelAddPlan([city("Кипр", { deleted_at: "2026-10-01T00:00:00Z", is_active: false })], "кипр").kind,
+      "revive",
+    );
+    assert.equal(labelAddPlan([city("Кипр")], "Греция").kind, "create");
   });
 });

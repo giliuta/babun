@@ -34,6 +34,10 @@ export interface DraftDirtyInput {
   hasPendingPayment: boolean;
   colorOverride: string | null;
   cityTouched: boolean;
+  /** Клиент и объект, с которыми форму открыли (`/book?clientId=…`): их
+   *  выбрал не человек в форме, а дверь, откуда он пришёл. */
+  initialClientId?: string | null;
+  initialLocationId?: string | null;
 }
 
 /** Did the person type or pick anything in a NEW record / event? */
@@ -65,7 +69,13 @@ export function draftDirty({
   hasPendingPayment,
   colorOverride,
   cityTouched,
+  initialClientId = null,
+  initialLocationId = null,
 }: DraftDirtyInput): boolean {
+  // «ЗАПИСАТЬ» С КАРТОЧКИ КЛИЕНТА — ЕЩЁ НЕ ВВОД. Клиент приехал параметром,
+  // и стрелка «назад» без единого касания спрашивала «Сохранить запись?».
+  const clientPicked = clientId !== initialClientId;
+  const locationPicked = locationId !== initialLocationId;
   // Сравнение вида с исходным ушло вместе с переключателем: менять вид
   // внутри формы больше нечем, и при создании `kind !== initialKind`
   // ложно всегда.
@@ -76,8 +86,8 @@ export function draftDirty({
     // без вопроса «Введённое не сохранится», — и выбранный клиент с
     // фотографиями пропадал вместе с формой.
     ? notesDirty ||
-      clientId != null ||
-      locationId != null ||
+      clientPicked ||
+      locationPicked ||
       eventTypeId != null ||
       pendingFilesCount > 0 ||
       eventTitle.trim().length > 0 ||
@@ -91,7 +101,7 @@ export function draftDirty({
       dateTouched ||
       durationTouched
     : notesDirty ||
-      clientId != null ||
+      clientPicked ||
       serviceIdsCount > 0 ||
       comment.trim().length > 0 ||
       address.trim().length > 0 ||

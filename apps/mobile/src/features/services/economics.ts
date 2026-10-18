@@ -1,3 +1,4 @@
+import { costPerUnit } from "@babun/shared/local/services";
 import { looseNumber, parseCostDrafts, parseDurationTiers, parsePriceTiers } from "./economics/parse";
 import type {
   CostTierValue,
@@ -26,6 +27,8 @@ export type {
 export { parseDurationTiers, parsePriceTiers } from "./economics/parse";
 
 interface ServiceEconomicsSource {
+  cost_per_unit?: unknown;
+  material_costs?: unknown;
   cost_tiers?: unknown;
   price_tiers?: unknown;
   duration_tiers?: unknown;
@@ -54,7 +57,7 @@ export function economicsDraftFromService(
   }
 
   const costs = parseCostDrafts(service?.cost_tiers);
-  const costByMinimum = new Map(costs.map((tier) => [tier.min_qty, tier]));
+  const costMinimums = new Set(costs.map((tier) => tier.min_qty));
   const priceByMinimum = new Map(prices.map((tier) => [tier.min_qty, tier]));
   const durationByMinimum = new Map(
     durations.map((tier) => [tier.min_qty, tier]),
@@ -63,7 +66,7 @@ export function economicsDraftFromService(
     ...new Set([
       ...priceByMinimum.keys(),
       ...durationByMinimum.keys(),
-      ...costByMinimum.keys(),
+      ...costMinimums,
     ]),
   ].sort((a, b) => a - b);
 
@@ -80,7 +83,11 @@ export function economicsDraftFromService(
       // (`ServiceSheet`: showCost/storeCost), который понимает поле «за одну»:
       // ступень «от 3 · €10» показывалась бы как 30, набранные 12 сохранялись
       // бы как 4, а деньги в прибыли записи (`costPerUnit × qty`) ехали мимо.
-      rowCost: String(round2(costByMinimum.get(minimum)?.cost_per_unit ?? 0)),
+      //
+      // Ступень без своего расхода показывает ДЕЙСТВУЮЩИЙ на её количестве
+      // (расход ступени выше или базы), а не «0»: ноль в поле сохраняется
+      // явным нулём, и пересохранение без правок обнулило бы расход.
+      rowCost: String(round2(costPerUnit(service ?? {}, minimum))),
       totalDuration:
         durationByMinimum.get(minimum) === undefined
           ? ""
@@ -240,8 +247,11 @@ export function validateServiceEconomics(
     if (tier.rowPrice.trim() !== "" && (price === null || price < 0)) {
       tierErrors.rowPrice = "Число от 0";
     }
-    const cost = tier.rowCost.trim() === "" ? 0 : strictNumber(tier.rowCost);
-    if (cost === null || cost < 0) {
+    // Пустой расход — «как выше» (ступень расхода не пишется); набранный 0 —
+    // явный ноль: «на этом количестве материалов нет».
+    const costBlank = tier.rowCost.trim() === "";
+    const cost = costBlank ? null : strictNumber(tier.rowCost);
+    if (!costBlank && (cost === null || cost < 0)) {
       tierErrors.rowCost = "Расход от 0";
     }
     if (
@@ -306,7 +316,7 @@ export function validateServiceEconomics(
         duration_minutes: row.duration,
       });
     }
-    if (row.cost !== null && row.cost > 0) {
+    if (row.cost !== null) {
       costTiers.push({
         min_qty: row.minimum as number,
         // Расход в черновике уже «за одну» — см. economicsDraftFromService.

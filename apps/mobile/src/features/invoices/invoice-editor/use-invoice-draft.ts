@@ -14,7 +14,6 @@ import { addDaysYmd, type EditableInvoiceLine } from "@/lib/paper/format";
 import {
   appointmentVatOf,
   existingDiscountOf,
-  firstIssuedOnFor,
   incomeAmountOf,
   initialInvoiceVatMode,
   rolledIssueDates,
@@ -130,26 +129,20 @@ export function useInvoiceDraft({
       : null,
   ).current;
 
-  // Future issue dates remain intentionally available (the server permits
-  // scheduled documents), but a new document always starts on tenant today.
-  //
-  // ДАТА ВЫСТАВЛЕНИЯ — НЕ РАНЬШЕ СЕГОДНЯ. Счёт по прошлому визиту
-  // (или по деньгам, принятым раньше) датировался днём визита: срок оплаты
-  // считался от него, и документ рождался «Просрочен», а номер вставал после
-  // уже выданных, но с датой раньше их — серия шла не по датам. Визит в
-  // будущем остаётся своей датой; руками дату по-прежнему можно сменить.
+  // ДАТА ВЫСТАВЛЕНИЯ НОВОГО ДОКУМЕНТА — СЕГОДНЯ БИЗНЕСА, а не день визита или
+  // прихода денег: прошлый день давал счёт «Просрочен» с номером не по датам,
+  // будущий сервер отвергает. Руками дату можно сдвинуть назад, но не вперёд
+  // (барабан «Выставлен» кончается сегодня).
   //
   // ДАТА, КОТОРУЮ НЕ ТРОГАЛИ, ЕДЕТ ЗА ЧАСАМИ БИЗНЕСА (`rolledIssueDates`): форма,
   // открытая до полуночи, выставляет документ уже новым днём и годом.
-  const sourceIssuedOn = seed?.issuedOn ?? prefill?.issuedOn ?? null;
-  const firstIssuedOn = firstIssuedOnFor(sourceIssuedOn, businessToday);
-  const [issuedOn, setIssuedOn] = useState(existing?.issued_on ?? firstIssuedOn);
+  const [issuedOn, setIssuedOn] = useState(existing?.issued_on ?? businessToday);
   const [dueOn, setDueOnState] = useState<string | null>(
     // Срок — из настроек компании, а не зашитая неделя,
     // и считается от даты выставления, а не от визита.
     existing
       ? existing.due_on
-      : addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
+      : addDaysYmd(businessToday, Math.max(0, generator.dueDays)),
   );
   const issuedTouched = useRef(!!existing);
   const dueTouched = useRef(!!existing);
@@ -172,7 +165,6 @@ export function useInvoiceDraft({
       dueOn,
       issuedTouched: issuedTouched.current,
       dueTouched: dueTouched.current,
-      sourceIssuedOn,
       today,
     });
   // Часы бизнеса перевалили за полночь, пока форма открыта: превью и номер

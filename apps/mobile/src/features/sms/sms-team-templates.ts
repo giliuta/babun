@@ -219,6 +219,12 @@ export function draftProblem(d: TemplateDraft): string | null {
   if (d.trigger === "after" && !(d.hours && d.hours >= 1 && d.hours <= 72)) return "Выберите, через сколько после визита";
   if (d.trigger === "day_before" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(d.atTime ?? "")) return "Выберите время накануне";
   if (d.trigger === "repeat" && !(d.months && d.months >= 1 && d.months <= 24)) return "Выберите, через сколько месяцев";
+  // Автоматическое SMS собирает сервер, а долг клиента — это инвойсы и
+  // платежи, которые считает только приложение: [Сумма] там не заполнится,
+  // и шаблон не уходил бы никогда — молча.
+  if (d.trigger !== "manual" && templateTokenKeys(d.body).includes("Amount")) {
+    return "[Сумма] подставляется только в шаблон «Вручную»";
+  }
   if (!(d.sendFrom >= 0 && d.sendFrom <= 23 && d.sendTo >= 1 && d.sendTo <= 24 && d.sendFrom < d.sendTo)) {
     return "Окно отправки: «с» раньше, чем «до»";
   }

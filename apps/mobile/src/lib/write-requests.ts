@@ -20,6 +20,8 @@
 
 /** Функции, которые только читают: `provolatile = 's'` на 20.09.2026. */
 export const READ_RPCS: ReadonlySet<string> = new Set([
+  // Право компании (директор «Партнёры: Управляет»): `stable`.
+  "access_company",
   "account_balances",
   "appointment_link_lookup",
   // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
@@ -30,6 +32,10 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   // STORY-086: `stable` объявлено в `20260922010000_client_members_read.sql`;
   // в боевой базе её ещё нет — сверить `provolatile` после наката.
   "list_client_members",
+  // Журнал изменений с маской блоков для партнёра: `stable` в объявлении.
+  "list_change_log",
+  // «Удалённые записи»: снимок с маской прав, `stable` в объявлении.
+  "list_deleted_appointments",
   "list_dispatcher_services_safe",
   "list_master_appointments_safe",
   "list_master_clients_safe",
@@ -46,6 +52,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "location_request_lookup",
   "my_access_map",
   "my_invitations",
+  // STORY-102: пройденные главы обучения, `stable`.
+  "my_onboarding",
   // STORY-101: предпросмотр номера из серии юрлица, `stable`
   // (миграция 20261001001000).
   "peek_document_number",
@@ -109,6 +117,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "member_client_contacts",
   "member_update_team",
   "member_rename_day_label",
+  // STORY-102: отметить главу обучения пройденной.
+  "onboarding_done",
   "patch_master_profile",
   "record_account_transfer",
   "record_appointment_payment",

@@ -22,6 +22,7 @@ import { useRecordColor } from "@/features/clients/use-record-color";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
 import { serverReason } from "./server-reason";
+import { recordComment } from "./record-title";
 import { canRestoreDeleted } from "./deleted-appointments-lines";
 import {
   useDeletedAppointments,
@@ -76,7 +77,9 @@ export function DeletedAppointmentsScreen() {
         const event = item.kind !== "work";
         const repeating = !!a.event_repeat && a.event_repeat.kind !== "none";
         const who = a.client_id ? names.get(a.client_id) : undefined;
-        const title = (event ? a.comment : who || a.comment)?.trim() || (event ? "Событие" : "Запись");
+        // Имя события — как на сетке (`recordComment`): тип, иначе первая
+        // строка заметки; голое «Событие» ничего не говорит.
+        const title = (event ? recordComment(a) : who || a.comment)?.trim() || (event ? "Событие" : "Запись");
         const time = a.event_all_day
           ? "Весь день"
           : [a.time_start?.slice(0, 5), a.time_end?.slice(0, 5)].filter(Boolean).join("–");

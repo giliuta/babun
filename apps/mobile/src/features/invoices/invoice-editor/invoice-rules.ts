@@ -192,28 +192,26 @@ function daysBetweenYmd(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-/** ДАТА ВЫСТАВЛЕНИЯ НОВОГО ДОКУМЕНТА — НЕ РАНЬШЕ СЕГОДНЯ. Будущий день визита
- *  остаётся своей датой; прошлый уступает сегодняшнему. */
-export function firstIssuedOnFor(sourceIssuedOn: string | null | undefined, today: string): string {
-  return sourceIssuedOn && sourceIssuedOn > today ? sourceIssuedOn : today;
-}
-
 /** ДАТА, КОТОРУЮ ЧЕЛОВЕК НЕ ТРОГАЛ, ЕДЕТ ЗА ЧАСАМИ. Форму открыли 31.12 в
  *  23:50, «Выставить» нажали в 00:10 — без пересчёта документ вышел бы вчерашним
  *  днём, с номером старого года. Тронутая руками дата остаётся как выбрана.
  *  Срок оплаты, если его не трогали, держит тот же отступ от даты выставления;
- *  выбранный руками остаётся, но не раньше самой даты. */
+ *  выбранный руками остаётся, но не раньше самой даты.
+ *
+ *  НЕТРОНУТАЯ ДАТА — РОВНО СЕГОДНЯ, ни раньше, ни позже. Прошлый день визита
+ *  рождал документ «Просрочен» с номером после уже выданных, но с датой раньше
+ *  их; будущий сервер не принимает вовсе («Документ нельзя датировать будущим
+ *  числом»), и счёт по завтрашнему визиту не выставлялся. */
 export function rolledIssueDates(input: {
   issuedOn: string;
   dueOn: string | null;
   issuedTouched: boolean;
   dueTouched: boolean;
-  sourceIssuedOn: string | null | undefined;
   today: string;
 }): { issuedOn: string; dueOn: string | null } {
   const { issuedOn, dueOn } = input;
   if (input.issuedTouched) return { issuedOn, dueOn };
-  const next = firstIssuedOnFor(input.sourceIssuedOn, input.today);
+  const next = input.today;
   if (next === issuedOn) return { issuedOn, dueOn };
   if (!dueOn) return { issuedOn: next, dueOn };
   if (input.dueTouched) return { issuedOn: next, dueOn: dueOn < next ? next : dueOn };

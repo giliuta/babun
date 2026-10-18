@@ -2,6 +2,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type {
   Client,
   ClientMembership,
+  ClientTag,
   ClientRequisites,
   Location,
   PhoneEntry,
@@ -9,6 +10,8 @@ import type {
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { clientMemberships } from "@babun/shared/local/clients";
 import { clientRequisitesOf, requisitesPatch } from "@babun/shared/local/client-requisites";
+import { DEFAULT_COUNTRY, tryToE164 } from "@/lib/phone";
+import type { CountryCode } from "libphonenumber-js";
 
 // СЛИЯНИЕ ДУБЛЕЙ.
 //
@@ -21,7 +24,8 @@ import { clientRequisitesOf, requisitesPatch } from "@babun/shared/local/client-
 // тем, чего в ней нет, и ничего не затирает. Правила:
 //   • скалярное поле берётся из дубля, только если в основной оно пустое;
 //   • номер дубля становится дополнительным (если такого ещё нет);
-//   • объекты, заметки и теги складываются без повторов;
+//   • объекты, заметки и теги складываются без повторов (теги — только из
+//     справочника команды основной карточки);
 //   • чёрный список «липкий»: если хоть один помечен — слитый помечен тоже;
 //   • связи (`memberships`) складываются без повторов и без связи на себя;
 //   • деньги (balance) НЕ складываются — почему, см. конец `mergeClientPatch`.
@@ -178,18 +182,66 @@ export function mergeLocations(
   return { locations: changed ? out : undefined, remap };
 }
 
-/** Ключ номера для сравнения — только цифры, хвост в 8 знаков. Так «99 12
- *  34 56», «+357 99123456» и «0035799123456» становятся одним номером. */
-export function phoneKey(raw: string | null | undefined): string {
+/** Хвост номера — последние 8 цифр. Годится только для СТАРЫХ карточек, чей
+ *  номер не разобрать в E.164: у двух разных людей из соседних кодов
+ *  (+7 916 … и +7 926 …) хвосты совпадают, поэтому как ключ человека хвост
+ *  не использовать. */
+export function phoneTail(raw: string | null | undefined): string {
   const digits = (raw ?? "").replace(/\D/g, "");
   return digits.length > 8 ? digits.slice(-8) : digits;
+}
+
+/** Ключ номера для сравнения. Номер, разобранный в E.164, сравнивается
+ *  ЦЕЛИКОМ: «+357 97 469998», «97469998» и «0035797469998» — один ключ, а
+ *  +7 916 123-45-67 и +7 926 123-45-67 — два. Что в E.164 не разобралось,
+ *  сводится к хвосту (`phoneTail`) — лучше пропустить дубль, чем склеить
+ *  двух людей. */
+export function phoneKey(
+  raw: string | null | undefined,
+  country: CountryCode = DEFAULT_COUNTRY,
+): string {
+  const e164 = tryToE164(raw ?? "", country);
+  return e164 ? e164.replace(/\D/g, "") : phoneTail(raw);
+}
+
+/** Один ли это номер у двух записей. Оба разобрались в E.164 — сверяем
+ *  целиком; хотя бы один не разобрался (старая строка) — по хвосту. */
+export function samePhone(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  country: CountryCode = DEFAULT_COUNTRY,
+): boolean {
+  const ea = tryToE164(a ?? "", country);
+  const eb = tryToE164(b ?? "", country);
+  if (ea && eb) return ea === eb;
+  const ta = phoneTail(a);
+  return ta.length >= 5 && ta === phoneTail(b);
 }
 
 const filled = (v: string | null | undefined): boolean =>
   typeof v === "string" && v.trim().length > 0;
 
-/** Патч ОСНОВНОЙ карточки: что забрать у дубля. */
-export function mergeClientPatch(primary: Client, dup: Client): Partial<Client> {
+/** Теги команды карточки — из справочника: тег без команды общий, с чужой
+ *  командой клиенту не предлагается. Нужен слиянию, чтобы не перенести
+ *  основной карточке тег, которого её команда не знает. */
+export function teamTagIds(
+  tags: readonly Pick<ClientTag, "id" | "team_id">[],
+  teamId: string | null | undefined,
+): Set<string> {
+  return new Set(
+    tags.filter((tag) => !tag.team_id || tag.team_id === (teamId ?? null)).map((tag) => tag.id),
+  );
+}
+
+/** Патч ОСНОВНОЙ карточки: что забрать у дубля.
+ *
+ *  `allowedTagIds` — теги команды основной карточки (`teamTagIds`); `null` —
+ *  справочник не загрузился, берём теги дубля как есть. */
+export function mergeClientPatch(
+  primary: Client,
+  dup: Client,
+  allowedTagIds: ReadonlySet<string> | null = null,
+): Partial<Client> {
   const patch: Partial<Client> = {};
 
   // ── скаляры: заполняем только пустое ──
@@ -269,17 +321,14 @@ export function mergeClientPatch(primary: Client, dup: Client): Partial<Client> 
     );
   }
 
-  // ── теги: НАБОР, наборы складываются без повторов. Порядок — сначала
-  //    теги основной карточки (первый из них главный и остаётся главным на
-  //    плитке), затем новые теги дубля. Брать один тег дубля нельзя: дубль
-  //    уходит в архив, и остальные его теги пропали бы вместе с ним. ──
-  const ownTags = primary.tag_ids ?? [];
-  const addTags = (dup.tag_ids ?? []).filter(
-    (tag, i, all) => !ownTags.includes(tag) && all.indexOf(tag) === i,
+  // ── теги: объединение. Порядок основной карточки впереди, повторов нет;
+  //    теги дубля, которых нет у команды основной, не переносим. Прежний
+  //    «только первый тег дубля» молча терял остальные. ──
+  const mineTags = primary.tag_ids ?? [];
+  const addTags = [...new Set(dup.tag_ids ?? [])].filter(
+    (id) => !mineTags.includes(id) && (allowedTagIds === null || allowedTagIds.has(id)),
   );
-  if (addTags.length > 0) {
-    patch.tag_ids = [...ownTags, ...addTags];
-  }
+  if (addTags.length > 0) patch.tag_ids = [...mineTags, ...addTags];
 
   // ── реквизиты: наборы дубля переезжают сюда без повторов (окно обещает
   //    «данные переедут», а иначе наборы уходили бы в архив с дублем).

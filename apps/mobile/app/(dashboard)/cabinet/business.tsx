@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -28,43 +28,26 @@ import {
   useTenant,
   useUpdateTenant,
 } from "@/session/tenant";
-
-type FormKey =
-  | "name"
-  | "city"
-  | "country"
-  | "contact_phone"
-  | "contact_email"
-  | "contact_whatsapp"
-  | "legal_name"
-  | "business_address"
-  | "vat_number"
-  | "iban"
-  | "bank_name"
-  | "invoice_prefix";
-
-const EMPTY: Record<FormKey, string> = {
-  name: "",
-  city: "",
-  country: "",
-  contact_phone: "",
-  contact_email: "",
-  contact_whatsapp: "",
-  legal_name: "",
-  business_address: "",
-  vat_number: "",
-  iban: "",
-  bank_name: "",
-  invoice_prefix: "",
-};
+import {
+  businessFormFromTenant,
+  EMPTY_BUSINESS_FORM,
+  shouldReseedBusinessForm,
+  type BusinessFormKey,
+} from "@/features/settings/business-form";
 
 export default function BusinessScreen() {
   const t = useThemeColors();
   const { data: tenant, isLoading, error, refetch } = useTenant();
   const { data: role } = useCurrentRole();
   const update = useUpdateTenant();
-  const [form, setForm] = useState<Record<FormKey, string>>(EMPTY);
+  const [form, setForm] = useState<Record<BusinessFormKey, string>>(EMPTY_BUSINESS_FORM);
   const [dirty, setDirty] = useState(false);
+  // Эффект пересева читает «грязность» и засеянную компанию через ref: как
+  // зависимость `dirty` пересеял бы форму старым профилем сразу после
+  // «Сохранить», до того как придёт перечитанный.
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  const seededTenantId = useRef<string | null>(null);
 
   const country = normalizeCountry(form.country);
   const countryLabel = `${countryName(country)} · ${countryDialCode(country)}`;
@@ -88,24 +71,13 @@ export default function BusinessScreen() {
 
   useEffect(() => {
     if (!tenant) return;
-    setForm({
-      name: tenant.name ?? "",
-      city: tenant.city ?? "",
-      country: tenant.country ?? "",
-      contact_phone: tenant.contact_phone ?? "",
-      contact_email: tenant.contact_email ?? "",
-      contact_whatsapp: tenant.contact_whatsapp ?? "",
-      legal_name: tenant.legal_name ?? "",
-      business_address: tenant.business_address ?? "",
-      vat_number: tenant.vat_number ?? "",
-      iban: tenant.iban ?? "",
-      bank_name: tenant.bank_name ?? "",
-      invoice_prefix: tenant.invoice_prefix ?? "",
-    });
+    if (!shouldReseedBusinessForm(seededTenantId.current, tenant.id, dirtyRef.current)) return;
+    seededTenantId.current = tenant.id;
+    setForm(businessFormFromTenant(tenant));
     setDirty(false);
   }, [tenant]);
 
-  const set = (k: FormKey) => (v: string) => {
+  const set = (k: BusinessFormKey) => (v: string) => {
     setForm((s) => ({ ...s, [k]: v }));
     setDirty(true);
   };

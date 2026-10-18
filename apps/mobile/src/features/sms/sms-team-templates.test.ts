@@ -101,6 +101,15 @@ describe("шаблоны SMS команды", () => {
     assert.equal(draftProblem(ready({ sendFrom: 21, sendTo: 8 })), "Окно отправки: «с» раньше, чем «до»");
   });
 
+  test("[Сумма] — только у ручного шаблона: автоматически долг не подставляется", () => {
+    // Автоматическое сообщение собирает сервер, а долга клиента он не
+    // знает: такой шаблон не уходил бы никогда, молча.
+    const debt = "[Имя], за вами [Сумма]";
+    assert.equal(draftProblem(ready({ body: debt, trigger: "manual" })), null);
+    assert.equal(draftProblem(ready({ body: debt, trigger: "after", hours: 2 })), "[Сумма] подставляется только в шаблон «Вручную»");
+    assert.equal(draftProblem(ready({ body: "Долг [Amount]", trigger: "repeat", months: 6 })), "[Сумма] подставляется только в шаблон «Вручную»");
+  });
+
   test("в базу уходит только срок выбранного «когда»", () => {
     const payload = draftPayload(ready({ trigger: "day_before", atTime: "18:00", hours: 24, months: 3 }));
     assert.deepEqual(

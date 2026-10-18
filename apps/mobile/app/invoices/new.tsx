@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { randomUuid } from "@babun/shared/sync";
+import { InvoiceAlreadyIssuedError } from "@babun/shared/db/repositories/invoices";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -83,6 +85,8 @@ export default function NewInvoiceScreen() {
     calendarSettings.data?.timezone ?? "Europe/Nicosia",
   );
   const requestId = useRef(randomUuid()).current;
+  /** Этот id уже уходил на сервер: ответ мог потеряться, а документ — создаться. */
+  const sentRef = useRef(false);
 
   const amount = params.amount ? Number(params.amount) : null;
   // Ждём и настройки НДС (компании И команд): редактор берёт режим ОДИН РАЗ
@@ -134,7 +138,21 @@ export default function NewInvoiceScreen() {
       back();
       return;
     }
-    const invoice = await issue.mutateAsync({ ...value, request_id: requestId });
+    const repeat = sentRef.current;
+    sentRef.current = true;
+    let invoice;
+    try {
+      invoice = await issue.mutateAsync({ ...value, request_id: requestId, repeat });
+    } catch (issueError) {
+      // ПРОШЛАЯ ПОПЫТКА УЖЕ ВЫСТАВИЛА ДОКУМЕНТ (ответ на неё потерялся) — ведём
+      // на него, а не держим на форме с ошибкой: уход с неё и новая попытка
+      // родили бы второй счёт.
+      if (!(issueError instanceof InvoiceAlreadyIssuedError)) throw issueError;
+      notify("Инвойс уже выставлен", "Прошлая попытка его создала — откроется выставленный документ.");
+      leavingRef.current = true;
+      router.replace(`/invoices/${issueError.invoice.id}` as Href);
+      return;
+    }
     // Язык не записался (сеть моргнула дважды) — сказать, а не молчать: иначе
     // клиенту ушла бы русская бумага вместо утверждённой английской.
     if (value.language && invoice.language !== value.language) {
@@ -158,6 +176,7 @@ export default function NewInvoiceScreen() {
   const [dirty, setDirty] = useState(false);
   const navigation = useNavigation();
   const leavingRef = useRef(false);
+  useBeforeUnloadWhileDirty(dirty);
   usePreventRemove(dirty, ({ data }) => {
     if (leavingRef.current) {
       navigation.dispatch(data.action);
