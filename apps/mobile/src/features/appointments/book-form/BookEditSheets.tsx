@@ -2,6 +2,7 @@ import { InputAccessoryView, Keyboard, Platform, Pressable, View } from "react-n
 import type { Href } from "expo-router";
 import { UserRound, Users } from "lucide-react-native";
 import { PickerSheet } from "@/components/ui/PickerSheet";
+import { ActionMenuSheet } from "@/components/blocks/ActionMenuSheet";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
 import { eventTypeIcon } from "@/features/reference/event-type-icons";
@@ -84,6 +85,7 @@ export function BookEditSheets({ form }: { form: BookModel }) {
   } = form;
   return (
     <>
+      <ActionMenuSheet menu={form.recordMenu} onClose={form.closeRecordMenu} />
       <TeamMasterSheet
         visible={teamSheetOpen}
         onClose={() => setTeamSheetOpen(false)}

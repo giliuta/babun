@@ -5011,5 +5011,8 @@
  "Сохранить запись?": "Termin speichern?",
  "Не сохранять": "Nicht speichern",
  "Вы изменили запись.": "Sie haben den Termin geändert.",
- "Запись ещё не создана.": "Der Termin ist noch nicht angelegt."
+ "Запись ещё не создана.": "Der Termin ist noch nicht angelegt.",
+ "Действия с событием": "Aktionen für Ereignis",
+ "Действия с записью": "Aktionen für Termin",
+ "Копия создана — поменяйте дату и время": "Kopie erstellt — Datum und Uhrzeit ändern"
 }

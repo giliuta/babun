@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { Bell, BellRing, ChevronLeft } from "lucide-react-native";
+import { Bell, BellRing, ChevronLeft, MoreHorizontal } from "lucide-react-native";
 import { ICON } from "@/components/ui/tokens";
 import { Halo } from "@/components/ui/Halo";
 import { colorName } from "@babun/shared/common/utils/colors";
@@ -8,7 +8,7 @@ import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
 import type { BookModel } from "./use-book-form";
 
-/** Header: back · title · bell (remind myself) · record colour swatch. */
+/** Header: back · title · bell (remind myself) · record colour swatch · «⋯». */
 export function BookHeader({ form }: { form: BookModel }) {
   const {
     t,
@@ -23,7 +23,11 @@ export function BookHeader({ form }: { form: BookModel }) {
     setColorSheetOpen,
     kind,
     hasColor,
+    hasRecordMenu,
+    openRecordMenu,
   } = form;
+  // Заголовок держится посередине: левая сторона шириной с правую.
+  const sideW = hasRecordMenu ? 116 : 72;
   return (
     // шапка: назад · заголовок · Цвет записи — на identity-подложке;
     // выбор цвета живо подсвечивает шапку (halo), фон и CTA.
@@ -45,7 +49,7 @@ export function BookHeader({ form }: { form: BookModel }) {
           accessibilityRole="button"
           accessibilityLabel="Назад"
           style={({ pressed }) => ({
-            minWidth: 72,
+            minWidth: sideW,
             minHeight: 44,
             justifyContent: "center",
             opacity: pressed ? 0.5 : 1,
@@ -61,7 +65,7 @@ export function BookHeader({ form }: { form: BookModel }) {
         </Text>
         <View
           style={{
-            minWidth: 72,
+            minWidth: sideW,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "flex-end",
@@ -134,6 +138,26 @@ export function BookHeader({ form }: { form: BookModel }) {
               }}
             />
           </Pressable>
+          {/* «⋯» — ТО ЖЕ МЕНЮ, ЧТО ДОЛГОЕ НАЖАТИЕ ПО ЗАПИСИ В КАЛЕНДАРЕ:
+              отменить визит, вернуть, скопировать, удалить — не уходя со
+              страницы. Пунктов нет (новая запись, нет прав) — нет кнопки. */}
+          {hasRecordMenu ? (
+            <Pressable
+              onPress={openRecordMenu}
+              hitSlop={6}
+              style={({ pressed }) => ({
+                minWidth: 40,
+                minHeight: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.5 : 1,
+              })}
+              accessibilityRole="button"
+              accessibilityLabel={kind === "event" ? "Действия с событием" : "Действия с записью"}
+            >
+              <MoreHorizontal size={22} strokeWidth={2} color={t.body} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>

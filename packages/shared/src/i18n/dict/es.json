@@ -5011,5 +5011,8 @@
  "Сохранить запись?": "¿Guardar la cita?",
  "Не сохранять": "No guardar",
  "Вы изменили запись.": "Ha cambiado la cita.",
- "Запись ещё не создана.": "La cita aún no está creada."
+ "Запись ещё не создана.": "La cita aún no está creada.",
+ "Действия с событием": "Acciones del evento",
+ "Действия с записью": "Acciones de la cita",
+ "Копия создана — поменяйте дату и время": "Copia creada — cambie la fecha y la hora"
 }

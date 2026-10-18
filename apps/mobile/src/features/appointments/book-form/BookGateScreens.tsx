@@ -19,10 +19,10 @@ export function BookMissingScreen({ t, onBack }: { t: Theme; onBack: () => void 
           onPress={onBack}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Вернуться к календарю"
+          accessibilityLabel="Назад"
           style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
         >
-          <Text style={{ fontSize: 16, color: t.body }}>Назад</Text>
+          <ChevronLeft color={t.body} size={ICON.md} />
         </Pressable>
         <Text
           className="flex-1 text-center"

@@ -32,6 +32,8 @@ import { useSaveState } from "./use-save-state";
 import { useLeaveGuard } from "./use-leave-guard";
 import { bookSaveActions } from "./book-save";
 import { bookChrome, bookTitle } from "./book-chrome";
+import { useRecordMenu } from "./use-record-menu";
+import { recordComment } from "@/features/calendar/record-title";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -266,6 +268,20 @@ export function useBookForm() {
   guard.saveRef.current = actions.save;
 
   const title = bookTitle(isEdit, kind);
+  const menu = useRecordMenu({
+    isEdit,
+    editing,
+    hydrated: draft.hydrated,
+    archivedRecord: label.archivedRecord,
+    workInPlan,
+    nudgeTariff,
+    menuTitle: client?.full_name?.trim() || (editing ? recordComment(editing) : "") || title,
+    setStatus: draft.setStatus,
+    editBaselineRef: guard.editBaselineRef,
+    leaveBook: guard.leaveBook,
+    toast,
+    router,
+  });
   const chrome = bookChrome({
     kind,
     eventColor: draft.eventColor,
@@ -321,6 +337,7 @@ export function useBookForm() {
     ...guard,
     ...actions,
     title,
+    ...menu,
     ...chrome,
   };
 }

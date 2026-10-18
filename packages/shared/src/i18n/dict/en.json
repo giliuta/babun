@@ -5011,5 +5011,8 @@
  "Сохранить запись?": "Save the appointment?",
  "Не сохранять": "Don't save",
  "Вы изменили запись.": "You changed the appointment.",
- "Запись ещё не создана.": "The appointment isn't created yet."
+ "Запись ещё не создана.": "The appointment isn't created yet.",
+ "Действия с событием": "Event actions",
+ "Действия с записью": "Booking actions",
+ "Копия создана — поменяйте дату и время": "Copy created — change the date and time"
 }
