@@ -5076,5 +5076,9 @@
  "＋ Добавить": "＋ Hinzufügen",
  "＋ Описание": "＋ Beschreibung",
  "＋ Перерыв после услуги": "＋ Pause nach der Leistung",
- "＋ По дням недели": "＋ Nach Wochentagen"
+ "＋ По дням недели": "＋ Nach Wochentagen",
+ "Открывает объекты всех клиентов": "Öffnet die Objekte aller Kunden",
+ "Сохранить событие?": "Ereignis speichern?",
+ "Вы изменили событие.": "Sie haben das Ereignis geändert.",
+ "Событие ещё не создано.": "Das Ereignis wurde noch nicht erstellt."
 }

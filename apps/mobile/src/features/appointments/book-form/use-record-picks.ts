@@ -154,7 +154,9 @@ export function useRecordPicks({
     // У СОБЫТИЯ КЛИЕНТ — ТОЛЬКО ЧЕЛОВЕК (клиент и объект у события независимы): команда, объект и любимый мастер за ним не
     // подтягиваются, цепочка «клиент → услуги» не запускается.
     if (kind === "event") {
-      if (c.id !== clientId) dropClientObject();
+      // Объект, выбранный без клиента, остаётся, если он этого клиента;
+      // объект другого клиента уходит — объект закрепляется за клиентом события.
+      if (c.id !== clientId && eventLocationOwner?.id !== c.id) dropClientObject();
       setClientId(c.id);
       haptics.tap();
       return;

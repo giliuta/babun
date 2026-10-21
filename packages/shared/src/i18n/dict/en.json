@@ -5076,5 +5076,9 @@
  "＋ Добавить": "＋ Add",
  "＋ Описание": "＋ Description",
  "＋ Перерыв после услуги": "＋ Break after service",
- "＋ По дням недели": "＋ By weekday"
+ "＋ По дням недели": "＋ By weekday",
+ "Открывает объекты всех клиентов": "Opens all clients' properties",
+ "Сохранить событие?": "Save the event?",
+ "Вы изменили событие.": "You changed the event.",
+ "Событие ещё не создано.": "The event hasn't been created yet."
 }
