@@ -137,7 +137,11 @@ function FinancesContent() {
           fill
           title="Счетов пока нет"
           subtitle="Счёт — касса, карта или банк: на него приходят деньги и с него уходят. Начните с первого."
-          action={{ label: "Создать счёт", onPress: () => setFirstAccountOpen(true) }}
+          action={{
+            label: "Создать счёт",
+            onPress: () => setFirstAccountOpen(true),
+            tourId: "finances.first-create",
+          }}
         />
         <AccountEditorSheet
           visible={firstAccountOpen}
