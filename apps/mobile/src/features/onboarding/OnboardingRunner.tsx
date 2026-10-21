@@ -53,7 +53,9 @@ export function OnboardingRunner() {
   const mark = useMarkOnboardingDone();
   const { mutate } = mark;
   const tour = useTour();
-  const segments = useSegments();
+  // Без сгенерированных типов маршрутов (CI) `useSegments()` — кортеж из
+  // одного элемента; путь читаем как обычный список.
+  const segments: readonly string[] = useSegments();
   const targetsVersion = useTourTargetsVersion();
   const started = useRef<ChapterId | null>(null);
   const introduced = useRef<ChapterId | null>(null);
