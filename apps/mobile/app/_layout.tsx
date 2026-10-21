@@ -169,6 +169,8 @@ function RootNavigator() {
       <Stack.Screen name="terms" />
       <Stack.Screen name="delete-account" />
       <Stack.Screen name="support" />
+      {/* «О Babun» — домашняя страница для окна входа Google. */}
+      <Stack.Screen name="about" />
     </Stack>
     {/* Заставка поверх первого экрана — до готовности календаря. */}
     <BootSplash hold={!!session} />
