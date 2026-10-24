@@ -160,7 +160,7 @@ export function CalendarCreateSheet({
               {footerNote}
             </Text>
           ) : null}
-          <TourTarget id="calendar.create-submit" shape="control">
+          <TourTarget id="calendar-sheet.submit" shape="control">
             <GradientButton
               label="Создать календарь"
               onPress={submit}
@@ -181,7 +181,7 @@ export function CalendarCreateSheet({
           читалась как уже введённое имя; «Название календаря» — нет. */}
       <View style={{ paddingBottom: 8 }}>
         <SectionCard>
-          <TourTarget id="calendar.create-name">
+          <TourTarget id="calendar-sheet.name">
           <NameColorField
             bare
             label={null}
@@ -194,7 +194,7 @@ export function CalendarCreateSheet({
             color={color}
             onColorChange={(hex) => setColor(hex)}
             autoFocus
-            tourIds={{ color: "calendar.create-color" }}
+            tourIds={{ color: "calendar-sheet.color" }}
           />
           </TourTarget>
         </SectionCard>

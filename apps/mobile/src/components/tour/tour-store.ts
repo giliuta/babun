@@ -36,6 +36,10 @@ export interface TourStep {
    *  „Создать“» человек должен видеть строку с именем и цветом, которые он
    *  только что выбрал. */
   keepVisible?: string;
+  /** Куда вернуться, если экран шага закрыли: смахнули шторку создания,
+   *  вышли из настроек. Тот шаг снова показывает, откуда экран открывается
+   *  («Создать календарь», шестерёнка), — человек не остаётся без подсказки. */
+  fallback?: string;
 }
 
 export interface TourChapter {
@@ -130,6 +134,16 @@ export function tourReady(key: string | undefined): boolean {
 
 export function activeStep(): TourStep | null {
   return chapter ? (chapter.steps[index] ?? null) : null;
+}
+
+/** Перейти к шагу главы по имени (возврат по `fallback`). */
+export function goToStep(id: string): void {
+  if (!chapter) return;
+  const at = chapter.steps.findIndex((s) => s.id === id);
+  if (at < 0 || at === index) return;
+  index = at;
+  startIndex = Math.min(startIndex, at);
+  emit();
 }
 
 /** Событие приложения: шаг, который его ждёт, идёт дальше. */
