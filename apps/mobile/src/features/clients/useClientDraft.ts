@@ -126,6 +126,7 @@ export function useClientDraft(
     tenantId,
     scopeKind: scope?.kind,
     draftClient,
+    bookingTeam: forBooking ? (team ?? null) : null, // из записи дубль — тот, кого ищут
   });
   // Засов «идёт создание» — синхронный, в отличие от create.isPending.
   const savingRef = useRef(false);

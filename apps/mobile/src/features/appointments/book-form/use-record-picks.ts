@@ -15,7 +15,7 @@ import {
   isMasterAllowedForTeam,
   reconcileBookingSelection,
 } from "@/features/appointments/booking-selection";
-import { takeCreatedClient } from "@/features/appointments/pending-client";
+import { takeDeliveredClient } from "@/features/appointments/pending-client";
 import type { ServiceOverride } from "@/features/appointments/helpers";
 import type { EventLocationRow } from "./event-locations";
 
@@ -30,6 +30,8 @@ export interface RecordPicksInput {
   services: Service[];
   masters: Master[];
   clients: Client[];
+  /** Принять в список формы клиента, которого список ещё не знает. */
+  adoptClient: (client: Client) => void;
   client: Client | null;
   clientId: string | null;
   teamId: string | null;
@@ -64,6 +66,7 @@ export function useRecordPicks({
   services,
   masters,
   clients,
+  adoptClient,
   client,
   clientId,
   teamId,
@@ -274,13 +277,16 @@ export function useRecordPicks({
   // «назад»; форма забирает его, получив фокус. Дальше — тот же `pickClient`,
   // что и тап по списку: объект, любимый мастер, цепочка услуг. Список
   // клиентов может ещё ехать после инвалидации — держим id, пока созданный
-  // в нём не появится.
+  // в нём не появится. Пришла строка (партнёр выбрал по «Номер уже есть»
+  // клиента другой команды, которого в его списке нет) — форма принимает её.
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
   useFocusEffect(
     useCallback(() => {
-      const id = takeCreatedClient();
-      if (id) setCreatedClientId(id);
-    }, []),
+      const delivered = takeDeliveredClient();
+      if (!delivered) return;
+      if (delivered.row) adoptClient(delivered.row);
+      setCreatedClientId(delivered.clientId);
+    }, [adoptClient]),
   );
   useEffect(() => {
     if (!createdClientId) return;

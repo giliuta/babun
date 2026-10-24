@@ -152,7 +152,9 @@ export function ClientCardPage({
             openLabel={handBack ? "Выбрать" : "Открыть"}
             onOpenDuplicate={(duplicateId) => {
               if (handBack) {
-                deliverCreatedClient(duplicateId);
+                // Со строкой: у партнёра клиента другой команды в списке
+                // записи нет, пока запись не сохранена.
+                deliverCreatedClient(duplicateId, duplicate);
                 // Выбрали существующего — черновик и не нужен.
                 leavingRef.current = true;
                 router.back();

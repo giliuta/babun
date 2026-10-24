@@ -44,6 +44,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "list_member_clients",
   // «История записей» клиента сотруднику (015): `stable`.
   "member_client_history",
+  // «Номер уже есть» партнёру из записи: `stable`.
+  "member_find_client_by_phone",
   "list_members",
   "list_my_calendars",
   "list_operational_masters_safe",
