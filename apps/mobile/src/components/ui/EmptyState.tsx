@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { CloudOff } from "lucide-react-native";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 import { Spinner } from "@/components/ui/Spinner";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { Button } from "./Button";
 import { useThemeColors } from "@/theme/colors";
 import { isOutageNoise, OUTAGE_WORDS } from "@/lib/connection-words";
@@ -28,8 +29,9 @@ export function EmptyState({
   title?: string;
   subtitle?: string;
   icon?: ReactNode;
-  /** `loading` — повтор уже идёт: кнопка крутится и не жмётся второй раз. */
-  action?: { label: string; onPress: () => void; loading?: boolean };
+  /** `loading` — повтор уже идёт: кнопка крутится и не жмётся второй раз.
+   *  `tourId` — кнопку подсвечивает обучение. */
+  action?: { label: string; onPress: () => void; loading?: boolean; tourId?: string };
   fill?: boolean;
 }) {
   const t = useThemeColors();
@@ -129,12 +131,23 @@ export function EmptyState({
         // как у «Создать клиента» и «Записать клиента». С 16/16 кнопка
         // стояла бы шире и выше соседних.
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
-          <Button
-            label={action.label}
-            onPress={action.onPress}
-            loading={action.loading}
-            disabled={action.loading}
-          />
+          {action.tourId ? (
+            <TourTarget id={action.tourId} shape="control">
+              <Button
+                label={action.label}
+                onPress={action.onPress}
+                loading={action.loading}
+                disabled={action.loading}
+              />
+            </TourTarget>
+          ) : (
+            <Button
+              label={action.label}
+              onPress={action.onPress}
+              loading={action.loading}
+              disabled={action.loading}
+            />
+          )}
         </View>
       ) : null}
     </View>

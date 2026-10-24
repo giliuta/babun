@@ -109,6 +109,8 @@ export function useLeaveGuard({
   // «Отмена» листа оставляет на форме. Сохранение собирается в форме позже
   // этого хука, поэтому приходит ссылкой (`saveRef`).
   const saveRef = useRef<(() => void | Promise<void>) | null>(null);
+  // Вопрос называет то, что на экране: у события — «событие», не «запись».
+  const event = draft.kind === "event";
   const confirmDiscard = (onDiscard: () => void) => {
     // СОХРАНИТЬ НЕЛЬЗЯ — НЕ ПРЕДЛАГАЕМ. Без услуги или без тарифа
     // «Сохранить» только показывал плашку и оставлял на форме: человек
@@ -126,9 +128,13 @@ export function useLeaveGuard({
       return;
     }
     void chooseOption(
-      isEdit ? "Сохранить изменения?" : "Сохранить запись?",
+      isEdit ? "Сохранить изменения?" : event ? "Сохранить событие?" : "Сохранить запись?",
       [{ label: "Сохранить" }, { label: "Не сохранять", destructive: true }],
-      { message: isEdit ? "Вы изменили запись." : "Запись ещё не создана." },
+      {
+        message: isEdit
+          ? event ? "Вы изменили событие." : "Вы изменили запись."
+          : event ? "Событие ещё не создано." : "Запись ещё не создана.",
+      },
     ).then((index) => {
       if (index === 0) {
         void saveRef.current?.();

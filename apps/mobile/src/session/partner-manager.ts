@@ -10,7 +10,8 @@ import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access
 //     только владелец;
 //   • право «Партнёры» выдаёт только владелец;
 //   • ступень — не выше его собственной в той же команде;
-//   • команды — только те, где работает он сам.
+//   • команды — только те, где работает он сам;
+//   • убрать из аккаунта — только партнёра, все команды которого — его.
 // Владельцу всё открыто, как прежде.
 
 export const PARTNERS_KEY = "company.partners";
@@ -56,7 +57,13 @@ export function partnerManager(
   if (targetDirector || target.map?.isOwner) {
     return { readOnly: "Права директора меняет владелец", canPreview: false, canRemove: false };
   }
-  return { readOnly: null, canPreview: false, canRemove: true };
+  // Убрать из аккаунта директор может только партнёра, все команды которого —
+  // его команды (`partners_removable`): иначе он выгнал бы человека и из
+  // чужих команд. Партнёра без команд убирает владелец.
+  const theirs = target.map?.attachedCalendars ?? [];
+  const mine = new Set(viewer.myMap?.attachedCalendars ?? []);
+  const canRemove = theirs.length > 0 && theirs.every((teamId) => mine.has(teamId));
+  return { readOnly: null, canPreview: false, canRemove };
 }
 
 /** Может ли тот, кто смотрит, поставить эту ступень этого права в этой

@@ -1,6 +1,7 @@
 import { useMemo, type Dispatch, type SetStateAction } from "react";
 import type { ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { pluralPhraseRu } from "@babun/shared/common/utils/plural-ru";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import type { useToast } from "@/components/ui/Toast";
@@ -99,7 +100,7 @@ export function useListBulk({
     if (n === 0) return;
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
     confirmThen(
-      `Удалить ${n} ${word}?`,
+      pluralPhraseRu(n, `Удалить ${n} клиента?`, `Удалить ${n} ${word}?`),
       {
         message: `Клиенты уйдут в «Удалённые клиенты». Кто без записей и денег — сотрётся через ${TRASH_DAYS} дней, у остальных история останется в отчётах. Вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке.`,
         confirmLabel: "Удалить",

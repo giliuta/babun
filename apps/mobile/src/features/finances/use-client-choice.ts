@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "./client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 
@@ -31,9 +32,10 @@ export function useClientChoice() {
   // бы выбор клиента в квадрат по числу записей (тот же довод, что в записи).
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsById = useMemo(
-    () => buildStatsMap(clients, appointments, invoicing),
-    [clients, appointments, invoicing],
+    () => buildStatsMap(clients, appointments, invoicing, today),
+    [clients, appointments, invoicing, today],
   );
 
   const recentIds = useMemo(() => {

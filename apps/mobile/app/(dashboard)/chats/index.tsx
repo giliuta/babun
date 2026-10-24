@@ -11,6 +11,7 @@ import {
   type Chat,
   type ChatChannel,
 } from "@babun/shared/local/chats";
+import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Chip } from "@/components/ui/Chip";
@@ -331,7 +332,11 @@ export default function ChatsListScreen() {
       <ScreenHeader
         large
         title="Чаты"
-        subtitle={`${visibleCount} диалогов${unread > 0 ? ` · ${unread} непрочитанных` : ""}`}
+        subtitle={`${visibleCount} ${countWordRu(visibleCount, "диалог", "диалога", "диалогов")}${
+          unread > 0
+            ? ` · ${unread} ${countWordRu(unread, "непрочитанный", "непрочитанных", "непрочитанных")}`
+            : ""
+        }`}
       />
 
       <View

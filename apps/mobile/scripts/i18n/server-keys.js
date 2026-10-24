@@ -5,7 +5,8 @@
 // function in supabase/migrations into packages/shared/src/i18n/server-keys.json;
 // `%` becomes a {N} slot, so «Платёж превышает остаток 50 EUR» is found by
 // the key «Платёж превышает остаток {0} {1}». Plus the few messages edge
-// functions write for people (EDGE_FUNCTION_MESSAGES). The runtime translates them where
+// functions write for people (EDGE_FUNCTION_MESSAGES), and the reasons the
+// database writes into `sms_messages.error_message`. The runtime translates them where
 // the app prints dynamic text (toasts, empty states) — see `tDynamic`.
 //
 //   node scripts/i18n/server-keys.js        rewrite server-keys.json
@@ -19,7 +20,13 @@ const MIGRATIONS = path.join(REPO, "supabase/migrations");
 const OUT = path.join(REPO, "packages/shared/src/i18n/server-keys.json");
 
 const FUNCTION = /create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?"?([a-z_0-9]+)"?\s*\(([\s\S]*?)\$(\w*)\$([\s\S]*?)\$\3\$/gi;
-const RAISE = /raise\s+exception\s+'((?:[^']|'')*)'/gi;
+// Both shapes of a raise: `raise exception 'текст'` and
+// `raise exception using errcode = '…', message = 'текст'` — the second sets
+// an SQLSTATE the client branches on, and its text reaches people the same way.
+const RAISE = /raise\s+exception\s+(?:'((?:[^']|'')*)'|using\b[^;]*?\bmessage\s*=\s*'((?:[^']|'')*)')/gi;
+// Why an SMS stayed unsent, written by the database into
+// `sms_messages.error_message` — the SMS history prints it through `tDynamic`.
+const ERROR_MESSAGE = /\berror_message\s*:?=\s*'((?:[^']|'')*)'/gi;
 const CYRILLIC = /[А-Яа-яЁё]/;
 
 // Edge functions write a few messages people read: why an SMS was not sent
@@ -39,6 +46,10 @@ const EDGE_FUNCTION_MESSAGES = [
   "{0}: валюта {1} вместо EUR — деньги не тронуты",
   "Оплата {0}: {1} ц. вместо {2} — не зачислена",
 ];
+
+// Reasons set by a `case` into `sms_messages.error_message` — the scanner
+// above reads only a literal right after `error_message =`.
+const SMS_CASE_MESSAGES = ["Клиент удалён", "Клиент в чёрном списке", "Клиент просил не писать"];
 
 // Raises a migration splices into a LIVE function body (pg_get_functiondef +
 // exact replace, e.g. 20261004060000 for `update_invoice_draft`) are not in
@@ -204,10 +215,22 @@ function collect() {
       lastIsDrop.set(name, drops.some((d) => d.name === name && d.from <= last && last < d.to));
     }
   }
-  const keys = new Set([...EDGE_FUNCTION_MESSAGES, ...PATCHED_FUNCTION_MESSAGES, ...SEEDED_NAMES, ...ACCESS_BLOCK_TITLES]);
+  const keys = new Set([
+    ...EDGE_FUNCTION_MESSAGES,
+    ...SMS_CASE_MESSAGES,
+    ...PATCHED_FUNCTION_MESSAGES,
+    ...SEEDED_NAMES,
+    ...ACCESS_BLOCK_TITLES,
+  ]);
   for (const [name, body] of latest) {
     if (lastIsDrop.get(name)) continue;
-    for (const m of body.matchAll(RAISE)) if (CYRILLIC.test(m[1])) keys.add(toKey(m[1]));
+    for (const m of body.matchAll(RAISE)) {
+      const text = m[1] ?? m[2];
+      if (CYRILLIC.test(text)) keys.add(toKey(text));
+    }
+    for (const m of body.matchAll(ERROR_MESSAGE)) {
+      if (CYRILLIC.test(m[1])) keys.add(m[1].replace(/''/g, "'"));
+    }
   }
   return [...keys].sort();
 }

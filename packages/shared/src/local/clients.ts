@@ -1,5 +1,6 @@
 // Clients data layer — форма клиента, объекты, техника и долг по записям.
 
+import { formatDateKey, getCurrentCyprusTime } from "../common/utils/date-utils";
 import { randomUuid } from "../sync/uuid";
 import { getDebtAmount, type Appointment } from "./appointments";
 
@@ -94,7 +95,10 @@ export function createBlankClient(overrides: Partial<Client> = {}): Client {
     tag_ids: [],
     acquisition_source: "unknown",
     referred_by_client_id: null,
-    first_contact_date: new Date().toISOString().slice(0, 10),
+    // День бизнеса, а не UTC: `toISOString()` до 02:00–03:00 по Кипру отдавал
+    // вчерашнюю дату. Пояс по умолчанию — Кипр; приложение передаёт день по
+    // поясу календаря компании (`useBusinessToday`).
+    first_contact_date: formatDateKey(getCurrentCyprusTime()),
     address: "",
     city: "",
     property_type: "",

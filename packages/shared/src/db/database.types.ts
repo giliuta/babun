@@ -1156,16 +1156,19 @@ export type Database = {
       client_tag_assignments: {
         Row: {
           client_id: string
+          position: number
           tag_id: string
           tenant_id: string
         }
         Insert: {
           client_id: string
+          position?: number
           tag_id: string
           tenant_id: string
         }
         Update: {
           client_id?: string
+          position?: number
           tag_id?: string
           tenant_id?: string
         }
@@ -6044,6 +6047,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      member_client_bookable: { Args: { p_client: string }; Returns: boolean }
       member_client_contacts: { Args: { p_client: string }; Returns: Json }
       member_client_history: { Args: { p_client?: string }; Returns: Json[] }
       member_client_in_team: {
@@ -6052,6 +6056,10 @@ export type Database = {
       }
       member_day_money_window_starts: { Args: never; Returns: Json }
       member_finance_window_starts: { Args: never; Returns: Json }
+      member_find_client_by_phone: {
+        Args: { p_phone_e164: string; p_team: string }
+        Returns: Json
+      }
       member_record_hidden: {
         Args: { p_date: string; p_kind: string; p_team: string }
         Returns: boolean

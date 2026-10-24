@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { todayYMD } from "@/features/clients/filter";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useClientsCapabilities } from "@/session/company-scope";
 import { useTeams } from "@/features/reference/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
@@ -48,6 +48,7 @@ export function ClientSummaryCard({
   const money = showMoney ?? capsMoney;
   // Долг записи под инвойсом — остаток инвойса, как в «Истории».
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
 
   if (!lastRecord) {
     // Записей нет — словами, без кнопки.
@@ -67,7 +68,7 @@ export function ClientSummaryCard({
       <VisitRow
         appointment={lastRecord}
         team={lastRecord.team_id ? teamsById.get(lastRecord.team_id) : undefined}
-        today={todayYMD()}
+        today={today}
         showMoney={money}
         onPress={onOpenHistory}
         invoicing={invoicing}

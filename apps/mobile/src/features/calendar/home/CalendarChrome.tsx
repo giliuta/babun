@@ -90,7 +90,7 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
       {/* Лента без чипов не рисуется — и обучению подсвечивать нечего:
           обёртка только вокруг живой ленты. */}
       {chipItems.length > 0 ? (
-        <TourTarget id="calendar.chips">
+        <TourTarget id="calendar.chips" shape="strip">
           <ScopeChips
             items={chipItems}
             // Пока идёт переход, подсвечен ТОТ чип, в который тапнули: экран

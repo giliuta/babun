@@ -1,6 +1,7 @@
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Search, Settings, SlidersHorizontal } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { clientsSettingsHref } from "@/session/clients-company";
 import { ALL_TEAMS, toggleTeamChoice } from "@/features/clients/team-scope";
 import { haptics } from "@/lib/haptics";
@@ -84,6 +85,7 @@ export function ListTopBar({ list }: { list: ClientsList }) {
             borderBottomColor: t.separator,
           }}
         >
+          <TourTarget id="clients.gear" shape="control">
           <Pressable
             onPress={() => router.push(clientsSettingsHref())}
             hitSlop={6}
@@ -100,7 +102,9 @@ export function ListTopBar({ list }: { list: ClientsList }) {
           >
             <Settings color={t.sub} size={21} strokeWidth={2} />
           </Pressable>
+          </TourTarget>
 
+          <TourTarget id="clients.search" shape="control" flex>
           <View
             className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
             style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
@@ -140,12 +144,14 @@ export function ListTopBar({ list }: { list: ClientsList }) {
               }}
             />
           </View>
+          </TourTarget>
 
           {/* ФИЛЬТРЫ — ЗНАЧКОМ СПРАВА, вверху (фильтры лежат рядом с
               аналитикой). Строка «Фильтры · N клиентов» под
               поиском уступила место ленте команд; аналитика — последней
               строкой шторки. Включённый фильтр — точкой на значке: список
               не имеет права прятать клиентов молча. */}
+          <TourTarget id="clients.filters" shape="control">
           <Pressable
             onPress={() => {
               setInitialFacet(null);
@@ -188,6 +194,7 @@ export function ListTopBar({ list }: { list: ClientsList }) {
               />
             ) : null}
           </Pressable>
+          </TourTarget>
         </View>
       )}
 

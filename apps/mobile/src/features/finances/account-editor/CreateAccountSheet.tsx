@@ -12,6 +12,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
+import { setTourReady, tourEvent } from "@/components/tour/tour-store";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { GUTTER } from "@/components/ui/tokens";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { notify } from "@/lib/notify";
@@ -73,6 +75,10 @@ export function CreateAccountSheet({
   const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
 
   const [name, setName] = useState("");
+  // Обучение ждёт имени счёта: «Дальше» горит, когда оно есть.
+  useEffect(() => {
+    setTourReady("account-name", name.trim().length > 0);
+  }, [name]);
   /** Владелец счёта — ровно одна команда. */
   const [teamId, setTeamId] = useState<string | null>(null);
   const [opening, setOpening] = useState("");
@@ -169,6 +175,7 @@ export function CreateAccountSheet({
         show_in_payments: inPayments,
       });
       haptics.success();
+      tourEvent("account-created");
       onCreated?.(created.id);
       onClose();
     } catch (e) {
@@ -225,12 +232,14 @@ export function CreateAccountSheet({
         // Лист без полей (`padded={false}`): отступ у кнопки свой — тот же,
         // что у «Применить» в листе правки.
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
-          <GradientButton
-            label="Добавить счёт"
-            onPress={() => void submit()}
-            disabled={!online || !teamsLoaded || insert.isPending}
-            loading={insert.isPending}
-          />
+          <TourTarget id="account.create-submit" shape="control">
+            <GradientButton
+              label="Добавить счёт"
+              onPress={() => void submit()}
+              disabled={!online || !teamsLoaded || insert.isPending}
+              loading={insert.isPending}
+            />
+          </TourTarget>
         </View>
       }
     >
@@ -241,6 +250,7 @@ export function CreateAccountSheet({
       >
         {/* ИМЯ, ЦВЕТ И ЗНАЧОК — одна строка, как первым блоком правки. */}
         <SectionCard dense>
+          <TourTarget id="account.create-name">
           <NameColorField
             bare
             label={null}
@@ -255,12 +265,15 @@ export function CreateAccountSheet({
             // Снятие делает сама решётка: повторный тап отдаёт `null`.
             onIconChange={(slug) => setIcon(slug)}
             fallback={accountIcon({ icon, kind: kindForIcon(icon, "cash") })}
+            tourIds={{ color: "account.create-look" }}
           />
+          </TourTarget>
         </SectionCard>
 
         {/* СКОЛЬКО ЛЕЖИТ СЕЙЧАС — та же плашка «На счёте», что у правки;
             сумма вводится справа. Пусто — ноль. */}
         <SectionCard dense>
+          <TourTarget id="account.create-opening">
           <View style={blockBody}>
             <SelectRow
               icon={Wallet}
@@ -277,6 +290,7 @@ export function CreateAccountSheet({
               }
             />
           </View>
+          </TourTarget>
         </SectionCard>
 
         {showTeams ? (

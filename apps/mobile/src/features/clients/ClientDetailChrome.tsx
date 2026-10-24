@@ -104,6 +104,7 @@ export function ClientDetailChrome({
           заголовок слева и 16-м кеглем. */}
       <ScreenHeader
         title={draft ? "Новый клиент" : "Клиент"}
+        backTourId="client.back"
         // Пока идёт запись, «назад» молчит: уход посреди сохранения терял бы
         // правку, которую строка ещё не донесла.
         onBack={saving ? () => {} : withCommit(onBack)}

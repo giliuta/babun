@@ -1,7 +1,7 @@
 // Pure rules of the «Услуги» price list: whose list is open, which services
 // are templates, the order of rows and the words of a row.
 
-import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
+import { pluralPhraseRu } from "@babun/shared/common/utils/plural-ru";
 import { parsePriceTiers } from "../economics";
 import { durationLabel } from "@/lib/service-format";
 import type { Service } from "../queries";
@@ -86,6 +86,10 @@ export function purgeMessage(name: string, used: number): string {
   return used === 0
     ? `«${name}» ещё не стоит ни в одной записи — удалить её можно без следа.`
     : used > 0
-      ? `«${name}» стоит в ${formatCountRu(used, ["записи", "записях", "записях"])}. После удаления имя работы там пропадёт, и вернуть его будет неоткуда. Если нужно просто убрать её из выбора — скройте.`
+      ? pluralPhraseRu(
+          used,
+          `«${name}» стоит в ${used} записи. После удаления имя работы там пропадёт, и вернуть его будет неоткуда. Если нужно просто убрать её из выбора — скройте.`,
+          `«${name}» стоит в ${used} записях. После удаления имя работы там пропадёт, и вернуть его будет неоткуда. Если нужно просто убрать её из выбора — скройте.`,
+        )
       : `«${name}» может стоять в уже сделанных записях. После удаления имя работы в них пропадёт безвозвратно. Если нужно просто убрать её из выбора — скройте.`;
 }

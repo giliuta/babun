@@ -139,18 +139,11 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
                   borderTopColor: t.separator,
                 }}
               >
-                {!clientId ? (
+                {eventPickPool.length > 0 ? (
                   <ChooseRow
                     icon={MapPin}
                     label="Выбрать объект"
-                    hint="Сначала выберите клиента"
-                    onPress={openEventObjectAdd}
-                  />
-                ) : eventPickPool.length > 0 ? (
-                  <ChooseRow
-                    icon={MapPin}
-                    label="Выбрать объект"
-                    hint="Открывает объекты клиента"
+                    hint={clientId ? "Открывает объекты клиента" : "Открывает объекты всех клиентов"}
                     onPress={() => {
                       setObjectPicker(true);
                       haptics.tap();

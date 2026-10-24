@@ -1,5 +1,8 @@
 import type { ComponentType } from "react";
 import { View } from "react-native";
+import { PlatformPressable } from "@react-navigation/elements";
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { openFirstCalendarSheet } from "@/features/calendar/first-calendar-sheet";
@@ -55,6 +58,13 @@ export function useTabLocks(invitationCount: number) {
       opacity: isLocked(tab) ? LOCKED_OPACITY : 1,
     },
     tabBarAccessibilityState: isLocked(tab) ? { disabled: true } : undefined,
+    // Вкладка — цель вступления к главе («открылся раздел — нажмите»):
+    // подсвечивается кнопка целиком, со значком и подписью.
+    tabBarButton: (props: BottomTabBarButtonProps) => (
+      <TourTarget id={`tab.${tab}`} shape="control" flex>
+        <PlatformPressable {...props} />
+      </TourTarget>
+    ),
   });
 
   const listeners = (tab: TabWithChapter) => ({ navigation }: { navigation: { navigate: (name: string) => void } }) => ({

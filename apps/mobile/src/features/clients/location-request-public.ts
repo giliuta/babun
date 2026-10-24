@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 import { supabase } from "@/lib/supabase";
 import { isLocationRequestToken } from "@/features/clients/location-request-link";
 import {
@@ -50,10 +51,12 @@ export async function submitLocationRequest(
   return parseSubmit(data);
 }
 
+/** Обрыв — словами; отказ базы приходит по-русски мимо плагина, поэтому
+ *  переводится здесь: страницу читает клиент на своём языке. */
 function friendlyNetworkError(message: string): string {
   return /fetch|network|failed to/i.test(message)
     ? "Нет связи. Проверьте интернет и повторите."
-    : message;
+    : tDynamic(message);
 }
 
 /** «Я сейчас здесь» есть только в браузере: expo-location в сборке нет, а

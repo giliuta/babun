@@ -29,7 +29,7 @@
 //   • выход только с этого устройства.
 // Новую настройку раздела сюда не добавлять — её место за шестерёнкой.
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { RefreshCw, Shield } from "lucide-react-native";
@@ -44,6 +44,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { TYPE } from "@/components/ui/tokens";
+import { TourScrollProvider, TourTarget } from "@/components/tour/TourTarget";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { InvitedAccounts } from "@/features/cabinet/InvitedAccounts";
@@ -71,6 +72,9 @@ export default function CabinetHome() {
   const syncDepth = useQueueDepth(visibleOp);
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
+  // Прокрутка — для обучения: строки внизу оно докручивает на вид.
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
 
   return (
     // Низ закрывает таб-бар — как у «Клиентов» и «Финансов». Со всеми краями
@@ -81,8 +85,17 @@ export default function CabinetHome() {
         <Text style={{ ...TYPE.display, color: t.ink }}>Кабинет</Text>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <PersonCard onPress={() => router.push("/cabinet/profile" as Href)} />
+      <TourScrollProvider scrollRef={scrollRef} scrollY={scrollY}>
+      <ScrollView
+        ref={scrollRef}
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 24 }}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+      >
+        <PersonCard tourId="cabinet.profile" onPress={() => router.push("/cabinet/profile" as Href)} />
 
         <CompaniesSection />
 
@@ -97,9 +110,13 @@ export default function CabinetHome() {
 
         <SectionEyebrow>Этот телефон</SectionEyebrow>
         <SectionCard>
-          <NotificationsRow />
+          <TourTarget id="cabinet.notifications">
+            <NotificationsRow />
+          </TourTarget>
           <Divider inset={48} />
-          <LanguageRow />
+          <TourTarget id="cabinet.languages">
+            <LanguageRow />
+          </TourTarget>
           {showSync ? (
             <>
               <Divider inset={48} />
@@ -120,15 +137,17 @@ export default function CabinetHome() {
 
         <SectionEyebrow>Аккаунт</SectionEyebrow>
         <SectionCard>
-          <SettingsRow
-            // Своего пигмента у безопасности в словаре `SETTINGS_TILE` нет:
-            // голый глиф, как у «Часового пояса».
-            tile="neutral"
-            icon={Shield}
-            title="Вход и безопасность"
-            sub="Пароль, устройства, удаление аккаунта"
-            onPress={() => router.push("/cabinet/account")}
-          />
+          <TourTarget id="cabinet.account">
+            <SettingsRow
+              // Своего пигмента у безопасности в словаре `SETTINGS_TILE` нет:
+              // голый глиф, как у «Часового пояса».
+              tile="neutral"
+              icon={Shield}
+              title="Вход и безопасность"
+              sub="Пароль, устройства, удаление аккаунта"
+              onPress={() => router.push("/cabinet/account")}
+            />
+          </TourTarget>
           <Divider inset={48} />
           {/* ПОМОЩЬ — частые вопросы и связь с поддержкой. */}
           <HelpRow />
@@ -148,6 +167,7 @@ export default function CabinetHome() {
           />
         </SectionCard>
       </ScrollView>
+      </TourScrollProvider>
     </Screen>
   );
 }

@@ -164,7 +164,7 @@ export const WeekView = memo(function WeekView({
       {/* Полоса шапок дат — страницы недель едут в локстепе с колонками;
           линия сетки живёт на обёртке и не скользит. Граница волосяная:
           шапка должна читаться продолжением сетки, а не отдельной плитой. */}
-      <TourTarget id="calendar.days">
+      <TourTarget id="calendar.days" shape="strip">
       <View
         style={{
           flexDirection: "row",
@@ -230,7 +230,7 @@ export const WeekView = memo(function WeekView({
       ) : null}
 
       {/* grid */}
-      <TourTarget id="calendar.grid" flex>
+      <TourTarget id="calendar.grid" shape="strip" flex>
       <ZoomableTimeGrid
         view="week"
         hourHSv={hourHSv}

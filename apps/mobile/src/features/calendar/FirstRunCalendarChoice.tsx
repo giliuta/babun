@@ -40,7 +40,7 @@ export function FirstRunCalendarChoice({ onCreate }: { onCreate: () => void }) {
         ))}
       </View>
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
-        <TourTarget id="calendar.first-create">
+        <TourTarget id="calendar.first-create" shape="control">
           <GradientButton label="Создать календарь" onPress={onCreate} />
         </TourTarget>
       </View>
