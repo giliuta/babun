@@ -1,6 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode, type RefObject } from "react";
-import { View, type ScrollView } from "react-native";
-import { registerTourTarget, tourTargetTapped, type TourScroll } from "./tour-store";
+import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { View, type ScrollView, type StyleProp, type ViewStyle } from "react-native";
+import {
+  registerTourTarget,
+  tourTargetTapped,
+  unregisterTourTarget,
+  type TourScroll,
+  type TourShape,
+} from "./tour-store";
 
 // ЭЛЕМЕНТ, КОТОРЫЙ ОБУЧЕНИЕ УМЕЕТ ПОДСВЕТИТЬ. Обёртка записывает себя в
 // реестр вместе с «хозяином» — окном, где она нарисована: экран приложения
@@ -37,26 +43,42 @@ export function TourTarget({
   id,
   children,
   flex,
+  shape = "card",
+  style,
 }: {
   id: string;
   children: ReactNode;
   /** Обёртка растягивается, как растягивался бы сам элемент (сетка, заголовок). */
   flex?: boolean;
+  /** Форма подсветки (`TourShape`); по умолчанию — строка карточки. */
+  shape?: TourShape;
+  /** Раскладка самой обёртки, когда она стоит между кнопкой и её
+   *  содержимым (подсветка по надписи, а не по всему полю кнопки). */
+  style?: StyleProp<ViewStyle>;
 }) {
   const host = useContext(TourHostContext);
   const scroll = useContext(TourScrollContext);
   // Ref стабилен: новая функция на каждой отрисовке снимала бы и ставила цель
   // заново, и слой подсказки перемерял бы её на каждый кадр экрана.
+  const mounted = useRef<View | null>(null);
   const ref = useCallback(
-    (node: View | null) => registerTourTarget(id, node ? { node, host, scroll } : null),
-    [id, host, scroll],
+    (node: View | null) => {
+      if (node) {
+        mounted.current = node;
+        registerTourTarget(id, { node, host, scroll, shape });
+      } else if (mounted.current) {
+        unregisterTourTarget(id, mounted.current);
+        mounted.current = null;
+      }
+    },
+    [id, host, scroll, shape],
   );
   return (
     <View
       // `collapsable={false}`: иначе Android выкидывает пустую обёртку из
       // дерева, и мерить становится нечего.
       collapsable={false}
-      style={flex ? { flex: 1 } : undefined}
+      style={[flex ? { flex: 1 } : null, style]}
       ref={ref}
       // Касание доходит до обёртки при любом ответчике внутри: кнопка
       // жмётся как обычно, а обучение узнаёт, что нажали именно её.

@@ -1,4 +1,5 @@
 import { ScrollView } from "react-native";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { UserPlus } from "lucide-react-native";
 import { Stack } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
@@ -321,14 +322,16 @@ export function ClientCardPage({
           действия, «Записать» понижена самим владельцем до обычной строки, а
           «Готово», которое ничего не пишет, дублировало бы стрелку «назад». */}
       {isDraft ? (
-        <ClientScreenFooter
-          label="Создать клиента"
-          reason={draftReason}
-          disabled={!canSave}
-          onPress={() => void saveDraft()}
-          // `/client` открыт поверх записи, вне вкладок — там таб-бара нет.
-          overTabBar={pathname !== "/client"}
-        />
+        <TourTarget id="client.create-submit" shape="control">
+          <ClientScreenFooter
+            label="Создать клиента"
+            reason={draftReason}
+            disabled={!canSave}
+            onPress={() => void saveDraft()}
+            // `/client` открыт поверх записи, вне вкладок — там таб-бара нет.
+            overTabBar={pathname !== "/client"}
+          />
+        </TourTarget>
       ) : null}
       </KeyboardLift>
 

@@ -5,6 +5,7 @@ import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useMirror } from "@/session/mirror-state";
 import { useMyMemberships } from "@/session/my-memberships";
@@ -62,7 +63,9 @@ export function OwnAccountSection() {
           {/* ТАРИФ — ПЕРВЫМ. Страницы тариф не закрывает (всё открывается,
               блокируются только кнопки): «Партнёры» открыты всегда, серая
               там только «Пригласить партнёра». */}
-          <TariffRow />
+          <TourTarget id="cabinet.tariff">
+            <TariffRow />
+          </TourTarget>
           <Divider inset={48} />
           {/* ОПЛАТЫ ТАРИФА — платежи за подписку и чеки.
               Только на сайте: страница ведёт к счетам Stripe с оплатой, а в
@@ -74,25 +77,35 @@ export function OwnAccountSection() {
             </>
           ) : null}
           {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ, права по каждой команде. */}
-          <SettingsRow
-            tile={SETTINGS_TILE.indigo}
-            icon={Users}
-            title="Партнёры"
-            sub="Права по командам"
-            onPress={() => router.push("/cabinet/people" as Href)}
-          />
+          <TourTarget id="cabinet.partners">
+            <SettingsRow
+              tile={SETTINGS_TILE.indigo}
+              icon={Users}
+              title="Партнёры"
+              sub="Права по командам"
+              onPress={() => router.push("/cabinet/people" as Href)}
+            />
+          </TourTarget>
           <Divider inset={48} />
           {/* РЕКВИЗИТЫ — единый блок на весь аккаунт. */}
-          <CabinetRequisitesRow />
+          <TourTarget id="cabinet.requisites">
+            <CabinetRequisitesRow />
+          </TourTarget>
           <Divider inset={48} />
           {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
               календарях — он сам и каждый партнёр. */}
-          <HistoryRow />
+          <TourTarget id="cabinet.history">
+            <HistoryRow />
+          </TourTarget>
           <Divider inset={48} />
-          <SmsCabinetRow />
+          <TourTarget id="cabinet.sms">
+            <SmsCabinetRow />
+          </TourTarget>
           <Divider inset={48} />
           {/* ВЫГРУЗКА ДАННЫХ (только из своих личных команд) — клиенты, записи и финансы своего аккаунта. */}
-          <DataExportRow />
+          <TourTarget id="cabinet.export">
+            <DataExportRow />
+          </TourTarget>
           <Divider inset={48} />
           {/* АРХИВ — в архив календарь уводит владелец, и только он может
               вернуть его или стереть. */}

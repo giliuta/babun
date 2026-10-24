@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { tourEvent } from "@/components/tour/tour-store";
 import { useCreateClient, useUpdateClientById } from "@/features/clients/queries";
 import { splitSourceStep, type SplitRef } from "@/features/clients/split-client";
 import { notify } from "@/lib/notify";
@@ -296,6 +297,7 @@ export function useClientDraft(
         billing_address: d.billing_address?.trim() || null,
       });
       haptics.success();
+      tourEvent("client-created");
       // Связь уехала вместе с клиентом, но блок людей карточки-группы кормит
       // СВОЙ ключ (`client-members`), а создание сбрасывает только список:
       // без этого Иван не появился бы у Натальи до следующего чтения.

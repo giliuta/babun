@@ -3,17 +3,19 @@ import { Keyboard, Platform, Pressable, Text, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
+  FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import { X } from "lucide-react-native";
+import Svg, { Path } from "react-native-svg";
 import { useThemeColors } from "@/theme/colors";
 import { useReduceMotion } from "@/lib/reduce-motion";
 import { chooseOption } from "@/lib/choose";
 import { topSheet, useSheetStackVersion } from "@/components/ui/sheet-overlay";
-import { finishTour, nextStep, tourTarget, useTour } from "./tour-store";
+import { finishTour, nextStep, tourReady, tourTarget, useTour } from "./tour-store";
 
 // СЛОЙ ПОДСКАЗКИ ОДНОГО ОКНА. Экран темнеет, светлой остаётся подсвеченная
 // цель, под ней (или над ней, если внизу нет места) — пузырь: «Шаг N из M»,
@@ -29,6 +31,29 @@ import { finishTour, nextStep, tourTarget, useTour } from "./tour-store";
 type Rect = { x: number; y: number; w: number; h: number };
 
 const GAP = 12;
+/** Отступ выреза вокруг кнопки или плитки. */
+const CONTROL_PAD = 6;
+/** Поле между вырезом и краем экрана. */
+const EDGE = 4;
+
+/** Вырез внутри экрана с полем `EDGE`: на краю он сжимается, а не режется. */
+function clampToScreen(r: Rect, size: { w: number; h: number }): Rect {
+  if (size.w === 0) return r;
+  // Сжимается поровну с обеих сторон, чтобы цель осталась посередине выреза.
+  const over = Math.max(0, EDGE - r.x, r.x + r.w - (size.w - EDGE));
+  return { x: r.x + over, y: r.y, w: Math.max(0, r.w - over * 2), h: r.h };
+}
+
+/** Контур затемнения: весь экран и в нём скруглённая дыра по цели. */
+function scrimPath(size: { w: number; h: number }, spot: Rect, radius: number): string {
+  const r = Math.max(0, Math.min(radius, spot.w / 2, spot.h / 2));
+  const { x, y, w, h } = spot;
+  const hole =
+    `M${x + r},${y} H${x + w - r} A${r},${r} 0 0 1 ${x + w},${y + r} ` +
+    `V${y + h - r} A${r},${r} 0 0 1 ${x + w - r},${y + h} ` +
+    `H${x + r} A${r},${r} 0 0 1 ${x},${y + h - r} V${y + r} A${r},${r} 0 0 1 ${x + r},${y} Z`;
+  return `M0,0 H${size.w} V${size.h} H0 Z ${hole}`;
+}
 /** Куда докручивается цель в прокрутке: под шапку экрана. */
 const SCROLL_TOP = 150;
 /** Цель двигается вместе с экраном (клавиатура, анимация листа) — перемер. */
@@ -73,6 +98,7 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
   const [rect, setRect] = useState<Rect | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [bubbleH, setBubbleH] = useState(150);
+  const [keep, setKeep] = useState<Rect | null>(null);
   const scrolled = useRef(false);
   const keyboardH = useKeyboardHeight();
 
@@ -92,6 +118,11 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
       }
     }
     const next = { x: box.x - origin.x, y: box.y - origin.y, w: box.w, h: box.h };
+    const kept = step?.keepVisible ? tourTarget(step.keepVisible) : undefined;
+    if (kept) {
+      const k = await measure(kept.node);
+      setKeep({ x: k.x - origin.x, y: k.y - origin.y, w: k.w, h: k.h });
+    }
     setRect((prev) =>
       prev && Math.abs(prev.x - next.x) < 1 && Math.abs(prev.y - next.y) < 1 &&
       Math.abs(prev.w - next.w) < 1 && Math.abs(prev.h - next.h) < 1
@@ -107,9 +138,25 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
   }, [place]);
 
   if (!step || !chapter) return null;
-  const scrim = { position: "absolute" as const, backgroundColor: `${t.ink}94` };
+  const scrimColor = `${t.ink}94`;
+  // ВЫРЕЗ ПО ФОРМЕ ЦЕЛИ. Строка карточки — ровно по карточке с её
+  // скруглением; кнопка и плитка — с ровным отступом со всех сторон (рамка
+  // по самому нажимаемому полю ложилась криво: у него свои несимметричные
+  // поля); полоса во всю ширину — без скругления.
+  const shape = tourTarget(step.target)?.shape ?? "card";
+  const pad = shape === "control" ? CONTROL_PAD : 0;
+  const radius = shape === "strip" ? 0 : t.radius.card + pad;
+  // Вырез не выходит за край экрана: у значка в углу шапки (аналитика,
+  // шестерёнка) отступ иначе срезался краем, и скругление пропадало.
+  // Полоса во всю ширину остаётся во всю ширину.
+  const raw = rect ? { x: rect.x - pad, y: rect.y - pad, w: rect.w + pad * 2, h: rect.h + pad * 2 } : null;
+  const spot = raw && shape !== "strip" ? clampToScreen(raw, size) : raw;
+  const block = { position: "absolute" as const };
   const passes = step.kind !== "info";
   const last = index + 1 >= total;
+  const hasSkip = !step.required && !last;
+  const hasNext = step.kind !== "tap";
+  const canNext = tourReady(step.needs);
 
   const close = async () => {
     const picked = await chooseOption("Завершить обучение?", [
@@ -121,9 +168,12 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
   };
 
   let bubbleTop = 0;
-  if (rect) {
-    const below = rect.y + rect.h + GAP;
-    const above = rect.y - GAP - bubbleH;
+  if (spot) {
+    // Пузырь ставится вне цели и вне того, что шаг просит не закрывать.
+    const top = keep ? Math.min(spot.y, keep.y) : spot.y;
+    const bottomEdge = keep ? Math.max(spot.y + spot.h, keep.y + keep.h) : spot.y + spot.h;
+    const below = bottomEdge + GAP;
+    const above = top - GAP - bubbleH;
     const bottom = size.h - keyboardH;
     // Внизу места нет — над целью; нет и там (цель во весь экран) — у нижнего края.
     bubbleTop = below + bubbleH <= bottom - GAP ? below : above >= GAP ? above : bottom - bubbleH - 24;
@@ -136,18 +186,32 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
       onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 1000, elevation: 1000 }}
     >
-      {rect ? (
+      {spot ? (
         <>
-          <View style={{ ...scrim, left: 0, right: 0, top: 0, height: Math.max(0, rect.y) }} />
-          <View style={{ ...scrim, left: 0, right: 0, top: rect.y + rect.h, bottom: 0 }} />
-          <View style={{ ...scrim, left: 0, width: Math.max(0, rect.x), top: rect.y, height: rect.h }} />
-          <View style={{ ...scrim, left: rect.x + rect.w, right: 0, top: rect.y, height: rect.h }} />
+          {/* Затемнение со скруглённым вырезом — один контур «экран минус
+              цель» (evenodd). Рамка-бордюр толщиной в экран для этого не
+              годится: на тройной плотности такой слой больше предельной
+              текстуры iOS и не рисуется вовсе. Касаний контур не ловит —
+              их держат полосы ниже. */}
+          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0 }}>
+            <Svg width={size.w} height={size.h}>
+              <Path d={scrimPath(size, spot, radius)} fill={scrimColor} fillRule="evenodd" />
+            </Svg>
+          </View>
+          {/* Касания вокруг выреза гасятся: нажать можно только показанное. */}
+          <View style={{ ...block, left: 0, right: 0, top: 0, height: Math.max(0, spot.y) }} />
+          <View style={{ ...block, left: 0, right: 0, top: spot.y + spot.h, bottom: 0 }} />
+          <View style={{ ...block, left: 0, width: Math.max(0, spot.x), top: spot.y, height: spot.h }} />
+          <View style={{ ...block, left: spot.x + spot.w, right: 0, top: spot.y, height: spot.h }} />
           {/* Пояснение: цель видна, но не нажимается. */}
           {passes ? null : (
-            <View style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h }} />
+            <View style={{ ...block, left: spot.x, top: spot.y, width: spot.w, height: spot.h }} />
           )}
-          {step.kind === "tap" ? <Pulse rect={rect} t={t} /> : null}
-          <View
+          {step.kind === "tap" ? <Pulse spot={spot} radius={radius} t={t} /> : null}
+          {/* Пузырь проявляется, а не выскакивает: шаги идут один за другим,
+              и рывок на каждом читался бы как перерисовка экрана. */}
+          <Animated.View
+            entering={FadeIn.duration(180)}
             accessibilityViewIsModal
             onLayout={(e) => setBubbleH(e.nativeEvent.layout.height)}
             style={{
@@ -162,7 +226,7 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
           >
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: t.caption }}>
-                {`Шаг ${index + 1} из ${total}`}
+                {chapter.intro ? "Новый раздел" : `Шаг ${index + 1} из ${total}`}
               </Text>
               <Pressable
                 onPress={() => void close()}
@@ -174,42 +238,49 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
               </Pressable>
             </View>
             <Text style={{ fontSize: 15, lineHeight: 21, color: t.body, marginTop: 4 }}>{step.text}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14, minHeight: 36 }}>
-              {step.required || last ? (
-                <View style={{ minWidth: 92 }} />
-              ) : (
-                <Pressable onPress={nextStep} hitSlop={12} accessibilityRole="button" style={{ minWidth: 92 }}>
-                  <Text style={{ fontSize: 15, fontWeight: "500", color: t.sub }}>Пропустить</Text>
-                </Pressable>
-              )}
-              <Dots index={index} total={total} t={t} />
-              {step.kind === "tap" ? (
-                <View style={{ minWidth: 92 }} />
-              ) : (
-                <Pressable
-                  onPress={nextStep}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({
-                    minWidth: 92,
-                    alignItems: "center",
-                    backgroundColor: t.accent,
-                    opacity: pressed ? 0.85 : 1,
-                    borderRadius: t.radius.pill,
-                    paddingHorizontal: 18,
-                    paddingVertical: 9,
-                  })}
-                >
-                  <Text style={{ color: t.onAccent, fontSize: 15, fontWeight: "600" }}>
-                    {last ? "Понятно" : "Дальше"}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
+            {/* НИЖНЯЯ СТРОКА — ТОЛЬКО КОГДА В НЕЙ ЕСТЬ ЧТО НАЖАТЬ. У шага «нажмите
+                сюда», который не пропускается, кнопок нет: строка с одними
+                точками была пустой полосой, а ход и так виден по «Шаг N из M». */}
+            {hasSkip || hasNext ? (
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14, minHeight: 36 }}>
+                {hasSkip ? (
+                  <Pressable onPress={nextStep} hitSlop={12} accessibilityRole="button" style={{ minWidth: 92 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "500", color: t.sub }}>Пропустить</Text>
+                  </Pressable>
+                ) : (
+                  <View style={{ minWidth: 92 }} />
+                )}
+                {chapter.intro ? <View style={{ flex: 1 }} /> : <Dots index={index} total={total} t={t} />}
+                {hasNext ? (
+                  <Pressable
+                    onPress={canNext ? nextStep : undefined}
+                    disabled={!canNext}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canNext }}
+                    style={({ pressed }) => ({
+                      minWidth: 92,
+                      alignItems: "center",
+                      backgroundColor: canNext ? t.accent : t.disabledFill,
+                      opacity: pressed ? 0.85 : 1,
+                      borderRadius: t.radius.pill,
+                      paddingHorizontal: 18,
+                      paddingVertical: 9,
+                    })}
+                  >
+                    <Text style={{ color: canNext ? t.onAccent : t.muted, fontSize: 15, fontWeight: "600" }}>
+                      {last ? "Понятно" : "Дальше"}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <View style={{ minWidth: 92 }} />
+                )}
+              </View>
+            ) : null}
+          </Animated.View>
         </>
       ) : (
         // Цель меряется и докручивается — экран уже тёмный, пузырь встанет на место.
-        <View style={{ ...scrim, left: 0, right: 0, top: 0, bottom: 0 }} />
+        <View style={{ ...block, left: 0, right: 0, top: 0, bottom: 0, backgroundColor: scrimColor }} />
       )}
     </View>
   );
@@ -232,7 +303,7 @@ function Dots({ index, total, t }: { index: number; total: number; t: ReturnType
 }
 
 /** Рамка цели «нажмите сюда»: дышит, пока на неё не нажали. */
-function Pulse({ rect, t }: { rect: Rect; t: ReturnType<typeof useThemeColors> }) {
+function Pulse({ spot, radius, t }: { spot: Rect; radius: number; t: ReturnType<typeof useThemeColors> }) {
   const reduced = useReduceMotion();
   const phase = useSharedValue(0);
   useEffect(() => {
@@ -244,18 +315,19 @@ function Pulse({ rect, t }: { rect: Rect; t: ReturnType<typeof useThemeColors> }
     opacity: reduced ? 1 : 1 - phase.value,
     transform: [{ scale: reduced ? 1 : 1 + phase.value * 0.06 }],
   }));
-  const pad = 4;
+  // Рамка сидит вплотную вокруг выреза и повторяет его скругление.
+  const pad = 3;
   return (
     <Animated.View
       pointerEvents="none"
       style={[
         {
           position: "absolute",
-          left: rect.x - pad,
-          top: rect.y - pad,
-          width: rect.w + pad * 2,
-          height: rect.h + pad * 2,
-          borderRadius: t.radius.card + pad,
+          left: spot.x - pad,
+          top: spot.y - pad,
+          width: spot.w + pad * 2,
+          height: spot.h + pad * 2,
+          borderRadius: radius + pad,
           borderWidth: 3,
           borderColor: t.accent,
         },

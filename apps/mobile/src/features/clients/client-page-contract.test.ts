@@ -51,7 +51,8 @@ describe("единственное действие черновика — вн�
     );
     assert.match(
       src,
-      /\{isDraft \? \(\s*<ClientScreenFooter/,
+      // Обёртка обучения (`TourTarget`) вокруг футера — не второе условие.
+      /\{isDraft \? \(\s*(?:<TourTarget id="[^"]+"(?: shape="[^"]+")?>\s*)?<ClientScreenFooter/,
       "футер у сохранённой карточки — у контактной базы нет единственного действия",
     );
     assert.match(src, /label="Создать клиента"/);

@@ -6,6 +6,7 @@ import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
 import { useOwnAccountName } from "./own-account-name";
 import { personCardView, type PersonFactKind } from "./person-card";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 const FACT_ICON: Record<PersonFactKind, LucideIcon> = {
   email: Mail,
@@ -26,7 +27,7 @@ const FACT_ICON: Record<PersonFactKind, LucideIcon> = {
 // ВИЗИТКА (имя, компания, почта, номер, дата рождения): под именем — компания, ниже — факты значком и
 // значением одной колонкой с именем. Значок и есть подпись; пустого нет.
 
-export function PersonCard({ onPress }: { onPress?: () => void }) {
+export function PersonCard({ onPress, tourId }: { onPress?: () => void; tourId?: string }) {
   const t = useThemeColors();
   const { session } = useSession();
   const accountName = useOwnAccountName().data;
@@ -150,6 +151,8 @@ export function PersonCard({ onPress }: { onPress?: () => void }) {
 
   return (
     <View style={{ marginTop: 8, marginHorizontal: GUTTER }}>
+      {/* Обучение подсвечивает саму карточку — без полей вокруг неё. */}
+      <TourTarget id={tourId ?? "cabinet.person"}>
       {onPress ? (
         <Pressable
           onPress={onPress}
@@ -178,6 +181,7 @@ export function PersonCard({ onPress }: { onPress?: () => void }) {
           {content}
         </View>
       )}
+      </TourTarget>
     </View>
   );
 }

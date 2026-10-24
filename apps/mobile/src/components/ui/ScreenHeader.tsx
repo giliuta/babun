@@ -4,6 +4,7 @@ import { useRouter, type Href } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { ICON, TYPE } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
+import { TourTarget } from "@/components/tour/TourTarget";
 
 // Unified screen chrome. Two modes:
 //  - default: back chevron + centered-left title + optional right action (44px taps)
@@ -17,6 +18,7 @@ export function ScreenHeader({
   large,
   seam = true,
   fallbackHref,
+  backTourId,
 }: {
   title: string;
   subtitle?: string;
@@ -32,6 +34,8 @@ export function ScreenHeader({
   /** Шов под шапкой. Гасится, когда СРАЗУ под ней идёт лента чипов со своим
    *  швом: две линии подряд читаются не как граница, а как случайный зазор. */
   seam?: boolean;
+  /** «Назад» подсвечивает обучение под этим именем. */
+  backTourId?: string;
 }) {
   const router = useRouter();
   const t = useThemeColors();
@@ -53,6 +57,34 @@ export function ScreenHeader({
     );
   }
 
+  const back = (
+    <Pressable
+      // Cold deep link (push / state restore) can land here with an empty
+      // history — GO_BACK would be a dead button (red screen in dev), so
+      // fall back to the screen's home (the app root unless told otherwise).
+      onPress={
+        onBack ??
+        (() =>
+          router.canGoBack()
+            ? router.back()
+            : router.replace(fallbackHref ?? "/"))
+      }
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Назад"
+      style={({ pressed }) => ({
+        height: 44,
+        width: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 999,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
+    >
+      <ChevronLeft color={t.body} size={ICON.md} />
+    </Pressable>
+  );
+
   return (
     <View
       className="flex-row items-center px-1 py-1.5"
@@ -61,31 +93,7 @@ export function ScreenHeader({
         borderBottomColor: t.separator,
       }}
     >
-      <Pressable
-        // Cold deep link (push / state restore) can land here with an empty
-        // history — GO_BACK would be a dead button (red screen in dev), so
-        // fall back to the screen's home (the app root unless told otherwise).
-        onPress={
-          onBack ??
-          (() =>
-            router.canGoBack()
-              ? router.back()
-              : router.replace(fallbackHref ?? "/"))
-        }
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Назад"
-        style={({ pressed }) => ({
-          height: 44,
-          width: 44,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 999,
-          backgroundColor: pressed ? t.pressed : "transparent",
-        })}
-      >
-        <ChevronLeft color={t.body} size={ICON.md} />
-      </Pressable>
+      {backTourId ? <TourTarget id={backTourId} shape="control">{back}</TourTarget> : back}
       {/* ЗАГОЛОВОК — ПО ЦЕНТРУ: канон навигационной
           шапки iOS. Центр честный: слева кнопка «назад» 44pt, справа контейнер
           действий с той же минимальной шириной — заголовок стоит ровно
