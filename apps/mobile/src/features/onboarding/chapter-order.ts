@@ -18,6 +18,19 @@ export function lockedByOnboarding(done: readonly string[] | null | undefined, t
   return before.some((c) => WRITTEN_CHAPTERS.has(c) && !done.includes(c));
 }
 
+/** Что записать в базу, когда глава обучения закончилась. Вступление,
+ *  доведённое до конца, — это открытый раздел, а не пройденная глава: ничего.
+ *  Крестик на вступлении закрывает саму главу. */
+export function progressToSave(
+  finished: { id: string; intro?: string },
+  how: "end" | "chapter" | "all",
+): ChapterId | "all" | null {
+  if (how === "all") return "all";
+  if (how === "end" && finished.intro) return null;
+  const id = finished.intro ?? finished.id;
+  return (CHAPTER_ORDER as readonly string[]).includes(id) ? (id as ChapterId) : null;
+}
+
 /** Первая непройденная написанная глава. */
 export function nextChapter(done: readonly string[] | null | undefined): ChapterId | null {
   if (!done) return null;

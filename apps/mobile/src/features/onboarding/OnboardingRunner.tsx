@@ -14,6 +14,7 @@ import { CALENDAR_CHAPTER, CALENDAR_GRID_START } from "./calendar-chapter";
 import { CLIENTS_CHAPTER } from "./clients-chapter";
 import { FINANCES_CHAPTER, FINANCES_PAGE_START } from "./finances-chapter";
 import { INTRO_CHAPTERS } from "./intro-chapters";
+import { progressToSave } from "./chapter-order";
 import { nextChapter, useMarkOnboardingDone, useOnboardingDone, type ChapterId } from "./use-onboarding";
 
 /** Глава раздела стартует, когда человек впервые открыл его вкладку и на
@@ -62,10 +63,8 @@ export function OnboardingRunner() {
 
   useEffect(() => {
     setTourFinishHandler((finished, how) => {
-      // Вступление, доведённое до конца, — это открытый раздел, а не
-      // пройденная глава. Крестик на нём закрывает саму главу.
-      if (how === "end" && finished.intro) return;
-      mutate(how === "all" ? "all" : ((finished.intro ?? finished.id) as ChapterId));
+      const save = progressToSave(finished, how);
+      if (save) mutate(save);
     });
     return () => setTourFinishHandler(null);
   }, [mutate]);

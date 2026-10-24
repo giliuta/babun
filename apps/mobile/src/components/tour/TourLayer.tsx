@@ -15,7 +15,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useReduceMotion } from "@/lib/reduce-motion";
 import { chooseOption } from "@/lib/choose";
 import { topSheet, useSheetStackVersion } from "@/components/ui/sheet-overlay";
-import { finishTour, nextStep, tourReady, tourTarget, useTour } from "./tour-store";
+import { finishTour, nextStep, tourReady, tourScreenShown, tourTarget, useTour } from "./tour-store";
 
 // СЛОЙ ПОДСКАЗКИ ОДНОГО ОКНА. Экран темнеет, светлой остаётся подсвеченная
 // цель, под ней (или над ней, если внизу нет места) — пузырь: «Шаг N из M»,
@@ -77,14 +77,24 @@ export function TourLayer({ host }: { host: string }) {
   const covered = host === "root" ? top !== null : top !== host;
   const mine = !!step && target?.host === host && !covered;
 
+  // Ввод закончен — клавиатура уходит: она закрывала низ окна, и пузырь
+  // следующего шага ложился поверх только что набранного. Следит корневой
+  // слой: он есть всегда, а слой шторки уходит вместе с ней.
+  const prevStep = useRef(step);
+  useEffect(() => {
+    if (host !== "root") return;
+    if (prevStep.current?.kind === "input" && prevStep.current !== step) Keyboard.dismiss();
+    prevStep.current = step;
+  }, [host, step]);
+
   // Необязательный шаг без цели на экране пропускается — отвечает за это
   // только корневой слой, чтобы шаг не пропускали два окна сразу.
   useEffect(() => {
     if (host !== "root" || !step?.optional) return;
-    const timer = setTimeout(() => {
-      if (!tourTarget(step.target)) nextStep();
+    const timer = setInterval(() => {
+      if (!tourTarget(step.target) && tourScreenShown(step.target)) nextStep();
     }, OPTIONAL_WAIT_MS);
-    return () => clearTimeout(timer);
+    return () => clearInterval(timer);
   }, [host, step]);
 
   if (!mine || !step || !chapter || !target) return null;

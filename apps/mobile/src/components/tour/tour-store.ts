@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { Keyboard, type ScrollView, type View } from "react-native";
+import type { ScrollView, View } from "react-native";
 
 // ОБУЧЕНИЕ — КАК В ИГРЕ. Одно состояние на приложение: какая глава идёт и на
 // каком она шаге. Шаг подсвечивает НАСТОЯЩИЙ элемент экрана (обёрнутый в
@@ -110,9 +110,6 @@ export function finishTour(how: TourFinish): void {
 
 export function nextStep(): void {
   if (!chapter) return;
-  // Ввод закончен — клавиатура уходит: она закрывала низ окна, и пузырь
-  // следующего шага ложился поверх только что набранного.
-  if (activeStep()?.kind === "input") Keyboard.dismiss();
   if (index + 1 >= chapter.steps.length) finishTour("end");
   else {
     index++;
@@ -184,6 +181,16 @@ export function tourTarget(id: string): TargetEntry | undefined {
   return targets.get(id);
 }
 
+/** Открыт ли экран цели: есть ли на экране хоть одна цель того же экрана
+ *  (`settings.hours` → любая `settings.*`). Необязательный шаг пропускается
+ *  сам, только когда экран открыт, а строки на нём нет (закрыта правом или
+ *  тарифом). Ушёл человек с экрана — шаг ждёт, а не проскакивает. */
+export function tourScreenShown(id: string): boolean {
+  const screen = id.split(".")[0] + ".";
+  for (const key of targets.keys()) if (key.startsWith(screen)) return true;
+  return false;
+}
+
 function subscribeTargets(listener: () => void): () => void {
   targetListeners.add(listener);
   return () => targetListeners.delete(listener);
@@ -217,6 +224,11 @@ function read(): TourSnapshot {
     };
   }
   return snapshot;
+}
+
+/** Снимок без подписки — для проверок и кода вне React. */
+export function tourSnapshot(): TourSnapshot {
+  return read();
 }
 
 export function useTour(): TourSnapshot {

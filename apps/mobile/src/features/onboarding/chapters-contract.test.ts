@@ -7,7 +7,8 @@ import { CABINET_CHAPTER } from "./cabinet-chapter";
 import { CALENDAR_CHAPTER, CALENDAR_GRID_START } from "./calendar-chapter";
 import { CLIENTS_CHAPTER } from "./clients-chapter";
 import { FINANCES_CHAPTER, FINANCES_PAGE_START } from "./finances-chapter";
-import { CHAPTER_ORDER, lockedByOnboarding, nextChapter, WRITTEN_CHAPTERS } from "./chapter-order";
+import { CHAPTER_ORDER, lockedByOnboarding, nextChapter, progressToSave, WRITTEN_CHAPTERS } from "./chapter-order";
+import { INTRO_CHAPTERS } from "./intro-chapters";
 
 // Шаг, чьей цели нет ни на одном экране, обучение не покажет: обязательный
 // встанет навсегда (подсказки нет, а «Пропустить» у него не бывает), и
@@ -94,3 +95,30 @@ describe("очерёдность разделов", () => {
     assert.equal(nextChapter(null), null);
   });
 });
+
+describe("что записать в базу, когда глава закончилась", () => {
+  test("вступление, доведённое до конца, — ничего: это открытый раздел", () => {
+    assert.equal(progressToSave(INTRO_CHAPTERS.finances, "end"), null);
+  });
+
+  test("крестик на вступлении закрывает саму главу", () => {
+    assert.equal(progressToSave(INTRO_CHAPTERS.clients, "chapter"), "clients");
+  });
+
+  test("глава, дошедшая до конца или закрытая, — она сама; «всё обучение» — всё", () => {
+    assert.equal(progressToSave(CALENDAR_CHAPTER, "end"), "calendar");
+    assert.equal(progressToSave(FINANCES_CHAPTER, "chapter"), "finances");
+    assert.equal(progressToSave(CABINET_CHAPTER, "all"), "all");
+  });
+
+  test("у каждого раздела после календаря есть вступление на его вкладку", () => {
+    for (const id of CHAPTER_ORDER.filter((c) => c !== "calendar")) {
+      const intro = INTRO_CHAPTERS[id];
+      assert.equal(intro.intro, id);
+      assert.equal(intro.steps.length, 1);
+      assert.equal(intro.steps[0]?.target, `tab.${id}`);
+      assert.equal(intro.steps[0]?.kind, "tap");
+    }
+  });
+});
+
