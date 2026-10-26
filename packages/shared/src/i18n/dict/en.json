@@ -3644,6 +3644,7 @@
  "Слишком много попыток, подождите минуту": "Too many attempts, wait a minute",
  "Слишком много ручных операций за один день": "Too many manual transactions in one day",
  "Слишком много строк ({0}). Максимум {1} за раз — раздели файл на части.": "Too many rows ({0}). Up to {1} at a time – split the file into parts.",
+ "Слишком простой пароль — как 123456 или 111111": "Password is too simple — like 123456 or 111111",
  "Служебные поля": "System fields",
  "Служебные поля: {0}": "System fields: {0}",
  "Сменить": "Change",

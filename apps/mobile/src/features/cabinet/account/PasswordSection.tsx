@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
-import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
+import { passwordAccepted, passwordHint } from "@/components/auth/password-rule";
 import { passwordRefusal } from "@/features/cabinet/account-errors";
 
 // ─── Смена пароля (web SecuritySection / PasswordBlock) ──────────────
@@ -20,12 +20,12 @@ export function PasswordSection({ email }: { email: string | null }) {
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tooShort = passwordTooShort(pwd);
+  const pwdHint = passwordHint(pwd);
   const mismatch = confirm.length > 0 && pwd !== confirm;
   const samePwd = pwd.length > 0 && pwd === currentPwd;
   const canSubmit =
     currentPwd.length > 0 &&
-    pwd.length >= PASSWORD_MIN &&
+    passwordAccepted(pwd) &&
     confirm === pwd &&
     !samePwd &&
     !saving;
@@ -101,8 +101,8 @@ export function PasswordSection({ email }: { email: string | null }) {
         autoComplete="new-password"
         textContentType="newPassword"
         error={
-          tooShort
-            ? "Минимум 6 символов"
+          pwdHint
+            ? pwdHint
             : samePwd
               ? "Новый пароль должен отличаться от текущего"
               : null
