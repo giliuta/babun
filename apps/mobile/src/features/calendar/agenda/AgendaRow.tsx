@@ -45,8 +45,9 @@ export function AgendaRow({
   const cancelled = apt.status === "cancelled";
   const statusWord = overdue ? "Не оплачена" : cancelled ? "Отменена" : null;
   // ЦВЕТ ЗАПИСИ ЗАЛИВАЕТ ВСЮ СТРОКУ, а не квадратик слева. Рецепт тот же, что у блока в сетке: заливка BLOCK_FILL,
-  // выполненная тише, отменённая теряет цвет.
-  const rowFill = cancelled
+  // выполненная тише. Отменённая — в цвете отмены; без него (`hue` пустой)
+  // теряет цвет.
+  const rowFill = cancelled && !hue
     ? `${t.ink}14`
     : // Тон — тот же, что у плотного блока сетки (`blockSolid`), а не сырой
       // цвет палитры: у бледных цветов сырой и плотный расходились по тону,

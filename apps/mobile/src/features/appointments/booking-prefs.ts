@@ -55,12 +55,20 @@ export {
 export { useDesignBase } from "./booking-prefs/design-base";
 export {
   AUTO_COLOR_RULES,
+  CANCELLED_DEFAULT,
+  PAID_DEFAULT,
+  PREPAID_DEFAULT,
+  SITUATION_DEFAULTS,
   useAutoColorRule,
   useFallbackColor,
   useSetAutoColorRule,
+  useCancelledColor,
+  usePaidColor,
+  usePrepaidColor,
   useSetSituationColor,
   useSituationPalette,
   type AutoColorRule,
+  type PaletteKey,
   type SituationPalette,
 } from "./booking-prefs/color";
 

@@ -121,29 +121,20 @@ describe("чипы «весь день»", () => {
 });
 
 describe("лестница содержимого блока", () => {
-  // Имя, время, услуга — и значки внизу; адреса нет, имя одной строкой и
-  // одним кеглем.
-  const base = { hasService: true, hasStatus: true };
-  test("высокий блок: имя, время, услуга и значки внизу", () => {
+  // Имя, время, услуга; адреса и значков нет, имя одной строкой и одним
+  // кеглем.
+  const base = { hasService: true };
+  test("высокий блок: имя, время, услуга", () => {
     assert.deepEqual(blockLadder({ ...base, rowsFit: 6 }), {
       showTime: true,
       showService: true,
-      showStatus: true,
       lastRow: "service",
     });
   });
-  test("на три строки: имя, время, услуга — значкам места нет", () => {
-    const l = blockLadder({ ...base, rowsFit: 3 });
-    assert.equal(l.showService, true);
-    assert.equal(l.showStatus, false);
-  });
-  test("нет услуги — значки встают сразу под временем", () => {
+  test("нет услуги — последней стоит время", () => {
     const l = blockLadder({ ...base, hasService: false, rowsFit: 3 });
-    assert.equal(l.showStatus, true);
+    assert.equal(l.showService, false);
     assert.equal(l.lastRow, "time");
-  });
-  test("сказать нечего — строки значков нет", () => {
-    assert.equal(blockLadder({ ...base, hasStatus: false, rowsFit: 6 }).showStatus, false);
   });
   test("самый низкий блок печатает хотя бы имя", () => {
     assert.equal(blockLadder({ ...base, rowsFit: 0 }).lastRow, "name");

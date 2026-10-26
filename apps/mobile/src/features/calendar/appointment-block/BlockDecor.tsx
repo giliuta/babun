@@ -1,7 +1,6 @@
 import { Text, View } from "react-native";
 import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import type { ViewStyle } from "react-native";
-import { Banknote, Check, CreditCard, Landmark, Wallet } from "lucide-react-native";
 import type { BlockMoney } from "@/features/calendar/block-status";
 import { useThemeColors } from "@/theme/colors";
 import { BLOCK_TEXT } from "@/components/ui/color-contrast";
@@ -227,59 +226,6 @@ export function FadeTail({
         </View>
       ))}
     </>
-  );
-}
-
-/** Кегль значков нижней строки — меньше текста, чтобы не спорить с именем;
- *  в широком блоке «Дня» 11 терялся — там 14. */
-const statusIcon = (width: number) => (width >= 96 ? 14 : 11);
-
-// СТРОКА ЗНАЧКОВ ВНИЗУ: что у записи уже есть, без суммы. Порядок
-// постоянный: деньги, выполнено. Деньги — значком способа (наличные · карта ·
-// перевод), частично — тот же значок вполсилы, не оплачено — бледный
-// кошелёк. Выполнено — галка; у невыполненной места нет, чтобы будущие
-// записи не мигали пустыми значками. «Нет объекта» говорит цвет блока.
-export function StatusRow({
-  money,
-  completed,
-  width,
-  left,
-  bottom,
-}: {
-  money: BlockMoney;
-  completed: boolean;
-  width: number;
-  left: number;
-  bottom: number;
-}) {
-  const size = statusIcon(width);
-  const Icon =
-    money?.method === "cash"
-      ? Banknote
-      : money?.method === "card"
-        ? CreditCard
-        : money?.method === "transfer"
-          ? Landmark
-          : Wallet;
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: "absolute",
-        left,
-        bottom,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: width >= 96 ? 6 : 4,
-      }}
-    >
-      {money ? (
-        <View style={{ opacity: money.state === "paid" ? 1 : money.state === "partial" ? 0.62 : 0.38 }}>
-          <Icon color={BLOCK_TEXT} size={size} strokeWidth={2.4} />
-        </View>
-      ) : null}
-      {completed ? <Check color={BLOCK_TEXT} size={size} strokeWidth={3} /> : null}
-    </View>
   );
 }
 

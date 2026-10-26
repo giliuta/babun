@@ -42,10 +42,23 @@ export const RECORD_COLOR_RULES: readonly RecordColorRule[] = [
   "service",
 ];
 
+/** ОТМЕНА И ОПЛАТА — ТОЖЕ КЛЮЧИ ПАЛИТРЫ, но не «дыры»: в лист «чего не
+ *  хватает» (`RECORD_COLOR_SITUATIONS`, худшая дыра дня в месяце) они не
+ *  входят. Оплата одна на все способы: чем именно платили, видно в записи. */
+export const RECORD_CANCELLED_KEY = "cancelled";
+export const RECORD_PAID_KEY = "paid";
+export const RECORD_PREPAID_KEY = "prepaid";
+
 /** Цвет на ситуацию. `null` у ситуации — «эта ситуация не красит»; отсутствие
  *  всей палитры — «владелец не трогал, действуют заводские цвета». */
 export type RecordColorPalette = Partial<
-  Record<RecordColorSituation, string | null>
+  Record<
+    | RecordColorSituation
+    | typeof RECORD_CANCELLED_KEY
+    | typeof RECORD_PAID_KEY
+    | typeof RECORD_PREPAID_KEY,
+    string | null
+  >
 >;
 
 export interface CalendarSettings {
@@ -218,7 +231,12 @@ function sanitizeRecordPalette(
   const raw = value as Record<string, unknown>;
   const out: RecordColorPalette = {};
   let touched = false;
-  for (const id of RECORD_COLOR_SITUATIONS) {
+  for (const id of [
+    ...RECORD_COLOR_SITUATIONS,
+    RECORD_CANCELLED_KEY,
+    RECORD_PAID_KEY,
+    RECORD_PREPAID_KEY,
+  ] as const) {
     if (!(id in raw)) continue;
     out[id] = hexOrNull(raw[id]);
     touched = true;

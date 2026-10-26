@@ -14,7 +14,6 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
-import { COLOR_SITUATIONS } from "@/features/appointments/record-color";
 import {
   BOOKING_BLOCKS,
   EVENT_BLOCKS,
@@ -57,7 +56,6 @@ export function DesignScreen() {
     memberUpdateTeam,
     rule,
     setRule,
-    palette,
     setSituationColor,
     editingColor,
     setEditingColor,
@@ -78,6 +76,9 @@ export function DesignScreen() {
     nudgeTariff,
     tab,
     setTab,
+    colorSheetTitle,
+    colorSheetValue,
+    toggleColor,
     openColor,
     colorRows,
     recordOn,
@@ -159,10 +160,11 @@ export function DesignScreen() {
                   hue={row.hue}
                   separated={i > 0}
                   onPress={readOnly ? undefined : () => openColor(row.id)}
+                  onToggle={readOnly || !row.toggles ? undefined : (next) => toggleColor(row.id, next)}
                 />
               ))}
             </SectionCard>
-            <RowCaption text="Цвет, выбранный в самой записи, главнее." />
+            <RowCaption text="Выключенный случай красится обычным цветом. Цвет, выбранный в самой записи, главнее всего, кроме отмены, долга и оплаты." />
 
             <SectionCard className="mt-4">
               <SwitchRow
@@ -239,11 +241,7 @@ export function DesignScreen() {
       <ColorSheet
         visible={editingColor != null}
         onClose={() => setEditingColor(null)}
-        title={
-          editingColor === "filled"
-            ? "Обычный цвет"
-            : COLOR_SITUATIONS.find((s) => s.id === editingColor)?.label
-        }
+        title={colorSheetTitle}
         // «Не красить»: у случая нет автомата — есть отказ от сигнала, и
         // тогда запись красится как обычная. У «Без цвета» отказа нет: это
         // последняя ступень.
@@ -251,13 +249,7 @@ export function DesignScreen() {
         autoColor={ordinary}
         allowNone={editingColor !== "filled"}
         commitOnPick
-        value={
-          editingColor === "filled"
-            ? ordinary
-            : editingColor
-              ? palette[editingColor] ?? null
-              : null
-        }
+        value={colorSheetValue}
         onPick={(color) => {
           if (!editingColor) return;
           if (editingColor === "filled") {
