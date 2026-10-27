@@ -115,7 +115,6 @@ export const FINANCE_ROW_ORDER: readonly string[] = [
   // «Ограничения» — под доходами и расходами, которые они режут.
   "finance.window",
   "finance.debts",
-  "finance.profit",
 ];
 
 /** ШЕСТЕРЁНКА «ФИНАНСОВ» — БЛОКАМИ, КАК НА НЕЙ САМОЙ («Деньги · Категории ·

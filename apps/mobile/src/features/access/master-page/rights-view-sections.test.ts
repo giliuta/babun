@@ -43,7 +43,6 @@ const REGISTRY: AccessBlock[] = [
   block("finance.accounts", ["off", "read", "write"], 120),
   block("finance.debts", ["off", "read", "write"], 130),
   block("finance.documents", ["off", "read", "write"], 140),
-  block("finance.profit", ["off", "read"], 150),
   // «Реквизиты» — право аккаунта (как в базе): на странице команды его нет.
   { ...block("finance.settings_requisites", ["off", "read"], 165), scope: "company" },
   block("finance.settings_accounts", ["off", "read", "write"], 160),
@@ -133,7 +132,6 @@ describe("страница раздела доступа — блоками вл
           "finance.income",
           "finance.expense",
           "finance.debts",
-          "finance.profit",
         ],
       },
       // Блоки шестерёнки «Финансов» — её названиями и в её порядке.

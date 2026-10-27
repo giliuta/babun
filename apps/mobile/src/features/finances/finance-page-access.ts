@@ -69,8 +69,9 @@ export interface FinancePageAccess {
   ops: Level;
   accounts: Level;
   debts: Level;
-  /** «Прибыль» (`finance.profit`: «Скрыта» · «Видит»). Плитка и панель
-   *  открыты, когда видны и обе стороны денег: прибыль — их разница. */
+  /** «Прибыль» — разница дохода и расхода: плитка и панель открыты, когда
+   *  видны обе стороны денег. Своего права у неё нет — сервер прибыль не
+   *  знает, а прятать разницу двух видимых чисел — галочка только экрана. */
   profit: Level;
   /** Пока владельческие: срез 1 их не открывает. */
   documents: boolean;
@@ -157,14 +158,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   const documentsLevel = levelIn("finance.documents", scope);
   // ПРИБЫЛЬ ПАРТНЁРА — доход минус расход команды, которые он видит. Материалы
   // записей в неё не входят: их суммы ему не приходят (`recordMoney`).
-  const profit: Level =
-    income === "locked" || expense === "locked"
-      ? "locked"
-      : owner
-        ? "read"
-        : levelIn("finance.profit", scope) === "locked"
-          ? "locked"
-          : "read";
+  const profit: Level = income === "locked" || expense === "locked" ? "locked" : "read";
 
   /** «Правит всё» — чужие операции стороны. */
   const sideFull = (side: Side, teamId: string | null): boolean => {

@@ -38,9 +38,8 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
   "finance.expense",
   "finance.accounts",
   "finance.debts",
-  // Плитки «Документы» и «Прибыль».
+  // Плитка «Документы».
   "finance.documents",
-  "finance.profit",
 ];
 
 export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
