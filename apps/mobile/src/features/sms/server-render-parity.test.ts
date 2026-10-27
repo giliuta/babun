@@ -8,8 +8,8 @@ import {
   MAX_SMS_PARTS as SERVER_MAX_PARTS,
   stripEmoji as serverStripEmoji,
 } from "../../../../../supabase/functions/send_sms/encoding";
-import { formatMoney, renderSms } from "../../../../../supabase/functions/send_sms/render";
-import { fillTemplate, MAX_SMS_PARTS, smsVars, stripEmoji } from "./sms-compose";
+import { formatMoney, renderSms, smsLanguageOf as serverLanguageOf } from "../../../../../supabase/functions/send_sms/render";
+import { fillTemplate, MAX_SMS_PARTS, smsLanguageOf, smsVars, stripEmoji } from "./sms-compose";
 
 // СЕРВЕР ОБЯЗАН ПИСАТЬ КЛИЕНТУ ТО ЖЕ, ЧТО ВЛАДЕЛЕЦ ВИДИТ В ЛИСТЕ «SMS»
 // (STORY-089). Функция `send_sms` не может импортировать общий код — её
@@ -27,6 +27,12 @@ const TEMPLATES = [
   "[Имя], ссылка [СсылкаНаОтмену]",
   "[Имя], подтвердите запись: [Ссылка]",
   "   ",
+  "Hi [Name], see you on [Day], [Date] at [Time]. [Company]",
+  "[Name], σας περιμένουμε την [Day], [Date] στις [Time].",
+  "[Имя], чекаємо вас у [День], [Дата] о [Время].",
+  "Здравейте, [Имя]! Очакваме Ви в [День], [Дата] в [Время].",
+  "Hallo [Name], wir kommen am [Day], [Date] um [Time].",
+  "Hola [Name], te esperamos el [Day], [Date] a las [Time].",
 ];
 
 const RECORDS = [
@@ -58,6 +64,12 @@ describe("текст SMS на сервере = текст в приложени�
       });
     }
   }
+});
+
+describe("язык шаблона — один и тот же", () => {
+  test("сервер и приложение читают язык одинаково", () => {
+    for (const template of TEMPLATES) assert.equal(serverLanguageOf(template), smsLanguageOf(template), template);
+  });
 });
 
 describe("деньги и части — те же", () => {

@@ -9,6 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
@@ -28,6 +29,7 @@ import {
   tariffStatus,
   tierName,
   workingTeamIds,
+  type BillingPeriod,
   type Tier,
   type TierCard,
 } from "@/session/tiers";
@@ -40,8 +42,9 @@ import { useLiveCalendarCount } from "./use-live-calendars";
 //
 // Сверху — что действует сейчас; ниже — карточка «Календарь»: цена одного и
 // итог за все живые календари аккаунта; действие страницы одно, в футере:
-// «Попробовать 14 дней», «Оплатить €… в месяц» или, когда старая подписка
-// есть, «Перейти на цену за календарь». Подписка есть — строка
+// «Попробовать 14 дней», «Оплатить €… в месяц» («… за год» — переключатель
+// «Месяц · Год» под карточкой) или, когда старая подписка есть, «Перейти на
+// цену за календарь». Подписка есть — строка
 // «Управление подпиской» (страница Stripe: карта, счета, отмена). Команд
 // больше лимита — строка «Рабочие команды» ведёт к выбору, какие работают;
 // остальные только смотрят.
@@ -81,6 +84,7 @@ export function TariffScreen() {
   // Выбор человека; пока не выбирал — действующий тариф (профиль может
   // приехать после первого кадра).
   const [picked, setPicked] = useState<Exclude<Tier, "free"> | null>(null);
+  const [period, setPeriod] = useState<BillingPeriod>("month");
   // Выдан навсегда — выбирать нечего: выделен свой тариф, а не прошлый тап.
   // Без плиток выбора (сборка без оплаты) пробный — на основной «Про».
   const fallback = offered[0]!;
@@ -105,9 +109,9 @@ export function TariffScreen() {
   // аккаунту страницы, а не по открытому в календаре.
   const calendars = Math.max(1, liveCount ?? (scope.foreign ? 0 : live.length));
   const full = owner
-    ? tariffAction(state, selected, calendars)
+    ? tariffAction(state, selected, calendars, period)
     : gate === "write"
-      ? partnerTariffAction(state, selected, accountName, calendars)
+      ? partnerTariffAction(state, selected, accountName, calendars, period)
       : null;
   // Без оплаты здесь — только бесплатный пробный.
   const action = CAN_PAY_HERE ? full : full?.kind === "trial" ? full : null;
@@ -129,7 +133,7 @@ export function TariffScreen() {
     }
     setPaying(true);
     try {
-      const result = await openTariffCheckout(selected, scope.foreign ? scope.tenantId : null);
+      const result = await openTariffCheckout(selected, scope.foreign ? scope.tenantId : null, undefined, period);
       if (result === "changed") {
         toast("Оплата за календари обновлена", "success");
         // Тариф пишет вебхук Stripe — через пару секунд.
@@ -226,6 +230,16 @@ export function TariffScreen() {
             onPress={canPick ? () => setPicked(card.tier) : undefined}
           />
         ))}
+        {/* Период — только у оплаты: пробный бесплатный, а у выданного
+            навсегда и своего оплаченного кнопки нет. */}
+        {showTiers && action && action.kind !== "trial" ? (
+          <SegmentedControl
+            options={PERIOD_OPTIONS}
+            value={period}
+            onChange={setPeriod}
+            style={{ marginHorizontal: GUTTER, marginTop: 12 }}
+          />
+        ) : null}
       </ScrollView>
 
       {action ? (
@@ -240,6 +254,11 @@ export function TariffScreen() {
     </Screen>
   );
 }
+
+const PERIOD_OPTIONS = [
+  { value: "month", label: "Месяц" },
+  { value: "year", label: "Год" },
+] as const satisfies readonly { value: BillingPeriod; label: string }[];
 
 function TierTile({
   card,

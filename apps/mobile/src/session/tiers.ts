@@ -1,5 +1,5 @@
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
-import { CALENDAR_PRICE, calendarsMonthly, euro } from "./calendar-price";
+import { CALENDAR_PRICE, calendarsMonthly, calendarsYearly, euro, type BillingPeriod } from "./calendar-price";
 
 // ЦЕНА ЗА КАЛЕНДАРЬ — ЧИСТЫЙ СЛОЙ.
 //
@@ -62,8 +62,7 @@ export const TIER_LIMITS: Record<Tier, { teams: number; partners: number }> = {
 };
 
 /** Карточка тарифа на странице «Тариф». Цена — евро в месяц; за год — цена
- *  месяца при оплате на год вперёд (пока помесячно, но
- *  оставьте зазор). */
+ *  месяца при оплате на год вперёд. */
 export interface TierCard {
   tier: Exclude<Tier, "free">;
   name: string;
@@ -73,7 +72,7 @@ export interface TierCard {
   includes: readonly string[];
 }
 
-export { CALENDAR_PRICE, calendarsMonthly } from "./calendar-price";
+export { CALENDAR_PRICE, calendarsMonthly, calendarsYearly, type BillingPeriod } from "./calendar-price";
 
 export const TIER_CARDS: readonly TierCard[] = [
   {
@@ -217,6 +216,13 @@ export interface TariffState {
   pastDue?: boolean;
 }
 
+/** Кнопка оплаты: «Оплатить €29.97 в месяц» или «Оплатить €287.64 за год». */
+function payLabel(calendars: number, period: BillingPeriod): string {
+  return period === "year"
+    ? `Оплатить ${calendarsYearly(calendars)} за год`
+    : `Оплатить ${calendarsMonthly(calendars)} в месяц`;
+}
+
 /** Одно действие страницы «Тариф» — в футере. Пробный — пока его не было и
  *  ничего не оплачено; дальше — оплата выбранного; подписка уже есть —
  *  переход на выбранный тариф в ней же. На своём оплаченном и на выданном
@@ -226,6 +232,8 @@ export function tariffAction(
   selected: Exclude<Tier, "free">,
   /** Живых календарей аккаунта — столько и в оплате. */
   calendars = 1,
+  /** Как платят: помесячно или за год вперёд. */
+  period: BillingPeriod = "month",
 ): { kind: "trial" | "pay" | "change"; label: string } | null {
   if (state.forever) return null;
   if (state.paid && state.tier === selected) return null;
@@ -233,7 +241,7 @@ export function tariffAction(
   if (!state.trial && !state.trialUsed) {
     return { kind: "trial", label: "Попробовать 14 дней" };
   }
-  return { kind: "pay", label: `Оплатить ${calendarsMonthly(calendars)} в месяц` };
+  return { kind: "pay", label: payLabel(calendars, period) };
 }
 
 /** ДЕЙСТВИЕ ПАРТНЁРА С «ТАРИФ: ОПЛАЧИВАЕТ» (чтобы кто-то
@@ -246,9 +254,10 @@ export function partnerTariffAction(
   _selected: Exclude<Tier, "free">,
   accountName: string | null,
   calendars = 1,
+  period: BillingPeriod = "month",
 ): { kind: "pay"; label: string } | null {
   if (state.forever || state.paid) return null;
-  const pay = `Оплатить ${calendarsMonthly(calendars)} в месяц`;
+  const pay = payLabel(calendars, period);
   return { kind: "pay", label: accountName ? `${pay} за ${accountName}` : pay };
 }
 

@@ -145,3 +145,29 @@ describe("online booking migration contract", () => {
     assert.match(create, /interval '1 hour'\) >= 20/);
   });
 });
+
+// СТОРОЖ ФИКСА АУДИТА (S-01/S-02): онлайн-заявка не шлёт автоматических SMS
+// и не цепляется к чужой карточке по одному номеру.
+describe("online booking sms and client match fix", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const file = "20261027213400_online_booking_sms_and_client_match.sql";
+  const repo = path.resolve(here, "../../../../..");
+  const found = ["supabase/migrations", "supabase/parked"]
+    .map((dir) => path.join(repo, dir, file))
+    .find((p) => existsSync(p));
+
+  test("sms funnel refuses online bookings", () => {
+    assert.ok(found, `нет ${file}`);
+    const sql = readFileSync(found, "utf8");
+    assert.match(sql, /if a\.source is not distinct from ''online'' then\s+return false;/);
+    assert.match(sql, /якорь не найден ровно один раз/);
+  });
+
+  test("existing client only on matching first name, never blacklisted", () => {
+    assert.ok(found, `нет ${file}`);
+    const sql = readFileSync(found, "utf8");
+    assert.match(sql, /if v_match_blocked then\s+raise exception/);
+    assert.match(sql, /lower\(split_part\(v_name, ' ', 1\)\) = any\(v_match_names\)/);
+    assert.match(sql, /case when v_match is null then v_phone end/);
+  });
+});

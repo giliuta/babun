@@ -79,21 +79,6 @@ export {
 // одинаково, и владелец выключает его один раз.
 const LEGACY_KEY = "babun-booking-blocks";
 
-/** Выключенное — ключами функций компании, как их ждут `crewBlocks` и
- *  финансы дня: функции компании плюс блоки записи ЭТОЙ команды
- *  (record_object → objects). Одна правда на экран мастера и владельца. */
-export function useRecordFeaturesOff(teamId: string | null | undefined): string[] {
-  const off = useTeamBlocksOff(teamId);
-  const disabled = useDisabledFeatures();
-  const out = new Set<string>(disabled);
-  if (off.has("record_label")) out.add("record_label");
-  if (off.has("record_object")) out.add("objects");
-  if (off.has("record_payment")) out.add("record_payment");
-  if (off.has("record_note")) out.add("record_note");
-  if (off.has("record_files")) out.add("record_files");
-  return [...out];
-}
-
 /** Включённые блоки формы записи КОМАНДЫ, в порядке показа (у каждой команды свои). Объект — ещё и функция компании
  *  (объекты клиентов): выключены объекты у компании — блока нет нигде. */
 export function useBookingBlocks(teamId: string | null | undefined): BookingBlockId[] {

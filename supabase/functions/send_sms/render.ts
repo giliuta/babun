@@ -27,11 +27,59 @@ export interface SmsRenderVars {
   link?: string | null;
 }
 
-const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
-const MONTHS = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
+// День и дата — на языке шаблона: английский шаблон не получает «пятница».
+// Языка у шаблона в базе нет — он читается из текста (`smsLanguageOf`).
+export type SmsLanguage = "ru" | "en" | "bg" | "el" | "uk" | "de" | "es";
+
+const WEEKDAYS: Record<SmsLanguage, readonly string[]> = {
+  ru: ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"],
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  bg: ["неделя", "понеделник", "вторник", "сряда", "четвъртък", "петък", "събота"],
+  el: ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο"],
+  uk: ["неділя", "понеділок", "вівторок", "середа", "четвер", "п'ятниця", "субота"],
+  de: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
+  es: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+};
+
+const MONTHS: Record<SmsLanguage, readonly string[]> = {
+  ru: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
+  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  bg: ["януари", "февруари", "март", "април", "май", "юни", "юли", "август", "септември", "октомври", "ноември", "декември"],
+  el: ["Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου", "Ιουνίου", "Ιουλίου", "Αυγούστου", "Σεπτεμβρίου", "Οκτωβρίου", "Νοεμβρίου", "Δεκεμβρίου"],
+  uk: ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"],
+  de: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+  es: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+};
+
+function dateWords(day: number, month: number, lang: SmsLanguage): string {
+  const name = MONTHS[lang][month];
+  if (lang === "de") return `${day}. ${name}`;
+  if (lang === "es") return `${day} de ${name}`;
+  return `${day} ${name}`;
+}
+
+const BULGARIAN_WORDS = /(^|[^а-яё])(ще|във|със|сте|утре|днес|здравейте|напомняме|очакваме|благодарим ви)(?=$|[^а-яё])/i;
+/** Немецкий и испанский без умлаутов и ударений латиницей не отличить от
+ *  английского — тоже по ходовым словам, которых в английском нет. */
+const GERMAN_WORDS = /\b(wir|sie|ihr|ihre|ihren|ihrem|und|uhr|termin|morgen|hallo|danke|bitte|ist|bis|zum)\b/i;
+const SPANISH_WORDS = /\b(hola|gracias|cita|te|le|el|los|las|su|sus|para|por|con|del|esperamos|nos|vemos)\b/i;
+
+/** Язык шаблона по его тексту без полей `[…]`; нечего прочесть — русский. */
+export function smsLanguageOf(body: string | null | undefined): SmsLanguage {
+  const text = (body ?? "").replace(/\[[\p{L}\p{N}_]+\]/gu, " ");
+  if (/[Ά-ώ]/.test(text)) return "el";
+  if (/[а-яёіїєґ]/i.test(text)) {
+    if (/[іїєґ]/i.test(text)) return "uk";
+    if (/[ыэё]/i.test(text)) return "ru";
+    return BULGARIAN_WORDS.test(text) ? "bg" : "ru";
+  }
+  if (/[a-z]/i.test(text)) {
+    if (/[äöüß]/i.test(text) || GERMAN_WORDS.test(text)) return "de";
+    if (/[ñ¡¿áéíóú]/i.test(text) || SPANISH_WORDS.test(text)) return "es";
+    return "en";
+  }
+  return "ru";
+}
 
 const TOKEN_ALIASES: Record<string, string> = {
   Имя: "Name",
@@ -83,7 +131,7 @@ function positiveMoney(value: number | string | null | undefined, currency?: str
   return formatMoney(n, currency);
 }
 
-export function renderVars(v: SmsRenderVars): Record<string, string> {
+export function renderVars(v: SmsRenderVars, lang: SmsLanguage = "ru"): Record<string, string> {
   const out: Record<string, string> = {};
   const put = (key: string, value: string | undefined) => {
     if (value) out[key] = value;
@@ -93,8 +141,8 @@ export function renderVars(v: SmsRenderVars): Record<string, string> {
   if (m) {
     const day = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
     if (!Number.isNaN(day.getTime())) {
-      put("Day", WEEKDAYS[day.getUTCDay()]);
-      put("Date", `${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]}`);
+      put("Day", WEEKDAYS[lang][day.getUTCDay()]);
+      put("Date", dateWords(day.getUTCDate(), day.getUTCMonth(), lang));
     }
   }
   const t = /^(\d{1,2}):(\d{2})/.exec(v.time ?? "");
@@ -114,7 +162,7 @@ export function renderVars(v: SmsRenderVars): Record<string, string> {
 export function renderSms(template: string | null | undefined, v: SmsRenderVars): string | null {
   const body = template ?? "";
   if (!body.trim()) return null;
-  const vars = renderVars(v);
+  const vars = renderVars(v, smsLanguageOf(body));
   let missing = false;
   const text = body.replace(/\[([\p{L}\p{N}_]+)\]/gu, (match, key: string) => {
     const value = vars[TOKEN_ALIASES[key] ?? key];

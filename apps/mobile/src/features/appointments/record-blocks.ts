@@ -20,7 +20,7 @@ type Role = "owner" | "dispatcher" | "master";
 // Level types and the `/book` rights live in `./record-blocks/`; this file
 // stays the public entry.
 export type { EventBlocks, RecordBlocks, RecordLevel } from "./record-blocks/levels";
-export { bookRights, readOnlyBookRights, type BookRights } from "./record-blocks/book-rights";
+export { bookIsReadOnly, bookRights, readOnlyBookRights, type BookRights } from "./record-blocks/book-rights";
 
 /** Что человек может сделать с записями календаря — кнопки сетки и меню. */
 export interface CalendarActions {

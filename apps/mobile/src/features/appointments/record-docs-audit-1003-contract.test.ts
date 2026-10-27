@@ -21,13 +21,12 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(block, /useBusinessNow\(teamId\)/);
   });
 
-  test("маршрут листа выезда и события — общей шторкой карт", () => {
-    for (const file of ["appointments/CrewWorkRecord.tsx", "appointments/CrewAppointmentSheet.tsx"]) {
-      const body = src(file);
-      assert.doesNotMatch(body, /maps\.apple\.com/, file);
-      assert.match(body, /onPress=\{\(\) => route\.open\(null, address\)\}/, file);
-      assert.match(body, /\{route\.sheet\}/, file);
-    }
+  test("маршрут вольного адреса события — общей кнопкой карт", () => {
+    // Записи и события открываются одной страницей /book; адрес без объекта
+    // ведёт в карты той же кнопкой, что строка объекта, а не ссылкой Apple.
+    const body = src("appointments/book-form/EventObjectBlock.tsx");
+    assert.doesNotMatch(body, /maps\.apple\.com/);
+    assert.match(body, /trailing=\{<ObjectRouteButton address=\{eventAddress\} teamId=\{teamId\} \/>\}/);
   });
 
   test("повтор SMS — той же командой и на тот же номер", () => {

@@ -1,4 +1,4 @@
--- СКИДКА НОВОЙ ЗАПИСИ — ПО ПРАВУ «СУММА И УСЛУГИ ЗАПИСИ» (ЧЕРНОВИК, НЕ НАКАЧЕН).
+-- СКИДКА НОВОЙ ЗАПИСИ — ПО ПРАВУ «СУММА И УСЛУГИ ЗАПИСИ». Накачена 27.10.2026.
 --
 -- Правка записи сотрудником проверяет скидку, свою сумму и цену строки
 -- правом `record.amount` (`member_check_appointment_field`). Создание —
@@ -9,7 +9,7 @@
 --
 -- Тело снято с живого `pg_proc.prosrc` (md5 daa17a762f59793bbda3626ff67d6812,
 -- 27.10); изменена ровно проверка денег в цикле полей рабочей записи.
--- Перед накатом — сверить md5 живого тела ещё раз.
+-- Накат 27.10: живое тело сверено (daa17a76…), прогон в откате 8/8, md5 после наката = файлу.
 --
 -- Что не закрывает: `total_amount` сервер не пересчитывает из услуг — его
 -- сотрудник без права всё ещё может прислать любым. VAT (`vat_mode`,
@@ -27,6 +27,7 @@ declare
   v_id uuid;
   v_rest jsonb;
   k text;
+  v_money_set boolean;
 begin
   if auth.uid() is null or public.current_user_role() is distinct from 'master' then
     raise exception 'only an employee can use this appointment create' using errcode = '42501';
@@ -71,15 +72,18 @@ begin
       -- только с «Сумма и услуги записи: Меняет» — так же, как в правке.
       -- Пустое значение (ноль, `false`, `null`, `{}`) проходит: форма его и
       -- так не шлёт, а старые клиенты не упадут.
-      if k in ('discount_amount', 'global_discount', 'custom_total', 'service_price_overrides')
-         and not public.member_can('record.amount', 'write', v_team)
-         and case k
-               when 'discount_amount' then coalesce(nullif(v_rest ->> k, '')::numeric, 0) <> 0
-               when 'custom_total' then coalesce((v_rest ->> k)::boolean, false)
-               when 'global_discount' then jsonb_typeof(v_rest -> k) = 'object'
-                 and coalesce(nullif(v_rest -> k ->> 'value', '')::numeric, 0) <> 0
-               else jsonb_typeof(v_rest -> k) = 'object' and v_rest -> k <> '{}'::jsonb
-             end then
+      -- CASE считается заранее: внутри условия IF его первый THEN обрывает
+      -- условие (plpgsql читает IF до первого THEN).
+      v_money_set := case k
+        when 'discount_amount' then coalesce(nullif(v_rest ->> k, '')::numeric, 0) <> 0
+        when 'custom_total' then coalesce((v_rest ->> k)::boolean, false)
+        when 'global_discount' then jsonb_typeof(v_rest -> k) = 'object'
+          and coalesce(nullif(v_rest -> k ->> 'value', '')::numeric, 0) <> 0
+        when 'service_price_overrides' then jsonb_typeof(v_rest -> k) = 'object'
+          and v_rest -> k <> '{}'::jsonb
+        else false
+      end;
+      if v_money_set and not public.member_can('record.amount', 'write', v_team) then
         raise exception 'access:block:record.amount' using errcode = '42501';
       end if;
     elsif k in ('comment', 'color_override', 'event_notes', 'event_url') then

@@ -11,7 +11,6 @@ export function useCalendarUiState() {
   const [smsApt, setSmsApt] = useState<Appointment | null>(null);
   const [smsOpen, setSmsOpen] = useState(false);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
-  const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
   // «ЦВЕТ» ИЗ МЕНЮ ДОЛГОГО НАЖАТИЯ (быстрая смена цвета). Из формы записи это
   // пять тапов, а «Применить» в листе лишь закрывает его — сохраняет футер
   // формы. Поэтому здесь тап по цвету сразу пишет запись.
@@ -32,8 +31,7 @@ export function useCalendarUiState() {
   const [reminderFor, setReminderFor] = useState<Appointment | null>(null);
 
   return {
-    smsApt, setSmsApt, smsOpen, setSmsOpen, miniCalOpen, setMiniCalOpen, crewViewing,
-    setCrewViewing, recolor, setRecolor, sheetMenu, setSheetMenu, cityPickerYmd,
+    smsApt, setSmsApt, smsOpen, setSmsOpen, miniCalOpen, setMiniCalOpen, recolor, setRecolor, sheetMenu, setSheetMenu, cityPickerYmd,
     setCityPickerYmd, slotDraft, setSlotDraft, finModalYmd, setFinModalYmd, reminderFor,
     setReminderFor,
   };

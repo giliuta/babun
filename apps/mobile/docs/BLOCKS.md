@@ -674,7 +674,7 @@
 | `src/features/clients/ClientRow.tsx` | свайп собран на сырой библиотеке; на ЛЕВОЙ кромке ДВЕ кнопки; ротор VoiceOver не видит ни один глагол | `SwipeRow`, одно действие на кромку, второе — в меню долгого нажатия |
 | Кабинет: `src/features/inventory/InventoryEditorSheet.tsx` (склад), `src/features/cabinet/account/DangerZoneSection.tsx` («Вход и безопасность») | сырой `Modal animationType="slide"` вместо `BottomSheet` | рецепт «Метки» |
 | `app/(dashboard)/chats/[id].tsx` | два сырых листа: выбор клиента написан заново | `ClientPickerSheet` |
-| `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` · `src/features/appointments/CrewAppointmentSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
+| `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
 | 9 мест | `borderRadius` числом (12, 20, 13, 15, 9, 36) | `t.radius.card` / `t.radius.pill` |
 | 27 мест | `borderRadius: 999` литералом | `t.radius.pill` |
 
