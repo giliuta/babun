@@ -124,6 +124,17 @@ const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"))
 const DELETE_RIGHT = "20261003004100_clients_delete_right_no_archive.sql";
 const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"));
 
+// ИСТОРИЮ КЛИЕНТА ЗНАЕТ ОДНА ФУНКЦИЯ: срок стирания снимается тем же
+// `client_has_history`, что держит стирание, — записи, инвойсы, операции и
+// долги. Правило DELETE_RIGHT то же, видов истории не меньше.
+const TRASH_HISTORY = "20261027225305_trash_knows_client_history.sql";
+const trashHistory = norm(readFileSync(join(MIGRATIONS_DIR, TRASH_HISTORY), "utf8"));
+
+// ВЫДАЧА СПИСКА КЛИЕНТОВ — В ЖУРНАЛ: `list_member_clients` — обёртка с
+// журналом, а тело TAG_ORDER живёт как `list_member_clients_rows` без правок.
+const DISCLOSURES = "20261027225327_client_list_disclosure_journal.sql";
+const disclosures = norm(readFileSync(join(MIGRATIONS_DIR, DISCLOSURES), "utf8"));
+
 // НОМЕР — СРАЗУ: «Клиент: Видит» отдаёт контакты целиком,
 // без двери и точек; «Скрыт» — без контактов.
 const PHONE_OPEN = "20261003010500_clients_phone_open_with_client_block.sql";
@@ -175,9 +186,11 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
-    for (const fn of ["member_trash_client", "client_history_never_purges"]) {
-      assert.equal(lastDefiner(fn), DELETE_RIGHT, `${fn} переопределён позже`);
-    }
+    assert.equal(lastDefiner("member_trash_client"), DELETE_RIGHT, "member_trash_client переопределён позже");
+    assert.equal(lastDefiner("client_history_never_purges"), TRASH_HISTORY, "client_history_never_purges переопределён позже");
+    assert.equal(lastDefiner("client_has_history"), TRASH_HISTORY, "client_has_history переопределён позже");
+    assert.equal(lastDefiner("list_member_clients"), DISCLOSURES, "list_member_clients переопределён позже");
+    assert.equal(lastDefiner("list_member_clients_rows"), "", "тело TAG_ORDER под именем list_member_clients_rows переписано");
     for (const fn of [
       "list_master_clients_safe",
       "member_appointment_copy",
@@ -219,7 +232,6 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of [
       "create_client_with_tags",
       "update_client_with_tags",
-      "list_member_clients",
       "list_client_members",
     ]) {
       assert.equal(lastDefiner(fn), TAG_ORDER, `${fn} переопределён позже`);
@@ -379,6 +391,31 @@ describe("сервер: клиенты по уровням", () => {
     );
     assert.ok(deleteRight.includes("before insert or update of purge_at on public.clients for each row execute function public.client_history_never_purges();"));
     assert.ok(deleteRight.includes("revoke all on function public.client_history_never_purges() from public, anon, authenticated;"));
+    // Живое тело — TRASH_HISTORY: то же правило через `client_has_history`.
+    assert.ok(
+      trashHistory.includes(
+        "if new.purge_at is not null and public.client_has_history(new.id, false) then new.purge_at := null;",
+      ),
+      "клиенту с историей снова ставится срок стирания",
+    );
+    for (const kind of [
+      "exists (select 1 from public.appointments a where a.client_id = p_client)",
+      "or exists (select 1 from public.invoices i where i.client_id = p_client)",
+      "or exists (select 1 from public.finance_transactions f where f.client_id = p_client)",
+      "or exists (select 1 from public.debts d where d.client_id = p_client)",
+    ]) {
+      assert.ok(trashHistory.includes(kind), `история клиента потеряла: ${kind}`);
+    }
+  });
+
+  test("выдача списка клиентов сотруднику пишется в журнал, тело списка — прежнее (DISCLOSURES)", () => {
+    assert.ok(disclosures.includes("alter function public.list_member_clients(uuid) rename to list_member_clients_rows;"));
+    assert.ok(disclosures.includes("revoke all on function public.list_member_clients_rows(uuid) from public, anon, authenticated;"));
+    assert.ok(disclosures.includes("return query select x from public.list_member_clients_rows(p_client_id) x;"));
+    assert.ok(
+      disclosures.includes("insert into public.client_list_disclosures (tenant_id, user_id, clients_count)"),
+      "выдача списка не пишется в журнал",
+    );
   });
 
   test("номер — сразу по блоку «Клиент», без двери и точек (03.10)", () => {
