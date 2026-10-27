@@ -1,6 +1,6 @@
 import { Pressable, View } from "react-native";
 import { Bell, BellRing, ChevronLeft, MoreHorizontal } from "lucide-react-native";
-import { ICON } from "@/components/ui/tokens";
+import { ICON, TYPE } from "@/components/ui/tokens";
 import { Halo } from "@/components/ui/Halo";
 import { colorName } from "@babun/shared/common/utils/colors";
 import { selfReminderLabel } from "@/lib/reminder-time";
@@ -59,7 +59,7 @@ export function BookHeader({ form }: { form: BookModel }) {
         </Pressable>
         <Text
           className="flex-1 text-center"
-          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          style={{ ...TYPE.headline, color: t.ink }}
         >
           {title}
         </Text>
