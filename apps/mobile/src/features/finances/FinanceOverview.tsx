@@ -14,6 +14,7 @@ import type { Period } from "@/lib/period";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
 import { SummaryToggle } from "./finance-overview/SummaryToggle";
+import { UNKNOWN_BALANCE_TEXT } from "./accounts";
 
 export { PeriodRow, ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
 export { SummaryToggle } from "./finance-overview/SummaryToggle";
@@ -51,7 +52,7 @@ export interface AccountTileSummary {
   /** Σ остатков набора — та же цифра, что и на странице счетов.
    *  Больше плитке ничего не нужно: она отвечает «сколько у команды», а состав
    *  (сколько счетов, сколько наличными) смотрят на самой странице счетов. */
-  total: number;
+  total: number | null;
 }
 
 export interface OverviewTotals {
@@ -171,8 +172,8 @@ export function FinanceOverview({
           <SummaryToggle
             label={accountsTitle}
             color={t.ink}
-            value={formatEUR(accounts.total)}
-            quiet={moneySign(accounts.total) === 0}
+            value={accounts.total === null ? UNKNOWN_BALANCE_TEXT : formatEUR(accounts.total)}
+            quiet={accounts.total === null || moneySign(accounts.total) === 0}
             active={view === "accounts"}
             locked={locked || lockAccounts}
             onPress={() => onTap("accounts")}
