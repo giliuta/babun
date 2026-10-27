@@ -1,6 +1,7 @@
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Search, Settings, SlidersHorizontal } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { TYPE } from "@/components/ui/tokens";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { clientsSettingsHref } from "@/session/clients-company";
 import { ALL_TEAMS, toggleTeamChoice } from "@/features/clients/team-scope";
@@ -31,22 +32,42 @@ export function ListTopBar({ list }: { list: ClientsList }) {
   return (
     <>
       {selecting ? (
-        // Селекшн-хедер: Отмена · «Выбрано N» · Выбрать всё/Снять.
-        <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
+        // Селекшн-хедер: Отмена · «Выбрано N» · Выбрать всё/Снять. Та же
+        // полоса, что у поиска (48, surface, шов снизу), и кегль навбара —
+        // иначе список прыгал при входе в выбор.
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 8,
+            minHeight: 48,
+            backgroundColor: t.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: t.separator,
+          }}
+        >
           <Pressable
             onPress={exitSelection}
             accessibilityRole="button"
             accessibilityLabel="Отменить выбор"
-            className="min-h-11 justify-center px-1 active:opacity-60"
+            hitSlop={6}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              justifyContent: "center",
+              paddingHorizontal: 8,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Text
-              className="text-base font-semibold"
-              style={{ color: t.accent }}
-            >
+            <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.headline, color: t.accent }}>
               Отмена
             </Text>
           </Pressable>
-          <Text className="text-base font-semibold" style={{ color: t.ink }}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            accessibilityRole="header"
+            style={{ ...TYPE.headline, color: t.ink }}
+          >
             {pickedCount > 0
               ? `Выбрано ${pickedCount}`
               : "Выберите клиентов"}
@@ -55,12 +76,15 @@ export function ListTopBar({ list }: { list: ClientsList }) {
             onPress={toggleAll}
             accessibilityRole="button"
             accessibilityLabel={allSelected ? "Снять всё" : "Выбрать всё"}
-            className="min-h-11 justify-center px-1 active:opacity-60"
+            hitSlop={6}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              justifyContent: "center",
+              paddingHorizontal: 8,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Text
-              className="text-base font-semibold"
-              style={{ color: t.accent }}
-            >
+            <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.headline, color: t.accent }}>
               {allSelected ? "Снять" : "Всё"}
             </Text>
           </Pressable>

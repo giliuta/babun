@@ -1141,10 +1141,11 @@ describe("экраны: вкладка «Клиенты» открывается
     // Список — маршрут + папка `list/`; шапка с лентой команд — `ListTopBar.tsx`.
     const list = clientsListSource();
     const top = clientsListTopBarSource();
-    // Срез строго по разметке шапки: от неё до ленты команд под ней. Якорь —
-    // сам тег; не найден — тест падает, а не проверяет весь файл (якорь
-    // в виде снесённого `<ClientsFilterBar` молча шёл бы срезом до конца).
-    const start = top.indexOf("minHeight: 48");
+    // Срез строго по разметке шапки: от шестерёнки до ленты команд под ней.
+    // Якорь — сама шестерёнка; не найден — тест падает, а не проверяет весь
+    // файл. `minHeight: 48` якорем быть не может: та же высота у полосы
+    // выбора над шапкой, и срез молча начался бы с неё.
+    const start = top.indexOf('id="clients.gear"');
     const end = top.indexOf("<ScopeChips");
     assert.ok(start > 0 && end > start, "границы шапки списка не найдены");
     const header = top.slice(start, end);
