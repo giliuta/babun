@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sql = readFileSync(
-  resolve(here, "../../../../../supabase/parked/20261027234500_merge_clients.sql"),
+  resolve(here, "../../../../../supabase/migrations/20261027234500_merge_clients.sql"),
   "utf8",
 );
 const body = sql.slice(sql.indexOf("create or replace function public.merge_clients("));

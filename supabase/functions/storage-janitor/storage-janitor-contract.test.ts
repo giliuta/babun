@@ -16,7 +16,7 @@ const janitor = read("index.ts");
 const shared = read("../_shared/tenant-storage.ts");
 const accountDelete = read("../account-delete/index.ts");
 const cleanup = read("../account-delete-cleanup/index.ts");
-const sql = read("../../parked/20261027224300_storage_janitor.sql");
+const sql = read("../../migrations/20261027224300_storage_janitor.sql");
 const config = read("../../config.toml");
 
 const BUCKETS = ["appointment-photos", "client-attachments", "partner-files", "receipts", "tenant-logos"];
