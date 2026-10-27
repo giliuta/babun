@@ -174,3 +174,31 @@ describe("online booking sms and client match fix", () => {
     assert.doesNotMatch(sql, /case when v_match is null then v_phone end/);
   });
 });
+
+// ДВЕ ПАРКОВЫЕ МИГРАЦИИ ПРАВЯТ `sms_enqueue`. 20261027170000 переписывает её
+// целиком, 20261027213400 вставляет проверку онлайн-заявки по якорю в живое
+// тело. Пара накатывается только в этом порядке: якоря обязаны найтись в теле
+// из 170000 ровно по разу, и итог несёт обе правки.
+describe("sms_enqueue: reschedule delay and online guard stack", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const repo = path.resolve(here, "../../../../..");
+  const read = (file: string): string | null => {
+    const p = ["supabase/migrations", "supabase/parked"].map((dir) => path.join(repo, dir, file)).find((x) => existsSync(x));
+    return p ? readFileSync(p, "utf8") : null;
+  };
+  const reschedule = read("20261027170000_sms_reschedule_undo.sql");
+  const online = read("20261027213400_online_booking_sms_and_client_match.sql");
+
+  test("online patch lands on the 170000 body with both changes", (t) => {
+    if (!reschedule || !online) return t.skip("пары миграций нет в дереве");
+    const body = /CREATE OR REPLACE FUNCTION public\.sms_enqueue\([\s\S]*?\$function\$([\s\S]*?)\$function\$/i.exec(reschedule)?.[1];
+    assert.ok(body, "в 170000 нет sms_enqueue");
+    const anchors = [...online.matchAll(/ {2}a[12] text := '([\s\S]*?)';\n/g)].map((m) => m[1].replace(/''/g, "'"));
+    assert.equal(anchors.length, 2);
+    for (const a of anchors) assert.equal(body.split(a).length - 1, 1, `якорь не один раз: ${a.slice(0, 40)}`);
+    // Срок «При переносе» — в теле, поверх которого ляжет вставка.
+    assert.match(body, /tpl\.trigger in \('cancelled', 'rescheduled'\)/);
+    assert.match(online, /Сначала накатить 20261027170000_sms_reschedule_undo/);
+    assert.match(online, /потерян срок «При переносе» из 20261027170000/);
+  });
+});

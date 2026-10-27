@@ -19,6 +19,23 @@
 --
 -- `sms_enqueue` правится вставкой по якорю в ЖИВОЕ тело (его переопределяли
 -- не раз): сторож падает, если якорь не найден ровно один раз.
+--
+-- ПОРЯДОК НАКАТА: СНАЧАЛА `20261027170000_sms_reschedule_undo`. Та переписывает
+-- `sms_enqueue` целиком (срок «При переносе») и, накаченная второй, молча
+-- стёрла бы проверку онлайн-заявки. Поверх её тела вставка ложится как есть:
+-- якоря в нём те же. Сторож ниже не пускает эту миграцию раньше той.
+
+do $order$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'sms_messages' and column_name = 'known_start'
+  ) or position('tpl.trigger in (''cancelled'', ''rescheduled'')' in
+       pg_get_functiondef('public.sms_enqueue(uuid, uuid, timestamptz)'::regprocedure)) = 0 then
+    raise exception 'Сначала накатить 20261027170000_sms_reschedule_undo: она переписывает sms_enqueue целиком и стёрла бы эту правку';
+  end if;
+end;
+$order$;
 
 do $patch$
 declare
@@ -207,6 +224,9 @@ do $guard$
 begin
   if position('a.source is not distinct from ''online''' in pg_get_functiondef('public.sms_enqueue(uuid, uuid, timestamptz)'::regprocedure)) = 0 then
     raise exception 'sms_enqueue: проверка онлайн-заявки не встала';
+  end if;
+  if position('tpl.trigger in (''cancelled'', ''rescheduled'')' in pg_get_functiondef('public.sms_enqueue(uuid, uuid, timestamptz)'::regprocedure)) = 0 then
+    raise exception 'sms_enqueue: потерян срок «При переносе» из 20261027170000';
   end if;
   if has_function_privilege('anon', 'public.sms_enqueue(uuid, uuid, timestamptz)', 'execute')
      or has_function_privilege('authenticated', 'public.sms_enqueue(uuid, uuid, timestamptz)', 'execute') then
