@@ -53,8 +53,11 @@ type PageBlock = {
   icon?: LucideIcon;
 };
 
-// Порядок — порядок страницы клиента.
+// Порядок — порядок страницы клиента (`CLIENT_CARD_ROW_ORDER`): метка и тег
+// самым верхом. SMS здесь нет — блок живёт выключателем SMS, а не этим.
 const PAGE_BLOCKS: PageBlock[] = [
+  { label: "Метка", key: "client_labels", icon: Bookmark },
+  { label: "Тег", key: "client_tags", icon: Tags },
   { label: "Клиент", pinned: true },
   { label: "Заметка", key: "client_note", icon: StickyNote },
   { label: "Люди", key: "client_people", icon: UsersRound },
@@ -62,8 +65,6 @@ const PAGE_BLOCKS: PageBlock[] = [
   { label: "Объекты", key: "client_objects", icon: Home },
   { label: "Файлы", key: "client_files", icon: Paperclip },
   { label: "Реквизиты", key: "client_requisites", icon: FileText },
-  { label: "Метка", key: "client_labels", icon: Bookmark },
-  { label: "Тег", key: "client_tags", icon: Tags },
   { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
