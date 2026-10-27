@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { ActionRow } from "@/components/ui/card-rows";
+import { Modal, Pressable, Text, View } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { Trash2 } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { wipeTenantScopedData } from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
@@ -63,58 +63,96 @@ export function DangerZoneSection({ email }: { email: string }) {
     }
   };
 
-  const openSheet = () => {
-    setTyped("");
-    setError(null);
-    setOpen(true);
-  };
-
   return (
     <>
-      {/* ВХОД — СТРОКА СПИСКА, А НЕ ВТОРАЯ КНОПКА-ПИЛЮЛЯ: красная `ActionRow`
-          со значком, как «Выйти со всех устройств» выше. */}
-      <SectionCard title="Опасная зона" padded={false}>
-        <Text className="px-4 pt-1 text-sm leading-5" style={{ color: t.sub }}>
+      <SectionCard title="Опасная зона" padded>
+        <Text className="mb-3 text-sm leading-5" style={{ color: t.sub }}>
           Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и
           настройки.
         </Text>
-        <ActionRow label="Удалить аккаунт" tone="danger" icon={Trash2} onPress={openSheet} />
+        <Pressable
+          onPress={() => {
+            setTyped("");
+            setError(null);
+            setOpen(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Удалить аккаунт"
+          className="flex-row items-center justify-center rounded-full border py-3.5 active:opacity-70"
+          style={{
+            minHeight: 48,
+            borderColor: t.danger + "4d",
+            backgroundColor: t.danger + "1a",
+          }}
+        >
+          <Trash2 color={t.danger} size={ICON.xs} />
+          <Text className="ml-2 text-base font-semibold" style={{ color: t.danger }}>
+            Удалить аккаунт
+          </Text>
+        </Pressable>
       </SectionCard>
 
-      {/* ПОДТВЕРЖДЕНИЕ — КАНОНИЧЕСКИЙ ЛИСТ (AGENTS Canon Reuse п.5): шапка,
-          поле, «Удалить» в футере. Пока идёт удаление, лист не закрывается. */}
-      <BottomSheet
+      <Modal
         visible={open}
-        onClose={() => !busy && setOpen(false)}
-        title="Удалить аккаунт?"
-        avoidKeyboard
-        footer={
-          <Button
-            label="Удалить"
-            tone="danger"
-            disabled={!ready || busy}
-            loading={busy}
-            onPress={() => void deleteAccount()}
-          />
-        }
+        transparent
+        animationType="fade"
+        onRequestClose={() => !busy && setOpen(false)}
       >
-        <View style={{ paddingHorizontal: 16 }}>
-          <Text style={{ marginBottom: 12, fontSize: 14, lineHeight: 20, color: t.sub }}>
-            Введите {email ? "email аккаунта" : /* i18n-ignore */ "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
-          </Text>
-          <Field
-            label="Подтверждение"
-            value={typed}
-            onChangeText={setTyped}
-            placeholder={targetPhrase}
-            keyboardType={email ? "email-address" : "default"}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!busy}
-            error={error}
-          />
-        </View>
-      </BottomSheet>
+        <KeyboardLift
+          style={{ flex: 1, justifyContent: "center", padding: 20, backgroundColor: t.scrim }}
+        >
+          <View
+            accessibilityRole="alert"
+            style={{
+              borderRadius: t.radius.card,
+              backgroundColor: t.surface,
+              padding: 20,
+              boxShadow: t.cardShadow,
+            }}
+          >
+            <Text style={{ fontSize: 20, fontWeight: "700", color: t.danger }}>
+              Удалить аккаунт?
+            </Text>
+            <Text style={{ marginTop: 8, marginBottom: 16, fontSize: 14, lineHeight: 20, color: t.sub }}>
+              Введите {email ? "email аккаунта" : /* i18n-ignore */ "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
+            </Text>
+            <Text style={{ marginBottom: 6, fontSize: 13, color: t.ink }} selectable>
+              {targetPhrase}
+            </Text>
+            <Field
+              label="Подтверждение"
+              value={typed}
+              onChangeText={setTyped}
+              placeholder={targetPhrase}
+              keyboardType={email ? "email-address" : "default"}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+              error={error}
+            />
+            <View className="mt-4 flex-row gap-2">
+              <View className="flex-1">
+                <Button
+                  label="Отмена"
+                  variant="secondary"
+                  disabled={busy}
+                  onPress={() => setOpen(false)}
+                />
+              </View>
+              <View className="flex-1">
+                <Button
+                  label="Удалить"
+                  variant="secondary"
+                  tone="danger"
+                  disabled={!ready || busy}
+                  loading={busy}
+                  onPress={() => void deleteAccount()}
+                />
+              </View>
+            </View>
+          </View>
+        </KeyboardLift>
+      </Modal>
     </>
   );
 }
