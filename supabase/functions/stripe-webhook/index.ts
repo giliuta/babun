@@ -42,7 +42,12 @@
 
 import { serviceClient } from "../_shared/service-client.ts";
 import { json } from "../_shared/http.ts";
-import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
+// `npm:`, а не `esm.sh`: сборка esm.sh тянула node-совместимость Deno std, и
+// она на каждое событие писала в логи «event loop error:
+// Deno.core.runMicrotasks() is not supported» — настоящий сбой вебхука в
+// таком шуме не отличить. Пакет из npm по условию `deno` отдаёт сборку для
+// воркеров: fetch и Web Crypto, без node.
+import Stripe from "npm:stripe@17.7.0";
 
 
 
@@ -562,6 +567,8 @@ Deno.serve(async (req: Request) => {
       rawBody,
       signature,
       webhookSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
     );
   } catch (err) {
     // Signature mismatch / expired timestamp / malformed payload. 400 so
