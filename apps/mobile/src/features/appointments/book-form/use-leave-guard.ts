@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Href, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "@react-navigation/native";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { useAndroidBack } from "@/lib/android-back";
 import { chooseOption } from "@/lib/choose";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { resolveReturnTo } from "@/features/appointments/return-to";
@@ -165,6 +166,13 @@ export function useLeaveGuard({
   usePreventRemove(dirty && !leaving, ({ data }) => {
     confirmDiscard(() => navigation.dispatch(data.action));
   });
+  // ANDROID: ФОРМА БЕЗ ИСТОРИИ ПОД СОБОЙ. После пересоздания активности
+  // (система выгрузила приложение из фона) или по ссылке запись — единственный
+  // экран стека: системному «назад» нечего снимать, `usePreventRemove` молчит,
+  // и жест уходил системе — приложение сворачивалось вместе с набранным
+  // (QAA-11). Тогда «назад» — та же стрелка формы: вопрос при изменениях,
+  // уход на календарь.
+  useAndroidBack(!leaving && !router.canGoBack(), requestClose);
   // Уход — после того, как защита снята: навигатор узнаёт о снятии
   // следующим кадром, поэтому переход ждёт его.
   useEffect(() => {
