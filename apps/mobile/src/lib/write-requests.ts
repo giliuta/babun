@@ -112,6 +112,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "issue_receipt_credit_note",
   // Частичная кредит-нота к инвойсу (миграция 20261004133917).
   "issue_partial_credit_note",
+  "register_push_device",
   "location_request_create",
   "location_request_submit",
   "member_appointment_copy",
@@ -164,6 +165,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "sms_set_team_template_enabled",
   "start_trial",
   "undo_appointment_payment",
+  // Телефон в получателях пушей и выход из них (миграция 20261027162300).
+  "unregister_push_device",
   "update_client_with_tags",
   "update_invoice_draft",
   "update_master_appointment_safe",

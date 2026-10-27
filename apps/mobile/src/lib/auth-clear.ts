@@ -18,6 +18,7 @@ import {
   babunNotificationRegistrySnapshot,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
+import { forgetOtherDevices, forgetThisDevice } from "@/lib/push-device";
 import {
   LAST_USER_KEY,
   consumeSignedOutOnPurpose,
@@ -143,6 +144,10 @@ export async function signOutScopeAndWipe(
   });
   intentionalSignOutBarrier = barrier;
   try {
+    // ПУШИ — ДО ВЫХОДА: после него сессии для запроса уже нет, а сервер
+    // продолжал бы слать на этот телефон клиентов вышедшего человека.
+    if (scope === "global") await forgetOtherDevices();
+    await forgetThisDevice();
     const { error } = await supabase.auth.signOut({ scope });
     if (error) throw new Error(error.message);
     await wipeTenantScopedData();

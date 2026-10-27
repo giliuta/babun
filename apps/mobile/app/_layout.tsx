@@ -29,6 +29,9 @@ import {
   type ClientNotificationTarget,
 } from "@/features/clients/reminders";
 import { reconcileBabunNotifications } from "@/lib/notifications";
+import { getActiveTenantId } from "@/lib/active-tenant";
+import { switchTenant } from "@/session/switch-tenant";
+import { refreshAppointmentsForTap } from "@/lib/notification-tap";
 
 void SplashScreen.preventAutoHideAsync();
 // Свежее обновление по воздуху — с первого запуска, пока видна заставка.
@@ -80,13 +83,24 @@ function RootNavigator() {
       // dashboard then resolves the id through its role-scoped query and
       // shows a safe "not available" state for foreign/deleted records.
       if (!session || !active) return;
-      router.push({
-        pathname: "/",
-        params: {
-          appointmentId: target.appointmentId,
-          date: target.date,
-          ...(target.teamId ? { teamId: target.teamId } : {}),
-        },
+      // Пуш с сервера о записи из другого аккаунта человека: календарь
+      // ищет запись в активном аккаунте, поэтому сперва переход в её.
+      if (target.tenantId && target.tenantId !== getActiveTenantId()) {
+        void switchTenant(target.tenantId)
+          .then(() => openAppointment({ ...target, tenantId: undefined }))
+          .catch(() => {});
+        return;
+      }
+      void refreshAppointmentsForTap().then(() => {
+        if (!active) return;
+        router.push({
+          pathname: "/",
+          params: {
+            appointmentId: target.appointmentId,
+            date: target.date,
+            ...(target.teamId ? { teamId: target.teamId } : {}),
+          },
+        });
       });
     };
     const openClient = (target: ClientNotificationTarget) => {

@@ -3214,6 +3214,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_devices: {
+        Row: {
+          created_at: string
+          last_seen_at: string
+          locale: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_seen_at?: string
+          locale?: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_seen_at?: string
+          locale?: string
+          platform?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           created_at: string
@@ -6553,6 +6580,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      register_push_device: {
+        Args: { p_locale?: string; p_platform: string; p_token: string }
+        Returns: Json
+      }
       replace_day_extras: {
         Args: { p_date: string; p_extras: Json; p_team_id: string }
         Returns: {
@@ -7146,6 +7177,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      unregister_push_device: {
+        Args: { p_other_devices?: boolean; p_token: string }
+        Returns: undefined
       }
       update_client_with_tags: {
         Args: {

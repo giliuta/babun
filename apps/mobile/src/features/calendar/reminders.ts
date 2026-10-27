@@ -39,6 +39,9 @@ export interface AppointmentNotificationTarget {
   appointmentId: string;
   date: string;
   teamId?: string;
+  /** Аккаунт записи — только у пуша с сервера: человек может состоять в
+   *  нескольких, а открыть запись можно лишь в её собственном. */
+  tenantId?: string;
 }
 
 /** Cancel every local notification attached to one appointment. This is
@@ -117,11 +120,13 @@ export function parseAppointmentNotificationTarget(
     typeof data.appointmentId === "string" ? data.appointmentId.trim() : "";
   const date = typeof data.date === "string" ? data.date.trim() : "";
   const teamId = typeof data.teamId === "string" ? data.teamId.trim() : "";
+  const tenantId = typeof data.tenantId === "string" ? data.tenantId.trim() : "";
   if (
     !appointmentId ||
     appointmentId.length > 128 ||
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-    teamId.length > 128
+    teamId.length > 128 ||
+    (tenantId && !/^[0-9a-f-]{36}$/i.test(tenantId))
   ) {
     return null;
   }
@@ -129,6 +134,7 @@ export function parseAppointmentNotificationTarget(
     appointmentId,
     date,
     ...(teamId ? { teamId } : {}),
+    ...(tenantId ? { tenantId } : {}),
   };
 }
 
