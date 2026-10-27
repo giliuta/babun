@@ -24,6 +24,7 @@ import { Check } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import {
   formatPhoneAsYouType,
+  isBareDialCode,
   tryToE164,
 } from "@/lib/phone";
 import { useDefaultCountry } from "@/features/reference/default-country";
@@ -123,7 +124,9 @@ export default function ClientHeader({
     // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс), но НЕОБЯЗАТЕЛЕН:
     // стёртый номер сохраняется пустым. Неразбираемое значение не пишем.
     onSave: (next) => {
-      if (!next) {
+      // Один код страны («+30» — стёрли номер до чужого кода) — тоже пустой
+      // номер, а не «не распознан».
+      if (!next || isBareDialCode(next)) {
         update({ phone: "", phone_e164: null });
         return;
       }
@@ -163,6 +166,8 @@ export default function ClientHeader({
           big
           value={client.full_name}
           placeholder="Имя или компания"
+          // Имя и название компании — с заглавной у каждого слова.
+          autoCapitalize="words"
           live={!!draft}
           // Вставку «Мария +357 99…» черновик делит: номер уезжает в телефон,
           // и поле должно сразу показать, что в имени осталось только имя.

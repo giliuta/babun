@@ -1,6 +1,6 @@
 import { Pressable, View } from "react-native";
 import { ChevronLeft } from "lucide-react-native";
-import { ICON } from "@/components/ui/tokens";
+import { ICON, TYPE } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { Spinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -22,28 +22,19 @@ export function BookMissingScreen({ t, onBack }: { t: Theme; onBack: () => void 
           accessibilityLabel="Назад"
           style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
         >
-          <ChevronLeft color={t.body} size={ICON.md} />
+          <ChevronLeft color={t.body} size={ICON.header} />
         </Pressable>
         <Text
           className="flex-1 text-center"
-          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          style={{ ...TYPE.headline, color: t.ink }}
         >
           Запись
         </Text>
         <View style={{ minWidth: 72 }} />
       </View>
-      <View className="flex-1 items-center justify-center px-7">
-        <Text
-          style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
-        >
-          Записи больше нет
-        </Text>
-        <Text
-          style={{ fontSize: 14, lineHeight: 20, color: t.sub, textAlign: "center", marginTop: 8 }}
-        >
-          Её удалили или ссылка устарела.
-        </Text>
-      </View>
+      {/* Пустой экран — канонный `EmptyState` (заголовок 17, подпись 13),
+          как у остальных страниц. */}
+      <EmptyState fill title="Записи больше нет" subtitle="Её удалили или ссылка устарела." />
     </Screen>
   );
 }
@@ -76,11 +67,11 @@ export function BookLoadingScreen({
           accessibilityLabel="Назад"
           style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
         >
-          <ChevronLeft color={t.body} size={ICON.md} />
+          <ChevronLeft color={t.body} size={ICON.header} />
         </Pressable>
         <Text
           className="flex-1 text-center"
-          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          style={{ ...TYPE.headline, color: t.ink }}
         >
           {title}
         </Text>
@@ -108,9 +99,7 @@ export function BookLoadingScreen({
           <View style={{ marginBottom: 14 }}>
             <Spinner size={30} label="Загружаем данные записи" />
           </View>
-          <Text
-            style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
-          >
+          <Text style={{ ...TYPE.headline, color: t.ink, textAlign: "center" }}>
             Загружаем данные записи
           </Text>
         </View>

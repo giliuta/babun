@@ -18,3 +18,18 @@ test("заметка записи кладётся в ссылку сразу п
   const branch = hydrate.slice(0, hydrate.indexOf("} else {"));
   assert.match(branch, /commentNow\.current = editing\.comment/);
 });
+
+test("Android: «назад» с формы без истории — стрелка формы, а не выход из приложения", () => {
+  // После пересоздания активности запись — единственный экран стека, и
+  // системный жест сворачивал приложение вместе с набранным (QAA-11).
+  const guard = readFileSync(resolve(here, "use-leave-guard.ts"), "utf8");
+  assert.match(guard, /useAndroidBack\(!leaving && !router\.canGoBack\(\), requestClose\);/);
+  assert.match(guard, /else router\.replace\("\/"\);/);
+});
+
+test("вопрос у несохраняемой формы называет, чего не хватает (CAL-11)", () => {
+  const guard = readFileSync(resolve(here, "use-leave-guard.ts"), "utf8");
+  assert.match(guard, /message: why \? `\$\{why\}\. \$\{lost\}` : lost/);
+  const form = readFileSync(resolve(here, "use-book-form.ts"), "utf8");
+  assert.match(form, /missingHint: verdict\.canSave \? undefined : verdict\.missingHint,/);
+});

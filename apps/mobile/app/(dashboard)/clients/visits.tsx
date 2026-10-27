@@ -213,7 +213,10 @@ function ClientVisitsScreen() {
           ) : undefined
         }
       />
-      {!access.history.show ? null : isLoading ? (
+      {!access.history.show ? (
+        // Блок закрыт правом — словами, а не пустым экраном с одной шапкой.
+        <EmptyState fill title="Нет доступа" />
+      ) : isLoading ? (
         <EmptyState state="loading" fill title="Загрузка" />
       ) : rows.length === 0 ? (
         <EmptyState fill title={unpaidOnly ? "Неоплаченных записей нет" : "Записей пока нет"} />

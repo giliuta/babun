@@ -154,8 +154,7 @@ function emptyClientSnapshotSupabase() {
 }
 
 // The offline path never calls Supabase; a bare stub satisfies the type.
- 
-const stubSupabase = {} as any;
+const stubSupabase = {} as never;
 
 beforeEach(() => {
   setSql(new MemorySqlAdapter(new Database(":memory:")));
@@ -647,12 +646,8 @@ describe("appointments cache-of-domain", () => {
       date: "2026-07-10",
       time_start: "09:00",
       time_end: "10:00",
-      services: [
-         
-        { id: "s1", name: "Чистка", price: 50, duration: 60 } as any,
-      ],
-       
-      expenses: [{ id: "e1", label: "фреон", amount: 10 } as any],
+      services: [{ id: "s1", name: "Чистка", price: 50, duration: 60 } as never],
+      expenses: [{ id: "e1", label: "фреон", amount: 10 } as never],
       service_ids: ["svc-1", "svc-2"],
     });
 

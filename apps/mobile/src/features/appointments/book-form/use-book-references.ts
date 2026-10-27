@@ -20,10 +20,11 @@ import {
 /** Reference data of the booking form and what is derived from it. */
 export function useBookReferences(teamId: string | null) {
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
-  const teamsQuery = useTeams();
+  // Имена — для показа (`session/team-name.ts`): докет и лист команды.
+  const teamsQuery = useTeams({ display: true });
   // Весь справочник, с архивом — только чтобы назвать календарь записи,
   // ушедшей в архив. Ключ общий с `teamsQuery`: сети это не добавляет.
-  const { data: allTeams = [] } = useTeams({ includeInactive: true });
+  const { data: allTeams = [] } = useTeams({ includeInactive: true, display: true });
   const mastersQuery = useMasters();
   const servicesQuery = useServices();
   // Услуга типа «варианты» продаётся выбором объёма работ, а не количеством:

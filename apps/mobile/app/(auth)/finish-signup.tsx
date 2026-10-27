@@ -32,8 +32,8 @@ import { useSession } from "@/providers/SessionProvider";
 // Имя пишется и человеку (`full_name`), и своему аккаунту — это то, что
 // регистрация раньше спрашивала полем «Имя или название компании».
 //
-// На iPhone новый аккаунт не заводится (`mayFinishHere`, App Review 3.1.1):
-// вместо формы — «аккаунта нет» и выход.
+// Где новый аккаунт заводить нельзя (`CAN_SIGN_UP_HERE` выключен и нет
+// приглашения — `mayFinishHere`), вместо формы — «аккаунта нет» и выход.
 export default function FinishSignupScreen() {
   const { session } = useSession();
   const user = session?.user ?? null;

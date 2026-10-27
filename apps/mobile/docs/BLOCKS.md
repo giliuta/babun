@@ -251,8 +251,10 @@
 на странице типов, ни в ссылке клиенту; метка удалённого типа объект не
 красит — он показывается без типа (`findObjectType`).
 
-**Форма объекта** — `src/features/clients/ObjectSheet.tsx` (новый) и
-`src/features/clients/ObjectEditSheet.tsx` (правка), тело у обеих одно:
+**Форма объекта** — один лист `src/features/clients/ObjectSheet.tsx`
+(`mode: "create" | "edit"`; запись —
+`src/features/clients/object-sheet/use-object-create.ts` и
+`src/features/clients/object-sheet/use-object-edit.ts`), тело одно:
 `src/features/clients/ObjectFields.tsx` — три карточки: «Тип объекта»
 (`ReferenceBlock` + `PickerSheet`, дверь в справочник — ползунками в шапке
 ШТОРКИ, как у типа события), «Адрес» (главная строка + карта `MapPicker` +
@@ -261,7 +263,7 @@
 
 **Дополнительные страницы:** типы объектов —
 `src/features/clients/ObjectTypesScreen.tsx`, двери
-`clients/object-types.tsx`, `cabinet/object-types.tsx`, `(shared)/object-types.tsx`.
+`clients/object-types.tsx`, `(shared)/object-types.tsx`.
 
 **Не делать:** второй формы объекта (была, свели 2026-09-10 — сторожит
 `src/features/clients/client-persistence-contract.test.ts`); `AddRow` вместо `ChooseRow`; строки
@@ -674,7 +676,7 @@
 | `src/features/clients/ClientRow.tsx` | свайп собран на сырой библиотеке; на ЛЕВОЙ кромке ДВЕ кнопки; ротор VoiceOver не видит ни один глагол | `SwipeRow`, одно действие на кромку, второе — в меню долгого нажатия |
 | Кабинет: `src/features/inventory/InventoryEditorSheet.tsx` (склад), `src/features/cabinet/account/DangerZoneSection.tsx` («Вход и безопасность») | сырой `Modal animationType="slide"` вместо `BottomSheet` | рецепт «Метки» |
 | `app/(dashboard)/chats/[id].tsx` | два сырых листа: выбор клиента написан заново | `ClientPickerSheet` |
-| `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` · `src/features/appointments/CrewAppointmentSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
+| `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
 | 9 мест | `borderRadius` числом (12, 20, 13, 15, 9, 36) | `t.radius.card` / `t.radius.pill` |
 | 27 мест | `borderRadius: 999` литералом | `t.radius.pill` |
 

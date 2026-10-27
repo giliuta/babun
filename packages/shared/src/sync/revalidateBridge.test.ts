@@ -70,8 +70,7 @@ function tagStub(rowsByTenant: Record<string, CachedTag[]>) {
       };
       return chain;
     },
-     
-  } as any;
+  } as never;
 }
 
 const tag = (id: string, name = id, color = "#000"): CachedTag => ({

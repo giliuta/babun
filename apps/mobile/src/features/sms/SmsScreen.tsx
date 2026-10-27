@@ -5,6 +5,7 @@ import { History } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -70,7 +71,7 @@ export function SmsScreen() {
   const [topupOpen, setTopupOpen] = useState(false);
   // Тап по строке истории — тот же лист сообщения, что в записи и у клиента.
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const awaitingPayment = useRef(false);
 
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает
@@ -83,7 +84,7 @@ export function SmsScreen() {
     }
     if (topupReturn === "cancelled") toast("Оплата отменена", "info");
     return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- один раз на ответ возврата с оплаты; account.refetch стабилен
   }, [topupReturn]);
 
   // В приложении оплата — в браузере: вернулись в приложение — перечитать
@@ -97,7 +98,7 @@ export function SmsScreen() {
       setTimeout(() => void account.refetch(), 9000);
     });
     return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- подписка одна на маунт; флаг ожидания — в ref
   }, []);
 
   const data = account.data;
@@ -190,7 +191,7 @@ export function SmsScreen() {
               </View>
             ))}
             {/* «Вся история» читает аккаунт, открытый на телефоне: свой
-                аккаунт, открытый из Кабинета со стороны (04.10), показывает
+                аккаунт, открытый из Кабинета со стороны, показывает
                 последние сообщения без двери. */}
             {scope.foreign ? null : (
               <>
@@ -210,14 +211,14 @@ export function SmsScreen() {
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ: пополнить баланс. */}
       {data.serviceOn && canTopUp ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton
             label={subtitle ? `Пополнить баланс ${subtitle}` : "Пополнить баланс"}
             disabled={!smsInPlan}
             onDisabledPress={nudgeTariff}
             onPress={() => setTopupOpen(true)}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <SmsTopupSheet

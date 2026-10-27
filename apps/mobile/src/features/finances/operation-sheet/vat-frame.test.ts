@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { operationTransactionPatch, type OperationPatchBaseline } from "../operation-patch";
-import { amountVatMode, hydratedAmountText, txVatMode } from "./vat-frame";
+import { amountVatMode, editedGross, hydratedAmountText, txVatMode } from "./vat-frame";
 
 // Операция «налог сверху»: назначили 100, на счёт легло 119 при 19 %.
 const exclusiveTx = { amount: 119, vat_mode: "exclusive" as const, vat_amount: 19, vat_rate: 19 };
@@ -49,5 +49,31 @@ describe("правка «налог сверху» с видимой строк�
   test("режим старой строки без колонки выводится из налога", () => {
     assert.equal(txVatMode({ amount: 119, vat_mode: null, vat_amount: 19, vat_rate: 19 }), "inclusive");
     assert.equal(txVatMode({ amount: 100, vat_mode: null, vat_amount: null, vat_rate: null }), "none");
+  });
+});
+
+describe("правка без касания суммы — сумма прежняя", () => {
+  // Брутто, записанное напрямую (партнёр без строки VAT), при 19 % не
+  // проходит путь брутто → нетто → брутто: 100,05 → 84,08 → 100,06.
+  const tx = { amount: 100.05, vat_mode: "exclusive" as const, vat_amount: 15.97, vat_rate: 19 };
+
+  test("сумму и VAT не трогали — уходит та же сумма, а не пересчитанная", () => {
+    const opened = Number(hydratedAmountText(tx, true));
+    assert.equal(
+      editedGross({ tx, vatRowAllowed: true, amountNum: opened, vatRetouched: false, recomputed: 100.06 }),
+      100.05,
+    );
+  });
+
+  test("сумму поменяли или VAT нажали заново — пересчёт", () => {
+    assert.equal(
+      editedGross({ tx, vatRowAllowed: true, amountNum: 90, vatRetouched: false, recomputed: 107.1 }),
+      107.1,
+    );
+    const opened = Number(hydratedAmountText(tx, true));
+    assert.equal(
+      editedGross({ tx, vatRowAllowed: true, amountNum: opened, vatRetouched: true, recomputed: 100.06 }),
+      100.06,
+    );
   });
 });

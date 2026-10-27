@@ -32,6 +32,7 @@ import {
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
+import { useTeamName } from "@/session/team-name";
 import { useFeatureOn } from "@/features/settings/company-features";
 
 // «БЛОКИ КЛИЕНТОВ» — ВСЁ О ВИДЕ КЛИЕНТА НА ОДНОЙ СТРАНИЦЕ (заметка, личная, метка, тег,
@@ -53,8 +54,11 @@ type PageBlock = {
   icon?: LucideIcon;
 };
 
-// Порядок — порядок страницы клиента.
+// Порядок — порядок страницы клиента (`CLIENT_CARD_ROW_ORDER`): метка и тег
+// самым верхом. SMS здесь нет — блок живёт выключателем SMS, а не этим.
 const PAGE_BLOCKS: PageBlock[] = [
+  { label: "Метка", key: "client_labels", icon: Bookmark },
+  { label: "Тег", key: "client_tags", icon: Tags },
   { label: "Клиент", pinned: true },
   { label: "Заметка", key: "client_note", icon: StickyNote },
   { label: "Люди", key: "client_people", icon: UsersRound },
@@ -62,8 +66,6 @@ const PAGE_BLOCKS: PageBlock[] = [
   { label: "Объекты", key: "client_objects", icon: Home },
   { label: "Файлы", key: "client_files", icon: Paperclip },
   { label: "Реквизиты", key: "client_requisites", icon: FileText },
-  { label: "Метка", key: "client_labels", icon: Bookmark },
-  { label: "Тег", key: "client_tags", icon: Tags },
   { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
@@ -86,6 +88,7 @@ export default function ClientBlocksSettingsRoute() {
 function ClientBlocksSettingsScreen() {
   const { team } = useLocalSearchParams<{ team?: string }>();
   const { data: ownTeams = [] } = useTeams();
+  const teamName = useTeamName();
   const teamRow =
     (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
   const teamId = teamRow?.id ?? null;
@@ -121,7 +124,7 @@ function ClientBlocksSettingsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Блоки клиентов" subtitle={teamRow?.name} />
+      <ScreenHeader title="Блоки клиентов" subtitle={teamRow ? teamName(teamRow.name) : undefined} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionCard title="Карточка клиента">
           <AlwaysLine blocks={blocks} />

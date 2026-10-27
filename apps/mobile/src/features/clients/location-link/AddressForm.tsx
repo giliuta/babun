@@ -30,6 +30,7 @@ import {
 import { MapEmbed } from "@/features/clients/MapEmbed";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { TYPE } from "@/components/ui/tokens";
 
 // Form of the public «куда приехать мастеру» page (`LocationLinkScreen`).
 
@@ -119,7 +120,7 @@ export function AddressForm({
       <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 26, lineHeight: 32, fontWeight: "800", letterSpacing: -0.4, color: t.ink }}
+          style={{ ...TYPE.title, color: t.ink }}
         >
           {name ? `${name}, куда приехать мастеру?` : "Куда приехать мастеру?"}
         </Text>

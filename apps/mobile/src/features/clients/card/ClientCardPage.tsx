@@ -9,7 +9,7 @@ import { NavRow } from "@/components/ui/card-rows";
 import { Screen } from "@/components/ui/Screen";
 import { SectionCard } from "@/components/ui/SectionCard";
 import ClientHeader from "@/features/clients/ClientHeader";
-import { clientSubParams } from "@/session/clients-company";
+import { clientSubParams, ownClientCardHref } from "@/session/clients-company";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { ClientLabelTags } from "@/features/clients/ClientLabelTags";
 import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";
@@ -50,7 +50,6 @@ export function ClientCardPage({
     prefillName,
     prefillPhone,
     openOnArrive,
-    insets,
     tags,
     appointments,
     menuOpen,
@@ -127,14 +126,9 @@ export function ClientCardPage({
         onMenuExited={split.onMenuExited}
       />
 
-      {/* ОТСТУП НА ВЫСОТУ ХРОМА. Без него нижние поля страницы уходили под
-          клавиатуру: `padding` меряет расстояние от низа ОКНА, а карточка
-          начинается ниже — на безопасной зоне сверху и своей шапке. Ровно эта
-          ошибка уже ловилась на записи. */}
-      <KeyboardLift
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={insets.top}
-      >
+      {/* Подъём над клавиатурой: нижние поля и «Создать клиента» не уходят
+          под клавиатуру. Высоту выреза и шапки `KeyboardLift` учитывает сам. */}
+      <KeyboardLift style={{ flex: 1 }}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -161,7 +155,11 @@ export function ClientCardPage({
                 router.back();
                 return;
               }
-              router.replace(`/clients/${duplicateId}`);
+              // Адрес — той же компании и того же стека, откуда пришли: голый
+              // `/clients/<id>` при открытой в календаре чужой компании вёл в
+              // «Клиент не найден», а с `/client` клал вторую копию табов.
+              const card = ownClientCardHref(duplicateId, scope);
+              router.replace(pathname === "/client" ? { ...card, pathname: "/client" } : card);
             }}
           />
         ) : null}
@@ -203,7 +201,7 @@ export function ClientCardPage({
           // блоком, под «Клиентом».
           note={
             noteOn ? (
-              <NotesBlock client={c} update={update} readOnly={!access.note.edit} />
+              <NotesBlock client={c} update={update} readOnly={!access.note.edit} live={isDraft} />
             ) : null
           }
           people={
@@ -238,7 +236,10 @@ export function ClientCardPage({
           draft={
             isDraft
               ? {
-                  valid: e164 !== null,
+                  // Галка — «номер годится». Номер другого клиента не
+                  // годится: сохранить его нельзя, плашка и футер это уже
+                  // говорят, и зелёная галка рядом им противоречила.
+                  valid: e164 !== null && !duplicate,
                   // Вставка «имя + номер» делится: номер — в телефон.
                   onNameChange: onDraftNameChange,
                   onPhoneChange: onDraftPhoneChange,

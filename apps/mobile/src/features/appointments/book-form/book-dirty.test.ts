@@ -108,3 +108,12 @@ describe("draftDirty — форма, открытая с клиентом", () =
     assert.equal(draftDirty(pristine({ ...ev, locationId: "l2", initialLocationId: "l1" })), true);
   });
 });
+
+describe("draftDirty — record opened with the client's object", () => {
+  test("the object's address from the link is not an edit; another object is", () => {
+    const linked = { address: "Karpathou 9, Paphos", locationId: "l1", initialLocationId: "l1" };
+    assert.equal(draftDirty(pristine(linked)), false);
+    assert.equal(draftDirty(pristine({ ...linked, locationId: "l2" })), true);
+    assert.equal(draftDirty(pristine({ address: "Typed street" })), true);
+  });
+});

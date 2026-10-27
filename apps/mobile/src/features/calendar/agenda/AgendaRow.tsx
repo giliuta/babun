@@ -10,6 +10,7 @@ import {
 import type { ThemeColors } from "@/theme/colors";
 import { EventRow } from "./EventRow";
 import { agendaMoney } from "./agenda-money";
+import { LIST_ROW } from "@/components/ui/tokens";
 
 const DEBT_SITUATION = COLOR_SITUATIONS.find((s) => s.id === "unpaid")?.label;
 
@@ -104,7 +105,7 @@ export function AgendaRow({
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        minHeight: 64,
+        minHeight: LIST_ROW.minHeight,
         backgroundColor: rowFill,
       }}
     >
@@ -133,14 +134,14 @@ export function AgendaRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={1}
-          style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+          style={{ ...LIST_ROW.name, color: t.ink }}
         >
           {clientName || apt.comment || "Без клиента"}
         </Text>
         {serviceSummary ? (
           <Text
             numberOfLines={1}
-            style={{ marginTop: 2, fontSize: 12, color: t.sub }}
+            style={{ marginTop: 2, ...LIST_ROW.sub, color: t.sub }}
           >
             {serviceSummary}
           </Text>

@@ -18,6 +18,7 @@ import { useMyAccess } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
 import { useTenantId } from "@/lib/tenant";
 import { SettingsBody } from "./SettingsBody";
+import { useTeamName } from "@/session/team-name";
 
 // «Настройки клиентов» page: the team ribbon on top, the body of the picked
 // team below (`SettingsBody`). The route `clients/settings.tsx` wraps it in
@@ -70,6 +71,7 @@ export function ClientsSettingsScreen() {
     }
     return out;
   }, [caps.manage, routeScope, ownTeams, guests.list, activeTenantId, activeMap, foreignMaps]);
+  const teamName = useTeamName();
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const entry =
     ribbon.find((tm) => tm.id === pickedTeam) ??
@@ -87,7 +89,9 @@ export function ClientsSettingsScreen() {
       />
       {entry ? (
         <ScopeChips
-          items={ribbon.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color }))}
+          // Имя команды — правилом показа: команда, названная почтой, не
+          // печатается адресом (`useTeamName`, как чипы календаря и списка).
+          items={ribbon.map((tm) => ({ id: tm.id, name: teamName(tm.name), color: tm.color }))}
           activeId={entry.id}
           onSelect={setPickedTeam}
         />

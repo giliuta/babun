@@ -131,7 +131,7 @@ export function useAccountsWithBalances(
   });
   // Справочник целиком, вместе с архивом: иначе не узнать, чей календарь
   // ушёл. Ключ общий с календарём и лентами — сети обычно нет вовсе.
-  const teamsQuery = useTeams({ includeInactive: true });
+  const teamsQuery = useTeams({ includeInactive: true, display: true });
 
   const rows = rowsQuery.data;
   const balances = balancesQuery.data;

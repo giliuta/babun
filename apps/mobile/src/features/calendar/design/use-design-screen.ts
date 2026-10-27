@@ -19,6 +19,7 @@ import {
   useRecordBlockOrder,
   useSetAutoColorRule,
   useSetSituationColor,
+  useRememberedColor,
   useSituationPalette,
   useToggleBookingBlock,
   useToggleEventBlock,
@@ -55,6 +56,7 @@ export function useDesignScreen() {
   const setRule = useSetAutoColorRule(teamId);
   const palette = useSituationPalette(teamId);
   const setSituationColor = useSetSituationColor(teamId);
+  const rememberedColor = useRememberedColor(teamId);
   const fallback = useFallbackColor(teamId);
   const [editingColor, setEditingColor] = useState<ColorTarget | null>(null);
   const cancelledColor = useCancelledColor(teamId);
@@ -130,6 +132,7 @@ export function useDesignScreen() {
     cancelled: cancelledColor,
     paid: paidColor,
     prepaid: prepaidColor,
+    rule,
   });
 
   const colorSheetTitle =
@@ -154,12 +157,13 @@ export function useDesignScreen() {
             : editingColor
             ? palette[editingColor] ?? null
             : null;
-  // ВЫКЛЮЧАТЕЛЬ СЛУЧАЯ. Выключили — такая запись красится обычным цветом;
-  // включили — заводской цвет случая.
+  // ВЫКЛЮЧАТЕЛЬ СЛУЧАЯ. Выключили — такая запись красится обычным цветом, а
+  // свой цвет случая запоминается; включили — возвращается он (заводской —
+  // только если своего не было).
   const toggleColor = (target: ColorTarget, next: boolean) => {
     if (readOnly || target === "filled") return;
     haptics.tap();
-    const on =
+    const factory =
       target === "cancelled"
         ? CANCELLED_DEFAULT
         : target === "paid"
@@ -167,7 +171,19 @@ export function useDesignScreen() {
           : target === "prepaid"
             ? PREPAID_DEFAULT
             : SITUATION_DEFAULTS[target];
-    setSituationColor.mutate({ situation: target, color: next ? on : null });
+    const current =
+      target === "cancelled"
+        ? cancelledColor
+        : target === "paid"
+          ? paidColor
+          : target === "prepaid"
+            ? prepaidColor
+            : palette[target] ?? null;
+    if (next) {
+      setSituationColor.mutate({ situation: target, color: rememberedColor(target) ?? factory });
+    } else {
+      setSituationColor.mutate({ situation: target, color: null, remember: current });
+    }
   };
 
   const recordOn = (id: string) => recordBlocks.includes(id as BookingBlockId);

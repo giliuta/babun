@@ -8,7 +8,7 @@ import {
   Platform,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { CheckCircle2, RefreshCw, Trash2, WifiOff } from "lucide-react-native";
+import { CheckCircle2, RefreshCw, Trash2 } from "lucide-react-native";
 import {
   kickReplayer,
   labelForOp,
@@ -25,6 +25,7 @@ import {
 } from "@babun/shared/db/cache/sql";
 import { Button } from "@/components/ui/Button";
 import { GUTTER } from "@/components/ui/tokens";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -40,6 +41,9 @@ import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
 import { clientKeys } from "@/lib/client-query-keys";
+import { kickMemberQueue } from "@/lib/member-queue/runtime";
+import { useMemberQueue } from "@/lib/member-queue/use-member-queue";
+import { MemberQueueCards } from "@/features/cabinet/MemberQueueCards";
 
 const MAX_ATTEMPTS = 3;
 
@@ -50,6 +54,9 @@ export default function SyncStatusScreen() {
   const [operations, setOperations] = useState<QueuedOp[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | "all" | null>(null);
+  // Правки сотрудника — своя очередь вызовов дверей сервера (`lib/member-queue`).
+  const memberOps = useMemberQueue(tenantId);
+  const waiting = operations.length + memberOps.length;
 
   const refresh = useCallback(async () => {
     try {
@@ -92,6 +99,7 @@ export default function SyncStatusScreen() {
           .map((item) => resetOpAttemptsAndEmit(item.id)),
       );
       await kickReplayer({ supabase });
+      kickMemberQueue();
       await refresh();
     } catch (error) {
       notify(
@@ -163,8 +171,8 @@ export default function SyncStatusScreen() {
         title="Синхронизация"
         subtitle={
           online
-            ? operations.length > 0
-              ? `${operations.length} ${countWordRu(operations.length, "изменение", "изменения", "изменений")} ${operations.length === 1 ? "ожидает" : "ожидают"} сервер`
+            ? waiting > 0
+              ? `${waiting} ${countWordRu(waiting, "изменение", "изменения", "изменений")} ${waiting === 1 ? "ожидает" : "ожидают"} сервер`
               : "Данные актуальны"
             : "Нет соединения"
         }
@@ -180,29 +188,27 @@ export default function SyncStatusScreen() {
           />
         }
       >
+        {/* Без сети — общая плашка во всю ширину, как у календаря. */}
         {!online ? (
-          <View
-            className="mx-3 mt-3 flex-row items-center gap-3 rounded-[10px] px-4 py-3"
-            style={{ backgroundColor: `${t.warning}1A` }}
-          >
-            <WifiOff color={t.warning} size={20} />
-            <Text className="flex-1 text-sm" style={{ color: t.body }}>
-              {Platform.OS === "android"
+          <NoticeBar
+            tone="warn"
+            message={
+              Platform.OS === "android"
                 ? "Изменения хранятся только на этом телефоне и отправятся после подключения."
-                : "Изменения хранятся только на этом iPhone и отправятся после подключения."}
-            </Text>
-          </View>
+                : "Изменения хранятся только на этом iPhone и отправятся после подключения."
+            }
+          />
         ) : null}
 
         {/* Первое чтение очереди: раньше эту паузу «показывал» программно
             выехавший контрол обновления, а без него экран был просто пустым. */}
-        {loading && operations.length === 0 ? (
+        {loading && waiting === 0 ? (
           <View className="items-center py-10">
             <Spinner size={26} label="Читаем очередь изменений" />
           </View>
         ) : null}
 
-        {operations.length === 0 && !loading ? (
+        {waiting === 0 && !loading ? (
           <EmptyState
             icon={<CheckCircle2 color={t.success} size={36} />}
             title="Всё синхронизировано"
@@ -282,7 +288,9 @@ export default function SyncStatusScreen() {
           );
         })}
 
-        {operations.length > 1 ? (
+        <MemberQueueCards ops={memberOps} online={online} />
+
+        {waiting > 1 ? (
           // КНОПКА ОДНА НА ПРОДУКТ: была своя, 50pt с кеглем 16/700.
           <View style={{ marginHorizontal: GUTTER, marginTop: 16 }}>
             <Button

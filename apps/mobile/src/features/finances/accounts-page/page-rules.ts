@@ -62,6 +62,11 @@ export function hideDecisionAfterTransfer<A extends ClosableAccount>(
  * СЧЕТА». Сервер принимает только пустой счёт
  * (`account_trash_rules`), поэтому деньги сначала уводятся переводом — ровно
  * как у «Скрыть»; ноль — вопрос «Удалить счёт?».
+ *
+ * СЧЁТ БЕЗ ОПЕРАЦИЙ — СРАЗУ ВОПРОС, при любом стартовом остатке: стартовый
+ * остаток — настройка счёта, а не деньги, и правки его в листе нет. Иначе
+ * нетронутый счёт с ненулевым стартом не удалялся вовсе — обнулить его можно
+ * было только выдуманной операцией.
  */
 export type TrashDecision = Exclude<HideDecision, { kind: "close" }> | { kind: "trash" };
 
@@ -69,6 +74,7 @@ export function trashDecision<A extends ClosableAccount>(
   account: A,
   accounts: readonly A[],
 ): TrashDecision {
+  if (!account.has_history) return { kind: "trash" };
   const decision = hideDecision(account, accounts);
   return decision.kind === "close" ? { kind: "trash" } : decision;
 }
@@ -127,21 +133,18 @@ export function presetTeamFor(
 }
 
 /**
- * Подытог группы счетов. Скрытый и закрытый счета в сумму не входят — как на
- * плитке «Счета». Хоть у одного счёта остаток неизвестен (нет права на деньги
- * команды) — подытога нет вовсе, `null`: сумма из выдуманных нулей врала бы.
+ * Подытог группы счетов — сумма всех её строк, скрытых и закрытых тоже: на
+ * странице «Счета» числа обязаны складываться (скрытые здесь видит только
+ * владелец). Плитка «Счета» в «Финансах» считает по-своему, без скрытых
+ * (`accountsTotal`). Хоть у одного счёта остаток неизвестен (нет права на
+ * деньги команды) — подытога нет вовсе, `null`: сумма из выдуманных нулей
+ * врала бы.
  */
 export function groupBalanceTotal(
-  accounts: readonly {
-    balance: number;
-    balance_known: boolean;
-    is_active: boolean;
-    is_hidden?: boolean | null;
-  }[],
+  accounts: readonly { balance: number; balance_known: boolean }[],
 ): number | null {
-  const counted = accounts.filter((account) => account.is_active && !account.is_hidden);
-  if (counted.some((account) => !account.balance_known)) return null;
-  return sumAccountBalances(counted);
+  if (accounts.some((account) => !account.balance_known)) return null;
+  return sumAccountBalances(accounts);
 }
 
 /**

@@ -7,6 +7,7 @@ import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import { useReceipts } from "@/features/finances/receipts-queries";
+import { useInvoiceAppointmentMoney } from "@/features/finances/invoices-queries";
 import type { AccountWithBalance } from "./accounts";
 import type { Period } from "@/lib/period";
 import { collectDocuments } from "./documents";
@@ -79,11 +80,13 @@ export function usePeriodDocuments({
   );
 
   const receipts = receiptsQuery.data;
+  const appointmentMoney = useInvoiceAppointmentMoney().data;
   const documents = useMemo(
     () =>
       collectDocuments({
         invoices,
         payments,
+        appointmentMoney: appointmentMoney ?? {},
         receipts: receipts ?? [],
         clientName: (id) => (id ? (clientName.get(id) ?? null) : null),
         receiptTeamId,
@@ -92,6 +95,7 @@ export function usePeriodDocuments({
         today,
       }),
     [
+      appointmentMoney,
       clientName,
       invoices,
       payments,

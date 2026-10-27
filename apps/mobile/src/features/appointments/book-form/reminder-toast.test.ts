@@ -46,4 +46,22 @@ describe("reminderToast", () => {
       ["Напоминание в очереди — установится, когда на телефоне освободится место", "info"],
     ]);
   });
+
+  test("«denied» leads to the phone's Settings when the caller can open them (CAL-40)", () => {
+    const calls: unknown[][] = [];
+    let opened = 0;
+    reminderToast(
+      ((...args: unknown[]) => calls.push(args)) as never,
+      "denied",
+      null,
+      false,
+      () => (opened += 1),
+    );
+    const [message, type, action] = calls[0] as [string, string, { label: string; onPress: () => void }];
+    assert.equal(message, "Разрешите уведомления в Настройках");
+    assert.equal(type, "error");
+    assert.equal(action.label, "Настройки");
+    action.onPress();
+    assert.equal(opened, 1);
+  });
 });

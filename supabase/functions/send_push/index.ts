@@ -65,8 +65,11 @@ const TEMPLATES: Record<string, TemplateFn> = {
       typeof data.appointment_id === "string" ? data.appointment_id : "";
     return {
       title: "Новая запись",
-      body: tail || "Открой календарь, чтобы посмотреть детали.",
-      url: apptId ? `/dashboard/appointments/${apptId}` : "/dashboard",
+      body: tail || "Откройте календарь, чтобы посмотреть подробности.",
+      // Маршрут приложения: календарь открывает запись по параметрам.
+      url: apptId
+        ? `/?appointmentId=${encodeURIComponent(apptId)}${typeof data.date === "string" ? `&date=${encodeURIComponent(data.date)}` : ""}`
+        : "/",
     };
   },
   "owner.new_member": async (data, ctx) => {
@@ -78,16 +81,16 @@ const TEMPLATES: Record<string, TemplateFn> = {
     // Identical pattern to inviter.invite_accepted for consistency.
     let body: string;
     if (email && roleRu) {
-      body = `${email} принял приглашение как ${roleRu}`;
+      body = `${email} — ${roleRu}`;
     } else if (roleRu) {
       body = `Принято приглашение в роли «${roleRu}»`;
     } else {
-      body = "В команду присоединился новый участник";
+      body = "В команде новый участник";
     }
     return {
-      title: "Новый член команды",
+      title: "Новый участник команды",
       body,
-      url: "/dashboard/settings/team",
+      url: "/cabinet/people",
     };
   },
   "inviter.invite_accepted": (data) => {
@@ -100,14 +103,14 @@ const TEMPLATES: Record<string, TemplateFn> = {
 
     let body: string;
     if (roleRu) {
-      body = `${who} принял приглашение как ${roleRu}`;
+      body = `${who} — ${roleRu}`;
     } else {
-      body = `${who} принял приглашение`;
+      body = who;
     }
     return {
       title: "Приглашение принято",
       body,
-      url: "/dashboard/settings/team",
+      url: "/cabinet/people",
     };
   },
 };
@@ -274,7 +277,7 @@ async function renderPayload(
   return {
     title: req.title,
     body: req.body,
-    url: req.url ?? "/dashboard",
+    url: req.url ?? "/",
   };
 }
 

@@ -3,6 +3,9 @@
 // plain values and gets plain answers back.
 
 import { formatEURExact as formatEUR, MAX_MONEY_CENTS, moneyInputProblem } from "@babun/shared/common/utils/money";
+import { minusWarning, type AccountMinus } from "../account-alerts";
+
+export { minusAfterSpend } from "../account-alerts";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -87,6 +90,9 @@ export function refundGuards({
 }
 
 export interface OperationGateInput {
+  /** Новый расход уведёт счёт в минус — не запрет (минус разрешён всем), а
+   *  слова до записи, те же, что у отмены перевода. */
+  minus?: AccountMinus | null;
   online: boolean;
   accountsFailed: boolean;
   txAccountClosed: boolean;
@@ -266,7 +272,9 @@ export function operationInputReason(g: OperationGateInput): OperationReason {
                               text: `Для категории «${g.categoryName ?? ""}» нужно фото чека`,
                               error: true,
                             }
-                          : null;
+                          : g.minus
+                            ? { text: minusWarning(g.minus), error: false }
+                            : null;
 }
 
 /** ТОЛЬКО ПРОСМОТР СИЛЬНЕЕ ПРИЧИН ВВОДА: заполнять форму дальше незачем,

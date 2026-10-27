@@ -23,6 +23,8 @@ export interface BusinessNow {
   ymd: string;
   /** HH:MM */
   hm: string;
+  /** Пояс, в чьих часах это «сейчас» (IANA). Нет — часы телефона. */
+  zone?: string;
 }
 
 /**
@@ -275,24 +277,54 @@ export function closesVisit(
  * тапа, а закрытие визита — по виду, а не по `closesVisit`.
  *
  * `full` — тап без поля суммы: «вся сумма», то есть итог формы на момент
- * создания. Сумма из поля — как вписали. Пусто — платить нечего.
+ * создания. Сумма из поля — как вписали, но не больше итога: часть €80 при
+ * итоге, урезанном потом до €60, сервер отбил бы («Запись создана, оплата
+ * не записана») — уходит вся сумма. Пусто — платить нечего.
  */
 export function pendingPaymentToSend(
   pending: { amount: number; full: boolean },
   form: Pick<Appointment, "date" | "time_start" | "status"> & { total: number },
   now: BusinessNow,
 ): { amount: number; kind: PaymentKind; closeVisit: boolean } | null {
-  const amountCents = Math.round((pending.full ? form.total : pending.amount) * 100);
+  const totalCents = Math.round(form.total * 100);
+  const amountCents = pending.full
+    ? totalCents
+    : Math.min(Math.round(pending.amount * 100), totalCents);
   if (amountCents <= 0) return null;
   const kind = paymentKindAt(form, now);
   return { amount: amountCents / 100, kind, closeVisit: closesVisit(form, kind, now) };
 }
 
+/** Стенные часы мгновения `at` в поясе `zone` — как Date «по местному». */
+function wallClockIn(at: Date, zone: string | undefined): Date {
+  if (!zone) return at;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(at);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    return new Date(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+  } catch {
+    return at;
+  }
+}
+
 /** «14:20» сегодня, «5 сен, 12:00» раньше: два платежа одного счёта в листе
- *  снятия должны различаться и днём, не только минутой. */
-export function paidAtLabel(iso: string, todayYmd: string): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return "";
+ *  снятия должны различаться и днём, не только минутой.
+ *
+ *  ЧАСЫ КОМАНДЫ, А НЕ ТЕЛЕФОНА (CAL-24). «Сегодня» приходит в поясе команды,
+ *  а время платежа читалось по телефону: в другом поясе около полуночи
+ *  вчерашний платёж назывался сегодняшним, и минуты расходились с формой. */
+export function paidAtLabel(iso: string, todayYmd: string, zone?: string): string {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return "";
+  const at = wallClockIn(instant, zone);
   const ymd = formatYMD(at);
   return ymd === todayYmd ? formatHM(at) : `${formatShortDateRu(ymd)}, ${formatHM(at)}`;
 }

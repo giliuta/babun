@@ -8,6 +8,7 @@ import { SelectRow } from "@/components/ui/select-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { useTenantId } from "@/lib/tenant";
+import { explainCameraDenied } from "@/lib/camera-denied";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -84,10 +85,7 @@ export function OperationReceiptRow({
       if (from === "camera") {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
-          notify(
-            "Нет доступа к камере",
-            "Разрешите камеру: Настройки → Babun → Камера.",
-          );
+          explainCameraDenied();
           return;
         }
       }

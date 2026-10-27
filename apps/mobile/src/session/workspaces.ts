@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BOUND_TENANT_FIELD } from "@babun/shared/sync/replayer";
 import { useMirror } from "@/session/mirror-state";
+import { useChipViewer } from "@/session/team-name";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useTenantId } from "@/lib/tenant";
@@ -198,8 +199,7 @@ export function useCalendarChips(opts: {
   const { data: myCalendars = [], isPending: calendarsPending } =
     useMyCalendars();
   const switching = useSwitchWorkspace();
-  const { session } = useSession();
-  const fullName: unknown = session?.user.user_metadata?.full_name;
+  const viewer = useChipViewer();
   // СВОЁ И ЧУЖОЕ СЧИТАЕТСЯ ОТ КОМПАНИИ УСТРОЙСТВА, А НЕ ОТ ФЛАГА СЕРВЕРА.
   //
   // `isActive` из `list_my_calendars` — это `t.tenant_id = current_tenant_id()`
@@ -263,10 +263,7 @@ export function useCalendarChips(opts: {
     myCalendars: calendars,
     activeTenantId,
     order,
-    viewer: {
-      email: session?.user.email,
-      name: typeof fullName === "string" ? fullName : null,
-    },
+    viewer,
   });
 
   const pick = (chipId: string) => {

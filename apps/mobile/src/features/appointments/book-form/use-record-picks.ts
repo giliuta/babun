@@ -93,6 +93,11 @@ export function useRecordPicks({
   router,
 }: RecordPicksInput) {
   const selectTeam = (nextTeamId: string | null) => {
+    // ТАП ПО УЖЕ ВЫБРАННОЙ КОМАНДЕ — НЕ СМЕНА. Сверка выбора с командой
+    // выкидывает услуги, которых нет в живом прайсе, и у старой записи с
+    // услугой, снятой из прайса, такой тап молча стирал строку и сумму (у
+    // оплаченной «Сохранить» звало бы возврат).
+    if (nextTeamId === teamId) return;
     const next = reconcileBookingSelection({
       teamId: nextTeamId,
       serviceIds,

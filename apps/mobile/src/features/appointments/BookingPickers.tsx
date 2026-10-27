@@ -8,7 +8,7 @@ import { formatEURExact } from "@babun/shared/common/utils/money";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER } from "@/components/ui/tokens";
+import { GUTTER, ICON } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import {
   SELECT_SHEET_RATIO,
@@ -210,7 +210,7 @@ export function ServicePicker({
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <Settings2 color={t.sub} size={20} strokeWidth={2} />
+          <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
         </Pressable>
       }
       padded={false}

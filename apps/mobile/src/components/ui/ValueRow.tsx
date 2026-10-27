@@ -118,7 +118,7 @@ export function ValueRow({
       {expanded ? (
         <ChevronDown color={t.accent} size={ICON.sm} />
       ) : (
-        <ChevronRight color={t.chevron} size={ICON.sm} />
+        <ChevronRight color={t.chevron} size={ICON.chevron} />
       )}
     </Pressable>
   );

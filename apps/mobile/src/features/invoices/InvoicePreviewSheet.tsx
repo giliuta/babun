@@ -62,7 +62,9 @@ export function InvoicePreviewSheet({
   error?: string | null;
   /** Язык бумаги — блок «Язык» над документом. */
   language: InvoiceLanguage;
-  onChangeLanguage: (next: InvoiceLanguage) => void;
+  /** Нет — язык решает не человек (нота отмены инвойса берёт язык
+   *  инвойса): блока «Язык» нет, обещать выбор нечего. */
+  onChangeLanguage?: (next: InvoiceLanguage) => void;
   onIssue: () => void;
   onClose: () => void;
   /** Шапка листа: «Инвойс» или «Кредит-нота». */
@@ -95,7 +97,7 @@ export function InvoicePreviewSheet({
         <LanguageOptionList
           selected={language}
           onPick={(code) => {
-            onChangeLanguage(code);
+            onChangeLanguage?.(code);
             setStep("paper");
           }}
         />
@@ -142,20 +144,22 @@ export function InvoicePreviewSheet({
         <View style={{ paddingBottom: 8, gap: 12 }}>
           {/* Блок стоит по краям бумаги: у `SectionCard` свои поля GUTTER,
               бумаге лист даёт SIDE. */}
-          <View style={{ marginHorizontal: SIDE - GUTTER }}>
-            <SectionCard dense title="Язык">
-              <View style={{ paddingHorizontal: 2, paddingVertical: 2 }}>
-                <SelectRow
-                  icon={paperLanguage.flag}
-                  title={paperLanguage.name}
-                  plain
-                  accessibilityLabel={`Язык бумаги: ${paperLanguage.name}`}
-                  accessibilityHint="Открывает выбор языка"
-                  onPress={() => setStep("language")}
-                />
-              </View>
-            </SectionCard>
-          </View>
+          {onChangeLanguage ? (
+            <View style={{ marginHorizontal: SIDE - GUTTER }}>
+              <SectionCard dense title="Язык">
+                <View style={{ paddingHorizontal: 2, paddingVertical: 2 }}>
+                  <SelectRow
+                    icon={paperLanguage.flag}
+                    title={paperLanguage.name}
+                    plain
+                    accessibilityLabel={`Язык бумаги: ${paperLanguage.name}`}
+                    accessibilityHint="Открывает выбор языка"
+                    onPress={() => setStep("language")}
+                  />
+                </View>
+              </SectionCard>
+            </View>
+          ) : null}
           <View style={{ paddingHorizontal: SIDE }}>
             <InvoicePaper doc={doc} />
           </View>

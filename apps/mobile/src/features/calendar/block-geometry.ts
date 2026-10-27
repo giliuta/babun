@@ -23,12 +23,6 @@ export function rowsThatFit(cardH: number, lineH: number): number {
   return Math.floor((cardH - CARD_CHROME_H) / lineH);
 }
 
-/** Сколько строк печатать: не больше трёх, но и не меньше одной — у самого
- *  низкого блока имя пытается напечататься всегда. */
-export function textRows(cardH: number, lineH: number): number {
-  return Math.min(3, Math.max(1, rowsThatFit(cardH, lineH)));
-}
-
 /** ЛЕСТНИЦА СОДЕРЖИМОГО БЛОКА: имя → время → услуга, столько, сколько
  *  влезает по высоте. Значков внизу нет: оплату, долг и отмену говорит цвет
  *  всего блока (`record-color`) — он виден и у самой короткой записи, а

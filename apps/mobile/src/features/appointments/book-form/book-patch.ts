@@ -13,6 +13,7 @@ import {
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
+import { UNTYPED_EVENT } from "@/features/calendar/record-title";
 
 export interface BookPatchInput {
   kind: "work" | "event";
@@ -128,7 +129,9 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       // creator through RLS. A hidden stale work-master must not leak in.
       master_id: null,
       status: "scheduled",
-      comment: (eventTypeLabel ?? eventTitle.trim()) || "Событие",
+      // Без типа — маркер базы, всегда русский (`UNTYPED_EVENT`): переведённое
+      // слово читалось бы на телефоне с другим языком как имя типа.
+      comment: (eventTypeLabel ?? eventTitle.trim()) || UNTYPED_EVENT,
       address: placeIsUrl ? "" : place,
       color_override: eventColor,
       // Метка события — та же метка выезда, что у записи: null значит «как
@@ -160,9 +163,13 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
     custom_total: customTotal,
     // A job without a catalog service still has the duration selected in
     // the time picker. Persist the actual slot instead of a misleading 0.
+    // Длительность — НЕ ДЛИННЕЕ СЛОТА. Конец записи упирается в 23:59 (запись
+    // не переходит через полночь), и услуги на 120 мин с 22:30 давали слот
+    // 89 мин, а в базу уходило 120 — отчёты и загрузка считали час, которого
+    // в календаре нет.
     total_duration:
       computedDuration > 0
-        ? computedDuration
+        ? Math.min(computedDuration, minutesBetweenHM(timeStart, timeEnd) || computedDuration)
         : minutesBetweenHM(timeStart, timeEnd),
     comment: comment.trim(),
     status,
@@ -177,8 +184,10 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
     color_override: colorOverride,
     // Метка записи: null — «как у дня», строка — своя.
     city,
-    global_discount: globalDiscount,
-    discount_amount: discountAmount,
+    // У «своей суммы» скидка ничего не снимает (итог — вписанное число), и
+    // хранить её значит врать: в базе итог ≠ услуги − скидка. Обнуляем.
+    global_discount: customTotal ? null : globalDiscount,
+    discount_amount: customTotal ? 0 : discountAmount,
     // Налог пишется только у рабочей записи с расчётной суммой: у старой
     // «своей суммы» его не выбирали, и тихо навешивать нельзя.
     ...(kind === "work" && !customTotal

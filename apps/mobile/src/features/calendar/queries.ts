@@ -22,6 +22,7 @@ import { useDataRole } from "@/session/tenant";
 import { accessGate, moneyKey } from "@/session/my-access";
 import { useMyAccess } from "@/session/access-queries";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
+import { withQueuedMemberOps } from "@/lib/member-queue/runtime";
 import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   appointmentsQueryKey,
@@ -108,11 +109,14 @@ export function useAppointments() {
     // неделю. `offlineFirst` зовёт её один раз; сетевой путь мастера без
     // копии встаёт на паузу, и экран говорит «недоступен офлайн».
     networkMode: "offlineFirst",
-    queryFn: () => {
+    queryFn: async () => {
       if (guest || role === "master") {
-        return listMasterAppointmentsSafePaged(
+        const list = await listMasterAppointmentsSafePaged(
           scope && !scope.isActive ? tenantBoundClient(tenantId as string) : supabase,
         );
+        // Свои правки, ещё ждущие сети, — поверх ответа сервера: иначе
+        // перечитка до отправки вернула бы запись назад (`lib/member-queue`).
+        return scope ? list : withQueuedMemberOps(list, tenantId);
       }
       if (role === "owner" || role === "dispatcher") {
         return listAppointmentsPaged(tenantId as string);

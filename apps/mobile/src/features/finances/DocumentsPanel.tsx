@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactElement } from "react";
 import {
   SectionList,
-  Text,
   View,
   type RefreshControlProps,
 } from "react-native";
@@ -19,6 +18,7 @@ import {
   Share2,
   Trash2,
 } from "lucide-react-native";
+import { DayDivider } from "@/components/ui/DayDivider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -37,6 +37,7 @@ import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
 import type { Period } from "@/lib/period";
 import { usePeriodDocuments } from "./use-period-documents";
+import { useInvoiceAppointmentMoney } from "./invoices-queries";
 import {
   filterDocuments,
   type DocumentFilter,
@@ -113,6 +114,7 @@ export function DocumentsPanel({
   const invoiceMenu = useInvoiceMenu();
   const receiptMenu = useReceiptMenu();
   const canWrite = useDocumentWriter();
+  const appointmentMoney = useInvoiceAppointmentMoney().data;
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
@@ -237,7 +239,8 @@ export function DocumentsPanel({
       const path = `/invoices/${invoice.id}`;
       const write = canWrite(invoice.brigade_id);
       const own = payments[invoice.id] ?? [];
-      const settlement = calculateInvoiceSettlement(invoice, own);
+      // «Принять оплату» — по остатку за вычетом денег записи, как на странице.
+      const settlement = calculateInvoiceSettlement(invoice, own, appointmentMoney?.[invoice.id] ?? 0);
       const isInvoice = (invoice.kind ?? "invoice") === "invoice";
       const awaits = isInvoice && invoice.status === "issued" && settlement.remaining > 0;
       const withReceipt = new Set(
@@ -291,17 +294,7 @@ export function DocumentsPanel({
         // День — подписью над плашками, как в «Истории» и «Файлах» клиента.
         // Прилипает при прокрутке — фон холста закрывает строки под ней.
         renderSectionHeader={({ section }) => (
-          <View
-            className="flex-row items-center px-4 pb-1.5 pt-3"
-            style={{ backgroundColor: t.canvas }}
-          >
-            <Text
-              className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: t.sub }}
-            >
-              {humanDayYear(section.title)}
-            </Text>
-          </View>
+          <DayDivider label={humanDayYear(section.title)} background={t.canvas} />
         )}
         ListHeaderComponent={header}
         // Плашки — с воздухом между ними, без швов.

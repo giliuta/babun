@@ -5,8 +5,7 @@ import { useThemeColors } from "@/theme/colors";
 
 /** «Назад» ВТОРОГО ШАГА ЛИСТА. Выбор внутри листа приезжает вторым шагом того
  *  же листа — лист поверх листа iOS не покажет (`BottomSheet` — RN Modal). Так
- *  выбирают счёт и день перевода и язык бумаги инвойса; строка возврата у них
- *  одна. */
+ *  выбирают язык бумаги инвойса. */
 export function StepBack({ onPress }: { onPress: () => void }) {
   const t = useThemeColors();
   return (

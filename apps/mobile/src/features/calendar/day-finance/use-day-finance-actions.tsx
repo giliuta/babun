@@ -10,7 +10,7 @@ import { humanDay } from "@/features/appointments/helpers";
 import type { useSetDayExtras } from "@/features/calendar/queries";
 import { useDeleteTransaction, useRefundTotals } from "@/features/finances/queries";
 import { deleteOperationAlert } from "@/features/finances/account-alerts";
-import { deletableByHand, refundBlocksDelete } from "@/features/finances/operation-delete";
+import { deletableByHand, refundDeleteNotice } from "@/features/finances/operation-delete";
 import { confirmThen } from "@/lib/confirm";
 import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
@@ -168,9 +168,10 @@ export function useDayFinanceActions({
     deletableByHand(tx) &&
     rowAction(tx) !== undefined;
   const askDeleteTx = (tx: FinanceTransaction) => {
-    if (refundBlocksDelete(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined)) {
+    const blocked = refundDeleteNotice(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined);
+    if (blocked) {
       haptics.warning();
-      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      notify(blocked.title, blocked.message);
       return;
     }
     const text = deleteOperationAlert();

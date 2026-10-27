@@ -63,6 +63,10 @@ export interface UploadPhotoArgs {
   caption?: string;
   locationId?: string | null;
   takenAt?: string | null;
+  /** Номер снимка, выданный заранее (очередь без сети). С ним повтор после
+   *  оборванного ответа находит уже уехавший файл и строку и не заводит
+   *  второй снимок. Без него номер новый на каждый вызов. */
+  photoId?: string;
 }
 
 async function rowWithUrl(
@@ -164,7 +168,7 @@ export async function uploadPhoto(
   supabase: DbSupabase,
   args: UploadPhotoArgs,
 ): Promise<AppointmentPhotoRecord> {
-  const photoId = randomUuid();
+  const photoId = args.photoId ?? randomUuid();
   const ext = pickExt(args.contentType, args.fileName);
   const path = `${args.tenantId}/${args.appointmentId}/${photoId}.${ext}`;
 
@@ -175,7 +179,18 @@ export async function uploadPhoto(
       cacheControl: "31536000, immutable",
       upsert: false,
     });
-  if (upErr) throw new Error(`uploadPhoto (storage): ${upErr.message}`);
+  // Файл с этим номером уже лежит — прошлый заход до него дошёл.
+  if (upErr && !(args.photoId && /already exists|duplicate/i.test(upErr.message))) {
+    throw new Error(`uploadPhoto (storage): ${upErr.message}`);
+  }
+  if (args.photoId) {
+    const { data: existing } = await supabase
+      .from("appointment_photos")
+      .select("*")
+      .eq("id", photoId)
+      .maybeSingle();
+    if (existing) return await rowWithUrl(supabase, existing as Row);
+  }
 
   // Resolve the next sort_order in a single round-trip via a
   // count-then-insert. Race-prone but the trigger enforces the cap;

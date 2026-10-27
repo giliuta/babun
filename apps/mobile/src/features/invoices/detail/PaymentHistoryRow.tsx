@@ -71,7 +71,7 @@ export function PaymentHistoryRow({
             style={{ backgroundColor: t.fill }}
           >
             <Text className="text-sm font-semibold" style={{ color: t.danger }}>
-              Вернуть
+              Оформить возврат
             </Text>
           </Pressable>
         ) : null}

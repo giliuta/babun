@@ -152,9 +152,7 @@ export function readableDocuments(
 export interface MoneySides {
   income: boolean;
   expense: boolean;
-  /** «Прибыль» (`finance.profit`): «Скрыта» прячет не только
-   *  плитку «Финансов», но и аналитику: иначе она показала бы прибыль всё равно. Нужны и
-   *  обе стороны денег, и само право. */
+  /** «Прибыль» — разница двух сторон: открыта, когда видны обе. */
   profit: boolean;
 }
 
@@ -165,7 +163,7 @@ export function moneySides({ role, map }: FinanceReader): MoneySides {
     Object.keys(map.calendars).some((teamId) => levelInCalendar({ role, map }, key, teamId) !== "locked");
   const income = seen(moneyKey(map, "income"));
   const expense = seen(moneyKey(map, "expense"));
-  return { income, expense, profit: income && expense && seen("finance.profit") };
+  return { income, expense, profit: income && expense };
 }
 
 /** Денежная панель аналитики открыта, только если видны её деньги; иначе —

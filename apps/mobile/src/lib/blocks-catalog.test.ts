@@ -155,7 +155,7 @@ describe("библиотека блоков указывает на живой �
     assert.match(card, /className="p-4 pt-2"/, "внутренние отступы тела блока поехали");
 
     const tokens = readFileSync(resolve(APP, "src/components/ui/tokens.ts"), "utf8");
-    assert.match(tokens, /ICON = \{ lg: 24, md: 22, sm: 18, xs: 14 \}/, "размеры иконок поехали");
+    assert.match(tokens, /ICON = \{\s*lg: 24,\s*md: 22,\s*sm: 18,\s*xs: 14,/, "размеры иконок поехали");
     assert.match(tokens, /GUTTER = 16/, "гуттер больше не 16");
 
     const circle = readFileSync(resolve(APP, "src/components/ui/IconCircle.tsx"), "utf8");

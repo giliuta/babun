@@ -12,8 +12,10 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { NameField } from "@/components/ui/picker-fields";
@@ -21,6 +23,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
+import { isHumanText, tDynamic } from "@babun/shared/i18n/runtime";
 import { confirmThen } from "@/lib/confirm";
 import { teamSources, type ClientSource, sourceDisplayName } from "@/features/clients/acquisition-source";
 import { useDataRole } from "@/session/tenant";
@@ -66,7 +69,7 @@ function ClientSourcesScreen() {
   const toast = useToast();
   const query = useClientSources();
   const { team } = useLocalSearchParams<{ team?: string }>();
-  const { data: ownTeams = [] } = useTeams();
+  const { data: ownTeams = [] } = useTeams({ display: true });
   const teamId =
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
@@ -102,13 +105,23 @@ function ClientSourcesScreen() {
     [isOwner, query.data, teamId, ownTeams],
   );
   const busy = createSource.isPending || renameSource.isPending;
-  const failed = (title: string, error: unknown) =>
-    notify(title, (error as Error).message || "Проверьте соединение и попробуйте ещё раз.");
+  // Текст сервера — только человеческий и переведённый; технический код
+  // («PGRST…», «duplicate key…») человеку ничего не скажет.
+  const failed = (title: string, error: unknown) => {
+    const text = (error as Error)?.message ?? "";
+    notify(title, isHumanText(text) ? tDynamic(text) : "Проверьте соединение и попробуйте ещё раз.");
+  };
 
   const submit = async (name: string) => {
     if (!name.trim() || busy || !editing) return;
     try {
       if (editing.mode === "edit") {
+        // Готовый источник показан на языке интерфейса; имя не тронули —
+        // в базе остаётся исходное, иначе перевод лёг бы вместо него.
+        if (name.trim() === sourceDisplayName(editing.source)) {
+          setEditing(null);
+          return;
+        }
         await renameSource.mutateAsync({ id: editing.source.id, name });
         toast("Источник обновлён", "success");
       } else {
@@ -135,7 +148,7 @@ function ClientSourcesScreen() {
     confirmThen(
       "Удалить источник?",
       {
-        message: `Клиенты из «${source.name}» останутся без источника.`,
+        message: `Клиенты из «${sourceDisplayName(source)}» останутся без источника.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
@@ -161,19 +174,17 @@ function ClientSourcesScreen() {
         <EmptyState
           state="error"
           fill
-          subtitle={query.error instanceof Error ? query.error.message : undefined}
+          subtitle={
+            query.error instanceof Error && isHumanText(query.error.message)
+              ? query.error.message
+              : undefined
+          }
           action={{ label: "Повторить", onPress: () => void query.refetch() }}
         />
       ) : list.length === 0 ? (
-        <EmptyState
-          fill
-          title="Источников пока нет"
-          action={
-            readOnly
-              ? undefined
-              : { label: "Добавить источник", onPress: () => setEditing({ mode: "create" }) }
-          }
-        />
+        // Пустое состояние — только слова: «Добавить источник» внизу, там же,
+        // где у полного списка (AGENTS 7.1).
+        <EmptyState fill title="Источников пока нет" />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -198,7 +209,7 @@ function ClientSourcesScreen() {
                     label={readOnly ? undefined : "Удалить"}
                     color={t.danger}
                     icon={Trash2}
-                    accessibilityLabel={`Удалить источник ${source.name}`}
+                    accessibilityLabel={`Удалить источник ${sourceDisplayName(source)}`}
                     onAction={readOnly ? undefined : () => remove(source)}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: t.surface }}>
@@ -207,7 +218,9 @@ function ClientSourcesScreen() {
                         onPress={() => setEditing({ mode: "edit", source })}
                         accessibilityRole={readOnly ? "text" : "button"}
                         accessibilityLabel={
-                          readOnly ? `Источник ${source.name}` : `Источник ${source.name}, переименовать`
+                          readOnly
+                            ? `Источник ${sourceDisplayName(source)}`
+                            : `Источник ${sourceDisplayName(source)}, переименовать`
                         }
                         style={({ pressed }) => ({
                           flex: 1,
@@ -238,10 +251,11 @@ function ClientSourcesScreen() {
         </ScrollView>
       )}
 
-      {!readOnly && !query.isLoading && !query.isError && list.length > 0 ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА: пуст список или полон. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton label="Добавить источник" onPress={() => setEditing({ mode: "create" })} />
-        </View>
+        </PageFooter>
       ) : null}
 
       <SourceSheet
@@ -275,11 +289,20 @@ function SourceSheet({
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [seeded, setSeeded] = useState<Editing | null>(null);
+  const seedName = isEdit ? sourceDisplayName(editing.source) : "";
   if (editing !== seeded) {
     setSeeded(editing);
     setPicking(false);
-    setName(isEdit ? editing.source.name : "");
+    setName(seedName);
   }
+  // НАБРАННОЕ НЕ ПРОПАДАЕТ ОТ СКРИМА И СВАЙПА — как у тега и метки: сначала
+  // вопрос.
+  const guard = useGuardedClose({
+    dirty: editing !== null && name !== seedName,
+    busy,
+    onClose,
+    message: "Набранное в источнике не сохранится.",
+  });
 
   const applyTemplate = (tpl: ClientSource) => {
     setName(sourceDisplayName(tpl));
@@ -288,13 +311,14 @@ function SourceSheet({
 
   return (
     <BottomSheet
-      visible={editing !== null}
-      onClose={onClose}
+      visible={editing !== null && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={isEdit ? "Источник" : "Новый источник"}
       avoidKeyboard
       footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
           <Button
-            label={isEdit ? "Сохранить" : "Добавить источник"}
+            label={isEdit ? "Сохранить" : "Создать источник"}
             disabled={!name.trim() || busy}
             loading={busy}
             onPress={() => onSubmit(name)}

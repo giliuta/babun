@@ -10,6 +10,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { GUTTER } from "@/components/ui/tokens";
@@ -122,7 +123,7 @@ export default function CategoriesScreen() {
   // меняет». Владелец правит всё. Правку пускает сервер (политика вида).
   const owner = useCurrentRole().data === "owner";
   const levelsOf = useFinanceSettingLevelsOf();
-  const allTeams = useTeams().data ?? [];
+  const allTeams = useTeams({ display: true }).data ?? [];
   const kindRow = CATEGORY_KIND_ROW[fixedKind ?? pickedType];
   const teams = owner ? allTeams : allTeams.filter((team) => levelsOf(team.id)[kindRow] !== "hidden");
   // КОМАНДА — В АДРЕСЕ (`?team=`): «Настройки финансов» открывают справочник
@@ -271,7 +272,6 @@ export default function CategoriesScreen() {
               ? "Категории называют, за что висят деньги — «Поставщик», «Займ», «Аренда»"
               : "Своих категорий пока нет — создайте те, что нужны именно вам"
           }
-          action={canEdit ? { label: "Добавить категорию", onPress: openCreate } : undefined}
         />
       ) : (
         <ScrollView
@@ -349,12 +349,12 @@ export default function CategoriesScreen() {
         </ScrollView>
       )}
 
-      {canEdit && !isLoading && !isError && filtered.length > 0 ? (
-        <View
-          style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
-        >
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА: пуст список или полон, кнопка на
+          одном месте (AGENTS 7.1); пустое состояние — только слова. */}
+      {canEdit ? (
+        <PageFooter>
           <GradientButton label="Добавить категорию" onPress={openCreate} />
-        </View>
+        </PageFooter>
       ) : null}
 
       <CategoryEditorSheet target={editorTarget} onClose={() => setEditorTarget(null)} />

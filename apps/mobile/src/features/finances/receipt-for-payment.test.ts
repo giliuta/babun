@@ -40,6 +40,14 @@ describe("чек на принятую оплату", () => {
     assert.deepEqual(ids, ["d", "a"]);
   });
 
+  it("оплате долга чек не предлагается — сервер его не выпишет", () => {
+    const ledger = [
+      tx({ id: "debt", debt_id: "d1", created_at: "2026-10-03T09:00:00Z" }),
+      tx({ id: "work", created_at: "2026-10-04T09:00:00Z" }),
+    ];
+    assert.deepEqual(incomesAwaitingReceipt(ledger, []).map((t) => t.id), ["work"]);
+  });
+
   it("берёт строки инвойса оплаты", () => {
     const lines = paymentReceiptLines(
       { amount: 70, vat_mode: null, vat_amount: null },

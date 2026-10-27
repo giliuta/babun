@@ -61,13 +61,30 @@ function normalizeDigits(input: string): string {
   return input.replace(/\D/g, "");
 }
 
+/** ГРУБЫЙ КЛЮЧ ЗВУЧАНИЯ — одинаковый для запроса и для клиента. Побуквенная
+ *  транслитерация даёт «Λουκάς» → «loykas», а человек набирает «Loukas»;
+ *  «Андрей» → «andrei», а в паспорте «Andrey»; «Χρίστος» → «hristos», а
+ *  «Christos» — «christos». Сводим обе стороны к одному ключу: лишнее
+ *  совпадение в поиске дешевле, чем ненайденный клиент. */
+function foldSound(latin: string): string {
+  return latin
+    .replace(/ph/g, "f")
+    .replace(/[kc]h/g, "h")
+    .replace(/t[sz]/g, "c")
+    .replace(/x/g, "ks")
+    .replace(/c/g, "k")
+    .replace(/o[uy]/g, "u")
+    .replace(/[yj]/g, "i")
+    .replace(/([a-z])\1+/g, "$1");
+}
+
 function normalizeSearchable(input: string): string {
   // Lower-case + strip everything that isn't a letter or digit; also
   // transliterate Cyrillic/Greek so "Ivan" and "Иван" hit the same
   // normalised form.
   const lower = stripMarks(input.toLowerCase());
   const translit = transliterate(lower);
-  return translit.replace(/[^a-z0-9]/g, "");
+  return foldSound(translit.replace(/[^a-z0-9]/g, ""));
 }
 
 function clientHaystacks(client: Client): {
@@ -229,45 +246,4 @@ function matchesPiece(
     if (word.includes(qNorm)) return true;
   }
   return false;
-}
-
-/**
- * Returns candidates that could be duplicates of the given new-client
- * draft. Used in the picker "Новый клиент" flow to ask "Это тот же
- * человек?" before creating a second record. Match logic:
- *
- *   * Exact-digits phone match (5+ digits) → strong candidate.
- *   * Normalised full-name match → medium candidate.
- *
- * Returns at most the top 5 to keep the UI readable.
- */
-export function findDuplicateCandidates(
-  clients: Client[],
-  draft: { full_name: string; phone?: string }
-): Client[] {
-  const phoneDigits = draft.phone ? normalizeDigits(draft.phone) : "";
-  const nameNorm = normalizeSearchable(draft.full_name);
-  if (!phoneDigits && !nameNorm) return [];
-  const hits: Client[] = [];
-  for (const c of clients) {
-    const { digits } = clientHaystacks(c);
-    let hit = false;
-    if (phoneDigits && phoneDigits.length >= 5) {
-      for (const d of digits) {
-        if (d === phoneDigits || d.endsWith(phoneDigits) || phoneDigits.endsWith(d)) {
-          hit = true;
-          break;
-        }
-      }
-    }
-    if (!hit && nameNorm.length >= 3) {
-      // A name match must compare against the name only. Searching every
-      // haystack here used to treat a draft named «Лимассол» as a duplicate
-      // of any client whose CITY happened to be Лимассол.
-      hit = normalizeSearchable(c.full_name) === nameNorm;
-    }
-    if (hit) hits.push(c);
-    if (hits.length >= 5) break;
-  }
-  return hits;
 }

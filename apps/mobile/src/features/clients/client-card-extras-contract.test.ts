@@ -136,7 +136,7 @@ describe("заметки: клиента — наверху, объекта — 
     assert.match(
       page,
       // Блок «Заметка» команда выключает на «Карточке клиента».
-      /note=\{\s*noteOn \? \(\s*<NotesBlock client=\{c\} update=\{update\} readOnly=\{!access\.note\.edit\} \/>\s*\) : null\s*\}/,
+      /note=\{\s*noteOn \? \(\s*<NotesBlock client=\{c\} update=\{update\} readOnly=\{!access\.note\.edit\} live=\{isDraft\} \/>\s*\) : null\s*\}/,
     );
     assert.match(read("ClientHeader.tsx"), /\{note \?\? null\}\s*\{people \?\? null\}/);
     assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /<NotesBlock/);

@@ -1,5 +1,6 @@
 import type { InvoicePaymentLedger } from "@babun/shared/local/finance/invoice-ledger";
 import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
+import { intlLocale } from "@babun/shared/i18n/runtime";
 import { formatInvoiceDate } from "@/lib/paper/format";
 
 /** The grey second line of a payment row on the invoice page. */
@@ -20,7 +21,9 @@ export function paymentMeta({
 }): string[] {
   const method = paymentMethodLabel(payment.payment_method) || null;
   return [
-    formatInvoiceDate(payment.occurred_on),
+    // Строка экрана, а не бумаги: язык интерфейса. Умолчание `formatInvoiceDate`
+    // («ru-RU») плагин языков не видит — на английском печаталось «5 октября».
+    formatInvoiceDate(payment.occurred_on, intlLocale()),
     accountName || "Счёт не указан",
     // Счёт «Наличные» и способ «Наличные» — одно слово дважды подряд.
     method && method !== accountName ? method : null,

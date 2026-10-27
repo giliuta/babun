@@ -55,7 +55,8 @@ export function MapPicker({
    *  карта летит туда; двигают карту рукой — она остаётся где поставили. */
   follow?: Coords | null;
   height?: number;
-  /** Центр карты после каждого движения: это и есть выбранная точка. */
+  /** Центр карты после движения рукой: это и есть выбранная точка. Открытие
+   *  карты и переезд к найденному адресу точки не дают. */
   onChange: (coords: Coords) => void;
 }) {
   const t = useThemeColors();
@@ -66,6 +67,13 @@ export function MapPicker({
   const emit = useRef(onChange);
   emit.current = onChange;
   const [ready, setReady] = useState(false);
+  // ТОЧКУ СТАВИТ ТОЛЬКО ПАЛЕЦ. Карта открывается на FALLBACK, и Apple Maps
+  // шлёт `onRegionChangeComplete` уже на загрузке: отдай его — и объекту без
+  // единого жеста записывался центр Лимасола, а маршрут берёт пин раньше
+  // адреса. Переезд к найденному адресу тоже не взводит: геокодер находит
+  // «Тест 5» в Саутгемптоне, и это была бы та же молчаливая чужая точка.
+  // Нашлось верно — человек тронет карту, и точка встанет.
+  const armed = useRef(false);
 
   // Карта едет за найденным адресом. Ключ — сами координаты: один и тот же
   // адрес, найденный второй раз, карту не дёргает.
@@ -123,6 +131,9 @@ export function MapPicker({
 
   return (
     <View
+      onTouchStart={() => {
+        armed.current = true;
+      }}
       style={{
         height,
         borderRadius: t.radius.input,
@@ -140,15 +151,11 @@ export function MapPicker({
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
-        onMapReady={() => {
-          setReady(true);
-          // Первая точка отдаётся сразу: карту открыли — значит согласны с
-          // тем, что видно по центру, и «Готово» не должно быть мёртвым.
-          emit.current(start.current);
+        onMapReady={() => setReady(true)}
+        onRegionChangeComplete={(region) => {
+          if (!armed.current) return;
+          emit.current({ lat: region.latitude, lng: region.longitude });
         }}
-        onRegionChangeComplete={(region) =>
-          emit.current({ lat: region.latitude, lng: region.longitude })
-        }
         showsUserLocation={false}
         toolbarEnabled={false}
       />

@@ -20,7 +20,7 @@ export default function AccountsLayout() {
   const t = useThemeColors();
   const role = useCurrentRole().data;
   const levelsOf = useFinanceSettingLevelsOf();
-  const teams = useTeams().data ?? [];
+  const teams = useTeams({ display: true }).data ?? [];
   const stack = (
     <Stack
       screenOptions={{

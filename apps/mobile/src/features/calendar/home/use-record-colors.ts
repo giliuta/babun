@@ -193,20 +193,36 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
   );
   // ЛЕНТА НАЗЫВАЕТ ДЫРУ СЛОВОМ. Она служит сетке легендой: цвет один на три
   // ситуации различает их слишком слабо для дальтоника, а в списке есть место
-  // для слова.
+  // для слова. Слово — того же правила, что цвет (`resolveRecordColor`):
+  // строку, которую покрасили «Оплачено» или «Предоплата», дыра не называет —
+  // иначе «Нет объекта» стояло только под зелёными строками.
   const situationFor = useCallback(
     (a: Appointment): string | null => {
+      const hidden = paymentHiddenFor(a);
+      if (a.kind === "work" && a.status !== "cancelled" && paymentOn && !hidden) {
+        const owes = !recordFilledFor(a, todayYmd, hidden, colorMinutes).paid;
+        if ((fullyPaid(a) && paidColor) || (!owes && partlyPaid(a) && prepaidColor)) return null;
+      }
       const id = appointmentSituation(a, {
         palette: situationPalette,
         active: activeSituations,
         todayYmd,
-        paymentHidden: paymentHiddenFor(a),
+        paymentHidden: hidden,
       });
       return id
         ? COLOR_SITUATIONS.find((s) => s.id === id)?.label ?? null
         : null;
     },
-    [situationPalette, activeSituations, todayYmd, paymentHiddenFor],
+    [
+      situationPalette,
+      activeSituations,
+      todayYmd,
+      paymentHiddenFor,
+      paymentOn,
+      colorMinutes,
+      paidColor,
+      prepaidColor,
+    ],
   );
 
   // ЛЕНТА НАЗЫВАЕТ И НЕЗАКРЫТУЮ РАБОТУ. В сетке просрочка говорит толщиной

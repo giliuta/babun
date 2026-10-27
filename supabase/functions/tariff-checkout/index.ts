@@ -3,7 +3,8 @@
 // бесплатно). Оплата — не через Apple, а в браузере.
 //
 // Подписка одна на аккаунт: одна цена «календарь», количество — живые
-// календари аккаунта. Добавили или убрали календарь — количество меняется со
+// календари аккаунта, в которых есть работа (запись, операция, SMS);
+// календарь только с событиями бесплатен. Добавили или убрали календарь — количество меняется со
 // следующего платежа (`proration_behavior: none`): действие "sync" после
 // создания/архива и сверка вебхуком перед счётом (`invoice.upcoming`).
 // Старые клиенты шлют `tier` solo/pro/max — любой означает «календари».
@@ -36,6 +37,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { keyFromEnv, serviceClient } from "../_shared/service-client.ts";
 import { json as jsonResponse } from "../_shared/http.ts";
+import { paidCalendars } from "../_shared/paid-calendars.ts";
+import {
+  checkoutIdempotencyKey,
+  liveSubscriptionOf,
+  openTariffSessions,
+  type CheckoutSessionLite,
+  type SubscriptionLite,
+} from "../_shared/tariff-duplicates.ts";
 
 type Period = "month" | "year";
 
@@ -88,6 +97,7 @@ async function stripe(
   method: "GET" | "POST",
   path: string,
   params?: Record<string, string>,
+  idempotencyKey?: string,
 ): Promise<Record<string, unknown>> {
   const body = params ? new URLSearchParams(params).toString() : undefined;
   const url = method === "GET" && body ? `https://api.stripe.com/v1/${path}?${body}` : `https://api.stripe.com/v1/${path}`;
@@ -96,6 +106,7 @@ async function stripe(
     headers: {
       Authorization: `Bearer ${key}`,
       ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: method === "POST" ? body : undefined,
   });
@@ -138,22 +149,6 @@ async function priceFor(key: string, period: Period): Promise<string> {
     "metadata[period]": period,
   });
   return price.id as string;
-}
-
-/** Живые календари аккаунта — столько и в подписке (не меньше одного).
- *  Ошибка чтения — исключение, а не «один календарь»: молчаливая единица
- *  выставила бы счёт за один календарь при пяти живых. */
-// deno-lint-ignore no-explicit-any
-async function liveCalendars(service: any, tenantId: string): Promise<number> {
-  const { count, error } = await service
-    .from("teams")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
-  if (error || typeof count !== "number") {
-    throw new Error(`live calendars unreadable: ${error?.code ?? "no count"}`);
-  }
-  return Math.max(1, count);
 }
 
 Deno.serve(async (request: Request) => {
@@ -222,7 +217,8 @@ Deno.serve(async (request: Request) => {
     }
 
     const live = ["active", "trialing", "past_due"].includes(String(tenant.subscription_status ?? ""));
-    const liveNow = await liveCalendars(service, tenantId);
+    // Платят только календари с работой (`_shared/paid-calendars.ts`).
+    const liveNow = await paidCalendars(service, tenantId);
     // Предложение «Новый календарь» платит и за тот, что заводят: живые + 1,
     // не больше (12.10). Сверка «sync» ставит ровно живые.
     const asked = Number(body.calendars);
@@ -249,10 +245,11 @@ Deno.serve(async (request: Request) => {
       return json(200, { synced: true, quantity });
     }
 
-    const period: Period = body.period === "year" ? "year" : "month";
+    // Период называет страница «Тариф» (месяц или год). Без него — у живой
+    // подписки её же период: «Новый календарь» не знает, как платят, и без
+    // этого перевёл бы годовую подписку на помесячную цену.
+    const chosen: Period | null = body.period === "year" ? "year" : body.period === "month" ? "month" : null;
     if (tenant.plan_override) return json(409, { error: "forever" });
-
-    const priceId = await priceFor(stripeKey, period);
 
     // ПОДПИСКА УЖЕ ЕСТЬ — ПЕРЕВОДИМ ЕЁ НА ЦЕНУ ЗА КАЛЕНДАРЬ И ЧИСЛО
     // КАЛЕНДАРЕЙ, А НЕ ЗАВОДИМ ВТОРУЮ (старые подписки Соло · Про · Макс).
@@ -260,8 +257,12 @@ Deno.serve(async (request: Request) => {
       // Смена в живой подписке меняет списания с карты владельца.
       if (!owner) return json(409, { error: "owner_only_change" });
       const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
-      const item = (sub.items as { data?: { id: string; quantity?: number; price?: { id?: string } }[] } | undefined)?.data?.[0];
+      const item = (sub.items as {
+        data?: { id: string; quantity?: number; price?: { id?: string; recurring?: { interval?: string } | null } }[];
+      } | undefined)?.data?.[0];
       if (!item) return json(409, { error: "subscription_without_items" });
+      const period: Period = chosen ?? (item.price?.recurring?.interval === "year" ? "year" : "month");
+      const priceId = await priceFor(stripeKey, period);
       if (item.price?.id === priceId && item.quantity === quantity) return json(200, { changed: false });
       await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
         "items[0][id]": item.id,
@@ -272,11 +273,40 @@ Deno.serve(async (request: Request) => {
       return json(200, { changed: true });
     }
 
+    const priceId = await priceFor(stripeKey, chosen ?? "month");
+
     // Клиент Stripe аккаунта: свой, иначе тот, что завёлся для SMS, иначе новый.
     let customer = tenant.stripe_customer_id as string | null;
+    const superseded: string[] = [];
     if (!customer) {
       const { data: smsCustomer } = await service.rpc("sms_autotopup_customer", { p_tenant: tenantId });
       if (typeof smsCustomer === "string" && smsCustomer) customer = smsCustomer;
+    }
+    if (customer) {
+      // ВТОРОЙ ПОДПИСКИ НЕ БЫВАЕТ. «Подписки нет» здесь — слово аккаунта, а
+      // его пишет вебхук: между оплатой и событием Stripe проходят секунды, и
+      // второе «Оплатить» в это окно оформило бы вторую подписку. Правда — в
+      // Stripe: живая подписка уже есть — оплата прошла, тариф вот-вот
+      // придёт (ответ тот же, что у смены тарифа: приложение перечитает
+      // аккаунт). Подписок у клиента единицы — хватает одной страницы.
+      const subs = await stripe(stripeKey, "GET", "subscriptions", { customer, status: "all", limit: "20" });
+      if (liveSubscriptionOf((subs.data as SubscriptionLite[] | undefined) ?? [])) {
+        return json(200, { changed: true });
+      }
+      // Старая открытая страница оплаты, оплаченная после новой, тоже завела
+      // бы вторую подписку — гасим её до того, как открыть новую.
+      const open = await stripe(stripeKey, "GET", "checkout/sessions", { customer, status: "open", limit: "20" });
+      for (const id of openTariffSessions((open.data as CheckoutSessionLite[] | undefined) ?? [])) {
+        superseded.push(id);
+        try {
+          await stripe(stripeKey, "POST", `checkout/sessions/${id}/expire`);
+        } catch (e) {
+          // Страница уже закрылась сама (оплачена или истекла) — не повод
+          // отказывать: оплаченную поймает проверка выше при следующем
+          // нажатии, а вторую подписку снимет вебхук.
+          console.warn("tariff-checkout: expire", id, e instanceof Error ? e.message : String(e));
+        }
+      }
     }
     if (!customer) {
       // Почта клиента Stripe — владельца: партнёр платит, но аккаунт не его.
@@ -314,7 +344,18 @@ Deno.serve(async (request: Request) => {
     if (tenant.trial_tier && Number.isFinite(trialEnd) && trialEnd - Date.now() > 49 * 3600 * 1000) {
       form["subscription_data[trial_end]"] = String(Math.floor(trialEnd / 1000));
     }
-    const session = await stripe(stripeKey, "POST", "checkout/sessions", form);
+    // Два нажатия одновременно (две вкладки, владелец и партнёр) проходят
+    // проверки выше вместе — ключ идемпотентности отдаёт им одну страницу.
+    const idempotencyKey = checkoutIdempotencyKey({
+      tenantId,
+      priceId,
+      quantity,
+      trialEnd: form["subscription_data[trial_end]"] ? Number(form["subscription_data[trial_end]"]) : null,
+      returnUrl: back,
+      superseded,
+      nowMs: Date.now(),
+    });
+    const session = await stripe(stripeKey, "POST", "checkout/sessions", form, idempotencyKey);
     if (!session.url) return json(502, { error: "stripe_failed" });
     return json(200, { url: session.url });
   } catch (e) {

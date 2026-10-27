@@ -95,9 +95,11 @@ describe("сетка открывается на месте", () => {
     assert.doesNotMatch(src, /\}, \[scrollToHour, startHour\]\);/);
   });
 
-  test("щипок запоминается, место — когда прокрутка встала", () => {
+  test("щипок держится до конца сессии и не переписывает «Масштаб при открытии»", () => {
     assert.match(src, /runOnJS\(commitZoom\)\(layoutH\.value\);/);
-    assert.match(src, /writeGridZoom\(zoomForHourH\(h, e0 - s0, vh\)\);/);
+    assert.match(src, /noteGridZoom\(zoomForHourH\(h, e0 - s0, vh\)\);/);
+    // На диск масштаб пишет только выбор в настройках.
+    assert.doesNotMatch(src, /writeGridZoom\(/);
     assert.match(src, /onMomentumEnd: \(e\) => \{\s*runOnJS\(saveTop\)/);
   });
 });

@@ -56,7 +56,7 @@ export function ServiceSheet(props: ServiceSheetProps) {
         picking ? undefined : (
         <View style={{ paddingHorizontal: GUTTER }}>
         <Button
-          label={service ? "Сохранить" : "Создать"}
+          label={service ? "Сохранить" : "Создать услугу"}
           onPress={submit}
           disabled={!canSubmit}
           loading={busy}

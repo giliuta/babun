@@ -58,8 +58,7 @@ export function useHomeMoney(input: HomeMoneyInput) {
 
   // Счёт = одна команда: командный скоуп видит РОВНО счета
   // своей команды, «общих счетов» нет; чип «Без команды» показывает
-  // сирот старой схемы. Скрытые балансы ВХОДЯТ в Σ:
-  // маркера-глазика у плитки нет.
+  // сирот старой схемы.
   const scopedAccounts = useMemo(
     () => scopedAccountsFor(accounts, orphanAccounts, scope),
     [accounts, orphanAccounts, scope],

@@ -10,6 +10,7 @@ import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
 import { passwordAccepted, passwordHint } from "@/components/auth/password-rule";
 import { passwordRefusal } from "@/features/cabinet/account-errors";
+import { PASSWORD_KEYBOARD } from "@/lib/keyboard";
 
 // ─── Смена пароля (web SecuritySection / PasswordBlock) ──────────────
 export function PasswordSection({ email }: { email: string | null }) {
@@ -89,6 +90,9 @@ export function PasswordSection({ email }: { email: string | null }) {
         onChangeText={setCurrentPwd}
         placeholder="Введите текущий пароль"
         secureTextEntry
+        keyboardType={PASSWORD_KEYBOARD}
+        autoCapitalize="none"
+        autoCorrect={false}
         autoComplete="current-password"
         textContentType="password"
       />
@@ -98,6 +102,9 @@ export function PasswordSection({ email }: { email: string | null }) {
         onChangeText={setPwd}
         placeholder="Минимум 6 символов"
         secureTextEntry
+        keyboardType={PASSWORD_KEYBOARD}
+        autoCapitalize="none"
+        autoCorrect={false}
         autoComplete="new-password"
         textContentType="newPassword"
         error={
@@ -114,6 +121,9 @@ export function PasswordSection({ email }: { email: string | null }) {
         onChangeText={setConfirm}
         placeholder="Повторите новый пароль"
         secureTextEntry
+        keyboardType={PASSWORD_KEYBOARD}
+        autoCapitalize="none"
+        autoCorrect={false}
         autoComplete="new-password"
         textContentType="newPassword"
         error={mismatch ? "Пароли не совпадают" : null}

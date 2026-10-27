@@ -19,6 +19,8 @@ export type TransferView = ReturnType<typeof useTransferDraft> & {
   spansTeams: boolean;
   label: (account: AccountWithBalance) => string;
   reason: string | null;
+  /** Не запрет — слова под кнопкой (перевод задним числом уводит в минус). */
+  warning: string | null;
   canSend: boolean;
   amountNum: number;
   send: () => Promise<void>;

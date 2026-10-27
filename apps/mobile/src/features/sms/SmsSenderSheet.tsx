@@ -85,7 +85,8 @@ export function SmsSenderSheet({
         maxLength={11}
         // Оператор примет только латиницу (`senderProblem`).
         keyboardType={LATIN_KEYBOARD}
-        autoCapitalize="none"
+        // Имя получатель видит ровно как набрано — «Giliuta», а не «giliuta».
+        autoCapitalize="words"
         autoCorrect={false}
         autoFocus
         returnKeyType="done"

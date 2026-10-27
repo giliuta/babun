@@ -259,39 +259,42 @@ export function NotificationsScreen() {
               />
             </SectionCard>
 
-            {/* ЧТО ДЕЛАЮТ ДРУГИЕ В КОМАНДЕ — из истории изменений; свои
-                действия не присылаются. Историю читает владелец аккаунта. */}
-            {isOwner ? (
-              <SectionCard title="Что происходит в команде">
-                <SettingsRow
-                  tile={SETTINGS_TILE.green}
-                  icon={CalendarPlus}
-                  title="Новые записи"
-                  toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
-                />
-                <Divider inset={56} />
-                <SettingsRow
-                  tile={SETTINGS_TILE.blue}
-                  icon={RefreshCw}
-                  title="Переносы и изменения"
-                  toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
-                />
-                <Divider inset={56} />
-                <SettingsRow
-                  tile={SETTINGS_TILE.red}
-                  icon={CalendarX}
-                  title="Отмены"
-                  toggle={{ value: prefs.notifyCancel, onChange: (v) => setPrefs({ notifyCancel: v }) }}
-                />
-                <Divider inset={56} />
-                <SettingsRow
-                  tile={SETTINGS_TILE.teal}
-                  icon={Wallet}
-                  title="Оплаты"
-                  toggle={{ value: prefs.notifyPayment, onChange: (v) => setPrefs({ notifyPayment: v }) }}
-                />
-              </SectionCard>
-            ) : null}
+            {/* ЧТО ДЕЛАЮТ ДРУГИЕ В КОМАНДЕ — пуш с сервера каждому, кто видит
+                календарь (мастеру — «Вам назначена работа»); свои действия не
+                присылаются. Оплаты — только владельцу: деньги команды. */}
+            <SectionCard title="Что происходит в команде">
+              <SettingsRow
+                tile={SETTINGS_TILE.green}
+                icon={CalendarPlus}
+                title="Новые записи"
+                toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={RefreshCw}
+                title="Переносы и изменения"
+                toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.red}
+                icon={CalendarX}
+                title="Отмены"
+                toggle={{ value: prefs.notifyCancel, onChange: (v) => setPrefs({ notifyCancel: v }) }}
+              />
+              {isOwner ? (
+                <>
+                  <Divider inset={56} />
+                  <SettingsRow
+                    tile={SETTINGS_TILE.teal}
+                    icon={Wallet}
+                    title="Оплаты"
+                    toggle={{ value: prefs.notifyPayment, onChange: (v) => setPrefs({ notifyPayment: v }) }}
+                  />
+                </>
+              ) : null}
+            </SectionCard>
 
             {isOwner ? (
               <SectionCard title="Финансы">

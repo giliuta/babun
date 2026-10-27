@@ -180,3 +180,19 @@ export function readOnlyBookRights(rights: BookRights): BookRights {
     editFiles: false,
   };
 }
+
+/** Страница только для просмотра, хотя блоки и видны:
+ *  • запись клиента без тарифа (`readOnlyBookRights` выше);
+ *  • ЧУЖОЕ СОБЫТИЕ у владельца и диспетчера — сервер пускает правку события
+ *    лишь его автору (`appointments_update`), и открытая дверь кончилась бы
+ *    отказом. Сотруднику своё событие решает `eventWritable` в `bookRights`.
+ *  Автора без `created_by` (старый кэш) не угадываем — только просмотр. */
+export function bookIsReadOnly(input: {
+  isMember: boolean;
+  kind: "work" | "event";
+  workInPlan: boolean;
+  ownEvent: boolean;
+}): boolean {
+  if (input.kind === "work") return !input.workInPlan;
+  return !input.isMember && !input.ownEvent;
+}

@@ -131,10 +131,19 @@ function owesAfterVisit(
   }
   const total = Number(apt.total_amount ?? 0);
   if (!(total > 0)) return false;
-  return receivedOf(apt) < total;
+  return receivedOf(apt) < cents(total);
 }
 
-/** Сколько получено по записи — аванс плюс платежи (леджер или зеркало веба). */
+/** ДЕНЬГИ СРАВНИВАЮТСЯ В ЦЕНТАХ. Аванс 4.76 + платёж 7.14 во float — это
+ *  11.899999…, меньше итога 11.90, и оплаченная запись горела «Долгом» после
+ *  визита и «Предоплатой» до него, хотя «Финансы» (`getPaidAmount`, тоже до
+ *  цента) называли её оплаченной. */
+function cents(amount: number): number {
+  return Math.round(amount * 100);
+}
+
+/** Сколько получено по записи, в центах — аванс плюс платежи (леджер или
+ *  зеркало веба). */
 function receivedOf(apt: Parameters<typeof recordFilled>[0]): number {
   const ledger = (apt.payments ?? []).reduce((sum, p) => sum + p.amount, 0);
   const mirror = apt.payment
@@ -142,7 +151,7 @@ function receivedOf(apt: Parameters<typeof recordFilled>[0]): number {
     : (apt.payment_status ?? "unpaid") !== "unpaid"
       ? apt.paid_amount ?? 0
       : 0;
-  return (apt.prepaid_amount ?? 0) + Math.max(ledger, mirror);
+  return cents((apt.prepaid_amount ?? 0) + Math.max(ledger, mirror));
 }
 
 /** ОПЛАЧЕНА ПОЛНОСТЬЮ — запись в цвете «Оплачено». Способ (карта, наличные,
@@ -152,7 +161,7 @@ export function fullyPaid(apt: Parameters<typeof recordFilled>[0]): boolean {
   if (apt.kind !== "work" || apt.status === "cancelled") return false;
   if (apt.payment_status === "refunded") return false;
   const total = Number(apt.total_amount ?? 0);
-  return total > 0 && receivedOf(apt) >= total;
+  return total > 0 && receivedOf(apt) >= cents(total);
 }
 
 /** ВНЕСЕНА ЧАСТЬ СУММЫ — аванс или частичная оплата, но не всё. До визита
@@ -163,7 +172,20 @@ export function partlyPaid(apt: Parameters<typeof recordFilled>[0]): boolean {
   if (apt.payment_status === "refunded") return false;
   const total = Number(apt.total_amount ?? 0);
   const got = receivedOf(apt);
-  return total > 0 && got > 0 && got < total;
+  return total > 0 && got > 0 && got < cents(total);
+}
+
+/** ЦВЕТ ЗАПИСИ ЗАДАЮТ ДЕНЬГИ: оплачена, внесена часть или долг после
+ *  визита. Выбранный рукой цвет у такой записи не виден (`resolveRecordColor`:
+ *  деньги сильнее руки), поэтому пункт «Цвет» ей не предлагается. Кто не
+ *  видит оплату, о деньгах не знает — для него решает рука. */
+export function colorSetByMoney(
+  apt: Parameters<typeof recordFilled>[0],
+  todayYmd: string,
+  paymentHidden = false,
+): boolean {
+  if (paymentHidden || apt.kind !== "work" || apt.status === "cancelled") return false;
+  return fullyPaid(apt) || partlyPaid(apt) || !recordFilled(apt, todayYmd).paid;
 }
 
 /** То же, что `recordFilled`, но для того, кто не видит оплату записи: тогда
@@ -350,8 +372,10 @@ export function resolveRecordColor(input: RecordColorInput): string {
   }
   const paid = (input.paid ?? "").trim();
   if (paid) return paid;
+  // «Предоплата» — только пока визит впереди. После визита внесённая часть —
+  // это долг; выключенный цвет «Долг» не превращает его обратно в предоплату.
   const prepaid = (input.prepaid ?? "").trim();
-  if (prepaid) return prepaid;
+  if (prepaid && input.filled.paid) return prepaid;
   const own = (input.override ?? "").trim();
   if (own) return own;
   if (active.includes("noObject") && !input.filled.object) {

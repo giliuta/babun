@@ -1,20 +1,7 @@
-import type { CardField } from "./card-prefs";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // ПОДПИСИ СТРОК ШЕСТЕРЁНКИ «КЛИЕНТОВ» — чистые, без React. Подпись — живое состояние, а не
 // пояснение.
-
-/** Поля строки списка в порядке страницы «Строка в списке». */
-export const LIST_ROW_FIELDS: { field: CardField; label: string }[] = [
-  { field: "phone", label: "Телефон" },
-  { field: "last", label: "Последняя запись" },
-];
-
-/** «Телефон · Последняя запись» или «Только имя». */
-export function listRowSummary(prefs: Record<CardField, boolean>): string {
-  const on = LIST_ROW_FIELDS.filter((f) => prefs[f.field]).map((f) => f.label);
-  return on.length > 0 ? on.join(" · ") : "Только имя";
-}
 
 /** «Типы объектов»: два первых имени и многоточие, без типов — «Типов нет». */
 export function objectTypesSummary(types: string[]): string {

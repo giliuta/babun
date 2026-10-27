@@ -42,6 +42,13 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
         <td class="number ${payment.refund ? "refund" : "payment"}">${escapeHtml(payment.amount)}</td>
       </tr>`).join("");
 
+  const settlementRows = doc.settlement.map((row) => `
+      <tr>
+        <td></td>
+        <td>${escapeHtml(row.label)}</td>
+        <td class="number">${escapeHtml(row.value)}</td>
+      </tr>`).join("");
+
   const totalRows = doc.totals.map((total) => `
         <tr class="${total.grand ? "grand" : ""}">
           <td class="total-label">${escapeHtml(total.label)}</td>
@@ -99,7 +106,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
     .totals { margin-left: auto; margin-top: 8px; border-collapse: collapse; }
     .totals td { padding: 3px 12px; font-size: 14px; }
     .total-label { text-align: right; color: #374151; }
-    .total-value { width: 124px; text-align: right; font-weight: 600; color: #111827; }
+    .total-value { min-width: 124px; text-align: right; font-weight: 600; color: #111827; white-space: nowrap; }
     .grand td { padding: 10px 12px; font-size: 17px; font-weight: 700; color: #111827; }
     .grand .total-value { border: 1px solid #e5e7eb; }
     .section { margin-top: 26px; break-inside: avoid; }
@@ -151,10 +158,10 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
       </section>
     ` : ""}
 
-    ${paymentRows ? `
+    ${paymentRows || settlementRows ? `
       <section class="section">
         <div class="eyebrow">${escapeHtml(doc.dict.payment)}</div>
-        <table class="payments" aria-label="${escapeHtml(doc.dict.paymentsTableLabel)}"><tbody>${paymentRows}</tbody></table>
+        <table class="payments" aria-label="${escapeHtml(doc.dict.paymentsTableLabel)}"><tbody>${paymentRows}${settlementRows}</tbody></table>
       </section>
     ` : ""}
 

@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
-import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
@@ -16,11 +15,9 @@ import {
   teamTagIds,
 } from "@/features/clients/merge-clients";
 import {
-  useArchiveClients,
   useClient,
   useClientTags,
   useClientsSourceScope,
-  useUpdateClientById,
 } from "@/features/clients/queries";
 import { useClientMembers } from "@/features/clients/use-client-links";
 import { clientMembersQueryKey, parseLinkKey } from "@/features/clients/use-link-writer";
@@ -28,8 +25,8 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
-import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
 import { clientKeys } from "@/lib/client-query-keys";
+import { mergeClientsOnServer } from "@/features/clients/merge-clients-rpc";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
@@ -37,10 +34,9 @@ import { clientKeys } from "@/lib/client-query-keys";
 // живёт в меню к остальным необратимым. Дубль —
 // тот же, что называет плашка (`useDuplicateOf`, один ключ, один запрос).
 //
-// ПОРЯДОК НЕ МЕНЯТЬ: патч основной → записи дубля → архив дубля. Патч не лёг —
-// записи не едут (иначе они уедут к карточке без данных дубля); архив не
-// прошёл — это ошибка словами: живой дубль вернул бы плашку, а второе
-// слияние сложило бы всё ещё раз.
+// СЛИВАЕТ СЕРВЕР ОДНИМ ВЫЗОВОМ (`merge-clients-rpc.ts`): правка основной,
+// визиты, «Удалённые записи», файлы, долги и корзина дубля — одна транзакция.
+// Отказ сервера (оплаченные визиты, не владелец) — тостом словами.
 
 interface MergeDuplicateInput {
   /** Карточка страницы; черновик и архив пункта не получают. */
@@ -88,8 +84,8 @@ export function useMergeDuplicate({
   const sourceScope = useClientsSourceScope();
   const activeTenantId = useTenantId();
   const tenantId = scope?.tenantId ?? activeTenantId;
-  // Записи переносятся клиентом АКТИВНОЙ компании (`useUpdateAppointment`):
-  // своя база, открытая не в календаре, ушла бы под чужой заголовок.
+  // Сервер сливает под АКТИВНОЙ компанией (заголовок запроса): своя база,
+  // открытая не в календаре, ушла бы под чужой заголовок.
   const eligible =
     !!client && !isDraft && !client.deleted_at && canManage && (scope?.isActive ?? true);
   const dupId = useDuplicateOf(eligible ? client : null);
@@ -97,10 +93,6 @@ export function useMergeDuplicate({
   const members = useClientMembers(dupId);
   const dupAppts = useClientAppointments(dupId ?? "");
   const tagsQuery = useClientTags();
-  const updateById = useUpdateClientById();
-  const updateAppt = useUpdateAppointment();
-  const archive = useArchiveClients();
-  const setOptOut = useSetClientSmsOptOut();
   const running = useRef(false);
 
   if (!eligible || !client || !dupId) return undefined;
@@ -112,14 +104,12 @@ export function useMergeDuplicate({
     if (running.current) return;
     running.current = true;
     try {
-      // 1. Дополняем основную. Не записалось — дальше не идём.
-      //    Карточку берём СВЕЖУЮ из кэша: патч перезаписывает массивы
-      //    (номера, объекты, заметки, связи) целиком, и снимок с момента
-      //    открытия страницы затёр бы номер, добавленный секунду назад.
-      //    Ключ карточки длиннее id — ["client", id, компания, вид], — и
-      //    точный `getQueryData(["client", id])` не находит ничего: слияние
-      //    всегда брало бы снимок. Берём самый свежий из совпавших по началу
-      //    ключа.
+      // Карточку берём СВЕЖУЮ из кэша: патч перезаписывает массивы (номера,
+      // объекты, заметки, связи) целиком, и снимок с момента открытия
+      // страницы затёр бы номер, добавленный секунду назад. Ключ карточки
+      // длиннее id — ["client", id, компания, вид], — и точный
+      // `getQueryData(["client", id])` не находит ничего: слияние всегда
+      // брало бы снимок. Берём самый свежий из совпавших по началу ключа.
       const fresh = freshestClient(qc, primary.id) ?? primary;
       // Справочник не загрузился — теги дубля берём как есть, а не теряем.
       const allowedTags = tagsQuery.data ? teamTagIds(tagsQuery.data, fresh.team_id) : null;
@@ -127,36 +117,18 @@ export function useMergeDuplicate({
       // Объект дубля, совпавший с объектом основной, уходит в него — и
       // визиты на нём переезжают на объект основной.
       const { remap } = mergeLocations(fresh, dupRow);
-      if (Object.keys(patch).length > 0) {
-        await updateById.mutateAsync({ id: primary.id, patch });
-      }
-      // «Клиент просил не писать» переезжает вместе с данными: правка клиента
-      // его не несёт — у отказа своя функция, — и без переноса основная
-      // карточка обещала бы SMS человеку, который просил не писать.
-      if (dupRow.sms_opt_out === true && fresh.sms_opt_out !== true) {
-        await setOptOut.mutateAsync({
-          clientId: primary.id,
-          value: true,
-          tenantId: sourceScope?.tenantId ?? null,
-        });
-      }
-      // 2. Визиты дубля — ради них слияние и затевается.
-      const moving = dupAppts.data ?? [];
-      for (const a of moving) {
-        const location = a.location_id ? remap.get(a.location_id) : undefined;
-        await updateAppt.mutateAsync({
-          id: a.id,
-          patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },
-        });
-      }
-      // 3. Дубль — в «Удалённые клиенты» (архива нет): визиты уже
-      //    у основной, и без истории он сотрётся через 30 дней; оставшиеся
-      //    за ним инвойсы или деньги база не даст стереть сама
-      //    (`client_history_never_purges`). Мутация отчитывается числами, а
-      //    не исключением: без проверки живой дубль сошёл бы за успех.
-      const res = await archive.mutateAsync({ ids: [dupRow.id], trash: true });
-      if (res.failed > 0 || res.archived === 0) {
-        throw new Error("Карточка объединена, но дубль не удалился");
+      await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });
+      // Сервер переписал строки мимо кэша телефона: визиты, файлы, долги и
+      // «Удалённые записи» перечитываются, дубль уходит из списка.
+      for (const key of [
+        clientKeys.all(),
+        clientKeys.cardAll(),
+        clientKeys.attachmentAll(),
+        ["appointments"],
+        ["debts"],
+        ["deleted-appointments"],
+      ]) {
+        void qc.invalidateQueries({ queryKey: key });
       }
       haptics.success();
       toast("Объединили");

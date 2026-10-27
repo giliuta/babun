@@ -232,22 +232,6 @@ export async function setInvoiceLanguage(
   }
 }
 
-export async function setInvoicePdfUrl(
-  supabase: DbSupabase,
-  id: string,
-  pdfPath: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("invoices")
-    .update({ pdf_url: pdfPath })
-    .eq("id", id)
-    .select("id")
-    .maybeSingle();
-  if (error || !data) {
-    throw new Error(`setInvoicePdfUrl: ${error?.message ?? "инвойс недоступен"}`);
-  }
-}
-
 /**
  * ПРАВКА ВЫСТАВЛЕННОГО ИНВОЙСА НА МЕСТЕ (пока клиенту не отправлен, его можно
  * отредактировать). Тот же номер; сервер пускает

@@ -3214,6 +3214,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_devices: {
+        Row: {
+          created_at: string
+          last_seen_at: string
+          locale: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_seen_at?: string
+          locale?: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_seen_at?: string
+          locale?: string
+          platform?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           created_at: string
@@ -6098,6 +6125,31 @@ export type Database = {
         Returns: string[]
       }
       onboarding_done: { Args: { p_chapter: string }; Returns: string[] }
+      online_booking_create: {
+        Args: {
+          p_date: string
+          p_name: string
+          p_phone: string
+          p_service: string
+          p_time: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      online_booking_page: { Args: { p_token: string }; Returns: Json }
+      online_booking_set: {
+        Args: { p_enabled: boolean; p_team: string }
+        Returns: Json
+      }
+      online_booking_set_service: {
+        Args: { p_online: boolean; p_service: string; p_team: string }
+        Returns: Json
+      }
+      online_booking_settings: { Args: { p_team: string }; Returns: Json }
+      online_booking_slots: {
+        Args: { p_service: string; p_token: string }
+        Returns: Json
+      }
       partners_card_manageable: {
         Args: { p_master_id: string }
         Returns: boolean
@@ -6243,6 +6295,7 @@ export type Database = {
           p_kind?: string
           p_paid_at?: string
           p_request_id: string
+          p_sent_at?: string
         }
         Returns: {
           address: string
@@ -6476,6 +6529,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      refund_overpayment_and_save: {
+        Args: {
+          p_amount: number
+          p_appointment_id: string
+          p_expected_updated_at?: string
+          p_patch: Json
+          p_request_id: string
+        }
+        Returns: Json
+      }
       refund_receipt: {
         Args: {
           p_amount: number
@@ -6527,6 +6590,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      register_push_device: {
+        Args: { p_locale?: string; p_platform: string; p_token: string }
+        Returns: Json
       }
       replace_day_extras: {
         Args: { p_date: string; p_extras: Json; p_team_id: string }
@@ -7121,6 +7188,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      unregister_push_device: {
+        Args: { p_other_devices?: boolean; p_token: string }
+        Returns: undefined
       }
       update_client_with_tags: {
         Args: {

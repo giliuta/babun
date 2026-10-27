@@ -207,19 +207,6 @@ export function cabinetScreenRole(
  *  `session/tiers.ts`). */
 export type PlanCapability = TierFeature;
 
-/** Действующий тариф: ручная выдача (`plan_override`) всегда сильнее
- *  оплаченного. Повторяет `public.tenant_effective_plan` — если правило
- *  меняется, оно меняется в обоих местах одним заходом. */
-export function effectivePlan(
-  tenant: { plan?: string | null; plan_override?: string | null } | null | undefined,
-): string | null {
-  if (!tenant) return null;
-  const override = tenant.plan_override?.trim();
-  if (override) return override;
-  const plan = tenant.plan?.trim();
-  return plan ? plan : null;
-}
-
 /** Разрешает ли ТАРИФ это действие.
  *
  *  Неизвестный тариф считается платным. Так задумано: ошибка в данных или

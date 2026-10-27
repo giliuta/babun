@@ -204,9 +204,3 @@ export function invoiceRequisites(
   if (id === NO_CLIENT_REQUISITES) return null;
   return (id ? sets.find((s) => s.id === id) : null) ?? defaultRequisites(sets);
 }
-
-/** Строке выбора в инвойсе есть что решать, только когда наборов больше
- *  одного; один или ни одного — строки нет. */
-export function invoiceNeedsRequisitesChoice(sets: readonly ClientRequisites[]): boolean {
-  return sets.length > 1;
-}

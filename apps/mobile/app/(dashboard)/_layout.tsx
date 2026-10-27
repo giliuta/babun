@@ -18,6 +18,7 @@ import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBounda
 import { DashboardGate } from "@/lib/DashboardGate";
 import { TeamActivityNotifier } from "@/features/cabinet/TeamActivityNotifier";
 import { CallerIdSync } from "@/features/clients/caller-id/CallerIdSync";
+import { PushRegistrar } from "@/features/cabinet/PushRegistrar";
 import { TourWindow } from "@/components/tour/TourWindow";
 import { OnboardingRunner } from "@/features/onboarding/OnboardingRunner";
 import { useTabLocks } from "@/features/onboarding/tab-locks";
@@ -65,8 +66,10 @@ export default function DashboardLayout() {
   // переиспользует стек /calendar, который лежит НАД табами.
   return (
     <DashboardGate>
-      {/* Уведомления о делах команды из истории изменений — пока
-          приложение открыто; без интерфейса. */}
+      {/* Уведомления о делах команды: пуш с сервера при закрытом
+          приложении (телефон — в получателях) или, пока сервер их не шлёт,
+          опрос истории изменений при открытом; без интерфейса. */}
+      <PushRegistrar />
       <TeamActivityNotifier />
       {/* База определителя номера на iPhone идёт за списком клиентов. */}
       <CallerIdSync />

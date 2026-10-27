@@ -1,12 +1,14 @@
 import { useDeferredValue, useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import { useClientSources } from "@/features/clients/acquisition-sources";
-import type { ClientSource } from "@/features/clients/acquisition-source";
+import { sourceFilterOptions, type ClientSource } from "@/features/clients/acquisition-source";
 import type { ClientsFilter } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
+import { useFeatureOn } from "@/features/settings/company-features";
+import { useBusinessToday } from "@/features/settings/business-today";
 import type { ListTeam } from "./use-list-merge";
-import { filterTagsFor, pruneFilter } from "./list-derive";
+import { filterTagsFor, pruneFilter, uniqueById } from "./list-derive";
 
 const NO_SOURCES: ClientSource[] = [];
 
@@ -30,6 +32,8 @@ export function useListFilters({
   tagsReady,
   citiesReady,
   data,
+  guestClientSources,
+  guestSourcesSettled,
 }: {
   tags: ClientTag[];
   teams: ListTeam[];
@@ -46,6 +50,9 @@ export function useListFilters({
   tagsReady: boolean;
   citiesReady: boolean;
   data: Client[] | undefined;
+  /** Источники гостевых компаний (`useListMerge`). */
+  guestClientSources: ClientSource[];
+  guestSourcesSettled: boolean;
 }) {
   // ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ: правило — `filterTagsFor`.
   const filterTags = useMemo(
@@ -54,8 +61,15 @@ export function useListFilters({
   );
   // ИСТОЧНИКИ КОМАНД — все: значение клиента любой команды читается
   // по ним; варианты фильтра — по именам, под чипом — только его команды.
+  // У партнёра в списке и клиенты компании-работодателя: их источники
+  // приходят гостевым чтением и склеиваются со своими по id.
   const sourcesQuery = useClientSources();
-  const ownSources = sourcesQuery.data ?? NO_SOURCES;
+  const ownData = sourcesQuery.data ?? NO_SOURCES;
+  const ownSources = useMemo(
+    () =>
+      guestClientSources.length === 0 ? ownData : uniqueById([...ownData, ...guestClientSources]),
+    [ownData, guestClientSources],
+  );
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
@@ -64,6 +78,7 @@ export function useListFilters({
   // поле, а пересчёт сотен клиентов и перерисовка строк идут следом и не
   // держат клавиатуру.
   const searched = useDeferredValue(query);
+  const today = useBusinessToday();
   const result = useClientFilters(
     teamClients,
     teamAppointments,
@@ -77,11 +92,18 @@ export function useListFilters({
     sheetOpen, // счётчики попапов считаем только при открытом листе
     ownSources,
     teamChoice === ALL_TEAMS ? null : teamChoice,
+    today,
   );
 
-  // Прунинг «призрачных» фильтров — `pruneFilter`.
-  const { teamOptions, cityOptions, tagOptions, sourceOptions } = result;
-  const sourcesReady = sourcesQuery.isSuccess;
+  // Прунинг «призрачных» фильтров — `pruneFilter`. Теги и источники
+  // сверяются со ВСЕМ справочником, а не с вариантами под чипом: тап по
+  // чипу сужает варианты до его команды, и прунинг по ним навсегда
+  // выкидывал из «набора дня» выбранное в другой команде. Убирается только
+  // то, чего больше нет нигде.
+  const { teamOptions, cityOptions } = result;
+  const tagOptions = useMemo(() => tags.map((tag) => ({ value: tag.id })), [tags]);
+  const sourceOptions = useMemo(() => sourceFilterOptions(ownSources, null), [ownSources]);
+  const sourcesReady = sourcesQuery.isSuccess && guestSourcesSettled;
   useEffect(() => {
     setFilter((f) =>
       pruneFilter(f, {
@@ -96,6 +118,15 @@ export function useListFilters({
     );
     // `setFilter` is the list's state setter: stable, listed only for the linter.
   }, [teamOptions, cityOptions, tagOptions, sourceOptions, sourcesReady, tagsReady, citiesReady, data, setFilter]);
+
+  // ОБЪЕКТЫ ВЫКЛЮЧЕНЫ — «ТИП ОБЪЕКТА» НЕ ФИЛЬТРУЕТ. Строки в «Фильтрах» тогда
+  // нет, а сохранённый в наборе дня «Дом» продолжал прятать клиентов, и снять
+  // его можно было только общим «Сбросить».
+  const objectsOn = useFeatureOn("objects");
+  useEffect(() => {
+    if (objectsOn) return;
+    setFilter((f) => (f.propertyTypes.length === 0 ? f : { ...f, propertyTypes: [] }));
+  }, [objectsOn, setFilter]);
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 

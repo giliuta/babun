@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { SmsTemplate } from "@babun/shared/local/sms-templates";
-import { acceptSmsInput, fillTemplate, fitsSmsLimit, MAX_SMS_PARTS, smsOptions, smsPartsOf, smsUrlWithBody, smsVars, stripEmoji } from "./sms-compose";
-
-const tpl = (id: string, body: string, enabled = true): SmsTemplate => ({
-  id,
-  kind: "reminder",
-  name: id,
-  body,
-  enabled,
-});
+import {
+  acceptSmsInput,
+  fillTemplate,
+  fitsSmsLimit,
+  MAX_SMS_PARTS,
+  smsLanguageOf,
+  smsPartsOf,
+  smsUrlWithBody,
+  smsVars,
+  stripEmoji,
+} from "./sms-compose";
 
 const RECORD = smsVars({
   name: "Мария",
@@ -42,6 +43,39 @@ describe("поля шаблона из записи", () => {
   });
 });
 
+describe("день и дата — на языке шаблона", () => {
+  test("английский шаблон не получает русских слов", () => {
+    assert.equal(
+      fillTemplate("Hi [Name], see you on [Day], [Date] at [Time]. [Company]", RECORD),
+      "Hi Мария, see you on Thursday, 24 September at 09:05. Giliuta",
+    );
+  });
+
+  test("каждый язык интерфейса пишет день и дату своими словами", () => {
+    const cases: [string, string][] = [
+      ["[Имя], ждём вас: [День], [Дата]", "Мария, ждём вас: четверг, 24 сентября"],
+      ["[Name], σας περιμένουμε: [Day], [Date]", "Мария, σας περιμένουμε: Πέμπτη, 24 Σεπτεμβρίου"],
+      ["[Имя]: чекаємо вас у [День], [Дата]", "Мария: чекаємо вас у четвер, 24 вересня"],
+      ["Здравейте, [Имя]! Очакваме Ви: [День], [Дата]", "Здравейте, Мария! Очакваме Ви: четвъртък, 24 септември"],
+      ["Hallo [Name], wir kommen am [Day], [Date]", "Hallo Мария, wir kommen am Donnerstag, 24. September"],
+      ["Hola [Name], te esperamos el [Day], [Date]", "Hola Мария, te esperamos el jueves, 24 de septiembre"],
+    ];
+    for (const [body, text] of cases) assert.equal(fillTemplate(body, RECORD), text, body);
+  });
+
+  test("язык читается по тексту, а не по полям", () => {
+    assert.equal(smsLanguageOf("[Имя], [Дата] [Время]"), "ru", "одни поля — русский, как раньше");
+    assert.equal(smsLanguageOf("[Имя], see you [Дата]"), "en");
+    assert.equal(smsLanguageOf("Thank you for your booking, see you on [Day] at the office"), "en");
+    assert.equal(smsLanguageOf("Wir sehen uns am [Day]"), "de");
+    assert.equal(smsLanguageOf("Nos vemos el [Day]"), "es");
+    assert.equal(smsLanguageOf("Напоминаем: завтра в [Время]"), "ru");
+    assert.equal(smsLanguageOf("Ще ви чакаме утре"), "bg");
+    assert.equal(smsLanguageOf("Чекаємо на вас"), "uk");
+    assert.equal(smsLanguageOf(""), "ru");
+  });
+});
+
 describe("шаблон заполняется целиком или не показывается", () => {
   test("русские и английские токены подставляются одинаково", () => {
     assert.equal(
@@ -62,25 +96,6 @@ describe("шаблон заполняется целиком или не пок�
 
   test("пустой шаблон отправлять нечего", () => {
     assert.equal(fillTemplate("   ", RECORD), null);
-  });
-
-  test("список: выключенные и незаполняемые уходят, порядок компании сохраняется", () => {
-    const options = smsOptions(
-      [
-        tpl("a", "[Имя], долг [Сумма]"),
-        tpl("b", "[Имя], до встречи [Дата]"),
-        tpl("c", "[Имя], привет", false),
-        tpl("d", "[Компания]: [Имя], спасибо"),
-      ],
-      RECORD,
-    );
-    assert.deepEqual(
-      options.map((o) => [o.template.id, o.text]),
-      [
-        ["b", "Мария, до встречи 24 сентября"],
-        ["d", "Giliuta: Мария, спасибо"],
-      ],
-    );
   });
 });
 

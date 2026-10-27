@@ -13,7 +13,7 @@ describe("запись из уведомления", () => {
   test("перед страницей записи закрыты все листы календаря", () => {
     const start = home.indexOf("ЛИСТЫ КАЛЕНДАРЯ УХОДЯТ ПЕРЕД ЗАПИСЬЮ");
     assert.ok(start > 0, "блок на месте");
-    const end = home.indexOf("router.push(\n            `/book?appointmentId=${target.id}", start);
+    const end = home.indexOf("`/book?appointmentId=${target.id}", start);
     assert.ok(end > start, "переход на страницу записи — после блока");
     const block = home.slice(start, end);
     for (const close of [

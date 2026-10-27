@@ -14,17 +14,31 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 export function deletableByHand(tx: FinanceTransaction): boolean {
   if (tx.source !== "manual") return false;
   if (tx.invoice_id) return false;
-  // Деньги записи — её блок «Оплата», не лента.
-  if (tx.appointment_id && tx.type !== "expense") return false;
+  // Деньги записи — сама запись (оплата — блок «Оплата», расход — её строки),
+  // не лента. И расход тоже: в ленте он то стоял своей строкой, то сливался
+  // в строку записи — смотря, попала ли запись в окно, — и свайп то был, то нет.
+  if (tx.appointment_id) return false;
   // Перевод — целиком, по паре; без связи пары удалять нечего.
   if (tx.type === "transfer" && !tx.transfer_group_id) return false;
   return true;
 }
 
-/** По доходу уже вернули деньги: сервер его не удалит, пока жив возврат. */
-export function refundBlocksDelete(
+/** Почему доход сейчас не удалить — словами, до вопроса «Удалить?». По доходу
+ *  вернули деньги — сервер его не удалит, пока жив возврат. Суммы возвратов ещё
+ *  не приехали — это не «есть возврат»: неправда толкала искать возврат, которого
+ *  нет. `null` — удалять можно. */
+export function refundDeleteNotice(
   tx: FinanceTransaction,
   refunded: number | undefined,
-): boolean {
-  return tx.type === "income" && (refunded === undefined || refunded > 0);
+): { title: string; message: string } | null {
+  if (tx.type !== "income") return null;
+  if (refunded === undefined) {
+    return {
+      title: "Подождите секунду",
+      message: "Проверяем, были ли возвраты по этому доходу, — попробуйте ещё раз.",
+    };
+  }
+  return refunded > 0
+    ? { title: "Удалить нельзя", message: "По этому доходу есть возврат — сначала удалите возврат." }
+    : null;
 }

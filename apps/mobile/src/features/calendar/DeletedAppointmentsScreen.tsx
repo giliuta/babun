@@ -123,7 +123,9 @@ export function DeletedAppointmentsScreen() {
     confirmThen(
       "Удалить насовсем?",
       {
-        message: "Запись и её фото уже не вернуть.",
+        // У события своё слово: «запись» у события путает (в ящике лежат
+        // оба вида).
+        message: row.item.kind === "work" ? "Запись и её фото уже не вернуть." : "Действие необратимо.",
         confirmLabel: "Удалить",
         destructive: true,
       },

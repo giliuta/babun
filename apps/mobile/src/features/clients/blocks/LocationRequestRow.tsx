@@ -78,7 +78,7 @@ export function LocationRequestRow({
           backgroundColor: t.rowFill,
         }}
       >
-        <MoreHorizontal color={t.body} size={ICON.sm} />
+        <MoreHorizontal color={t.body} size={ICON.command} />
       </View>
     </Pressable>
   );

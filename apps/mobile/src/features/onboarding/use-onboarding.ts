@@ -21,15 +21,25 @@ export {
 const onboardingKey = (tenantId: string | null, userId: string | null) =>
   ["onboarding", tenantId, userId] as const;
 
+// СЕРВЕР ОБУЧЕНИЯ ЕЩЁ НЕ ВКЛЮЧЁН. Функции `my_onboarding` и `onboarding_done`
+// приходят миграцией `20261018100000_signup_without_calendar`, а её накат меняет
+// и регистрацию — он идёт отдельным решением. До него запрос не уходит вовсе:
+// иначе каждый запуск у владельца — три ответа 404 (запрос и два повтора), а
+// обучение всё равно молчит (`done` пуст — разделы открыты). Включается этим
+// флагом в том же коммите, что и накат.
+export const ONBOARDING_SERVER_READY = false;
+
 export function useOnboardingDone() {
   const tenantId = useTenantId();
   const userId = useSession().session?.user.id ?? null;
   const role = useCurrentRole().data;
   return useQuery({
     queryKey: onboardingKey(tenantId, userId),
-    enabled: !!tenantId && !!userId && role === "owner",
+    enabled: ONBOARDING_SERVER_READY && !!tenantId && !!userId && role === "owner",
     // Ответ меняется только отсюда же — перечитывать его незачем.
     staleTime: Infinity,
+    // Отказ сервера повтором не лечится, а повтор — лишний запрос на старте.
+    retry: false,
     queryFn: async (): Promise<string[] | null> => {
       const { data, error } = await supabase.rpc("my_onboarding");
       if (error) throw new Error(error.message);
@@ -45,6 +55,7 @@ export function useMarkOnboardingDone() {
   const userId = useSession().session?.user.id ?? null;
   return useMutation({
     mutationFn: async (chapter: ChapterId | "all"): Promise<string[] | null> => {
+      if (!ONBOARDING_SERVER_READY) return null;
       const { data, error } = await supabase.rpc("onboarding_done", { p_chapter: chapter });
       if (error) throw new Error(error.message);
       return data ?? null;

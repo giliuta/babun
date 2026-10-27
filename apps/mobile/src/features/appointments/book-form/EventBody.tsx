@@ -59,7 +59,6 @@ export function EventBody({ form }: { form: BookModel }) {
     editing,
     locationId,
     status,
-    isMemberView,
     pendingFiles,
     setPendingFiles,
   } = form;
@@ -228,8 +227,9 @@ export function EventBody({ form }: { form: BookModel }) {
                 locationId={editing?.location_id ?? locationId ?? null}
                 canUpload={status !== "cancelled" && can.editFiles}
                 // «Меняет» — весь блок: удаляет тот, кто прикладывает;
-                // сервер пускает по тому же праву календаря записи.
-                canDelete={!isMemberView || can.editFiles}
+                // сервер пускает по тому же праву календаря записи. Чужое
+                // событие владелец только смотрит — и файлы тоже.
+                canDelete={can.editFiles}
                 pending={pendingFiles}
                 onPendingChange={setPendingFiles}
               />

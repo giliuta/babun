@@ -18,6 +18,7 @@ export function cardMenuActions(card: ClientCard, c: Client) {
     caps,
     access,
     stats,
+    partFailed,
     bookInPlan,
     calendarActionsFor,
     guardedBook,
@@ -129,8 +130,11 @@ export function cardMenuActions(card: ClientCard, c: Client) {
       );
       return;
     }
-    // ЛЮБАЯ запись — уже история, даже будущая.
+    // ЛЮБАЯ запись — уже история, даже будущая. Историю не дочитали
+    // (`partFailed`) — не обещаем «сотрётся через 30 дней»: у клиента с
+    // записями база срок снимет, и слова соврали бы.
     const hasHistory =
+      partFailed ||
       (stats?.visits ?? 0) > 0 ||
       (stats?.totalSpent ?? 0) > 0 ||
       (stats?.unclosedVisits ?? 0) > 0 ||

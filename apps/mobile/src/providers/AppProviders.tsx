@@ -9,7 +9,10 @@ import { supabase } from "@/lib/supabase";
 import { evictCompanyFromDevice } from "@/lib/evict-company";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { startSyncRuntime } from "@/lib/sync-runtime";
-import { startSyncBridge } from "@/lib/sync-bridge";
+import { startMemberQueueRuntime } from "@/lib/member-queue/runtime";
+import { memberQueueHost } from "@/features/appointments/member-queue-senders";
+import { startMemberSyncBridge, startSyncBridge } from "@/lib/sync-bridge";
+import { useMyAccess } from "@/session/access-queries";
 import { useTenantId } from "@/lib/tenant";
 import {
   FIRST_WARM_DELAY_MS,
@@ -40,6 +43,12 @@ function SyncRuntimeMount() {
     }
     return startSyncRuntime(tenantId);
   }, [role, tenantId]);
+  // У сотрудника своя очередь: вызовы дверей сервера, отложенные без сети
+  // (`lib/member-queue`). Только на телефоне — она живёт в SQLite.
+  useEffect(() => {
+    if (Platform.OS === "web" || !tenantId || role !== "master") return;
+    return startMemberQueueRuntime(memberQueueHost(queryClient));
+  }, [role, tenantId]);
   return null;
 }
 
@@ -60,6 +69,19 @@ function SyncBridgeMount() {
     }
     return startSyncBridge(tenantId);
   }, [role, tenantId]);
+  return role === "master" ? <MemberSyncBridgeMount /> : null;
+}
+
+/** Мост сотрудника — на всех платформах: кэша SQLite у него нет, записи идут
+ *  дверью сервера прямо в память. Календари — из его карты прав; карта
+ *  сменилась (выдали или забрали календарь) — подписка пересобирается. */
+function MemberSyncBridgeMount() {
+  const calendars = useMyAccess().data?.attachedCalendars;
+  const watched = calendars ? [...calendars].sort().join(",") : "";
+  useEffect(() => {
+    if (!watched) return;
+    return startMemberSyncBridge(watched.split(","));
+  }, [watched]);
   return null;
 }
 

@@ -72,6 +72,12 @@ describe("appointment money input", () => {
   test("accepts EU decimal comma and rejects negative values", () => {
     assert.equal(parseMoneyInput("120,50"), 120.5);
     assert.equal(parseMoneyInput("-1"), 0);
+    // Тот же разбор, что у сумм финансов: разряды, валюта, европейская запись.
+    assert.equal(parseMoneyInput("1 200"), 1200);
+    assert.equal(parseMoneyInput("€80"), 80);
+    assert.equal(parseMoneyInput("1.234,50"), 1234.5);
+    assert.equal(parseMoneyInput("12,555"), 12.56);
+    assert.equal(parseMoneyInput("abc"), 0);
   });
 });
 

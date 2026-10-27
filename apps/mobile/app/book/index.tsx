@@ -1,14 +1,12 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { AlertTriangle } from "lucide-react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import { ICON } from "@/components/ui/tokens";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
 import { loadErrorWords } from "@/lib/connection-words";
 import { PageWash } from "@/features/appointments/PageWash";
 import { first } from "@/features/appointments/book-form/book-math";
 import { WASH } from "@/features/appointments/book-form/book-chrome";
-import { Text } from "@/features/appointments/book-form/book-text";
 import { useBookForm } from "@/features/appointments/book-form/use-book-form";
 import {
   BookLoadingScreen,
@@ -35,16 +33,17 @@ import { BookEditSheets } from "@/features/appointments/book-form/BookEditSheets
 // держала дату и время прежней записи («чт, 8 октября 11:00»), а оплату
 // показывала уже новой («Дата изменена — сохраните»): «Сохранить» перенёс бы
 // запись на чужой день. Ключ по записи собирает форму заново.
+// «Удалить черновик» новой записи — тоже другая форма: метка `fresh` в
+// ключе собирает её с чистого листа, с тем днём и клиентом, с какими открыли.
 export default function BookScreen() {
-  const params = useLocalSearchParams<{ appointmentId?: string }>();
-  return <BookForm key={first(params.appointmentId) ?? "new"} />;
+  const params = useLocalSearchParams<{ appointmentId?: string; fresh?: string }>();
+  return <BookForm key={`${first(params.appointmentId) ?? "new"}:${first(params.fresh) ?? ""}`} />;
 }
 
 function BookForm() {
   const form = useBookForm();
   const {
     t,
-    insets,
     scrollRef,
     isEdit,
     editing,
@@ -99,17 +98,9 @@ function BookForm() {
       <PageWash color={identityC} strength={WASH} />
       <BookHeader form={form} />
 
-      {/* KAV МЕРЯЕТ СЕБЯ ОТНОСИТЕЛЬНО РОДИТЕЛЯ, А КЛАВИАТУРУ — В ОКНЕ.
-          `Screen` кладёт верхний safe-area отступ во внешний View, и `layout.y`
-          у KAV начинается ПОД ним: перекрытие с клавиатурой недооценивалось
-          ровно на высоту «острова» (59pt), и кнопка «Создать запись» уезжала
-          под клавиатуру наполовину (заметно в симуляторе при отключённой
-          аппаратной клавиатуре). `keyboardVerticalOffset` и
-          есть это расстояние от верха окна до View. */}
-      <KeyboardLift
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={insets.top}
-      >
+      {/* Подъём над клавиатурой: «Создать запись» и нижние поля не уходят
+          под клавиатуру. Высоту выреза `KeyboardLift` учитывает сам. */}
+      <KeyboardLift style={{ flex: 1 }}>
         <ScrollView
           // СКРОЛЛ УПИРАЕТСЯ В КРАЙ БЛОКОВ, А НЕ ТЯНЕТСЯ: фиксируется на конце
           // блока, а не поднимается сколько угодно. Резинка iOS у формы
@@ -146,15 +137,10 @@ function BookForm() {
           {/* Необязательный справочник не загрузился — не блокируем, но честно
               предупреждаем, что часть подсказок недоступна. */}
           {failedOptional ? (
-            <View
-              className="mx-3 mt-2 flex-row items-center gap-2 rounded-[10px] px-3 py-2.5"
-              style={{ backgroundColor: `${t.warning}14`, borderWidth: 1, borderColor: `${t.warning}33` }}
-            >
-              <AlertTriangle color={t.warning} size={ICON.sm} />
-              <Text style={{ fontSize: 13, color: t.warning, flex: 1 }}>
-                Не удалось загрузить {failedOptional.label} — часть подсказок недоступна
-              </Text>
-            </View>
+            <NoticeBar
+              tone="warn"
+              message={`Не удалось загрузить ${failedOptional.label} — часть подсказок недоступна`}
+            />
           ) : null}
 
           {kind === "work" ? <WorkBody form={form} /> : <EventBody form={form} />}

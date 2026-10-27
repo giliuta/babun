@@ -9,6 +9,7 @@ import { deletedOperationsQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { NEVER_PAUSE } from "./accounts";
+import { checkBudgetsAfterWrite } from "./budget-notify";
 import { invalidateLedger } from "./queries";
 
 // «УДАЛЁННЫЕ ОПЕРАЦИИ» — ящик живёт на сервере, офлайн его
@@ -39,7 +40,18 @@ export function useRestoreOperation() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => restoreDeletedOperation(supabase, id),
-    onSuccess: (_data, id) => dropFromTrash(qc, tenantId, id),
+    onSuccess: (_data, id) => {
+      // День операции — из снимка в ящике, пока строка ещё там.
+      const restored = qc
+        .getQueryData<DeletedOperation[]>(deletedOperationsQueryKey(tenantId))
+        ?.find((row) => row.id === id);
+      dropFromTrash(qc, tenantId, id);
+      // Вернувшийся расход — снова в месяце категории: бюджет пересчитывается,
+      // как после любой записи расхода (вставка и правка делают то же).
+      if (restored?.transaction.type === "expense") {
+        checkBudgetsAfterWrite(qc, tenantId, restored.transaction.occurred_on);
+      }
+    },
     onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });

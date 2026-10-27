@@ -21,15 +21,17 @@ import { passwordAccepted, passwordHint } from "@/components/auth/password-rule"
 import { CAN_PAY_HERE, CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { invitationSignupErrorMessage } from "@/features/settings/invitation-flow";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
+import { legalLang } from "@/features/legal/legal-texts";
 
 // «Создать аккаунт» — name/email/password inline (chained return key).
-// Non-functional OAuth placeholders are not shown. Terms is a one-line legal note.
+// Кнопок Apple и Google здесь нет: они стоят на экране входа и сами заводят
+// аккаунт. Terms is a one-line legal note.
 // После отправки — «Введите код» из письма Babun (EmailCodeCard); верный код
 // сразу открывает календарь. Мастера «название бизнеса / род занятий» больше
 // нет: имя аккаунта — первое поле этой формы.
-// НА iPhone — ТОЛЬКО ПО ПРИГЛАШЕНИЮ (App Review, `CAN_SIGN_UP_HERE`).
-// Ссылка с экрана входа убрана, а прямой переход сюда без приглашения
-// возвращает на вход: аккаунт компании заводится на babun.app.
+// ГДЕ МОЖНО ЗАВЕСТИ АККАУНТ, РЕШАЕТ `CAN_SIGN_UP_HERE`: где флаг выключен,
+// регистрация открывается только по приглашению, а прямой переход сюда без
+// него возвращает на вход.
 export default function RegisterRoute() {
   const [allowed, setAllowed] = useState<boolean | null>(
     CAN_SIGN_UP_HERE ? true : null,
@@ -126,7 +128,9 @@ function RegisterScreen() {
       router.push(href);
       return;
     }
-    Linking.openURL(`https://babun.app${href}`).catch(() => {
+    // Язык документа — язык интерфейса: сайт иначе берёт язык браузера, и
+    // при английском приложении договор открывался по-русски.
+    Linking.openURL(`https://babun.app${href}?lang=${legalLang(null, uiLocale())}`).catch(() => {
       notify(
         "Не удалось открыть ссылку",
         "Проверьте интернет и повторите.",
@@ -154,6 +158,7 @@ function RegisterScreen() {
           onChangeText={edit(setFullName)}
           placeholder="Ваше имя"
           accessibilityLabel="Ваше имя"
+          autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
           maxLength={120}

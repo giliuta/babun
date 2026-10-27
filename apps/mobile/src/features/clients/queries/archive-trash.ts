@@ -13,7 +13,7 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { cancelClientReminder } from "@/features/clients/reminders";
+import { dropClientReminder } from "@/features/clients/reminders";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { clientKeys } from "@/lib/client-query-keys";
 import type { ClientWriteTarget } from "./mutations-update";
@@ -48,7 +48,7 @@ export function useTrashClientAsPartner() {
       );
       // «Напомнить» об удалённом клиенте снимается и у партнёра, как у
       // владельца: иначе пуш приходил бы в срок и вёл на удалённую карточку.
-      void cancelClientReminder(id);
+      void dropClientReminder(id);
       void qc.invalidateQueries({ queryKey: clientKeys.all() });
       void qc.invalidateQueries({ queryKey: clientKeys.card(id) });
     },
@@ -93,9 +93,9 @@ export function useArchiveClients() {
       const { ids, trash } = input;
       assertOwnCompany(scope, "Убирать клиентов из работы");
       const tenantId = scope.tenantId;
-      if (scope.role !== "owner" && scope.role !== "dispatcher") {
-        throw new Error("Удалять клиентов может владелец или диспетчер.");
-      }
+      // Полки своей базы — только у владельца: так же решает RLS
+      // (`clients_update_owner`). Роли «диспетчер» в продукте нет.
+      if (scope.role !== "owner") throw new Error("Это может только владелец");
       // Один срок на весь заход: клиенты, удалённые одним действием, должны
       // и стереться вместе, а не расползтись по секундам.
       const purgeAt = trash ? purgeDateFromNow() : null;
@@ -139,7 +139,7 @@ export function useArchiveClients() {
       for (const [key, value] of context?.previous ?? []) qc.setQueryData(key, value);
     },
     onSuccess: ({ archivedIds }) => {
-      void Promise.all(archivedIds.map(cancelClientReminder));
+      void Promise.all(archivedIds.map(dropClientReminder));
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientKeys.all() });
@@ -166,9 +166,13 @@ function useHiddenClients(
       !!tenantId &&
       scope.ready &&
       scope.kind === "own" &&
-      (scope.role === "owner" || scope.role === "dispatcher"),
+      scope.role === "owner",
     // Привязанным клиентом — разбор над `useClients`.
     queryFn: () => read(tenantBoundClient(tenantId as string), tenantId as string),
+    // ПОЛКА ПЕРЕЧИТЫВАЕТСЯ НА КАЖДОМ ОТКРЫТИИ: сервер снимает срок клиенту с
+    // историей уже после удаления, а сигнал базы полку не трогает — и экран
+    // показывал «30 дней» и «Удалить» тому, кого база не сотрёт.
+    refetchOnMount: "always",
   });
 }
 
@@ -194,9 +198,7 @@ export function useRestoreClient() {
     ...NEVER_PAUSE,
     mutationFn: async (client: Client) => {
       assertOwnCompany(scope, "Возвращать клиентов в работу");
-      if (scope.role !== "owner" && scope.role !== "dispatcher") {
-        throw new Error("Восстановить клиента может владелец или диспетчер.");
-      }
+      if (scope.role !== "owner") throw new Error("Это может только владелец");
       await restoreClientCached(writeClientOf(scope), client, scope.tenantId, scope.writeOpts);
       return { ...client, deleted_at: null, purge_at: null } satisfies Client;
     },
@@ -230,7 +232,7 @@ export function useDeleteClientForever() {
     mutationFn: async (id: string) => {
       assertOwnCompany(scope, "Стирать клиентов");
       if (scope.role !== "owner") {
-        throw new Error("Стереть клиента навсегда может только владелец.");
+        throw new Error("Удалить клиента насовсем может только владелец.");
       }
       try {
         await deleteClientCached(writeClientOf(scope), id, scope.tenantId, scope.writeOpts);

@@ -34,7 +34,6 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.debts", area: "finance", scope: "calendar", title: "Долги" }),
   // «Финансы» по плиткам и шестерёнке.
   block({ key: "finance.documents", area: "finance", scope: "calendar", title: "Документы" }),
-  block({ key: "finance.profit", area: "finance", scope: "calendar", levels: ["off", "read"], title: "Прибыль" }),
   // «Ограничения» финансов — шкала сроков, как у клиентов.
   block({ key: "finance.window", area: "finance", scope: "calendar", levels: ["week", "near", "month", "quarter", "half", "own"], title: "Ограничения" }),
   block({ key: "finance.settings_accounts", area: "finance", scope: "calendar", title: "Счета" }),
@@ -133,7 +132,6 @@ describe("слова прав", () => {
         "finance.debts",
         // «Финансы» по плиткам и шестерёнке.
         "finance.documents",
-        "finance.profit",
         "finance.window",
         "finance.settings_accounts",
         "finance.settings_trash",

@@ -7,7 +7,7 @@
 // возвращает то, что уже записано, а не дублирует деньги.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "../database.types";
+import type { Database, Json } from "../database.types";
 import type { Appointment } from "../../local/appointments";
 import { rowToAppointment } from "./appointments";
 
@@ -41,6 +41,10 @@ export async function recordAppointmentPayment(
     p_kind: input.kind ?? "settlement",
     p_paid_at: input.paidAt ?? new Date().toISOString(),
     p_close_visit: input.closeVisit ?? false,
+    // Часы телефона В МОМЕНТ ОТПРАВКИ, а не оплаты: очередь мастера шлёт
+    // платёж позже, и время оплаты у неё прежнее. Разница с часами сервера —
+    // сбой часов телефона, сервер на неё сдвигает время оплаты.
+    p_sent_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Сервер не вернул запись после оплаты");
@@ -69,28 +73,38 @@ export async function cancelAppointmentPayment(
   return rowToAppointment(data as Row);
 }
 
-export interface RefundAppointmentOverpaymentInput {
+export interface RefundOverpaymentAndSaveInput {
   appointmentId: string;
   /** Сколько вернуть клиенту — евро с копейками. */
   amount: number;
   /** UUID, придуманный клиентом: становится id первой строки возврата. */
   requestId: string;
+  /** Сохранение записи: у мастера — тело его двери (`memberPatch`), у
+   *  владельца и диспетчера — колонки базы (`appointmentToUpdate`). */
+  patch: Json;
+  /** `updated_at` записи, по которой посчитан возврат: изменилась — отказ
+   *  до возврата (у мастера сервер его не сверяет). */
+  expectedUpdatedAt?: string | null;
 }
 
-/** Вернуть клиенту часть полученного по записи (итог стал меньше оплаты).
- *  Сервер (`refund_appointment_overpayment`) пишет возвраты
- *  «Возврат клиенту» по платежам от последнего к первому и возвращает
- *  свежую строку записи; повтор того же `requestId` ничего не задваивает. */
-export async function refundAppointmentOverpayment(
+/** ВЕРНУТЬ КЛИЕНТУ ПЕРЕПЛАТУ И СОХРАНИТЬ НОВЫЙ ИТОГ — ОДНОЙ ТРАНЗАКЦИЕЙ.
+ *  Итог стал меньше полученного: сервер (`refund_overpayment_and_save`)
+ *  пишет возвраты «Возврат клиенту» от последнего платежа к первому и тут же
+ *  сохраняет запись. Отказ сохранения откатывает и возврат — денег назад без
+ *  нового итога не бывает. Ответ — строка записи у владельца и диспетчера,
+ *  `null` у мастера (его дверь возвращает только номер). */
+export async function refundOverpaymentAndSave(
   supabase: SupabaseClient<Database>,
-  input: RefundAppointmentOverpaymentInput,
-): Promise<Appointment> {
-  const { data, error } = await supabase.rpc("refund_appointment_overpayment", {
+  input: RefundOverpaymentAndSaveInput,
+): Promise<Appointment | null> {
+  const { data, error } = await supabase.rpc("refund_overpayment_and_save", {
     p_appointment_id: input.appointmentId,
     p_amount: input.amount,
     p_request_id: input.requestId,
+    p_patch: input.patch,
+    ...(input.expectedUpdatedAt ? { p_expected_updated_at: input.expectedUpdatedAt } : {}),
   });
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Сервер не вернул запись после возврата");
-  return rowToAppointment(data as Row);
+  const row = data as Row | null;
+  return row && typeof row === "object" && "tenant_id" in row ? rowToAppointment(row) : null;
 }

@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
 import { View, type ScrollView, type StyleProp, type ViewStyle } from "react-native";
+import { NavigationContext } from "@react-navigation/native";
 import {
   registerTourTarget,
   tourTargetTapped,
@@ -35,10 +36,6 @@ export function TourScrollProvider({
   return <TourScrollContext.Provider value={value}>{children}</TourScrollContext.Provider>;
 }
 
-export function useTourHost(): string {
-  return useContext(TourHostContext);
-}
-
 export function TourTarget({
   id,
   children,
@@ -58,28 +55,27 @@ export function TourTarget({
 }) {
   const host = useContext(TourHostContext);
   const scroll = useContext(TourScrollContext);
-  // Ref стабилен: новая функция на каждой отрисовке снимала бы и ставила цель
-  // заново, и слой подсказки перемерял бы её на каждый кадр экрана.
-  const mounted = useRef<View | null>(null);
-  const ref = useCallback(
-    (node: View | null) => {
-      if (node) {
-        mounted.current = node;
-        registerTourTarget(id, { node, host, scroll, shape });
-      } else if (mounted.current) {
-        unregisterTourTarget(id, mounted.current);
-        mounted.current = null;
-      }
-    },
-    [id, host, scroll, shape],
-  );
+  const focused = useScreenFocused();
+  // Узел — состоянием: запись в реестр идёт эффектом, который знает и узел, и
+  // фокус экрана.
+  const [node, setNode] = useState<View | null>(null);
+  // ЦЕЛЬ ЕСТЬ, ТОЛЬКО ПОКА ЕЁ ЭКРАН В ФОКУСЕ. Экран под открытой поверх него
+  // страницей стека остаётся смонтированным, и его цели мерились бы по
+  // старым координатам: вырез и пузырь вставали поверх чужой страницы, а
+  // «нажмите шестерёнку» указывало на «‹ Назад» — глава застревала. Ушёл
+  // экран из фокуса — цель снята, шаг ждёт, пока экран вернётся.
+  useEffect(() => {
+    if (!node || !focused) return;
+    registerTourTarget(id, { node, host, scroll, shape });
+    return () => unregisterTourTarget(id, node);
+  }, [node, focused, id, host, scroll, shape]);
   return (
     <View
       // `collapsable={false}`: иначе Android выкидывает пустую обёртку из
       // дерева, и мерить становится нечего.
       collapsable={false}
       style={[flex ? { flex: 1 } : null, style]}
-      ref={ref}
+      ref={setNode}
       // Касание доходит до обёртки при любом ответчике внутри: кнопка
       // жмётся как обычно, а обучение узнаёт, что нажали именно её.
       onTouchEnd={() => tourTargetTapped(id)}
@@ -87,4 +83,23 @@ export function TourTarget({
       {children}
     </View>
   );
+}
+
+/** В фокусе ли экран, где нарисована цель. Вне экрана навигации (таб-бар,
+ *  корневые окна) — всегда да. Событие `blur` приходит и экрану, накрытому
+ *  страницей стека, и экрану ушедшей вкладки. */
+function useScreenFocused(): boolean {
+  const navigation = useContext(NavigationContext);
+  const [focused, setFocused] = useState(() => navigation?.isFocused() ?? true);
+  useEffect(() => {
+    if (!navigation) return;
+    setFocused(navigation.isFocused());
+    const offFocus = navigation.addListener("focus", () => setFocused(true));
+    const offBlur = navigation.addListener("blur", () => setFocused(false));
+    return () => {
+      offFocus();
+      offBlur();
+    };
+  }, [navigation]);
+  return focused;
 }

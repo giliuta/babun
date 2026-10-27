@@ -68,7 +68,7 @@ export function useBudgetWatch(): void {
   const categories = useFinanceCategories().data;
   const anyBudget = owner && !!categories?.some(hasBudget);
   const { month, spend } = useBudgetMonth(anyBudget);
-  const teamsData = useTeams({ includeInactive: true }).data;
+  const teamsData = useTeams({ includeInactive: true, display: true }).data;
   const teamNames = useMemo(
     () => new Map((teamsData ?? []).map((team) => [team.id, team.name])),
     [teamsData],

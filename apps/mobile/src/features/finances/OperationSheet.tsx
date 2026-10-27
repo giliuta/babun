@@ -20,7 +20,7 @@ import {
 } from "./queries";
 import { useCurrentRole } from "@/session/tenant";
 import {
-  operationCanSave,
+  minusAfterSpend, operationCanSave,
   operationInputReason,
   operationReason,
   refundGuards,
@@ -64,7 +64,7 @@ export function OperationSheet({
   const th = useThemeColors();
   const online = useIsOnline();
   const { data: categories = [] } = useFinanceCategories();
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   // ВЛАДЕЛЬЧЕСКИЕ ДВЕРИ ЭТОЙ ФОРМЫ. Сотрудник пишет только доход и расход на
   // счёт своего календаря (уровни финансов): бакет чеков,
   // справочник категорий, настройки счёта, инвойс и возврат сервер отдаёт
@@ -162,7 +162,7 @@ export function OperationSheet({
     canCreateCategory: isOwner,
     debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
     grossCents,
-    receiptLocked,
+    receiptLocked, minus: type === "expense" && !isEdit && grossCents != null ? minusAfterSpend(acc.selectedAccount, grossCents / 100) : null,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
   const isExpense = type === "expense";
@@ -200,9 +200,13 @@ export function OperationSheet({
   // свайпом влево по её строке в ленте «Финансов» и в листе дня
   // (`features/finances/operation-delete.ts`), как счета и клиентов.
 
-  const { askingClose, guardedClose, runAfterExit } = useOperationClose({
+  const { askingClose, guardedClose, runAfterExit, dirty } = useOperationClose({
     busy, onClose, onExited, draft, vatRate: opVatRate,
   });
+  // ПРАВКА БЕЗ ПРАВОК НЕ СОХРАНЯЕТСЯ: «Сохранить» серая, пока в операции
+  // ничего не поменяли, — как «Применить» у листа счёта. Команда в снимок
+  // формы не входит, её сверяем со строкой отдельно.
+  const unchangedEdit = isEdit && !dirty && teamId === (transaction?.team_id ?? null);
 
   const reason = operationReason(canWrite, operationInputReason(gate));
 
@@ -248,7 +252,7 @@ export function OperationSheet({
                   : "Добавить доход"
           }
           onSave={save}
-          canSave={canSave}
+          canSave={canSave && !unchangedEdit}
           busy={busy}
           onRetry={onRetryRefunds}
         />

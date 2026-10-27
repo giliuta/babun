@@ -19,6 +19,7 @@ export function ListBody({ list }: { list: ClientsList }) {
     scope,
     isLoading,
     error,
+    data,
     listErrorWords,
     refetch,
     isRefetching,
@@ -31,7 +32,6 @@ export function ListBody({ list }: { list: ClientsList }) {
     cardFieldsFor,
     selectedIds,
     toggleId,
-    openSwipe,
     setRemindClient,
     confirmDeleteOne,
     setMenuClient,
@@ -44,7 +44,10 @@ export function ListBody({ list }: { list: ClientsList }) {
         <View className="flex-1 items-center justify-center">
           <Spinner size={30} label="Загрузка клиентов" />
         </View>
-      ) : error ? (
+      ) : error && !data ? (
+        // ПОЛНЫЙ ЭКРАН ОШИБКИ — ТОЛЬКО КОГДА ПОКАЗАТЬ НЕЧЕГО. Упало фоновое
+        // перечитывание (react-query держит и `error`, и прежние `data`) —
+        // список остаётся, а слова ошибки — плашкой над ним.
         <ClientDataNotice
           fullScreen
           title={listErrorWords.title}
@@ -57,6 +60,14 @@ export function ListBody({ list }: { list: ClientsList }) {
         {/* Дообновление в фоне: данные на экране уже есть, поэтому индикация
             не имеет права сдвигать список. */}
         <LoadingBar visible={isRefetching && !pull.refreshing} />
+        {error ? (
+          <ClientDataNotice
+            title={listErrorWords.title}
+            message={listErrorWords.subtitle}
+            onRetry={() => void refetch()}
+            retrying={isRefetching}
+          />
+        ) : null}
         <FlatList
           style={{ flex: 1 }}
           accessibilityLabel="Список клиентов"
@@ -96,12 +107,6 @@ export function ListBody({ list }: { list: ClientsList }) {
                       ? router.push(clientCardHref(item.id, guest.tenantId))
                       : router.push(ownClientCardHref(item.id, scope))
                 }
-                onSwipeOpen={(row) => {
-                  if (openSwipe.current && openSwipe.current !== row) {
-                    openSwipe.current.close();
-                  }
-                  openSwipe.current = row;
-                }}
                 // Свайп: вправо — «Напомнить», влево —
                 // «Удалить»; «Записать» — в меню долгого нажатия.
                 onRemind={actions.remind ? () => setRemindClient(item) : undefined}

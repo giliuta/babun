@@ -1,5 +1,6 @@
 import { Text, TextInput, View } from "react-native";
 import { moneySymbol } from "@babun/shared/common/utils/money";
+import { SIGNED_NUMBER_KEYBOARD } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 
 // ПОЛЕ СУММЫ — ОДНО НА ВЕСЬ ПРОДУКТ.
@@ -87,7 +88,7 @@ export function MoneyField({
           // `decimal-pad` не содержит минуса ни в одной раскладке: счёт «в
           // долге» на ней физически не набрать. Там, где минус осмыслен,
           // берём клавиатуру с пунктуацией — на ней есть и точка, и минус.
-          keyboardType={allowNegative ? "numbers-and-punctuation" : "decimal-pad"}
+          keyboardType={allowNegative ? SIGNED_NUMBER_KEYBOARD : "decimal-pad"}
           // Сумма либо принимается целиком, либо перебивается целиком:
           // предзаполненный остаток («перевести всё») правят не по цифре, а
           // набором поверх, и стирать его вручную — лишняя работа.

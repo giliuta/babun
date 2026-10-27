@@ -102,6 +102,10 @@ export function MapPicker({
   const emit = useRef(onChange);
   emit.current = onChange;
   const start = useRef<Coords>(value ?? FALLBACK);
+  // Точку ставит только рука: `moveend` приходит и от `setView` (открытие,
+  // переезд к найденному адресу) — без этого объекту записывался бы Лимасол
+  // или промах геокодера.
+  const armed = useRef(false);
 
   useEffect(() => {
     if (leaflet !== "ready" || !host.current || map.current) return;
@@ -116,13 +120,11 @@ export function MapPicker({
       attribution: "© OpenStreetMap",
     }).addTo(instance);
     instance.on("moveend", () => {
+      if (!armed.current) return;
       const c = instance.getCenter();
       emit.current({ lat: c.lat, lng: c.lng });
     });
     map.current = instance;
-    // Первая точка отдаётся сразу: человек открыл карту — значит уже согласен
-    // с тем, что видит по центру, и кнопка «Готово» не должна быть мёртвой.
-    emit.current(start.current);
     return () => {
       instance.remove();
       map.current = null;
@@ -135,7 +137,7 @@ export function MapPicker({
   useEffect(() => {
     if (!follow || !map.current) return;
     map.current.setView([follow.lat, follow.lng], 17);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ключ — координаты (followKey): объект follow новый на каждом рендере
   }, [followKey]);
 
   return (
@@ -155,7 +157,16 @@ export function MapPicker({
         </View>
       ) : (
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
-          <div ref={host} style={{ width: "100%", height: "100%" }} />
+          <div
+            ref={host}
+            onPointerDown={() => {
+              armed.current = true;
+            }}
+            onWheel={() => {
+              armed.current = true;
+            }}
+            style={{ width: "100%", height: "100%" }}
+          />
           {/* Пин рисуем сами: маркер Leaflet тянет свои картинки с CDN, а без
               них показывает битую иконку. Свой — всегда на месте. */}
           <div

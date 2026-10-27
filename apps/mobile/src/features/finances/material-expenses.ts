@@ -18,10 +18,6 @@ import { inTeamScope } from "./team-scope";
 
 export const MATERIAL_TX_PREFIX = "material:";
 
-export function isMaterialExpenseRow(tx: Pick<FinanceTransaction, "id">): boolean {
-  return tx.id.startsWith(MATERIAL_TX_PREFIX);
-}
-
 export function materialExpenseRows(
   appointments: readonly Appointment[],
   services: readonly MaterialCatalogService[],

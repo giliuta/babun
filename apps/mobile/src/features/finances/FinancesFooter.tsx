@@ -98,6 +98,7 @@ export function FinancesFooter({
     // скрытыми (накопительный). Иначе один видимый счёт плюс скрытый давали
     // «Для перевода нужен второй счёт».
     company: transferAccounts ?? accounts,
+    teamHidden: (transferAccounts ?? []).filter((a) => a.is_hidden && a.brigade_id === teamId).length,
   });
   // У КОМАНДЫ ЧИПА НЕТ СЧЁТА — ГЛАВНОЕ ДЕЙСТВИЕ ВЕЗДЕ «СОЗДАТЬ СЧЁТ»:
   // без счёта ни доход, ни расход, ни перевод не записать, и первым

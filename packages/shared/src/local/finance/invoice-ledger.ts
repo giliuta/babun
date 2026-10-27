@@ -228,6 +228,13 @@ export function invoiceDisplayStatus(
 export function calculateInvoiceSettlement(
   invoice: Pick<InvoiceLedger, "status" | "total" | "credited_amount">,
   payments: readonly InvoicePaymentLedger[],
+  /** ДЕНЬГИ ЗАПИСИ МИМО ИНВОЙСА (предоплата наличными до выставления):
+   *  `listInvoiceAppointmentMoney`. Работа одна — клиент за неё уже заплатил,
+   *  и инвойс по записи просит только разницу: «Получено €260 · К оплате €40».
+   *  Передают те, кто ПОКАЗЫВАЕТ остаток и считает долг; действия по деньгам
+   *  самого инвойса (возврат, кредит-нота) считают без них — сервер этих
+   *  денег у инвойса не знает. */
+  appointmentMoney = 0,
 ): InvoiceSettlement {
   // К ОПЛАТЕ = СУММА − СТОРНИРОВАНО (частичная кредит-нота) — то же
   // правило, что у сервера (`sync_invoice_status_from_ledger`).
@@ -249,7 +256,9 @@ export function calculateInvoiceSettlement(
   const recognizedIncome =
     invoice.status === "paid" ? Math.max(due, income) : income;
   const rawPaid = round2(Math.max(0, recognizedIncome - refunded));
-  const paid = round2(Math.min(due, rawPaid));
+  const invoicePaid = round2(Math.min(due, rawPaid));
+  const paid = round2(Math.min(due, invoicePaid + Math.max(0, appointmentMoney)));
+  // Переплата — только деньгами самого инвойса: её возвращают с инвойса.
   const overpaid = round2(Math.max(0, rawPaid - due));
   // ЗАКРЫТАЯ БУМАГА ДЕНЕГ НЕ ЖДЁТ. «Аннулирован» — ошибочный документ;
   // «отменён» — сторнированный кредит-нотой, и сервер отменяет инвойс только
@@ -263,6 +272,7 @@ export function calculateInvoiceSettlement(
     income,
     refunded,
     paid,
+    fromAppointment: round2(paid - invoicePaid),
     remaining,
     overpaid,
     isPartial: !closed && paid > 0 && remaining > 0,

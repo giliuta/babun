@@ -18,15 +18,6 @@ export function dropIndex(
   return n;
 }
 
-/** Сдвиг соседа `index`, пока `active` тянут к месту `target`. */
-export function shiftOf(index: number, active: number, target: number, width: number): number {
-  "worklet";
-  if (active < 0 || index === active) return 0;
-  if (active < index && index <= target) return -(width + CHIP_GAP);
-  if (active > index && index >= target) return width + CHIP_GAP;
-  return 0;
-}
-
 /** Левый край чипа на месте `index` при порядке `order` и ширинах `widths`
  *  (лента начинается с `pad`, между чипами — `CHIP_GAP`). */
 export function slotX(

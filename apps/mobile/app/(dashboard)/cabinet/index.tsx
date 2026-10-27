@@ -30,20 +30,21 @@
 // Новую настройку раздела сюда не добавлять — её место за шестерёнкой.
 
 import { useCallback, useRef } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { RefreshCw, Shield } from "lucide-react-native";
 import { useQueueDepth } from "@babun/shared/sync";
 import type { QueuedOp } from "@babun/shared/db/cache/sql";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
+import { useMemberQueue } from "@/lib/member-queue/use-member-queue";
 import { useTenantId } from "@/lib/tenant";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { TYPE } from "@/components/ui/tokens";
 import { TourScrollProvider, TourTarget } from "@/components/tour/TourTarget";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
@@ -69,9 +70,11 @@ export default function CabinetHome() {
     (op: QueuedOp) => isQueuedOpVisibleForTenant(op, tenantId),
     [tenantId],
   );
-  const syncDepth = useQueueDepth(visibleOp);
-  // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
-  const showSync = role === "owner" || role === "dispatcher";
+  // Правки сотрудника без сети — своя очередь (`lib/member-queue`), та же строка.
+  const syncDepth = useQueueDepth(visibleOp) + useMemberQueue(tenantId).length;
+  // Очередь выгрузки видят все, кто правит без сети: владелец — правки
+  // таблиц, сотрудник — отложенные вызовы дверей сервера.
+  const showSync = role === "owner" || role === "dispatcher" || role === "master";
   // Прокрутка — для обучения: строки внизу оно докручивает на вид.
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
@@ -81,9 +84,7 @@ export default function CabinetHome() {
     // над таб-баром висела пустая полоса навигации (на Android с кнопками —
     // 48 dp), и последний пункт списка обрезался над ней.
     <Screen edges={["top"]}>
-      <View className="px-4 pb-1 pt-4">
-        <Text style={{ ...TYPE.display, color: t.ink }}>Кабинет</Text>
-      </View>
+      <ScreenHeader large title="Кабинет" />
 
       <TourScrollProvider scrollRef={scrollRef} scrollY={scrollY}>
       <ScrollView

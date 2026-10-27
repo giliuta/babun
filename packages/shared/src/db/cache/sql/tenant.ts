@@ -99,7 +99,7 @@ export async function cacheClearTenant(
   });
 }
 
-/** Wipe every table. Called on auth.signOut (cross-tenant leak guard —
+/** Wipe every table (both queues too). Called on auth.signOut (cross-tenant leak guard —
  *  offline-plan risk #1). All five deletes run in ONE EXCLUSIVE transaction
  *  so a concurrent optimistic write racing the wipe can't (a) land inside
  *  the BEGIN…COMMIT and get rolled back with it, or (b) survive as a
@@ -113,6 +113,7 @@ export async function cacheClearAll(): Promise<void> {
        DELETE FROM appointments;
        DELETE FROM tags;
        DELETE FROM sync_queue;
+       DELETE FROM member_queue;
        DELETE FROM sync_meta;`,
     );
   });

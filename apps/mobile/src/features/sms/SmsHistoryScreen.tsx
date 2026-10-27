@@ -35,7 +35,7 @@ import { euro } from "./sms-words";
 export function SmsHistoryScreen() {
   const t = useThemeColors();
   const params = useLocalSearchParams<{ teamId?: string }>();
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const [teamId, setTeamId] = useState<string | null>(params.teamId || null);
   const [bucket, setBucket] = useState<SmsBucket>("all");
   const [query, setQuery] = useState("");

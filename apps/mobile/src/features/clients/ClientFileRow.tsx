@@ -6,7 +6,6 @@ import { docTitle, isVideoPath } from "@/features/appointments/appointment-files
 import { formatBytes } from "@/features/clients/card-attachments";
 import { fileTime } from "@/lib/client-files";
 import type { ClientFileItem } from "@/features/clients/use-client-files";
-import { KIND_LABEL } from "@/features/clients/visit-photos";
 import { useThemeColors } from "@/theme/colors";
 
 // ФАЙЛ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ЗАПИСЬ В «ИСТОРИИ»: файлы идут по
@@ -21,7 +20,6 @@ import { useThemeColors } from "@/theme/colors";
 /** Столбик суммы — тот же, что у записи в «Истории» (`VisitRow`). */
 const AMOUNT_COLUMN = 64;
 
-const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 export function ClientFileRow({
   entry,
@@ -59,18 +57,11 @@ export function ClientFileRow({
       image = thumb || undefined;
       break;
     case "visit": {
-      // «До работы», «После работы»; просто снимок с выезда — «Фото с выезда»
-      // (в самой записи — «Фото» или «Видео»). У видео снимка нет — значок:
-      // ссылка на ролик в плитке картинкой не рисуется, плитка была пустой.
+      // Снимок с выезда — «Фото с выезда» (в самой записи — «Фото» или
+      // «Видео»); разметки «до/после» у фото записи нет. У видео снимка нет —
+      // значок: ссылка на ролик в плитке картинкой не рисуется, плитка была пустой.
       const video = isVideoPath(entry.item.storage_path);
-      title =
-        entry.item.kind !== "other"
-          ? capitalize(KIND_LABEL[entry.item.kind])
-          : video
-            ? "Видео"
-            : inRecord
-              ? "Фото"
-              : "Фото с выезда";
+      title = video ? "Видео" : inRecord ? "Фото" : "Фото с выезда";
       subtitle = time;
       icon = video ? Video : ImageIcon;
       image = video ? undefined : entry.item.url || undefined;

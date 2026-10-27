@@ -56,7 +56,7 @@ test("tag edit + network blip: throws, cache rolled back, nothing queued", async
     error = e;
   }
   expect(error).toBeInstanceOf(Error);
-  expect((error as Error).message).toBe("Изменения тегов недоступны без сети — попробуй позже");
+  expect((error as Error).message).toBe("Изменения тегов недоступны без сети — попробуйте позже");
   expect(await dequeueAll()).toEqual([]);
   const cached = await cacheGetOne<CachedClientData>("clients", ID);
   expect(cached?.tag_ids).toEqual([OLD_TAG]);
@@ -65,7 +65,7 @@ test("tag edit + network blip: throws, cache rolled back, nothing queued", async
 test("tag edit with other fields + network blip: the whole edit is refused", async () => {
   await expect(
     updateClient(networkDownSupabase(), ID, { tag_ids: [NEW_TAG], comment: "дверь с торца" }, TENANT),
-  ).rejects.toThrow("Изменения тегов недоступны без сети — попробуй позже");
+  ).rejects.toThrow("Изменения тегов недоступны без сети — попробуйте позже");
   expect(await dequeueAll()).toEqual([]);
   const cached = await cacheGetOne<CachedClientData>("clients", ID);
   expect(cached?.tag_ids).toEqual([OLD_TAG]);

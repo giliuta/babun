@@ -38,7 +38,7 @@ export function useStatementDocument(
   const accounts = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
   const categories = useFinanceCategories();
   const clients = useClients();
-  const teams = useTeams({ includeInactive: true });
+  const teams = useTeams({ includeInactive: true, display: true });
   const people = useMasters({ includeInactive: true });
   const timeZone = useCalendarSettings().data?.timezone ?? "Europe/Nicosia";
   const today = todayYmd(timeZone);

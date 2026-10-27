@@ -105,7 +105,8 @@ export function useRecordMenu({
           ? { label: "Восстановить", run: () => lifecycle.restoreCancelled(apt) }
           : { label: "Отменить визит", run: () => lifecycle.cancelVisit(apt) },
       );
-    if (mutable)
+    // Запись с деньгами не удаляется (правило сервера) — пункта нет вовсе.
+    if (mutable && lifecycle.canDelete(apt))
       list.push({
         label: event
           ? apt.event_repeat && apt.event_repeat.kind !== "none"

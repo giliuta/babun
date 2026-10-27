@@ -1,14 +1,9 @@
 import { useRef } from "react";
-import {
-  useLocalSearchParams,
-  useRouter,
-  type Href,
-} from "expo-router";
-import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTenantId } from "@/lib/tenant";
 
-/** Router wiring of the calendar tab: guarded pushes to the record form,
- *  the way back to the screen that sent us here, and the route params. */
+/** Router wiring of the calendar tab: guarded pushes to the record form
+ *  and the route params. */
 export function useCalendarRoute() {
   const router = useRouter();
   // ДВОЙНОЙ ТАП НЕ ОТКРЫВАЕТ ФОРМУ ДВАЖДЫ: две страницы одной
@@ -20,25 +15,6 @@ export function useCalendarRoute() {
     if (at - lastBookPushRef.current < 700) return;
     lastBookPushRef.current = at;
     router.push(href);
-  };
-  /** Экран, с которого пришли открывать запись. Ref, а не state: он не влияет
-   *  на отрисовку и не должен вызывать лишний рендер календаря. Гасится сразу
-   *  после ухода — второе закрытие уже никуда не уводит. */
-  const returnToRef = useRef<string | null>(null);
-  const returnHome = () => {
-    const href = returnToRef.current;
-    if (!href) return;
-    returnToRef.current = null;
-    // Лист уезжает первым: переключить вкладку под открытым модалом значит
-    // показать человеку пустой лист поверх нового экрана.
-    //
-    // Вкладка — push (переход на таб), страница-донор (инвойс, счёт) —
-    // replace: push наслаивал бы вторую копию её экрана поверх календаря, и
-    // жест «назад» водил бы по кругу.
-    setTimeout(() => {
-      if (href === "/finances") router.push(href as Href);
-      else router.replace(href as Href);
-    }, SHEET_EXIT_MS);
   };
   const params = useLocalSearchParams<{
     appointmentId?: string;
@@ -65,7 +41,7 @@ export function useCalendarRoute() {
   const tenantId = useTenantId();
 
   return {
-    router, pushBookOnce, returnToRef, returnHome, params, tenantId,
+    router, pushBookOnce, params, tenantId,
   };
 }
 

@@ -58,12 +58,9 @@ describe("единственное действие черновика — вн�
     assert.match(src, /label="Создать клиента"/);
   });
 
-  test("клавиатура не закрывает нижние поля: отступ на высоту безопасной зоны", () => {
-    assert.match(
-      page(),
-      /<KeyboardLift[\s\S]{0,200}?keyboardVerticalOffset=\{insets\.top\}/,
-      "KAV снова меряет себя без верхней зоны — нижние поля уйдут под клавиатуру",
-    );
+  test("клавиатура не закрывает нижние поля: страница внутри подъёма", () => {
+    // Высоту выреза подъём учитывает сам (keyboard-lift-contract.test.ts).
+    assert.match(page(), /<KeyboardLift style=\{\{ flex: 1 \}\}>/);
   });
 });
 
@@ -503,21 +500,19 @@ describe("«Объединить с дублем» в «⋯» карточки",
     );
   });
 
-  test("порядок: патч основной → записи дубля → удаление дубля", () => {
+  test("сливает только сервер одной транзакцией; отказ — словами", () => {
     const src = merge();
     const body = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
-    const patch = body.indexOf("await updateById.mutateAsync({ id: primary.id, patch })");
-    // Визит едет к основной вместе с объектом основной.
-    const appts = body.indexOf("patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },");
-    const archive = body.indexOf("await archive.mutateAsync({ ids: [dupRow.id], trash: true })");
-    assert.ok(patch > -1 && appts > -1 && archive > -1, "шаг слияния пропал");
-    assert.ok(patch < appts && appts < archive, "порядок слияния сломан");
-    assert.match(
-      body,
-      /if \(res\.failed > 0 \|\| res\.archived === 0\) \{\s*throw new Error\("Карточка объединена, но дубль не удалился"\);/,
-      "неудача удаления дубля снова сходит за успех",
+    assert.ok(
+      body.indexOf("await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });") > -1,
+      "слияние снова идёт с телефона шагами",
     );
+    assert.doesNotMatch(src, /MergeNotOnServer|включится после обновления сервера/, "вернулась заглушка «до наката»");
+    assert.doesNotMatch(src, /mergeStepByStep|archive\.mutateAsync|updateAppt\.mutateAsync/, "вернулся путь по шагам");
     assert.match(body, /if \(running\.current\) return;\s*running\.current = true;/, "двойной тап снова сливает дважды");
+    const rpc = read("merge-clients-rpc.ts");
+    assert.match(rpc, /if \(error\) throw new Error\(mergeRefusal\(error\)\);/);
+    assert.match(rpc, /p_tag_ids: tagIds \?\? null,/);
   });
 });
 

@@ -91,10 +91,17 @@ const cardFieldsKey = (teamId: string | null, tenantId: string | null) =>
  *  тогда набор с телефона. */
 function fromServerOff(off: readonly string[] | null | undefined): CardFieldPrefs | null {
   if (!off) return null;
+  // ОДИН ОБЪЕКТ НА ОДИН ОТВЕТ СЕРВЕРА. Строка списка мемоизирована и сравнивает
+  // набор по ссылке: новый объект на каждый рендер перерисовывал все строки
+  // на каждую букву поиска. Массив `off` живёт, пока не пришёл новый ответ.
+  const cached = SERVER_PREFS.get(off);
+  if (cached) return cached;
   const out = { ...DEFAULT_CARD_FIELDS };
   for (const f of CARD_FIELDS) out[f] = !off.includes(f);
+  SERVER_PREFS.set(off, out);
   return out;
 }
+const SERVER_PREFS = new WeakMap<readonly string[], CardFieldPrefs>();
 
 /** Живые префы полей карточки команды — один query key на команду, так
  *  что тоггл в «Что показывать» мгновенно обновляет список. */

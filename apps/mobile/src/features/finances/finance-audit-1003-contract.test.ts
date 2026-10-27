@@ -71,7 +71,9 @@ describe("повторный аудит финансов 03.10", () => {
     // The sheet is `TransferSheet.tsx` plus its `transfer-sheet/` steps.
     const sheet = transferSheetSource();
     assert.match(sheet, /const guard = useGuardedClose\(\{/);
-    assert.equal((sheet.match(/onClose=\{guard\.close\}/g) ?? []).length, 3);
+    // Форма закрывается сторожем; шаги «счёт» и «день» — назад к форме, без потери.
+    assert.equal((sheet.match(/onClose=\{guard\.close\}/g) ?? []).length, 1);
+    assert.equal((sheet.match(/onClose=\{\(\) => setStep\("form"\)\}/g) ?? []).length, 2);
     assert.equal((sheet.match(/onExited=\{guard\.onExited\}/g) ?? []).length, 3);
     assert.doesNotMatch(sheet, /closeUnlessSending/);
   });

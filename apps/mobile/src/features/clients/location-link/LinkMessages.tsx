@@ -3,6 +3,7 @@ import { CircleCheck } from "lucide-react-native";
 import { Button } from "@/components/ui/Button";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
+import { TYPE } from "@/components/ui/tokens";
 
 // Final and message states of the public location page.
 
@@ -24,7 +25,7 @@ export function Done({ business, address }: { business: string; address: string 
       </View>
       <Text
         accessibilityRole="header"
-        style={{ marginTop: 18, fontSize: 24, fontWeight: "800", color: t.ink, textAlign: "center" }}
+        style={{ marginTop: 18, ...TYPE.title, color: t.ink, textAlign: "center" }}
       >
         Адрес отправлен
       </Text>

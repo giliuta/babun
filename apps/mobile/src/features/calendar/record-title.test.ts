@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { eventTitleIsNote, recordComment } from "./record-title";
+import { eventTitleIsNote, isUntypedEventComment, recordComment, UNTYPED_EVENT } from "./record-title";
 
 describe("заголовок записи без клиента", () => {
   test("событие с типом называется типом", () => {
@@ -17,5 +17,17 @@ describe("заголовок записи без клиента", () => {
   });
   test("работа — её комментарий, заметка события ни при чём", () => {
     assert.equal(recordComment({ kind: "work", comment: "звонить", event_notes: "x" }), "звонить");
+  });
+  test("маркер, записанный телефоном на другом языке, — тоже «без типа»", () => {
+    const a = { kind: "event", comment: "Event", event_notes: "Забрать фреон" };
+    assert.equal(recordComment(a), "Забрать фреон");
+    assert.equal(eventTitleIsNote(a), true);
+    assert.equal(isUntypedEventComment("Подія"), true);
+    assert.equal(recordComment({ kind: "event", comment: "Ereignis", event_notes: "" }), "Событие");
+  });
+  test("в базу уходит русский маркер, тип с таким же именем не путается с ним", () => {
+    assert.equal(UNTYPED_EVENT, "Событие");
+    assert.equal(isUntypedEventComment("Встреча"), false);
+    assert.equal(isUntypedEventComment("Meeting"), false);
   });
 });

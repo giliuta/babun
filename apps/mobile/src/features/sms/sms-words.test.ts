@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  applyPatch,
   balanceWarning,
   checkoutErrorText,
   parseTopupEuros,
@@ -13,9 +12,8 @@ import {
   parseSmsRecordLog,
   senderProblem,
   smsErrorText,
-  teamStats,
 } from "./sms-model";
-import { balanceWords, costWords, monthWords, priceOf, statusWords, triggerWords } from "./sms-words";
+import { balanceWords, costWords, statusWords, triggerWords } from "./sms-words";
 
 describe("слова страницы SMS", () => {
   test("баланс — в штуках SMS и бесплатных", () => {
@@ -30,7 +28,6 @@ describe("слова страницы SMS", () => {
     assert.equal(costWords({ status: "blocked", costCents: 0, wasFree: false }), undefined);
     assert.equal(costWords({ status: "queued", costCents: 0, wasFree: false }), undefined);
     assert.equal(costWords({ status: "failed", costCents: 0, wasFree: false }), undefined);
-    assert.equal(priceOf(2, 10), "€0,20");
     assert.equal(statusWords("blocked"), "Не отправлено");
   });
 
@@ -38,7 +35,6 @@ describe("слова страницы SMS", () => {
     assert.equal(triggerWords("reschedule"), "Перенос");
     assert.equal(triggerWords("repeat"), "Пора повторить");
     assert.equal(triggerWords("manual"), "Вручную");
-    assert.equal(monthWords(new Date(2026, 8, 24)), "Сентябрь");
   });
 });
 
@@ -64,16 +60,6 @@ describe("ответ базы", () => {
     const a = parseSmsAccount(OWNER);
     assert.equal(a.owner?.balanceCents, 500);
     assert.deepEqual(a.owner?.templateCounts, { t1: 6, t3: 2 }, "не число — отброшено");
-    assert.deepEqual(teamStats(a, "t3"), { teamId: "t3", count: 3, segments: 4, cents: 48, delivered: 2, failed: 1 });
-    assert.equal(teamStats(a, "t1").count, 0, "команда без сообщений — нули");
-  });
-
-  test("тумблер откликается сразу: черновик правки", () => {
-    const before = parseSmsAccount({ enabled: false, team_ids: [], balance_cents: 0 });
-    const after = applyPatch(before, { enabled: true, team_ids: ["t1"] });
-    assert.equal(after.enabled, true);
-    assert.deepEqual(after.teamIds, ["t1"]);
-    assert.equal(after.owner?.balanceCents, 0);
   });
 
   test("история читается и без необязательных полей", () => {

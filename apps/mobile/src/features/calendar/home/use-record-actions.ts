@@ -1,5 +1,5 @@
 import type { Href } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, Linking } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { parseYMD } from "@/features/appointments/helpers";
 import { setSelfReminder } from "@/features/calendar/reminders";
@@ -27,10 +27,10 @@ import type { SlotNotice } from "./use-slot-notice";
 
 type UseRecordActionsDeps =
   Pick<CalendarScope, "activeActions" | "activeTeamId">
-  & Pick<CalendarRights, "canManageBookings" | "isCrew" | "canMutateAppointment">
+  & Pick<CalendarRights, "canManageBookings" | "isCrew">
   & Pick<CalendarSources, "toast" | "roleQuery" | "appts">
   & Pick<CalendarRoute, "pushBookOnce" | "tenantId">
-  & Pick<CalendarUiState, "setCrewViewing" | "reminderFor" | "setReminderFor">
+  & Pick<CalendarUiState, "reminderFor" | "setReminderFor">
   & Pick<RecordNaming, "clientName" | "appointmentTimeZone">
   & Pick<GridModes, "setMoving" | "setEditingApt" | "placedFromRef" | "setPick"
     | "setMovingKind">
@@ -42,7 +42,7 @@ type UseRecordActionsDeps =
 export function useRecordActions(deps: UseRecordActionsDeps) {
   const {
     activeActions, canManageBookings, isCrew, toast, roleQuery, pushBookOnce,
-    activeTeamId, appts, canMutateAppointment, setCrewViewing,
+    activeTeamId, appts,
     clientName, setMoving, setEditingApt, mode, setMode, rememberView, setDay,
     placedFromRef, setPick, setNotice, setMovingKind, reminderFor, setReminderFor,
     appointmentTimeZone, tenantId,
@@ -50,7 +50,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   const createAppt = useCreateAppointment();
   const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
-  const { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed } =
+  const { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed, canDelete } =
     useRecordLifecycle({ toast });
 
   // Тап по свободному слоту / действие из агенды / «Записать» с карточки открывает
@@ -100,12 +100,8 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
     const parentId = (apt as { virtualParentId?: string }).virtualParentId;
     const target = parentId ? appts.find((a) => a.id === parentId) ?? apt : apt;
-    // Сотрудник — на ту же страницу записи, что владелец (STORY-088): двери
-    // на ней погашены по его правам. Лист просмотра остался чужому событию.
-    if (!isCrew && !canMutateAppointment(target)) {
-      setCrewViewing(target);
-      return;
-    }
+    // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ: сотрудник и владелец на чужом событии
+    // открывают ту же /book, двери на ней гаснут по правам (`useBookRights`).
     // ПРАВКА УХОДИТ НА /book: форма записи одна и создаёт, и правит (STORY-064).
     // Две формы — отдельная для создания и для правки — делали бы любую
     // правку наполовину: снос поля («Источник заявки») из одной оставлял бы
@@ -161,7 +157,12 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
         else if (res === "scheduled" && rule) {
           const l = selfReminderLabel(rule);
           toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
-        } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
+        } else if (res === "denied")
+          // Запрет снимается только в Настройках телефона — туда и ведёт тост.
+          toast("Разрешите уведомления в Настройках", "error", {
+            label: "Настройки",
+            onPress: () => void Linking.openSettings(),
+          });
         else if (res === "past") toast("Это время уже прошло", "info");
         else if (res === "deferred")
           toast(
@@ -179,7 +180,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   return {
     createAppt, memberCopy, deleteAppt, bookAt, openEdit, setCancelled,
     restoreCancelled, cancelVisit, deleteAppointmentConfirmed, startFreeMove, startMove,
-    openReminderMenu, pickReminderFor, recordRoute,
+    openReminderMenu, pickReminderFor, recordRoute, canDelete,
   };
 }
 

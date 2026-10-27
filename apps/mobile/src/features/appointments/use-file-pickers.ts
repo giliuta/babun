@@ -1,6 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useToast } from "@/components/ui/Toast";
+import { explainCameraDenied } from "@/lib/camera-denied";
 import { notify } from "@/lib/notify";
 import type { PickedFile } from "@/features/clients/card-attachments";
 import { MAX_APPOINTMENT_PHOTOS, type PickedAppointmentPhoto } from "./appointment-photos";
@@ -54,7 +55,7 @@ export function useFilePickers(opts: {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        notify("Нет доступа к камере", "Разрешите камеру: Настройки → Babun → Камера.");
+        explainCameraDenied();
         return;
       }
       const result = await ImagePicker.launchCameraAsync({

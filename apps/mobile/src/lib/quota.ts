@@ -87,18 +87,6 @@ async function fetchCount(
   return count ?? 0;
 }
 
-export async function fetchRemainingQuota(
-  client: DbSupabase,
-  tenantId: string,
-  kind: MobileQuotaKind,
-): Promise<number> {
-  const [limit, current] = await Promise.all([
-    fetchQuota(client, tenantId, kind),
-    fetchCount(client, tenantId, kind),
-  ]);
-  return Math.max(0, limit - current);
-}
-
 export async function assertQuotaAvailable(
   client: DbSupabase,
   tenantId: string,

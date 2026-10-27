@@ -6,6 +6,7 @@ import {
   overrideWithQuantity,
   type ServiceOverride,
 } from "@/features/appointments/helpers";
+import { parsePriceTiers } from "@/features/services/economics";
 import { haptics } from "@/lib/haptics";
 
 export interface ServiceLineActionsInput {
@@ -77,14 +78,22 @@ export function serviceLineActions({
       setServiceIds((p) => p.filter((x) => x !== id));
       return;
     }
-    // Правка количества снимает замок сохранённой строки — строка считается
-    // по действующему прайсу (`overrideWithQuantity`); своя строка и услуга,
-    // убранная из прайса, держат свои числа.
+    // Правка количества снимает замок сохранённой строки (`overrideWithQuantity`);
+    // своя строка и услуга, убранная из прайса, держат свои числа.
     const repriceable = catalog.has(id) && !isCustomServiceId(id);
-    setOverrides((p) => ({
-      ...p,
-      [id]: overrideWithQuantity(p[id], qty, repriceable, catalog.get(id)),
-    }));
+    // ЦЕНА ЗА ШТУКУ СОХРАНЁННОЙ СТРОКИ ОСТАЁТСЯ: майская строка по €100 при
+    // прайсе €120 после ×1 → ×2 давала €240 вместо €200, и молча менялся
+    // долг клиента. Исключение — лестница цен: там цену за штуку решает
+    // количество, и решает её прайс.
+    const ladder = parsePriceTiers(catalog.get(id)?.price_tiers).length > 0;
+    setOverrides((p) => {
+      const current = p[id];
+      const next = overrideWithQuantity(p[id], qty, repriceable, catalog.get(id));
+      if (current?.locked && next.price === undefined && !ladder) {
+        next.price = current.locked.pricePerUnit;
+      }
+      return { ...p, [id]: next };
+    });
   };
   return {
     toggleService,

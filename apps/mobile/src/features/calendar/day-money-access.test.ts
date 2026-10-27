@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { MemberAccessMap } from "@/session/access-map";
-import {
-  canEditDayMoneyRow,
-  dayMoneyGate,
-  dayMoneyRowReadable,
-  isDayMoneyRow,
-} from "./day-money-access";
+import { canEditDayMoneyRow, dayMoneyGate, dayMoneyRowReadable } from "./day-money-access";
 
 // ДОХОД И РАСХОД ДНЯ — ПРАВО КАЛЕНДАРЯ. Копия правил
 // сервера (`finance_transactions_*_day_money`, окно — «Ограничения»
@@ -24,15 +19,6 @@ const map = (levels: Record<string, string>, team = "t1"): MemberAccessMap =>
     calendars: { [team]: levels },
     attachedCalendars: [team],
   }) as MemberAccessMap;
-
-describe("что считается деньгами дня", () => {
-  test("оплата записи и операция из календаря — да, касса «Финансов» — нет", () => {
-    assert.equal(isDayMoneyRow({ appointment_id: "a1" }), true);
-    assert.equal(isDayMoneyRow({ appointment_id: null, from_calendar: true }), true);
-    assert.equal(isDayMoneyRow({ appointment_id: null, from_calendar: false }), false);
-    assert.equal(isDayMoneyRow({ appointment_id: null }), false);
-  });
-});
 
 describe("кто видит", () => {
   const row = { team_id: "t1", occurred_on: TODAY };

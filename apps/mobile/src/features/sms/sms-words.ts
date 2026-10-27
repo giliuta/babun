@@ -31,14 +31,6 @@ const TRIGGER_TITLES: Record<string, string> = {
   bulk: "Рассылка",
 };
 
-const MONTHS = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-];
-
-/** «Сентябрь» — счёт команды за текущий месяц. */
-export const monthWords = (date: Date): string => MONTHS[date.getMonth()] ?? "";
-
 const STATUS: Record<SmsHistoryItem["status"], string> = {
   queued: "Отправляется",
   sending: "Отправляется",
@@ -75,9 +67,4 @@ export function costWords(item: Pick<SmsHistoryItem, "status" | "costCents" | "w
   if (item.status === "failed" && item.costCents === 0 && !item.wasFree) return undefined;
   if (item.wasFree) return "бесплатно";
   return item.costCents > 0 ? euro(item.costCents) : undefined;
-}
-
-/** Цена текста до отправки: части × цена части. */
-export function priceOf(segments: number, priceCents: number): string {
-  return euro(Math.max(1, segments) * priceCents);
 }

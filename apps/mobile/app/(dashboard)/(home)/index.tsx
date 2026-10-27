@@ -1,5 +1,4 @@
 import { Screen } from "@/components/ui/Screen";
-import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
 import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { CalendarBody } from "@/features/calendar/home/CalendarBody";
 import { CalendarChrome } from "@/features/calendar/home/CalendarChrome";
@@ -15,7 +14,6 @@ export default function CalendarTab() {
   const c = useCalendarController();
   const {
     teams, miniCalOpen, day, mode, todayYmd, visibleAppts, jumpToDate, setMiniCalOpen,
-    calendarLoading, calendarError, crewViewing, setCrewViewing, returnHome,
   } = c;
 
   // First-run gate (web parity: dashboard/page.tsx). No team calendar yet →
@@ -73,16 +71,6 @@ export default function CalendarTab() {
         appointments={visibleAppts}
         onSelectDate={jumpToDate}
         onClose={() => setMiniCalOpen(false)}
-      />
-
-      {/* Листа правки здесь нет (STORY-064): владелец
-          и диспетчер правят запись на странице /book; лист бригады остался. */}
-      <CrewAppointmentSheet
-        appointment={calendarLoading || calendarError ? null : crewViewing}
-        onClose={() => {
-          setCrewViewing(null);
-          returnHome();
-        }}
       />
 
     </Screen>

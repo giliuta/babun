@@ -136,7 +136,7 @@ export function LabelEditSheet({
       avoidKeyboard
       footer={picking ? undefined : (<>
           <Button
-            label={isEdit ? "Сохранить" : "Создать"}
+            label={isEdit ? "Сохранить" : "Создать метку"}
             onPress={() => {
               // Сохраняются только дни, которые плитки показывают своими:
               // выходной команды или чужой день, оставшийся в метке с прошлого
@@ -191,6 +191,7 @@ export function LabelEditSheet({
           в двух местах продукта. */}
       <NameColorField
         label="Название"
+        placeholder="Название метки"
         name={name}
         onNameChange={setName}
         color={color}

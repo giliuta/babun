@@ -5,6 +5,7 @@ import { AddRow } from "@/components/ui/AddRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { TARIFF_LOCKED_HINT } from "@/features/tariffs/use-tariff";
 import { useThemeColors } from "@/theme/colors";
+import type { NoAccountsReason } from "./payment-block/stray-accounts";
 
 // ПЛИТКИ БЛОКА «ОПЛАТА» — только вид (STORY-065): компактные плитки, предоплата и инвойс — маленькие иконки
 // справа, сумму в шапке не дублировать. Логика денег живёт в PaymentBlock.
@@ -230,21 +231,30 @@ export { PaymentStateRow, type StateRowAmount } from "./payment-tiles/PaymentSta
 
 /** У команды нет касс: владельцу — дверь создания, остальным — слова. */
 export function NoAccountsNotice({
+  reason,
   canCreate,
   onCreate,
 }: {
+  /** Почему плиток нет (`stray-accounts.ts`): «нет счёта» — только когда его нет. */
+  reason: NoAccountsReason;
   canCreate: boolean;
   onCreate: () => void;
 }) {
   const t = useThemeColors();
+  // Счета есть, но не в оплате, или нет права — «Добавить счёт» завёл бы дубль.
+  const offerCreate = canCreate && reason === "none";
   return (
     <View style={{ paddingTop: 4 }}>
       <Text style={{ marginHorizontal: 16, fontSize: 13, color: t.sub }}>
-        {canCreate
-          ? "У команды нет счёта — некуда положить деньги."
-          : "У команды нет счёта. Попросите владельца завести его в финансах."}
+        {reason === "right"
+          ? "Принимать оплату в этом календаре вам не разрешили"
+          : reason === "off"
+            ? "Счета команды скрыты или выключены из оплаты записи — включите «В оплате записи» в настройках счёта."
+            : canCreate
+              ? "У команды нет счёта — некуда положить деньги."
+              : "У команды нет счёта. Попросите владельца завести его в финансах."}
       </Text>
-      {canCreate ? (
+      {offerCreate ? (
         <AddRow label="Добавить счёт" onPress={onCreate} />
       ) : (
         <View style={{ height: 12 }} />

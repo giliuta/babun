@@ -69,10 +69,10 @@ export async function setSelfReminder(
   // сразу, а не на следующей сверке календаря.
   const autos = autoOwnersOf(apt.id);
   if (autos.length > 0) await removeBabunNotificationOwners(autos);
-  // ПРАВИЛО, КОТОРОЕ НЕ ЗАЗВОНИТ, НЕ ХРАНИТСЯ: сохранённое при прошедшем времени или
-  // сбое, оно показывалось бы в шторке отмеченным, хотя пуша не будет, а
-  // повторный тап его СНИМАЛ бы вместо того, чтобы поставить заново. Запрет уведомлений и очередь iPhone —
-  // другое: правило зазвонит, когда разрешат или освободится место.
+  // ПРАВИЛО, КОТОРОЕ НЕ ЗАЗВОНИТ, НЕ ХРАНИТСЯ: сохранённое при прошедшем времени,
+  // сбое или запрете уведомлений, оно показывалось бы горящим колокольчиком, хотя
+  // пуша не будет, а повторный тап его СНИМАЛ бы вместо того, чтобы поставить
+  // заново. Очередь iPhone — другое: правило зазвонит, когда освободится место.
   const forget = () => {
     const current = { ...readSelfReminders() };
     delete current[apt.id];
@@ -101,7 +101,9 @@ export async function setSelfReminder(
       ),
       { requestPermission: true },
     );
-    if (result.status === "capacity" || result.status === "unavailable") forget();
+    if (result.status === "capacity" || result.status === "unavailable" || result.status === "denied") {
+      forget();
+    }
     return result.status;
   } catch {
     forget();

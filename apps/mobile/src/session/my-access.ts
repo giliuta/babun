@@ -241,7 +241,6 @@ export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.accounts",
   "finance.debts",
   "finance.documents",
-  "finance.profit",
   // «Ограничения»: сузили окно — старые деньги уходят с телефона.
   "finance.window",
   // Строки шестерёнки: категории, счета, ящик и бланк — тоже деньги

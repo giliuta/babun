@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTeamName } from "@/session/team-name";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
@@ -69,9 +70,12 @@ export function useListTeamScope({
     : caps.create;
   // Команды компаний-партнёров — ТЕМ ЖЕ ЧИПОМ, что свои (как будто все
   // команды его): граница баз держится данными, а не видом.
+  // Имя — тем же правилом, что чип календаря: команда, названная почтой,
+  // не обрезается в «babun.app+r…» (`session/team-name.ts`).
+  const teamName = useTeamName();
   const teamChips = useMemo(
-    () => teams.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
-    [teams],
+    () => teams.map((tm) => ({ id: tm.id, name: teamName(tm.name), color: tm.color })),
+    [teams, teamName],
   );
   // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
   // клиенты команды и те, кого она обслуживала; цифры — по её записям.

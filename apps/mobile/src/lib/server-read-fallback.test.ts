@@ -4,7 +4,6 @@ import {
   isConfirmedNetworkUnavailable,
   isMissingCalendarSettingsContract,
   isMissingPersonalEventTypesContract,
-  isMissingSmsTemplatesContract,
 } from "./server-read-fallback";
 
 describe("server read cache fallback", () => {
@@ -80,31 +79,6 @@ describe("server read cache fallback", () => {
       { code: "22023", message: "invalid settings" },
     ]) {
       assert.equal(isMissingPersonalEventTypesContract(error), false);
-    }
-  });
-
-  test("recognizes only a missing SMS-template RPC contract", () => {
-    assert.equal(
-      isMissingSmsTemplatesContract({
-        code: "PGRST202",
-        message:
-          "Could not find the function public.read_sms_templates_safe in the schema cache",
-      }),
-      true,
-    );
-    assert.equal(
-      isMissingSmsTemplatesContract({
-        code: "42883",
-        message: "function public.write_sms_templates_safe(jsonb) does not exist",
-      }),
-      true,
-    );
-    for (const error of [
-      { code: "42501", message: "sms templates require owner access" },
-      { code: "22023", message: "sms templates payload is invalid" },
-      { code: "23505", message: "duplicate key" },
-    ]) {
-      assert.equal(isMissingSmsTemplatesContract(error), false);
     }
   });
 });

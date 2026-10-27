@@ -89,7 +89,7 @@ export function AgendaView({
         fill
         title="Записей нет"
         action={
-          onCreate ? { label: "Новая запись", onPress: onCreate } : undefined
+          onCreate ? { label: "Создать запись", onPress: onCreate } : undefined
         }
       />
     );
@@ -131,7 +131,7 @@ export function AgendaView({
           return (
             <DaySection
               section={item}
-              header={headerRu(item.title, todayYmd, tomorrowYmd, !!label)}
+              header={headerRu(item.title, todayYmd, tomorrowYmd)}
               label={label}
               offLabelFor={offLabelFor}
               hueFor={hueFor}
