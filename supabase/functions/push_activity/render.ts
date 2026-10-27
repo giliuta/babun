@@ -191,3 +191,96 @@ export function renderActivity(facts: ActivityFacts, locale: string): { title: s
   const body = [whenLabel(facts, locale), clean(facts.client), clean(facts.city)].filter(Boolean).join(", ");
   return { title, body: body || clean(facts.team) || "" };
 }
+
+// ── Сводки утром и вечером ────────────────────────────────────────────────
+
+export interface DigestFacts {
+  slot: "morning" | "evening";
+  count: number;
+  firstTime: string | null;
+  firstCity: string | null;
+}
+
+interface DigestWords {
+  morning: string;
+  evening: string;
+  today: string;
+  tomorrow: string;
+  /** Формы слова «визит» по категориям `Intl.PluralRules`. */
+  visit: Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
+  first: string;
+}
+
+const DIGEST: Record<string, DigestWords> = {
+  ru: {
+    morning: "План на сегодня",
+    evening: "План на завтра",
+    today: "Сегодня",
+    tomorrow: "Завтра",
+    visit: { one: "визит", few: "визита", many: "визитов", other: "визита" },
+    first: "первый в {0}",
+  },
+  en: {
+    morning: "Today's plan",
+    evening: "Tomorrow's plan",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    visit: { one: "visit", other: "visits" },
+    first: "first at {0}",
+  },
+  uk: {
+    morning: "План на сьогодні",
+    evening: "План на завтра",
+    today: "Сьогодні",
+    tomorrow: "Завтра",
+    visit: { one: "візит", few: "візити", many: "візитів", other: "візиту" },
+    first: "перший о {0}",
+  },
+  bg: {
+    morning: "План за днес",
+    evening: "План за утре",
+    today: "Днес",
+    tomorrow: "Утре",
+    visit: { one: "посещение", other: "посещения" },
+    first: "първото в {0}",
+  },
+  el: {
+    morning: "Πρόγραμμα σήμερα",
+    evening: "Πρόγραμμα αύριο",
+    today: "Σήμερα",
+    tomorrow: "Αύριο",
+    visit: { one: "επίσκεψη", other: "επισκέψεις" },
+    first: "η πρώτη στις {0}",
+  },
+  de: {
+    morning: "Plan für heute",
+    evening: "Plan für morgen",
+    today: "Heute",
+    tomorrow: "Morgen",
+    visit: { one: "Besuch", other: "Besuche" },
+    first: "der erste um {0}",
+  },
+  es: {
+    morning: "Plan de hoy",
+    evening: "Plan de mañana",
+    today: "Hoy",
+    tomorrow: "Mañana",
+    visit: { one: "visita", other: "visitas" },
+    first: "la primera a las {0}",
+  },
+};
+
+/** «Сегодня 3 визита, первый в 9:00, Limassol». */
+export function renderDigest(facts: DigestFacts, locale: string): { title: string; body: string } {
+  const lang = DIGEST[locale] ? locale : "en";
+  const w = DIGEST[lang];
+  const form = w.visit[new Intl.PluralRules(lang).select(facts.count)] ?? w.visit.other;
+  const m = facts.firstTime ? TIME_RE.exec(facts.firstTime) : null;
+  const time = m ? `${Number(m[1])}:${m[2]}` : null;
+  const parts = [
+    `${facts.slot === "morning" ? w.today : w.tomorrow} ${facts.count} ${form}`,
+    time ? w.first.replace("{0}", time) : null,
+    clean(facts.firstCity),
+  ].filter(Boolean);
+  return { title: facts.slot === "morning" ? w.morning : w.evening, body: parts.join(", ") };
+}

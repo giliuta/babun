@@ -40,6 +40,7 @@ import { useThemeColors } from "@/theme/colors";
 
 import { useDevicePermission, useDeviceReminders } from "./device-notifications";
 import { registerThisDevice } from "@/lib/push-device";
+import { PushScheduleCard } from "./PushScheduleCard";
 import {
   CLIENT_TIME_OPTIONS,
   RECORD_REMINDER_OPTIONS,
@@ -217,6 +218,8 @@ export function NotificationsScreen() {
             }
           />
         </SectionCard>
+
+        <PushScheduleCard />
 
         {/* НАСТРОЙКИ — У КАЖДОЙ КОМАНДЫ. Одна команда —
             ленты нет. */}

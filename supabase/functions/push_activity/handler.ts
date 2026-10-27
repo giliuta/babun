@@ -2,7 +2,7 @@
 // чтобы правила гонялись `bun test`. Всё, что ходит в базу или в Expo, —
 // в `PushDeps`; настоящие реализации — в `index.ts`.
 
-import { PUSH_KINDS, renderActivity, type PushKind } from "./render.ts";
+import { PUSH_KINDS, renderActivity, renderDigest, type PushKind } from "./render.ts";
 
 export interface PushTarget {
   user_id: string;
@@ -122,7 +122,70 @@ export function localToday(now: Date, timeZone: string | null): string {
 
 const str = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
 
+/** Строка сводки из `push_digest_dispatch`. */
+export interface DigestItem {
+  user_id: string;
+  tenant_id: string;
+  slot: "morning" | "evening";
+  date: string;
+  count: number;
+  first_time: string | null;
+  first_city: string | null;
+}
+
+export function parseDigest(raw: unknown): DigestItem[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const items = (raw as { digest?: unknown }).digest;
+  if (!Array.isArray(items) || items.length === 0 || items.length > 500) return null;
+  const out: DigestItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return null;
+    const d = item as Record<string, unknown>;
+    if (typeof d.user_id !== "string" || !UUID_RE.test(d.user_id)) return null;
+    if (typeof d.tenant_id !== "string" || !UUID_RE.test(d.tenant_id)) return null;
+    if (d.slot !== "morning" && d.slot !== "evening") return null;
+    if (typeof d.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return null;
+    if (typeof d.count !== "number" || !Number.isSafeInteger(d.count) || d.count <= 0) return null;
+    out.push({
+      user_id: d.user_id,
+      tenant_id: d.tenant_id,
+      slot: d.slot,
+      date: d.date,
+      count: d.count,
+      first_time: str(d.first_time),
+      first_city: str(d.first_city),
+    });
+  }
+  return out;
+}
+
+async function handleDigest(items: DigestItem[], deps: PushDeps): Promise<PushResult> {
+  const devices = await deps.loadDevices([...new Set(items.map((i) => i.user_id))]);
+  const messages: ExpoMessage[] = [];
+  for (const item of items) {
+    for (const device of devices) {
+      if (device.user_id !== item.user_id) continue;
+      const { title, body } = renderDigest(
+        { slot: item.slot, count: item.count, firstTime: item.first_time, firstCity: item.first_city },
+        device.locale,
+      );
+      // Тап открывает этот день календаря.
+      messages.push({
+        to: device.token,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data: { type: "calendar-day", date: item.date, tenantId: item.tenant_id },
+      });
+    }
+  }
+  return deliver(messages, deps);
+}
+
 export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<PushResult | null> {
+  const digest = parseDigest(raw);
+  if (digest) return handleDigest(digest, deps);
   const input = parseInput(raw);
   if (!input) return null;
   const log = await deps.loadLog(input.logId);
@@ -212,6 +275,11 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
     }
   }
 
+  return deliver(messages, deps);
+}
+
+/** Отправка пачками по сто; мёртвые токены забываются. */
+async function deliver(messages: ExpoMessage[], deps: PushDeps): Promise<PushResult> {
   let sent = 0;
   let failed = 0;
   const dead: string[] = [];

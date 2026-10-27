@@ -3241,6 +3241,30 @@ export type Database = {
         }
         Relationships: []
       }
+      push_settings: {
+        Row: {
+          digest_evening: boolean
+          digest_morning: boolean
+          time_zone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          digest_evening?: boolean
+          digest_morning?: boolean
+          time_zone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          digest_evening?: boolean
+          digest_morning?: boolean
+          time_zone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           created_at: string

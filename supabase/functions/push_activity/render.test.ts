@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { moneyLabel, renderActivity, whenLabel, type ActivityFacts } from "./render.ts";
+import { moneyLabel, renderActivity, renderDigest, whenLabel, type ActivityFacts } from "./render.ts";
 
 const base: ActivityFacts = {
   kind: "new",
@@ -66,5 +66,22 @@ describe("текст пуша о делах команды", () => {
 
   test("битая валюта не роняет функцию", () => {
     assert.equal(moneyLabel(10, "??", "ru"), "10 ??");
+  });
+});
+
+describe("сводка утром и вечером", () => {
+  test("утро: «Сегодня 3 визита, первый в 9:00, Limassol»", () => {
+    assert.deepEqual(renderDigest({ slot: "morning", count: 3, firstTime: "09:00", firstCity: "Limassol" }, "ru"), {
+      title: "План на сегодня",
+      body: "Сегодня 3 визита, первый в 9:00, Limassol",
+    });
+  });
+
+  test("вечер и склонение: 1 визит, 5 визитов, 21 визит", () => {
+    assert.equal(renderDigest({ slot: "evening", count: 1, firstTime: "08:30", firstCity: null }, "ru").body, "Завтра 1 визит, первый в 8:30");
+    assert.equal(renderDigest({ slot: "evening", count: 5, firstTime: null, firstCity: null }, "ru").body, "Завтра 5 визитов");
+    assert.equal(renderDigest({ slot: "morning", count: 21, firstTime: null, firstCity: null }, "ru").body, "Сегодня 21 визит");
+    assert.equal(renderDigest({ slot: "evening", count: 2, firstTime: null, firstCity: null }, "en").body, "Tomorrow 2 visits");
+    assert.equal(renderDigest({ slot: "morning", count: 1, firstTime: "10:00", firstCity: "Paphos" }, "de").body, "Heute 1 Besuch, der erste um 10:00, Paphos");
   });
 });

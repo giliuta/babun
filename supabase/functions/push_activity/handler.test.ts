@@ -196,4 +196,22 @@ describe("push_activity: сборка пушей", () => {
     assert.equal(localToday(new Date("2026-10-27T22:30:00Z"), null), "2026-10-28");
     assert.equal(localToday(new Date("2026-10-27T22:30:00Z"), "UTC"), "2026-10-27");
   });
+
+  test("сводка: каждому телефону своя, тап открывает день", async () => {
+    const { deps, sent } = fake();
+    const result = await handlePushActivity(
+      {
+        digest: [
+          { user_id: MASTER, tenant_id: TENANT, slot: "morning", date: "2026-10-30", count: 3, first_time: "09:00", first_city: "Limassol" },
+        ],
+      },
+      deps,
+    );
+    assert.deepEqual(result, { sent: 2, failed: 0, dropped: 0 });
+    const ru = sent[0].find((m) => m.to === "ExponentPushToken[master-b]");
+    assert.equal(ru?.title, "План на сегодня");
+    assert.equal(ru?.body, "Сегодня 3 визита, первый в 9:00, Limassol");
+    assert.deepEqual(ru?.data, { type: "calendar-day", date: "2026-10-30", tenantId: TENANT });
+    assert.equal(parseInput({ digest: [] }), null);
+  });
 });
