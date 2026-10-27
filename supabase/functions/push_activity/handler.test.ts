@@ -236,4 +236,18 @@ describe("push_activity: сборка пушей", () => {
     assert.deepEqual(badgeCalls, []);
     assert.equal(sent[0][0].badge, undefined);
   });
+
+  test("тихие часы: одна сводка на человека, на значке — все накопленные", async () => {
+    const { deps, sent, badgeCalls } = fake();
+    const result = await handlePushActivity(
+      { held: [{ user_id: MASTER, tenant_id: TENANT, counts: { new: 2, change: 1, cancel_link: 1, hack: 9 } }] },
+      deps,
+    );
+    assert.deepEqual(result, { sent: 2, failed: 0, dropped: 0 });
+    assert.deepEqual(badgeCalls, [[MASTER, 4]]);
+    const ru = sent[0].find((m) => m.to === "ExponentPushToken[master-b]");
+    assert.equal(ru?.title, "Пока были тихие часы");
+    assert.equal(ru?.body, "Новые работы: 2 · Переносы: 1 · Отмены: 1");
+    assert.equal(ru?.badge, 4);
+  });
 });

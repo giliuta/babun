@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { moneyLabel, renderActivity, renderDigest, whenLabel, type ActivityFacts } from "./render.ts";
+import { moneyLabel, renderActivity, renderDigest, renderHeld, whenLabel, type ActivityFacts } from "./render.ts";
 
 const base: ActivityFacts = {
   kind: "new",
@@ -83,5 +83,15 @@ describe("сводка утром и вечером", () => {
     assert.equal(renderDigest({ slot: "morning", count: 21, firstTime: null, firstCity: null }, "ru").body, "Сегодня 21 визит");
     assert.equal(renderDigest({ slot: "evening", count: 2, firstTime: null, firstCity: null }, "en").body, "Tomorrow 2 visits");
     assert.equal(renderDigest({ slot: "morning", count: 1, firstTime: "10:00", firstCity: "Paphos" }, "de").body, "Heute 1 Besuch, der erste um 10:00, Paphos");
+  });
+});
+
+describe("сводка после тихих часов", () => {
+  test("пустые виды не пишутся, отмена по ссылке и передача — тоже «Отмены»", () => {
+    assert.deepEqual(renderHeld({ new: 1, moved: 1, cancel: 1, payment: 2 }, "ru"), {
+      title: "Пока были тихие часы",
+      body: "Новые работы: 1 · Отмены: 2 · Оплаты: 2",
+    });
+    assert.equal(renderHeld({ change: 3 }, "en").body, "Rescheduled: 3");
   });
 });

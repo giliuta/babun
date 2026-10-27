@@ -3,27 +3,21 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 
 // ПУШ-НАСТРОЙКИ ЧЕЛОВЕКА — не команды: сводки утром и вечером говорят про весь
-// его день во всех календарях, а время сводки — его часовой пояс. Одна строка
-// `push_settings` на человека; строки нет — всё выключено.
+// его день во всех календарях, тихие часы — про его сон, а время того и
+// другого — его часовой пояс. Одна строка `push_settings` на человека; строки
+// нет — всё выключено.
+//
+// Пишутся ТОЛЬКО изменённые столбцы: сводки и тихие часы накатываются
+// разными миграциями, и правка одного не должна зависеть от другого.
 
-export interface PushSettings {
-  digestMorning: boolean;
-  digestEvening: boolean;
-}
+import {
+  DEFAULT_PUSH_SETTINGS,
+  pushSettingsColumns,
+  pushSettingsFromRow,
+  type PushSettings,
+} from "./push-settings-rules";
 
-export const DEFAULT_PUSH_SETTINGS: PushSettings = { digestMorning: false, digestEvening: false };
-
-interface PushSettingsRow {
-  digest_morning: boolean | null;
-  digest_evening: boolean | null;
-}
-
-export function pushSettingsFromRow(row: Partial<PushSettingsRow> | null | undefined): PushSettings {
-  return {
-    digestMorning: row?.digest_morning === true,
-    digestEvening: row?.digest_evening === true,
-  };
-}
+export { DEFAULT_PUSH_SETTINGS, DEFAULT_QUIET, quietLabel, type PushSettings } from "./push-settings-rules";
 
 const key = (userId: string | null) => ["push-settings", userId] as const;
 
@@ -46,7 +40,8 @@ export function usePushSettings() {
     queryFn: async (): Promise<PushSettings> => {
       const { data, error } = await supabase
         .from("push_settings")
-        .select("digest_morning, digest_evening")
+        // Все столбцы, какие есть: тихие часы приходят своей миграцией.
+        .select("*")
         .eq("user_id", userId as string)
         .maybeSingle();
       if (error) throw new Error(`push_settings: ${error.message}`);
@@ -68,12 +63,10 @@ export function useSavePushSettings() {
     },
     mutationFn: async (patch) => {
       if (!userId) throw new Error("Нет входа");
-      const next = { ...(qc.getQueryData<PushSettings>(key(userId)) ?? DEFAULT_PUSH_SETTINGS), ...patch };
       const { error } = await supabase.from("push_settings").upsert(
         {
           user_id: userId,
-          digest_morning: next.digestMorning,
-          digest_evening: next.digestEvening,
+          ...pushSettingsColumns(patch),
           time_zone: deviceTimeZone(),
           updated_at: new Date().toISOString(),
         },

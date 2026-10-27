@@ -284,3 +284,36 @@ export function renderDigest(facts: DigestFacts, locale: string): { title: strin
   ].filter(Boolean);
   return { title: facts.slot === "morning" ? w.morning : w.evening, body: parts.join(", ") };
 }
+
+// ── Сводка после тихих часов ─────────────────────────────────────────────
+
+/** Сколько новостей какого вида накопилось (виды — как у `push_activity_targets`). */
+export type HeldCounts = Partial<Record<PushKind, number>>;
+
+const HELD: Record<string, { title: string; new: string; change: string; cancel: string; payment: string }> = {
+  ru: { title: "Пока были тихие часы", new: "Новые работы", change: "Переносы", cancel: "Отмены", payment: "Оплаты" },
+  en: { title: "During quiet hours", new: "New jobs", change: "Rescheduled", cancel: "Cancelled", payment: "Payments" },
+  uk: { title: "Поки були тихі години", new: "Нові роботи", change: "Перенесення", cancel: "Скасування", payment: "Оплати" },
+  bg: { title: "През тихите часове", new: "Нови задачи", change: "Преместени", cancel: "Отменени", payment: "Плащания" },
+  el: { title: "Κατά τις ώρες ησυχίας", new: "Νέες εργασίες", change: "Μετατέθηκαν", cancel: "Ακυρώθηκαν", payment: "Πληρωμές" },
+  de: { title: "Während der Ruhezeit", new: "Neue Aufträge", change: "Verschoben", cancel: "Storniert", payment: "Zahlungen" },
+  es: { title: "Durante las horas de silencio", new: "Trabajos nuevos", change: "Reprogramados", cancel: "Cancelados", payment: "Pagos" },
+};
+
+/** «Новые работы: 2 · Переносы: 1 · Отмены: 1» — число через двоеточие,
+ *  без склонений на семи языках. Отмена по ссылке и передача другой
+ *  команде — тоже «Отмены»: работы у человека больше нет. */
+export function renderHeld(counts: HeldCounts, locale: string): { title: string; body: string } {
+  const w = HELD[locale] ?? HELD.en;
+  const n = (k: PushKind) => counts[k] ?? 0;
+  const groups: [string, number][] = [
+    [w.new, n("new")],
+    [w.change, n("change")],
+    [w.cancel, n("cancel") + n("cancel_link") + n("moved")],
+    [w.payment, n("payment")],
+  ];
+  return {
+    title: w.title,
+    body: groups.filter(([, c]) => c > 0).map(([label, c]) => `${label}: ${c}`).join(" · "),
+  };
+}

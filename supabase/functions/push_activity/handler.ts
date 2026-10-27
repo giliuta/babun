@@ -2,7 +2,7 @@
 // чтобы правила гонялись `bun test`. Всё, что ходит в базу или в Expo, —
 // в `PushDeps`; настоящие реализации — в `index.ts`.
 
-import { PUSH_KINDS, renderActivity, renderDigest, type PushKind } from "./render.ts";
+import { PUSH_KINDS, renderActivity, renderDigest, renderHeld, type HeldCounts, type PushKind } from "./render.ts";
 
 export interface PushTarget {
   user_id: string;
@@ -187,9 +187,66 @@ async function handleDigest(items: DigestItem[], deps: PushDeps): Promise<PushRe
   return deliver(messages, deps);
 }
 
+/** Строка сводки после тихих часов из `push_quiet_flush`. */
+export interface HeldItem {
+  user_id: string;
+  tenant_id: string;
+  counts: HeldCounts;
+}
+
+export function parseHeld(raw: unknown): HeldItem[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const items = (raw as { held?: unknown }).held;
+  if (!Array.isArray(items) || items.length === 0 || items.length > 500) return null;
+  const out: HeldItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return null;
+    const h = item as Record<string, unknown>;
+    if (typeof h.user_id !== "string" || !UUID_RE.test(h.user_id)) return null;
+    if (typeof h.tenant_id !== "string" || !UUID_RE.test(h.tenant_id)) return null;
+    if (!h.counts || typeof h.counts !== "object") return null;
+    const counts: HeldCounts = {};
+    for (const [kind, n] of Object.entries(h.counts as Record<string, unknown>)) {
+      if (PUSH_KINDS.includes(kind as PushKind) && typeof n === "number" && Number.isSafeInteger(n) && n > 0) {
+        counts[kind as PushKind] = n;
+      }
+    }
+    out.push({ user_id: h.user_id, tenant_id: h.tenant_id, counts });
+  }
+  return out;
+}
+
+async function handleHeld(items: HeldItem[], deps: PushDeps): Promise<PushResult> {
+  const devices = await deps.loadDevices([...new Set(items.map((i) => i.user_id))]);
+  const day = localToday(deps.now(), null);
+  const messages: ExpoMessage[] = [];
+  for (const item of items) {
+    const total = Object.values(item.counts).reduce((a, b) => a + (b ?? 0), 0);
+    const mine = devices.filter((d) => d.user_id === item.user_id);
+    if (total === 0 || mine.length === 0) continue;
+    // Каждая накопленная новость — единица на значке, как если бы пришла сразу.
+    const badge = await deps.bumpBadge(item.user_id, total, day);
+    for (const device of mine) {
+      const { title, body } = renderHeld(item.counts, device.locale);
+      messages.push({
+        to: device.token,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data: { type: "team-activity", tenantId: item.tenant_id },
+        ...(typeof badge === "number" ? { badge } : {}),
+      });
+    }
+  }
+  return deliver(messages, deps);
+}
+
 export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<PushResult | null> {
   const digest = parseDigest(raw);
   if (digest) return handleDigest(digest, deps);
+  const held = parseHeld(raw);
+  if (held) return handleHeld(held, deps);
   const input = parseInput(raw);
   if (!input) return null;
   const log = await deps.loadLog(input.logId);

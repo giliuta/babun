@@ -3245,6 +3245,8 @@ export type Database = {
         Row: {
           digest_evening: boolean
           digest_morning: boolean
+          quiet_end: number | null
+          quiet_start: number | null
           time_zone: string
           updated_at: string
           user_id: string
@@ -3252,6 +3254,8 @@ export type Database = {
         Insert: {
           digest_evening?: boolean
           digest_morning?: boolean
+          quiet_end?: number | null
+          quiet_start?: number | null
           time_zone?: string
           updated_at?: string
           user_id?: string
@@ -3259,6 +3263,8 @@ export type Database = {
         Update: {
           digest_evening?: boolean
           digest_morning?: boolean
+          quiet_end?: number | null
+          quiet_start?: number | null
           time_zone?: string
           updated_at?: string
           user_id?: string
