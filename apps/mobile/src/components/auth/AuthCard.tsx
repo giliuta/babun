@@ -152,7 +152,7 @@ export function InputCard({ children }: { children: ReactNode }) {
   return (
     <View
       style={{
-        borderRadius: 10,
+        borderRadius: t.radius.card,
         backgroundColor: t.surface,
         overflow: "hidden",
         boxShadow: t.cardShadow,
@@ -212,7 +212,7 @@ export const AuthField = forwardRef<
       <Animated.View
         pointerEvents="none"
         style={[
-          { position: "absolute", top: 3, bottom: 3, left: 3, right: 3, borderRadius: 10, borderWidth: 1.5, borderColor: t.accent },
+          { position: "absolute", top: 3, bottom: 3, left: 3, right: 3, borderRadius: t.radius.input, borderWidth: 1.5, borderColor: t.accent },
           ringStyle,
         ]}
       />
