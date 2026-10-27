@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View, Platform } from "react-native";
-import { Check } from "lucide-react-native";
-import type { CountryCode } from "libphonenumber-js";
+import { Text, View, Platform } from "react-native";
+import { randomUuid } from "@babun/shared/sync/uuid";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+  SelectSearch,
+} from "@/components/ui/select-rows";
+import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useDefaultCountry } from "@/features/reference/default-country";
 import { phoneKey } from "@/features/clients/merge-clients";
-import { formatPhoneAsYouType, tryToE164 } from "@/lib/phone";
+import { contactRows, type ContactRow } from "./contact-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -38,14 +46,6 @@ try {
  *  отсутствия (в старом дев-билде нативного модуля просто нет). */
 export const CONTACTS_AVAILABLE = Contacts !== null;
 
-interface Row {
-  key: string;
-  name: string;
-  phone: string;
-  /** Уже есть в базе — показываем, но не даём выбрать. */
-  exists: boolean;
-}
-
 export function ContactsImportSheet({
   visible,
   onClose,
@@ -63,7 +63,8 @@ export function ContactsImportSheet({
   const { data: clients = [] } = useClients();
   const create = useCreateClient();
 
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [rows, setRows] = useState<ContactRow[] | null>(null);
+  const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -119,24 +120,7 @@ export function ContactsImportSheet({
           fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
         });
         if (!alive) return;
-      const seen = new Set<string>();
-      const list: Row[] = [];
-      for (const c of data) {
-        const raw = c.phoneNumbers?.[0]?.number ?? "";
-        const key = phoneKey(raw, country);
-        if (!key || key.length < 5 || seen.has(key)) continue;
-        seen.add(key);
-        list.push({
-          key,
-          name:
-            c.name ||
-            [c.firstName, c.lastName].filter(Boolean).join(" ") ||
-            formatPhoneAsYouType(raw, country),
-          phone: formatPhoneAsYouType(raw, country),
-          exists: knownRef.current.has(key),
-        });
-      }
-        list.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+        const list = contactRows(data, country, knownRef.current);
         setRows(list);
         // Ничего не отмечено: каждого контакта человек выбирает сам.
         setPicked(new Set());
@@ -173,7 +157,8 @@ export function ContactsImportSheet({
         await create.mutateAsync({
           full_name: row.name,
           phone: row.phone,
-          phone_e164: tryToE164(row.phone, country as CountryCode),
+          phone_e164: row.phoneE164,
+          phones: row.extras.map((e) => ({ ...e, id: randomUuid() })),
           acquisition_source: "other",
           team_id: teamId,
         });
@@ -204,6 +189,21 @@ export function ContactsImportSheet({
       return next;
     });
 
+  const subtitle = denied
+    ? CONTACTS_AVAILABLE
+      ? "Нет доступа к контактам"
+      : "Недоступно в этой сборке"
+    : rows === null
+      ? "Читаем контакты…"
+      : `${newCount} новых · выбрано ${picked.size}`;
+  const needle = q.trim().toLowerCase();
+  const shown = (rows ?? []).filter(
+    (r) => !needle || r.name.toLowerCase().includes(needle) || r.phone.replace(/\D/g, "").includes(needle.replace(/\D/g, "") || "\u0000"),
+  );
+
+  // АНАТОМИЯ — КАНОН ШТОРКИ ВЫБОРА (5.2): шапка пропом, поиск, строки
+  // `SelectRow`, одна кнопка в футере. Выбор здесь множественный, поэтому
+  // кнопка есть и называет число: «Добавить N».
   return (
     <BottomSheet
       padded={false}
@@ -212,70 +212,25 @@ export function ContactsImportSheet({
         generation.current += 1;
         onClose();
       }}
-      maxHeightRatio={0.92}
-      // Кнопка — в футере листа: он платит нижний безопасный отступ, а свой
-      // ряд с `paddingBottom: 24` ставил её на полосу home-индикатора.
+      title="Из контактов телефона"
+      subtitle={subtitle}
+      maxHeightRatio={SELECT_SHEET_RATIO}
+      scroll
       footer={
-        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
-          <Pressable
-            onPress={() => void run()}
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button
+            label={busy ? "Добавляем…" : `Добавить ${picked.size}`}
+            loading={busy}
             disabled={busy || picked.size === 0}
-            accessibilityRole="button"
-            accessibilityLabel={`Добавить ${picked.size}`}
-            style={({ pressed }) => ({
-              minHeight: 52,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: t.radius.input,
-              backgroundColor:
-                busy || picked.size === 0 ? t.fill : pressed ? t.pressed : t.accent,
-            })}
-          >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{
-                fontSize: 17,
-                fontWeight: "600",
-                color: busy || picked.size === 0 ? t.faint : t.onAccent,
-              }}
-            >
-              {busy ? "Добавляем…" : `Добавить ${picked.size}`}
-            </Text>
-          </Pressable>
+            onPress={() => void run()}
+          />
         </View>
       }
     >
-      <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 6 }}>
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-        >
-          Из контактов телефона
-        </Text>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 13, color: t.sub, marginTop: 2 }}
-        >
-          {denied
-            ? CONTACTS_AVAILABLE
-              ? "Нет доступа к контактам"
-              : "Недоступно в этой сборке"
-            : rows === null
-              ? "Читаем контакты…"
-              : `${newCount} новых · выбрано ${picked.size}`}
-        </Text>
-      </View>
-
       {denied ? (
         <Text
           maxFontSizeMultiplier={1.3}
-          style={{
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            fontSize: 13,
-            color: t.sub,
-          }}
+          style={{ paddingHorizontal: GUTTER, paddingVertical: 16, fontSize: 13, color: t.sub }}
         >
           {CONTACTS_AVAILABLE
             ? Platform.OS === "android"
@@ -284,80 +239,41 @@ export function ContactsImportSheet({
             : "Адресная книга появится после следующей сборки приложения."}
         </Text>
       ) : (
-        <FlatList
-          data={rows ?? []}
-          keyExtractor={(r) => r.key}
-          style={{ flexShrink: 1 }}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingBottom: 8,
-            gap: 8,
-          }}
-          ListEmptyComponent={
-            rows === null ? null : (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{
-                  paddingVertical: 18,
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: t.faint,
-                }}
-              >
-                В контактах телефона нет номеров
-              </Text>
-            )
-          }
-          renderItem={({ item }) => {
-            const on = picked.has(item.key);
-            return (
-              <Pressable
+        <>
+          {(rows?.length ?? 0) > 10 ? (
+            <SelectSearch
+              value={q}
+              onChange={setQ}
+              placeholder="Имя или телефон"
+              accessibilityLabel="Поиск"
+              onClear={() => setQ("")}
+            />
+          ) : null}
+          {rows !== null && shown.length === 0 ? (
+            <EmptyState title={rows.length === 0 ? "В контактах телефона нет номеров" : "Ничего не найдено"} />
+          ) : null}
+          <SelectList>
+            {shown.map((item) => {
+              // Номер, который не разобрался, едет доп. номером — но в строке
+              // его видно: человек выбирает контакт и по номеру тоже.
+              const number = item.phone || item.extras[0]?.number || "";
+              return (
+              <SelectRow
+                key={item.key}
+                title={item.name}
+                subtitle={item.exists ? `${number} · уже есть` : number || undefined}
+                selected={picked.has(item.key)}
+                disabled={item.exists}
+                accessibilityRole="checkbox"
                 onPress={() => {
-                  if (item.exists) return;
                   haptics.tap();
                   toggle(item.key);
                 }}
-                disabled={item.exists}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: on, disabled: item.exists }}
-                accessibilityLabel={`${item.name}, ${item.phone}`}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  minHeight: 52,
-                  paddingHorizontal: 14,
-                  borderRadius: t.radius.input,
-                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-                })}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={1.3}
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "600",
-                      color: item.exists ? t.faint : t.ink,
-                    }}
-                  >
-                    {item.name}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={1.3}
-                    style={{ fontSize: 13, color: t.sub }}
-                  >
-                    {item.exists ? `${item.phone} · уже есть` : item.phone}
-                  </Text>
-                </View>
-                {on && !item.exists ? (
-                  <Check color={t.accent} size={18} strokeWidth={2.4} />
-                ) : null}
-              </Pressable>
-            );
-          }}
-        />
+              />
+              );
+            })}
+          </SelectList>
+        </>
       )}
     </BottomSheet>
   );
