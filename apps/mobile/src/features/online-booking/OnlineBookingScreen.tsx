@@ -11,6 +11,7 @@ import { useThemeColors } from "@/theme/colors";
 import { BookingForm } from "./BookingForm";
 import { doneWords, isBookingToken, type BookingDone } from "./online-booking";
 import { useBookingPage } from "./online-booking-public";
+import { TYPE } from "@/components/ui/tokens";
 
 // «ОНЛАЙН-ЗАПИСЬ» — ПУБЛИЧНАЯ СТРАНИЦА КАЛЕНДАРЯ: babun.app/b/<токен>.
 // Ссылку владелец ставит в Instagram, Google-профиль и на визитку
@@ -109,7 +110,7 @@ function Booked({ done, business }: { done: BookingDone; business: string }) {
       </View>
       <Text
         accessibilityRole="header"
-        style={{ marginTop: 18, fontSize: 24, fontWeight: "800", color: t.ink, textAlign: "center" }}
+        style={{ marginTop: 18, ...TYPE.title, color: t.ink, textAlign: "center" }}
       >
         Вы записаны
       </Text>
