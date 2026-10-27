@@ -100,6 +100,7 @@ export function TagSheet({
       <>
       <NameColorField
         name={name}
+        placeholder="Название тега"
         onNameChange={setName}
         color={color}
         onColorChange={setColor}

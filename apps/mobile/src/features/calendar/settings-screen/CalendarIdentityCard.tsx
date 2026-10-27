@@ -47,6 +47,7 @@ export function CalendarIdentityCard({
       <TourTarget id="settings.name">
       <NameColorField
         bare
+        placeholder="Название календаря"
         label={null}
         name={name}
         onNameChange={setDraft}

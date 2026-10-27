@@ -107,6 +107,7 @@ export function TypeSheet({
           блок… и используются везде»). */}
       <NameColorField
         name={name}
+        placeholder="Название типа"
         onNameChange={setName}
         color={color}
         onColorChange={setColor}

@@ -191,6 +191,7 @@ export function LabelEditSheet({
           в двух местах продукта. */}
       <NameColorField
         label="Название"
+        placeholder="Название метки"
         name={name}
         onNameChange={setName}
         color={color}
