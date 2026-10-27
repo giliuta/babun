@@ -29,6 +29,11 @@ verify_jwt = true
 [functions.account-delete-cleanup]
 verify_jwt = false
 
+# Nightly Storage janitor called by pg_net with x-cleanup-secret
+# (edge_cron_secrets «storage-janitor», migration storage_janitor).
+[functions.storage-janitor]
+verify_jwt = false
+
 # ─── Ports of the Next API routes (retiring apps/web) ────────────────
 # All three are called by systems that have no Supabase JWT to send, so
 # verify_jwt must stay false. Each authenticates by its own means.

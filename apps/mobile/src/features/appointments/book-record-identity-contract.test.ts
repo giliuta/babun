@@ -19,7 +19,9 @@ const picker = readFileSync(path.join(__dirname, "BookingPickers.tsx"), "utf8");
 
 describe("форма записи и её запись", () => {
   test("другая запись в адресе собирает форму заново", () => {
-    assert.match(book, /export default function BookScreen\(\) \{\n  const params = useLocalSearchParams<\{ appointmentId\?: string \}>\(\);\n  return <BookForm key=\{first\(params\.appointmentId\) \?\? "new"\} \/>;\n\}/);
+    // Ключ формы начинается с записи; метка `fresh` («Удалить черновик»)
+    // идёт следом и собирает новую запись с чистого листа.
+    assert.match(book, /export default function BookScreen\(\) \{\n  const params = useLocalSearchParams<\{ appointmentId\?: string; fresh\?: string \}>\(\);\n  return <BookForm key=\{`\$\{first\(params\.appointmentId\) \?\? "new"\}:\$\{first\(params\.fresh\) \?\? ""\}`\} \/>;\n\}/);
     assert.equal(book.match(/export default function/g)?.length, 1);
   });
 

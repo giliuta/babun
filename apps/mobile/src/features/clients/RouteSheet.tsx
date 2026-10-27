@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import type { MapService } from "@babun/shared/common/utils/map-links";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { useEnabledMapServices } from "@/features/clients/map-services";
@@ -16,6 +17,7 @@ export function RouteSheet({
   target,
   onClose,
   teamId = null,
+  open,
 }: {
   visible: boolean;
   /** Адрес, ссылка или координаты. */
@@ -24,6 +26,9 @@ export function RouteSheet({
   /** Команда клиента — её «Карты для маршрута» (у каждой команды свои,
    *  нет — набор компании. */
   teamId?: string | null;
+  /** Своя дорога вместо одной точки `target` — маршрут дня через все
+   *  выезды («Список»). Карты, порядок и шестерёнка — те же. */
+  open?: (service: MapService) => void;
 }) {
   const router = useRouter();
   // Шестерёнка — в «Карты для маршрута» ЭТОЙ команды в её компании (из
@@ -37,7 +42,7 @@ export function RouteSheet({
     label: s.label,
     icon: s.icon,
     color: s.color,
-    onPress: () => openInMap(s.id, target),
+    onPress: () => (open ? open(s.id) : openInMap(s.id, target)),
   }));
 
   return (

@@ -27,6 +27,9 @@ export interface LeaveGuardInput {
   saveable: boolean;
   navigation: { dispatch: (action: NavigationAction) => void };
   router: ReturnType<typeof useRouter>;
+  /** «Не сохранять» — человек выбросил новую запись: черновик на телефоне
+   *  тоже уходит (`book-draft-store.ts`). */
+  onDiscardDraft?: () => void;
 }
 
 /** «Есть несохранённое», the discard question and the way out of the form. */
@@ -42,6 +45,7 @@ export function useLeaveGuard({
   saveable,
   navigation,
   router,
+  onDiscardDraft,
 }: LeaveGuardInput) {
   // ПРОГРАММНЫЙ УХОД (сохранение / подтверждённое «Закрыть») СНАЧАЛА СНИМАЕТ
   // ЗАЩИТУ, ПОТОМ УХОДИТ. Повтор перехваченного действия
@@ -101,6 +105,7 @@ export function useLeaveGuard({
     // уезжала в объект при уходе экрана, хотя человек нажал «Закрыть»
     // (она же считается в `notesDirty`).
     eventObjectNote.discard();
+    if (!isEdit) onDiscardDraft?.();
   };
   // ВЫХОД С ИЗМЕНЕНИЯМИ — ВОПРОС «СОХРАНИТЬ?», А НЕ «ЗАКРЫТЬ?». Человек
   // нажал «назад», потому что закончил: чаще всего он хочет сохранить, и
@@ -174,5 +179,5 @@ export function useLeaveGuard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaving]);
 
-  return { leaveBook, editBaselineRef, requestClose, saveRef };
+  return { leaveBook, editBaselineRef, requestClose, saveRef, dirty };
 }

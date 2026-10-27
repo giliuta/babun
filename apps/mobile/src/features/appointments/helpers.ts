@@ -266,6 +266,15 @@ export function humanDayTitle(ymd: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// «пт, 5 марта 2027» — ДЕНЬ ЗАПИСИ С ГОДОМ, ЕСЛИ ОН НЕ ЭТОТ. Запись ставят и
+// на будущий год: без года «5 марта» читается как ближайшее и путает. В этом
+// году год — лишнее слово.
+export function humanDayMaybeYear(ymd: string, today: Date = new Date()): string {
+  const d = parseYMD(ymd);
+  if (!ymd || Number.isNaN(d.getTime())) return humanDay(ymd);
+  return d.getFullYear() === today.getFullYear() ? humanDay(ymd) : `${humanDay(ymd)} ${d.getFullYear()}`;
+}
+
 // «чт, 1 октября 2026» — РАЗДЕЛИТЕЛЬ ДНЯ В СПИСКАХ, с годом всегда (год — только в таких
 // моментах). Строки и подписи остаются без
 // года (`humanDay`).

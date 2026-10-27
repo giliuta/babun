@@ -1,5 +1,6 @@
 import { createActionMenu } from "./action-menu";
 import { createReschedule } from "./reschedule";
+import { useRescheduleSms } from "./reschedule-sms";
 import { createSlotPlacement } from "./slot-placement";
 import { useCalendarClock } from "./use-calendar-clock";
 import { useCalendarDeepLinks } from "./use-calendar-deep-links";
@@ -63,7 +64,8 @@ export function useCalendarController() {
   const grid = useCalendarGrid(acting);
   const gridded = { ...acting, ...quick, ...headerNav, ...grid };
 
-  const reschedule = createReschedule(gridded);
+  const smsOnMove = useRescheduleSms(gridded.clients);
+  const reschedule = createReschedule({ ...gridded, smsOnMove });
   const createAt = createSlotPlacement(gridded);
   const openActionMenu = createActionMenu(gridded);
   const wired = { ...gridded, reschedule, createAt, openActionMenu };

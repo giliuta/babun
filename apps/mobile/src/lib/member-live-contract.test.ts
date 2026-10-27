@@ -36,6 +36,8 @@ describe("member live calendar", () => {
     assert.deepEqual(keys, ["id", "op", "updated_at"]);
     assert.match(sql, /realtime\.send\(payload, 'appointment_changed', 'calendar:' \|\| new_team, true\)/);
     assert.match(sql, /realtime\.send\(payload, 'appointment_changed', 'calendar:' \|\| old_team, true\)/);
+    // Сбой сигнала не откатывает правку записи.
+    assert.match(sql, /begin\s+if new_team is not null[\s\S]*exception when others then\s+raise warning 'calendar_change_signal: % \(%\)', sqlerrm, sqlstate;\s+end;\s+return null;/);
   });
 
   test("only people with records or events of that calendar may listen", () => {

@@ -8,19 +8,10 @@ import {
 } from "react-native";
 import { X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type {
-  AppointmentPhotoRecord,
-  PhotoKind,
-} from "@babun/shared/db/repositories/appointment-photos";
+import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { MirrorBanner } from "@/components/blocks/MirrorBanner";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
-
-const PHOTO_KIND_LABEL: Record<PhotoKind, string> = {
-  before: "До работы",
-  after: "После работы",
-  other: "Фото",
-};
 
 export function AppointmentPhotoViewer({
   photo,
@@ -29,7 +20,7 @@ export function AppointmentPhotoViewer({
 }: {
   /** Просмотру нужны ссылка, вид и подпись — фото записи и картинка из
    *  вложений клиента открываются одним и тем же экраном. */
-  photo: Pick<AppointmentPhotoRecord, "url" | "kind" | "caption"> | null;
+  photo: Pick<AppointmentPhotoRecord, "url" | "caption"> | null;
   onClose: () => void;
   onRetry: () => Promise<boolean>;
 }) {
@@ -111,7 +102,10 @@ export function AppointmentPhotoViewer({
             className="text-center text-sm font-semibold"
             style={{ color: t.ink }}
           >
-            {PHOTO_KIND_LABEL[photo.kind]}
+            {/* Разметки «до/после» у фото записи нет: снимок просто
+                загружают, без лишнего шага. Старые строки с видом в базе
+                подписываются так же. */}
+            Фото
           </Text>
           {photo.caption ? (
             <Text className="mt-1 text-center text-sm" style={{ color: t.sub }}>

@@ -31,7 +31,11 @@ type CreateRescheduleDeps =
   & Pick<CalendarGrid, "workBandFor" | "bufferMinutes">
   & Pick<CalendarView, "mode" | "setDay">
   & Pick<GridModes, "editingApt" | "setEditingApt">
-  & Pick<RecordNaming, "appointmentTimeZone">;
+  & Pick<RecordNaming, "appointmentTimeZone">
+  & {
+    /** Уйдёт ли клиенту SMS «При переносе» (`reschedule-sms.ts`). */
+    smsOnMove: (apt: Appointment, teamId: string | null, date: string, timeStart: string) => boolean;
+  };
 
 /** Drag and stretch on the grid: move a record in time, across days or to
  *  another own team, warn softly and offer an undo. */
@@ -39,7 +43,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
   const {
     isCrew, toast, workInPlan, nudgeTariff, canMoveAppointment, visibleAppts,
     workBandFor, bufferMinutes, mode, weekYmds, setDay, editingApt, setEditingApt,
-    updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery,
+    updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery, smsOnMove,
   } = deps;
   const reschedule = (
     apt: Appointment,
@@ -179,13 +183,18 @@ export function createReschedule(deps: CreateRescheduleDeps) {
         : apt.time_start === newStart
           ? `Время: ${newStart}–${newEnd}`
           : `Перенесено на ${newStart}`;
+    // КЛИЕНТУ УЙДЁТ SMS — СЛОВАМИ В ТОМ ЖЕ ТОСТЕ. Сервер ставит шаблон «При
+    // переносе» сам, и молча это было письмом от имени человека, который
+    // просто подвинул блок. «Отменить» снимает и сообщение: перенос ждёт в
+    // очереди дольше, чем живёт тост.
+    const sms = smsOnMove(apt, teamId, date, newStart) ? "Клиенту уйдёт SMS" : null;
     const prev = {
       time_start: apt.time_start,
       time_end: apt.time_end,
       ...(dateMoves ? { date: apt.date } : {}),
       ...(teamMoves ? { team_id: apt.team_id } : {}),
     };
-    toast(warn ? `${what}. ${warn}` : what, "success", {
+    toast([what, sms, warn].filter(Boolean).join(". "), "success", {
       label: "Отменить",
       onPress: () =>
         void gate.settled.then((ok) => {

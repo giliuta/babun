@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Session } from "@supabase/supabase-js";
 
-import { shouldPublishSession } from "./session-publish";
+import { shouldPublishSession, signedOutNow } from "./session-publish";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -68,6 +68,25 @@ describe("публикация сессии", () => {
     assert.match(
       source,
       /setSession\(\(prev\) =>\s*shouldPublishSession\(event, prev, next\) \? next : prev,?\s*\)/,
+    );
+  });
+});
+
+describe("выход гасит повторы запросов", () => {
+  test("только переход «был человек → никого»", () => {
+    assert.equal(signedOutNow("user-1", null), true);
+    assert.equal(signedOutNow(null, null), false, "холодный старт без входа: публичные страницы грузятся");
+    assert.equal(signedOutNow(null, "user-1"), false);
+    assert.equal(signedOutNow("user-1", "user-2"), false, "смену человека чистит handleAuthEvent");
+    assert.equal(signedOutNow("user-1", "user-1"), false);
+  });
+
+  test("SessionProvider гасит запросы на этом переходе, после снятия заслонки", () => {
+    const source = readFileSync(resolve(here, "SessionProvider.tsx"), "utf8");
+    const effect = source.slice(source.indexOf("setShownSessionUserId(shownUserId)"));
+    assert.match(
+      effect,
+      /if \(signedOutNow\(shownBefore\.current, shownUserId\)\) \{\s*void queryClient\.cancelQueries\(\);/,
     );
   });
 });

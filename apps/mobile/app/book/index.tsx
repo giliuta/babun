@@ -35,9 +35,11 @@ import { BookEditSheets } from "@/features/appointments/book-form/BookEditSheets
 // держала дату и время прежней записи («чт, 8 октября 11:00»), а оплату
 // показывала уже новой («Дата изменена — сохраните»): «Сохранить» перенёс бы
 // запись на чужой день. Ключ по записи собирает форму заново.
+// «Удалить черновик» новой записи — тоже другая форма: метка `fresh` в
+// ключе собирает её с чистого листа, с тем днём и клиентом, с какими открыли.
 export default function BookScreen() {
-  const params = useLocalSearchParams<{ appointmentId?: string }>();
-  return <BookForm key={first(params.appointmentId) ?? "new"} />;
+  const params = useLocalSearchParams<{ appointmentId?: string; fresh?: string }>();
+  return <BookForm key={`${first(params.appointmentId) ?? "new"}:${first(params.fresh) ?? ""}`} />;
 }
 
 function BookForm() {

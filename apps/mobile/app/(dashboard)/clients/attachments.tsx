@@ -2,7 +2,6 @@ import { Fragment, useState } from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useInClientsTab } from "@/lib/reference-href";
-import type { PhotoKind } from "@babun/shared/db/repositories/appointment-photos";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -65,7 +64,7 @@ function ClientAttachmentsScreen() {
   const upload = useClientFileUpload(id);
   const remove = useDeleteAttachment(id);
   const [addOpen, setAddOpen] = useState(false);
-  const [viewer, setViewer] = useState<{ url: string; kind: PhotoKind; source: "attachment" | "visit" } | null>(null);
+  const [viewer, setViewer] = useState<{ url: string; source: "attachment" | "visit" } | null>(null);
   const days = groupFilesByDay(files.timeline);
 
   const openUrl = async (url: string) => {
@@ -89,13 +88,13 @@ function ClientAttachmentsScreen() {
     switch (entry.type) {
       case "photo": {
         const url = files.thumbs[entry.item.id];
-        if (url) setViewer({ url, kind: "other", source: "attachment" });
+        if (url) setViewer({ url, source: "attachment" });
         else void openAttachment(entry.item);
         return;
       }
       case "visit":
         if (isVideoPath(entry.item.storage_path)) void openUrl(entry.item.url);
-        else setViewer({ url: entry.item.url, kind: entry.item.kind, source: "visit" });
+        else setViewer({ url: entry.item.url, source: "visit" });
         return;
       case "file":
         void openAttachment(entry.item);
@@ -199,7 +198,7 @@ function ClientAttachmentsScreen() {
       <FileAddSheet visible={addOpen} pickers={upload.pickers} withDocuments onClose={() => setAddOpen(false)} />
 
       <AppointmentPhotoViewer
-        photo={viewer ? { url: viewer.url, kind: viewer.kind, caption: "" } : null}
+        photo={viewer ? { url: viewer.url, caption: "" } : null}
         onClose={() => setViewer(null)}
         onRetry={async () =>
           (await (viewer?.source === "visit" ? files.refetchVisitPhotos() : files.refetch())).isSuccess
