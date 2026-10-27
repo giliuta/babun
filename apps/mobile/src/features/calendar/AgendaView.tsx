@@ -131,7 +131,7 @@ export function AgendaView({
           return (
             <DaySection
               section={item}
-              header={headerRu(item.title, todayYmd, tomorrowYmd, !!label)}
+              header={headerRu(item.title, todayYmd, tomorrowYmd)}
               label={label}
               offLabelFor={offLabelFor}
               hueFor={hueFor}
