@@ -116,11 +116,13 @@ export function useClientCard() {
       navigation.dispatch(data.action);
       return;
     }
+    // Те же слова, что у формы записи: уход без сохранения — одно действие
+    // на весь продукт.
     confirmThen(
-      "Удалить черновик?",
+      "Закрыть без сохранения?",
       {
-        message: "Введённые данные клиента ещё не сохранены.",
-        confirmLabel: "Удалить черновик",
+        message: "Введённое не сохранится.",
+        confirmLabel: "Не сохранять",
         destructive: true,
       },
       () => {
