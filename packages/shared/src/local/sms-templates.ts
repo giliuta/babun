@@ -22,14 +22,6 @@ export type TemplateKind =
   | "waitlist"
   | "debt";
 
-export interface SmsTemplate {
-  id: string;
-  kind: TemplateKind;
-  name: string;
-  body: string;
-  enabled: boolean;
-}
-
 export const AVAILABLE_TOKENS = [
   { token: "[Имя]", label: "Имя клиента" },
   { token: "[День]", label: "День недели" },

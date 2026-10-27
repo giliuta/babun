@@ -314,31 +314,3 @@ export function checkoutErrorText(code: string | null | undefined, offline = fal
       return "Попробуйте ещё раз";
   }
 }
-
-export type SmsSettingsPatch = Partial<{
-  enabled: boolean;
-  team_ids: string[];
-}>;
-
-/** Черновик ответа базы на правку — чтобы тумблер не ждал сеть. */
-export function applyPatch(account: SmsAccount, patch: SmsSettingsPatch): SmsAccount {
-  return {
-    ...account,
-    ...(patch.enabled !== undefined ? { enabled: patch.enabled } : null),
-    ...(patch.team_ids !== undefined ? { teamIds: patch.team_ids } : null),
-  };
-}
-
-/** Счёт команды за месяц; нет сообщений — нули. */
-export function teamStats(account: SmsAccount, teamId: string): SmsTeamStats {
-  return (
-    account.owner?.teams.find((s) => s.teamId === teamId) ?? {
-      teamId,
-      count: 0,
-      segments: 0,
-      cents: 0,
-      delivered: 0,
-      failed: 0,
-    }
-  );
-}

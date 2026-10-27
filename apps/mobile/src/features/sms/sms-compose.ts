@@ -196,23 +196,6 @@ export interface SmsTemplateLike {
   enabled: boolean;
 }
 
-export interface SmsOption<T extends SmsTemplateLike = SmsTemplateLike> {
-  template: T;
-  text: string;
-}
-
-/** Шаблоны, готовые к отправке: включённые и заполняемые целиком, в порядке
- *  списка. */
-export function smsOptions<T extends SmsTemplateLike>(templates: readonly T[], vars: SmsVars): SmsOption<T>[] {
-  const out: SmsOption<T>[] = [];
-  for (const template of templates) {
-    if (!template.enabled) continue;
-    const text = fillTemplate(template.body, vars);
-    if (text) out.push({ template, text });
-  }
-  return out;
-}
-
 /** Ссылка `sms:` с текстом. Разделитель — свойство платформы: iOS ждёт
  *  «&body=», Android — «?body=». Пустой текст — ссылка без текста. */
 export function smsUrlWithBody(url: string, body: string, os: string): string {
