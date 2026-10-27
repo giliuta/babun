@@ -68,6 +68,22 @@ describe("homeTotals", () => {
     assert.deepEqual(totals, { income: 170, expense: 50, profit: 120, debt: 0 });
   });
 
+  test("копейки складываются в центах — без хвоста плавающей точки (F-30)", () => {
+    const totals = homeTotals(
+      base({
+        scopedTransactions: [
+          tx({ id: "a", type: "income", amount: 0.1 }),
+          tx({ id: "b", type: "income", amount: 0.2 }),
+          tx({ id: "e", type: "expense", amount: 0.1 }),
+        ],
+        materialAmount: 0.2,
+      }),
+    );
+    assert.equal(totals.income, 0.3);
+    assert.equal(totals.expense, 0.3);
+    assert.equal(totals.profit, 0);
+  });
+
   test("debt = unpaid past records of the chip + manual incoming + invoice rests", () => {
     const totals = homeTotals(
       base({
