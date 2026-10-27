@@ -39,6 +39,9 @@ import {
 import { appointmentsQueryKey } from "./queries";
 import { invalidateKeys, useMemberRefusal } from "./mutations/shared";
 import { useUpdateAppointmentOptions } from "./mutations/update";
+import { sendOrQueue } from "@/lib/member-queue/runtime";
+import { errorMessage as messageOf } from "@/lib/member-queue/plan";
+
 
 // Shared helpers, the edit options and the partner-only doors live in
 // `./mutations/`; this file stays the public entry.
@@ -56,8 +59,8 @@ export function useCreateAppointment() {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (role === "master") {
         // Квоту месяца держит серверный триггер вставки; предпроверка —
-        // удобство владельца, сотруднику она не нужна. Без сети дверь
-        // сервера не откроется — офлайн-очереди у сотрудника нет.
+        // удобство владельца, сотруднику она не нужна. Без сети запись
+        // ложится в очередь телефона и уйдёт той же дверью (`lib/member-queue`).
         // Same UUID guard as the offline wrapper. createBlankAppointment falls back to a
         // NON-uuid `apt-…` id when `crypto.randomUUID` is missing — the RN/Hermes case
         // (react-native-get-random-values only polyfills getRandomValues). We stamp a
@@ -66,16 +69,31 @@ export function useCreateAppointment() {
         // otherwise the edit lands in the update-op path with a non-uuid row_id and
         // the replayer silently drops it, losing the edit.
         const stamped = isUuid(input.id) ? input : { ...input, id: randomUuid() };
-        const { error } = await supabase.rpc("member_appointment_create", {
-          p_row: memberCreateRow(stamped) as Json,
-        });
-        // Повтор после оборванного ответа: запись уже стоит — это успех.
-        if (error && !isOwnRecordAlreadyCreated(error)) {
-          throw refusal("createAppointment", error.message);
+        const created = { ...stamped, status: "scheduled" } as Appointment;
+        const row = memberCreateRow(stamped);
+        try {
+          await sendOrQueue({
+            tenantId,
+            recordId: stamped.id,
+            kind: "create",
+            args: { p_row: row, view: created },
+            label: "Новая запись",
+            send: async () => {
+              const { error } = await supabase.rpc("member_appointment_create", {
+                p_row: row as Json,
+              });
+              // Повтор после оборванного ответа: запись уже стоит — это успех.
+              if (error && !isOwnRecordAlreadyCreated(error)) {
+                throw error;
+              }
+            },
+          });
+        } catch (error) {
+          throw refusal("createAppointment", messageOf(error));
         }
         // Дверь отвечает только id — он наш же; форме нужна запись целиком,
         // свежую строку довезёт перечитывание списка.
-        return { ...stamped, status: "scheduled" } as Appointment;
+        return created;
       }
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Роль в аккаунте ещё не подтверждена.");
@@ -188,10 +206,23 @@ export function useDeleteAppointment() {
       const paths = await listPhotoPaths(supabase, id).catch(() => [] as string[]);
       if (role === "master") {
         // «Отменять и удалять» (или своё событие) проверяет сервер.
-        const { error } = await supabase.rpc("member_appointment_delete", {
-          p_appointment_id: id,
-        });
-        if (error) throw refusal("deleteAppointment", error.message);
+        try {
+          await sendOrQueue({
+            tenantId: tenantId as string,
+            recordId: id,
+            kind: "delete",
+            args: { p_appointment_id: id },
+            label: "Удаление записи",
+            send: async () => {
+              const { error } = await supabase.rpc("member_appointment_delete", {
+                p_appointment_id: id,
+              });
+              if (error) throw error;
+            },
+          });
+        } catch (error) {
+          throw refusal("deleteAppointment", messageOf(error));
+        }
       } else {
         await deleteAppointment(supabase, id, tenantId as string);
       }
@@ -227,7 +258,18 @@ export function useTrashAppointment() {
         throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
       try {
-        await trashAppointment(supabase, id);
+        if (role === "master") {
+          await sendOrQueue({
+            tenantId: tenantId as string,
+            recordId: id,
+            kind: "trash",
+            args: {},
+            label: "Удаление записи",
+            send: () => trashAppointment(supabase, id),
+          });
+        } else {
+          await trashAppointment(supabase, id);
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         throw role === "master"

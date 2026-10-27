@@ -40,6 +40,9 @@ import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
 import { clientKeys } from "@/lib/client-query-keys";
+import { kickMemberQueue } from "@/lib/member-queue/runtime";
+import { useMemberQueue } from "@/lib/member-queue/use-member-queue";
+import { MemberQueueCards } from "@/features/cabinet/MemberQueueCards";
 
 const MAX_ATTEMPTS = 3;
 
@@ -50,6 +53,9 @@ export default function SyncStatusScreen() {
   const [operations, setOperations] = useState<QueuedOp[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | "all" | null>(null);
+  // Правки сотрудника — своя очередь вызовов дверей сервера (`lib/member-queue`).
+  const memberOps = useMemberQueue(tenantId);
+  const waiting = operations.length + memberOps.length;
 
   const refresh = useCallback(async () => {
     try {
@@ -92,6 +98,7 @@ export default function SyncStatusScreen() {
           .map((item) => resetOpAttemptsAndEmit(item.id)),
       );
       await kickReplayer({ supabase });
+      kickMemberQueue();
       await refresh();
     } catch (error) {
       notify(
@@ -163,8 +170,8 @@ export default function SyncStatusScreen() {
         title="Синхронизация"
         subtitle={
           online
-            ? operations.length > 0
-              ? `${operations.length} ${countWordRu(operations.length, "изменение", "изменения", "изменений")} ${operations.length === 1 ? "ожидает" : "ожидают"} сервер`
+            ? waiting > 0
+              ? `${waiting} ${countWordRu(waiting, "изменение", "изменения", "изменений")} ${waiting === 1 ? "ожидает" : "ожидают"} сервер`
               : "Данные актуальны"
             : "Нет соединения"
         }
@@ -196,13 +203,13 @@ export default function SyncStatusScreen() {
 
         {/* Первое чтение очереди: раньше эту паузу «показывал» программно
             выехавший контрол обновления, а без него экран был просто пустым. */}
-        {loading && operations.length === 0 ? (
+        {loading && waiting === 0 ? (
           <View className="items-center py-10">
             <Spinner size={26} label="Читаем очередь изменений" />
           </View>
         ) : null}
 
-        {operations.length === 0 && !loading ? (
+        {waiting === 0 && !loading ? (
           <EmptyState
             icon={<CheckCircle2 color={t.success} size={36} />}
             title="Всё синхронизировано"
@@ -282,7 +289,9 @@ export default function SyncStatusScreen() {
           );
         })}
 
-        {operations.length > 1 ? (
+        <MemberQueueCards ops={memberOps} online={online} />
+
+        {waiting > 1 ? (
           // КНОПКА ОДНА НА ПРОДУКТ: была своя, 50pt с кеглем 16/700.
           <View style={{ marginHorizontal: GUTTER, marginTop: 16 }}>
             <Button

@@ -73,3 +73,16 @@ export {
   removeOp,
   resetOpAttempts,
 } from "./sql/queue";
+export {
+  clearMemberOpsOfTenant,
+  enqueueMemberOp,
+  hasMemberOps,
+  listMemberOps,
+  markMemberOpRefused,
+  memberQueueDepth,
+  noteMemberOpAttempt,
+  removeMemberOp,
+  replaceMemberOpArgs,
+  retryMemberOp,
+  type MemberQueuedOp,
+} from "./sql/member-queue";

@@ -15,6 +15,44 @@ import { useCurrentRole } from "@/session/tenant";
 import { appointmentsQueryKey } from "@/features/calendar/queries";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { laterPaymentQueued, paymentScope } from "./payment-queue";
+import { sendOrQueue } from "@/lib/member-queue/runtime";
+
+/** Денежные поля записи после оплаты — их очередь кладёт поверх списка, пока
+ *  оплата не дошла: перечитка иначе показала бы «не оплачено». Остальные поля
+ *  записи берутся с сервера. */
+const MONEY_FIELDS = [
+  "payments",
+  "prepayments",
+  "payment",
+  "paid_amount",
+  "prepaid_amount",
+  "payment_status",
+  "payment_method",
+  "payment_account_id",
+  "status",
+] as const satisfies readonly (keyof Appointment)[];
+
+/** Ответы оплат, легших в очередь: это мгновенный вид, а не строка сервера —
+ *  его не кладут в кэш как каноническую и деньги по нему не перечитывают. */
+const queuedRows = new WeakSet<Appointment>();
+
+/** Ответ оплаты из очереди: экран получает запись такой, какой её сделает
+ *  сервер (`optimistic`). Без мгновенного вида (оплата новой записи) ответ
+ *  никто не читает — хватает номера записи. */
+function queuedView(appointmentId: string, optimistic: Appointment | undefined): Appointment {
+  const row = optimistic ?? ({ id: appointmentId } as Appointment);
+  queuedRows.add(row);
+  return row;
+}
+
+function moneyView(optimistic: Appointment | undefined): Partial<Appointment> | null {
+  if (!optimistic) return null;
+  const view: Partial<Record<keyof Appointment, unknown>> = {};
+  for (const key of MONEY_FIELDS) {
+    if (optimistic[key] !== undefined) view[key] = optimistic[key];
+  }
+  return view as Partial<Appointment>;
+}
 
 // ДЕНЬГИ ПИШУТСЯ СРАЗУ ПО ТАПУ, без черновика. Поэтому здесь не патч записи, а
 // событие: сервер сам дописывает леджер, зеркала и проводку и возвращает
@@ -106,6 +144,8 @@ export interface RecordPaymentVars {
 export function useRecordPayment(appointmentId?: string | null) {
   const settle = useSettleFreshAppointment();
   const patch = useOptimisticPatch();
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   return useMutation({
     ...NEVER_PAUSE,
     scope: paymentScope(appointmentId),
@@ -115,8 +155,8 @@ export function useRecordPayment(appointmentId?: string | null) {
     },
     onError: (_error, _vars, context) => patch.revert(context),
     onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
-    mutationFn: (vars: RecordPaymentVars) =>
-      recordAppointmentPayment(supabase, {
+    mutationFn: async (vars: RecordPaymentVars): Promise<Appointment> => {
+      const input = {
         appointmentId: vars.appointmentId,
         accountId: vars.accountId,
         amount: vars.amount,
@@ -124,8 +164,23 @@ export function useRecordPayment(appointmentId?: string | null) {
         kind: vars.kind,
         closeVisit: vars.closeVisit,
         paidAt: new Date().toISOString(),
-      }),
-    onSuccess: settle,
+      };
+      if (role !== "master" || !tenantId) return recordAppointmentPayment(supabase, input);
+      // Сотрудник без сети: оплата ждёт в очереди телефона и уйдёт той же
+      // дверью, повтор узнаётся по `requestId` (`lib/member-queue`).
+      const sent = await sendOrQueue({
+        tenantId,
+        recordId: vars.appointmentId,
+        kind: "pay",
+        args: { ...input, view: moneyView(vars.optimistic) },
+        label: "Оплата записи",
+        send: () => recordAppointmentPayment(supabase, input),
+      });
+      return sent.queued ? queuedView(vars.appointmentId, vars.optimistic) : sent.data;
+    },
+    onSuccess: (data) => {
+      if (!queuedRows.has(data)) settle(data);
+    },
   });
 }
 
@@ -139,6 +194,8 @@ export interface CancelPaymentVars {
 export function useCancelPayment(appointmentId?: string | null) {
   const settle = useSettleFreshAppointment();
   const patch = useOptimisticPatch();
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   return useMutation({
     ...NEVER_PAUSE,
     scope: paymentScope(appointmentId),
@@ -148,13 +205,26 @@ export function useCancelPayment(appointmentId?: string | null) {
     },
     onError: (_error, _vars, context) => patch.revert(context),
     onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
-    mutationFn: (vars: CancelPaymentVars) =>
-      cancelAppointmentPayment(supabase, {
+    mutationFn: async (vars: CancelPaymentVars): Promise<Appointment> => {
+      const input = {
         appointmentId: vars.appointmentId,
         paymentId: vars.paymentId,
         requestId: vars.requestId,
-      }),
-    onSuccess: settle,
+      };
+      if (role !== "master" || !tenantId) return cancelAppointmentPayment(supabase, input);
+      const sent = await sendOrQueue({
+        tenantId,
+        recordId: vars.appointmentId,
+        kind: "unpay",
+        args: { ...input, view: moneyView(vars.optimistic) },
+        label: "Снятие оплаты",
+        send: () => cancelAppointmentPayment(supabase, input),
+      });
+      return sent.queued ? queuedView(vars.appointmentId, vars.optimistic) : sent.data;
+    },
+    onSuccess: (data) => {
+      if (!queuedRows.has(data)) settle(data);
+    },
   });
 }
 

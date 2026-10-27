@@ -13,8 +13,9 @@
 --     (и SMS после него) — следующий шаг онлайн-записи.
 --   • S-02. Заявка цеплялась к существующему клиенту по одному номеру и не
 --     смотрела чёрный список. Теперь — только при совпадении первого слова
---     имени; иначе новый клиент с тем же номером без phone_e164. Клиенту из
---     чёрного списка — «Онлайн-запись недоступна — позвоните нам».
+--     имени; иначе запись встаёт без клиента, а имя и номер заявителя — в
+--     заметке записи (клиента выбирает сотрудник, принимая заявку). Клиенту
+--     из чёрного списка — «Онлайн-запись недоступна — позвоните нам».
 --
 -- `sms_enqueue` правится вставкой по якорю в ЖИВОЕ тело (его переопределяли
 -- не раз): сторож падает, если якорь не найден ровно один раз.
@@ -78,6 +79,7 @@ declare
   v_match uuid;
   v_match_names text[];
   v_match_blocked boolean;
+  v_comment text := 'Онлайн-запись';
   v_appointment uuid := gen_random_uuid();
 begin
   select * into r from public.online_booking_resolve(p_token);
@@ -141,10 +143,11 @@ begin
   -- Клиент — по номеру в контактной базе компании, но номер заказчик не
   -- подтверждал: к карточке заявка встаёт, только если совпало и первое
   -- слово имени (полное имя или имя для SMS). Иначе это может быть чужой
-  -- человек с чужим номером — заводим нового клиента с тем же номером, но
-  -- без phone_e164: уникальный ключ номера остаётся за настоящим клиентом,
-  -- а дубль сольют в «Дублях». Клиенту из чёрного списка онлайн-запись
-  -- закрыта.
+  -- человек с чужим номером: запись встаёт БЕЗ клиента, а имя и номер
+  -- заявителя — в заметке записи; клиента выбирает сотрудник, принимая
+  -- заявку. Второго клиента с тем же номером не заводим: без phone_e164 он
+  -- выпал бы из дедупа, поиска по номеру и уникального ключа. Клиенту из
+  -- чёрного списка онлайн-запись закрыта.
   select c.id,
          array[lower(split_part(btrim(coalesce(c.full_name, '')), ' ', 1)),
                lower(split_part(btrim(coalesce(c.sms_name, '')), ' ', 1))],
@@ -159,11 +162,12 @@ begin
     end if;
     if lower(split_part(v_name, ' ', 1)) = any(v_match_names) then
       v_client := v_match;
+    else
+      v_comment := 'Онлайн-запись · ' || v_name || ' · ' || v_phone;
     end if;
-  end if;
-  if v_client is null then
+  else
     insert into public.clients (tenant_id, full_name, phone, phone_e164, team_id)
-    values (r.tenant_id, v_name, v_phone, case when v_match is null then v_phone end, r.team_id)
+    values (r.tenant_id, v_name, v_phone, v_phone, r.team_id)
     returning id into v_client;
   end if;
 
@@ -173,7 +177,7 @@ begin
   ) values (
     v_appointment, r.tenant_id, v_client, r.team_id, p_date, p_time,
     lpad((v_end / 60)::text, 2, '0') || ':' || lpad((v_end % 60)::text, 2, '0'),
-    'work', 'scheduled', coalesce(s.price, 0), 'Онлайн-запись', 'online', true,
+    'work', 'scheduled', coalesce(s.price, 0), v_comment, 'online', true,
     jsonb_build_array(s.id),
     jsonb_build_array(jsonb_build_object(
       'serviceId', s.id,

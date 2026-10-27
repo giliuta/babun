@@ -163,11 +163,14 @@ describe("online booking sms and client match fix", () => {
     assert.match(sql, /якорь не найден ровно один раз/);
   });
 
-  test("existing client only on matching first name, never blacklisted", () => {
+  test("existing client only on matching first name, otherwise no client, never blacklisted", () => {
     assert.ok(found, `нет ${file}`);
     const sql = readFileSync(found, "utf8");
     assert.match(sql, /if v_match_blocked then\s+raise exception/);
     assert.match(sql, /lower\(split_part\(v_name, ' ', 1\)\) = any\(v_match_names\)/);
-    assert.match(sql, /case when v_match is null then v_phone end/);
+    // Номер совпал, имя нет — запись без клиента, заявитель в заметке;
+    // второго клиента с тем же номером (без phone_e164) не бывает.
+    assert.match(sql, /v_comment := 'Онлайн-запись · ' \|\| v_name \|\| ' · ' \|\| v_phone;/);
+    assert.doesNotMatch(sql, /case when v_match is null then v_phone end/);
   });
 });

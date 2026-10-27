@@ -19,6 +19,9 @@ import { memberPatch } from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "../queries";
 import { clientKeys } from "@/lib/client-query-keys";
 import { useMemberRefusal } from "./shared";
+import { sendOrQueue } from "@/lib/member-queue/runtime";
+import { errorMessage as messageOf, isMemberQueued, MEMBER_QUEUED } from "@/lib/member-queue/plan";
+
 
 /** Поля «места» записи: перенос по сетке трогает только их. */
 const PLACE_FIELDS = new Set(["time_start", "time_end", "date", "team_id"]);
@@ -84,12 +87,28 @@ export function useUpdateAppointmentOptions() {
         const { body, foreign } = memberPatch(patch, kind);
         if (foreign.length > 0) throw new Error("Это поле меняет только владелец");
         if (Object.keys(body).length === 0) return null;
-        const { data, error } = await supabase.rpc("member_appointment_update", {
-          p_appointment_id: id,
-          p_patch: body as Json,
-        });
-        if (error) throw refusal("updateAppointment", error.message);
-        return data;
+        // Без сети правка ложится в очередь телефона и уйдёт той же дверью,
+        // когда связь вернётся (`lib/member-queue`).
+        try {
+          const sent = await sendOrQueue({
+            tenantId: tenantId as string,
+            recordId: id,
+            kind: "update",
+            args: { p_appointment_id: id, p_patch: body, view: body },
+            label: "Правка записи",
+            send: async () => {
+              const { data, error } = await supabase.rpc("member_appointment_update", {
+                p_appointment_id: id,
+                p_patch: body as Json,
+              });
+              if (error) throw error;
+              return data;
+            },
+          });
+          return sent.queued ? MEMBER_QUEUED : sent.data;
+        } catch (error) {
+          throw refusal("updateAppointment", messageOf(error));
+        }
       }
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Роль в аккаунте ещё не подтверждена.");
@@ -149,6 +168,9 @@ export function useUpdateAppointmentOptions() {
       );
     },
     onSuccess: (data, { id, patch }) => {
+      // Правка ждёт сети в очереди: на экране её мгновенный вид, а перечитка
+      // без сети только упала бы. Дошедший вызов перечитает список сам.
+      if (isMemberQueued(data)) return;
       // ПЕРЕНОС БЕЗ ПЕРЕЗАГРУЗКИ ВСЕГО КАЛЕНДАРЯ. Полное перечитывание списка на каждый перенос
       // перерисовывает сетку целиком второй раз, уже после оптимистичного
       // шага (свободное перемещение лагает). Когда патч трогает только место записи (время, дата, команда),

@@ -16,6 +16,7 @@ import { MirrorBanner, MirrorInsetShim } from "@/components/blocks/MirrorBanner"
 import { useSession } from "@/providers/SessionProvider";
 import { ChoiceSheetHost } from "@/components/ui/ChoiceSheet";
 import { ToastProvider } from "@/components/ui/Toast";
+import { MemberQueueToasts } from "@/features/appointments/MemberQueueToasts";
 import { AppUpdateGate } from "@/features/app-update/AppUpdateGate";
 import {
   consumeLastAppointmentNotificationTarget,
@@ -201,6 +202,7 @@ export default function RootLayout() {
           включая границы разделов (`access/mirror/mirror-state.tsx`). */}
       <MirrorProvider>
       <ToastProvider>
+        <MemberQueueToasts />
         {/* Хост выбора «что сделать»: любой chooseOption() рисуется нижним
             листом, а не системным попапом посередине. */}
         <ChoiceSheetHost>

@@ -11,6 +11,8 @@
 //   tags         ← IDB "tags"         (keyPath id; idx tenant)
 //   sync_queue   ← IDB "sync_queue"   (autoInc id; idx created_at)
 //   sync_meta    ← IDB "sync_meta"    (keyPath key)
+//   member_queue — без веб-двойника: вызовы дверей сервера, отложенные
+//                  сотрудником без сети (`sql/member-queue.ts`)
 //
 // Schema versioning uses SQLite's `PRAGMA user_version`, the direct
 // analogue of IDB's `DB_VERSION` + upgrade callback. `migrate()` below is
@@ -22,7 +24,7 @@ import type { SqlAdapter } from "../../storage/sql/types";
 
 /** Analogue of the web cache's `DB_VERSION`. Bump + add a migration
  *  branch when the schema changes. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /** DDL for the whole cache. Kept as one string so first-run is a single
  *  `execAsync` (expo-sqlite runs multiple `;`-separated statements). */
@@ -72,6 +74,20 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   value      TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS member_queue (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at INTEGER NOT NULL,
+  tenant_id  TEXT NOT NULL,
+  record_id  TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  args       TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  refused    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_member_queue_record ON member_queue (record_id);
 `;
 
 /** Idempotent schema install + migration. Safe to call on every app

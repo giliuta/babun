@@ -8,6 +8,10 @@ import {
 } from "@babun/shared/db/repositories/appointment-photos";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useCurrentRole } from "@/session/tenant";
+import { randomUuid } from "@babun/shared/sync";
+import { sendOrQueue } from "@/lib/member-queue/runtime";
+import { keepPhotosForQueue } from "./queued-photo-files";
 
 // 20 файлов на запись: пяти снимков «до/после» на объект с тремя
 // кондиционерами не хватало; число стоит уточнить.
@@ -25,6 +29,8 @@ export interface PickedAppointmentPhoto {
   fileSize?: number;
   /** Что сказал пикер: у видео с iPhone mimeType бывает пустым. */
   mediaType?: "image" | "video";
+  /** Номер снимка, выданный очередью без сети: повтор не задвоит фото. */
+  photoId?: string;
 }
 
 export interface UploadAppointmentPhotosInput {
@@ -163,6 +169,7 @@ export async function uploadAppointmentAssets(args: {
         kind,
         locationId: locationId ?? null,
         takenAt: new Date().toISOString(),
+        photoId: asset.photoId,
       }));
     } catch (error) {
       throw new RetryableAppointmentPhotoUploadError(
@@ -188,12 +195,40 @@ function settlePhotos(
   return queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) });
 }
 
+/** Фото сотрудника — с очередью без сети (`lib/member-queue`). Номер снимка
+ *  выдаётся до отправки: обрыв посреди пачки ставит в очередь только хвост, а
+ *  повтор не задвоит уехавшее. Пустой ответ — фото ждут сети на телефоне. */
+export async function uploadOrQueueMemberPhotos(args: {
+  tenantId: string;
+  appointmentId: string;
+  input: UploadAppointmentPhotosInput;
+}): Promise<AppointmentPhotoRecord[]> {
+  const input = {
+    ...args.input,
+    assets: args.input.assets.map((asset) => ({ ...asset, photoId: asset.photoId ?? randomUuid() })),
+  };
+  const sent = await sendOrQueue({
+    tenantId: args.tenantId,
+    recordId: args.appointmentId,
+    kind: "photos",
+    args: (failure) => {
+      const left = failure instanceof RetryableAppointmentPhotoUploadError ? failure.retryInput : input;
+      return { input: { ...left, assets: keepPhotosForQueue(left.assets) } };
+    },
+    label: "Фото записи",
+    send: () => uploadAppointmentAssets({ tenantId: args.tenantId, appointmentId: args.appointmentId, input }),
+  });
+  return sent.queued ? [] : sent.data;
+}
+
 export function useUploadAppointmentPhotos(appointmentId: string) {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UploadAppointmentPhotosInput): Promise<AppointmentPhotoRecord[]> => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
+      if (role === "master") return uploadOrQueueMemberPhotos({ tenantId, appointmentId, input });
       return uploadAppointmentAssets({ tenantId, appointmentId, input });
     },
     onSettled: () => settlePhotos(queryClient, tenantId, appointmentId),
