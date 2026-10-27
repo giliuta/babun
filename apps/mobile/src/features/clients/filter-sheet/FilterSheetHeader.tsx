@@ -62,7 +62,7 @@ export function FilterSheetHeader({
                 // Выключенная кнопка должна быть ТИШЕ живой: t.faint
                 // темнее кобальта и читался как активный.
                 color:
-                  nothingActive && !undo ? "rgba(11,18,32,0.28)" : t.accent,
+                  nothingActive && !undo ? t.muted : t.accent,
               }}
             >
               {undo ? "Вернуть" : "Сбросить"}

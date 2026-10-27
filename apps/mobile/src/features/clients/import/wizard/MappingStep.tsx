@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import { tintOver } from "@/components/ui/color-contrast";
 import type { CountryCode } from "libphonenumber-js";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Button } from "@/components/ui/Button";
@@ -60,7 +61,7 @@ export function MappingStep({
       {resume ? (
         <View
           className="gap-2 rounded-[10px] p-4"
-          style={{ backgroundColor: "rgba(245,166,35,0.10)" }}
+          style={{ backgroundColor: tintOver(t.warning, t.surface, 0.1) }}
         >
           <Text className="text-[13px] font-semibold" style={{ color: t.warning }}>
             Прошлый импорт не завершён
@@ -155,7 +156,7 @@ export function MappingStep({
               >
                 <Text
                   className="text-[13px] font-semibold"
-                  style={{ color: active ? "#fff" : t.body }}
+                  style={{ color: active ? t.onAccent : t.body }}
                 >
                   {c.label}
                 </Text>

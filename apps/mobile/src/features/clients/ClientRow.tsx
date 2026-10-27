@@ -154,7 +154,7 @@ function ClientRowView({
               borderColor: t.separatorStrong,
             }}
           >
-            {picked ? <Check color="#fff" size={14} strokeWidth={3} /> : null}
+            {picked ? <Check color={t.onAccent} size={14} strokeWidth={3} /> : null}
           </View>
         ) : null}
         <View className="flex-1">

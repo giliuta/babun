@@ -143,7 +143,7 @@ export function HistoryFilterSheet({
                 style={{
                   fontSize: 15,
                   fontWeight: "600",
-                  color: nothingActive ? "rgba(11,18,32,0.28)" : t.accent,
+                  color: nothingActive ? t.muted : t.accent,
                 }}
               >
                 Сбросить
