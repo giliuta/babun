@@ -198,7 +198,13 @@ export function DeletedOperationsScreen() {
           <EmptyState state="loading" fill />
         )
       ) : rows.length === 0 ? (
-        <EmptyState fill title="Пусто" />
+        // Пустой ящик говорит, что в нём бывает, — как соседние пустые экраны
+        // (заголовок и пояснение), а не одним словом.
+        <EmptyState
+          fill
+          title="Удалённых операций нет"
+          subtitle="Удалённая операция лежит здесь, пока её не вернут или не удалят насовсем"
+        />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {days.map(([day, items]) => (

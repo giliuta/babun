@@ -200,9 +200,13 @@ export function OperationSheet({
   // свайпом влево по её строке в ленте «Финансов» и в листе дня
   // (`features/finances/operation-delete.ts`), как счета и клиентов.
 
-  const { askingClose, guardedClose, runAfterExit } = useOperationClose({
+  const { askingClose, guardedClose, runAfterExit, dirty } = useOperationClose({
     busy, onClose, onExited, draft, vatRate: opVatRate,
   });
+  // ПРАВКА БЕЗ ПРАВОК НЕ СОХРАНЯЕТСЯ: «Сохранить» серая, пока в операции
+  // ничего не поменяли, — как «Применить» у листа счёта. Команда в снимок
+  // формы не входит, её сверяем со строкой отдельно.
+  const unchangedEdit = isEdit && !dirty && teamId === (transaction?.team_id ?? null);
 
   const reason = operationReason(canWrite, operationInputReason(gate));
 
@@ -248,7 +252,7 @@ export function OperationSheet({
                   : "Добавить доход"
           }
           onSave={save}
-          canSave={canSave}
+          canSave={canSave && !unchangedEdit}
           busy={busy}
           onRetry={onRetryRefunds}
         />
