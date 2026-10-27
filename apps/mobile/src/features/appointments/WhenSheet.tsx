@@ -11,6 +11,7 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { TimeRangePicker } from "@/components/ui/TimeWheel";
 import { shiftRangeStart } from "@/features/appointments/time-range";
 import { useThemeColors } from "@/theme/colors";
+import { WHEN_WEEKS_BACK, WHEN_WEEKS_FWD, formatDateRu } from "./when-dates";
 
 // «КОГДА» — ШТОРКА СНИЗУ, А НЕ ОКНО ПО ЦЕНТРУ: тап по времени открывает её
 // снизу вверх — два барабана, один тумблер, то же самое, что период в
@@ -26,12 +27,6 @@ import { useThemeColors } from "@/theme/colors";
 // закрытие скримом или свайпом — отказ, как у любого листа.
 
 const WEEKDAYS = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]; // понедельник-first
-const MONTHS_GEN = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
-const WEEKS_BACK = 26;
-const WEEKS_FWD = 26;
 const ALL_DAY_RANGE = { start: "00:00", end: "23:59" };
 
 function pad2(n: number): string {
@@ -63,10 +58,6 @@ function sameYMD(a: Date, b: Date): boolean {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
-}
-function formatDateRu(dateKey: string): string {
-  const [, m, d] = dateKey.split("-").map(Number);
-  return `${d} ${MONTHS_GEN[m - 1]}`;
 }
 // «31 августа – 6 сентября»: число с месяцем стоит в родительном падеже,
 // как в подписи даты выше. Именительный («31 АВГУСТ») читался как опечатка
@@ -134,8 +125,8 @@ export function WhenSheet({
 
   const weeks = useMemo(() => {
     const anchorMon = mondayOf(anchorKey);
-    return Array.from({ length: WEEKS_BACK + WEEKS_FWD + 1 }, (_, i) => {
-      const monday = addDays(anchorMon, (i - WEEKS_BACK) * 7);
+    return Array.from({ length: WHEN_WEEKS_BACK + WHEN_WEEKS_FWD + 1 }, (_, i) => {
+      const monday = addDays(anchorMon, (i - WHEN_WEEKS_BACK) * 7);
       const days = Array.from({ length: 7 }, (_, j) => {
         const d = addDays(monday, j);
         return {
@@ -223,7 +214,7 @@ export function WhenSheet({
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(w) => w.monday.toISOString()}
-                initialScrollIndex={WEEKS_BACK}
+                initialScrollIndex={WHEN_WEEKS_BACK}
                 getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
                 renderItem={({ item: w }: { item: (typeof weeks)[number] }) => (
                   <View style={{ width: pageWidth, flexDirection: "row" }}>

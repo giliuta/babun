@@ -8,7 +8,7 @@ import { AlertTriangle, ChevronRight } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDayMaybeYear } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { durationLabel } from "@/lib/service-format";
 import { Card } from "@/components/ui/Card";
@@ -152,7 +152,7 @@ export function WhenRow({
           accessibilityRole={onPress ? "button" : "text"}
           accessibilityLabel={
             timeStart
-              ? `Дата и время: ${humanDay(date)}, ${
+              ? `Дата и время: ${humanDayMaybeYear(date)}, ${
                   allDay
                     ? "весь день"
                     : timeEnd
@@ -160,8 +160,8 @@ export function WhenRow({
                       : timeStart
                 }`
               : until
-                ? `Даты: ${humanDay(date)}, ${until.text}${until.pill ? `, ${until.pill}` : ""}`
-                : `Дата: ${humanDay(date)}`
+                ? `Даты: ${humanDayMaybeYear(date)}, ${until.text}${until.pill ? `, ${until.pill}` : ""}`
+                : `Дата: ${humanDayMaybeYear(date)}`
           }
           accessibilityHint={
             !onPress
@@ -183,7 +183,7 @@ export function WhenRow({
               numberOfLines={1}
               style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
             >
-              {dateLabel ?? humanDay(date)}
+              {dateLabel ?? humanDayMaybeYear(date)}
             </Text>
             {timeStart || (until && until.text) ? (
               <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
