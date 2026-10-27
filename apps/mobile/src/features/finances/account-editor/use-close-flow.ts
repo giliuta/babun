@@ -91,8 +91,8 @@ export function useCloseFlow({
   const tenantId = useTenantId();
   const trashAcc = useTrashAccount();
   const undoTrash = useUndoAccountTrash();
-  // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА: свайп «Скрыть»
-  // говорил «Счёт скрыт», а кнопка листа то же действие делала молча.
+  // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА «Удалить»: «Счёт удалён» с «Отменить»;
+  // кнопка листа то же действие молча не делает.
   const toast = useToast();
 
   const [parked, setParked] = useState(false);
@@ -202,7 +202,7 @@ export function useCloseFlow({
    * дверь к нему была только на «Финансах»). Лист уезжает с дороги (два листа
    * в одном кадре iOS не покажет), открывается тот же лист перевода, что в
    * футере «Финансов», с этим счётом источником и всем его остатком; по
-   * закрытии лист счёта возвращается — вопроса о скрытии здесь нет.
+   * закрытии лист счёта возвращается — вопроса об удалении здесь нет.
    */
   const startTransfer = (account: AccountWithBalance) => {
     closingFrom.current = null;
