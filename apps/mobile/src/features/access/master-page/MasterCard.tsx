@@ -8,6 +8,7 @@ import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 import { isInvitationEmail } from "@/features/settings/invitation-flow";
+import { useAndroidBack } from "@/lib/android-back";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 
@@ -142,6 +143,9 @@ function MasterDraftCard({
     }
     confirmThen("Удалить черновик?", { confirmLabel: "Удалить", destructive: true }, close);
   };
+  // Системная «назад» Android — та же стрелка: иначе она уводила мимо вопроса,
+  // а черновик молча оставался в `draft-store` до следующего открытия.
+  useAndroidBack(true, leave);
 
   const openArea = (area: string) =>
     router.push(
