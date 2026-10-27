@@ -4,9 +4,9 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// КРЕДИТ-НОТА И ВОЗВРАТ ПО ЧЕКУ НЕ ТЕРЯЮТ СУММУ И ПРИЧИНУ МОЛЧА (аудит 035,
-// I-06): уход спрашивает сама навигация, теми же словами, что черновик
-// инвойса; выписанный документ уходит без вопроса.
+// КРЕДИТ-НОТА И ВОЗВРАТ ПО ЧЕКУ НЕ ТЕРЯЮТ СУММУ И ПРИЧИНУ МОЛЧА: уход
+// спрашивает сама навигация, теми же словами, что черновик инвойса;
+// выписанный документ уходит без вопроса.
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (file: string) => readFileSync(resolve(here, "../../..", file), "utf8");
 const screens = {

@@ -77,7 +77,7 @@ describe("earliestPayment", () => {
   });
 });
 
-test("дата платежа — по языку интерфейса, а не «ru-RU» по умолчанию (F-58)", async () => {
+test("дата платежа — по языку интерфейса, а не «ru-RU» по умолчанию", async () => {
   const { readFileSync } = await import("node:fs");
   const { dirname, resolve } = await import("node:path");
   const { fileURLToPath } = await import("node:url");

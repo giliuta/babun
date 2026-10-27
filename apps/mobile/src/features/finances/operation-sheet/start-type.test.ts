@@ -21,7 +21,7 @@ describe("сторона новой операции", () => {
     );
   });
 
-  test("оплата долга «мне должны» у партнёра «только расходы» — всё равно доход (F-09)", () => {
+  test("оплата долга «мне должны» у партнёра «только расходы» — всё равно доход", () => {
     assert.equal(
       operationStartType({ defaultType: "income", debtPayment: true, typeWritable: only("expense") }),
       "income",
@@ -40,7 +40,7 @@ describe("сторона новой операции", () => {
     assert.match(draft, /operationStartType\(\{ defaultType, debtPayment: !!debtPayment, typeWritable \}\)/);
   });
 
-  test("снимок пустой формы — с той же стороной, что и форма (F-10)", () => {
+  test("снимок пустой формы — с той же стороной, что и форма", () => {
     const draft = readFileSync(resolve(here, "use-operation-draft.ts"), "utf8");
     assert.match(draft, /setType\(startType\);/);
     assert.match(draft, /initialDraftKey\.current = operationDraftKey\(\{\s*type: startType,/);

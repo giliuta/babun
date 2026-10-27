@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// СКРЫТЫЙ СЧЁТ — ТОЛЬКО НА СТРАНИЦЕ «СЧЕТА» (аудит 035, F-12). В разбивке
+// СКРЫТЫЙ СЧЁТ — ТОЛЬКО НА СТРАНИЦЕ «СЧЕТА». В разбивке
 // «Финансов дня» его плитки с нулём нет; деньги дня на нём всё равно видны —
 // `moneyByAccount` ставит такие счета в хвост. Хук тянет react-query — по исходнику.
 const here = dirname(fileURLToPath(import.meta.url));

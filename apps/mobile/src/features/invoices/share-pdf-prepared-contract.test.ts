@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// «ПОДЕЛИТЬСЯ» ИНВОЙСА БЕЗ ПЯТИ СЕКУНД СПИННЕРА (аудит 035, F-60): страница
+// «ПОДЕЛИТЬСЯ» ИНВОЙСА БЕЗ ПЯТИ СЕКУНД СПИННЕРА: страница
 // печатает PDF заранее, кнопка берёт готовый файл. По исходнику: печать — это
 // expo-print в скрытом WebView, под node её не запустить.
 const here = dirname(fileURLToPath(import.meta.url));

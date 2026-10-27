@@ -6,8 +6,7 @@ import { fileURLToPath } from "node:url";
 import { minusWarning } from "../account-alerts";
 import { operationInputReason, type OperationGateInput } from "./operation-guards";
 
-// РАСХОД В МИНУС — НЕ ЗАПРЕТ, А СЛОВА (аудит 035, F-51; решение 035: минус на
-// счёте разрешён всем). Новый расход, который уводит счёт ниже нуля, пишет под
+// РАСХОД В МИНУС — НЕ ЗАПРЕТ, А СЛОВА: минус на счёте разрешён всем. Новый расход, который уводит счёт ниже нуля, пишет под
 // кнопкой ту же фразу, что отмена перевода, — кнопка живая.
 const here = dirname(fileURLToPath(import.meta.url));
 

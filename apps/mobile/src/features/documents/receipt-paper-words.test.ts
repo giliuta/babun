@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// РУССКИЕ СЛОВА НЕ ВШИВАЮТСЯ В АНГЛИЙСКИЙ ЧЕК (аудит 035, F-35). Чек неизменяем:
+// РУССКИЕ СЛОВА НЕ ВШИВАЮТСЯ В АНГЛИЙСКИЙ ЧЕК. Чек неизменяем:
 // строка «Оплата», «Услуга» вместо снятой из прайса услуги и номер «Черновик»
 // оставались на английской бумаге навсегда. По исходнику: экран тянет react-native.
 const here = dirname(fileURLToPath(import.meta.url));

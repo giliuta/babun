@@ -21,7 +21,7 @@ describe("свайп «Удалить» в ленте", () => {
 
   test("доход через услугу, проводка инвойса и авто-строки — нет", () => {
     assert.equal(deletableByHand(tx({ type: "income", appointment_id: "a1" })), false);
-    // Расход записи — тоже из записи, а не свайпом в ленте (F-26).
+    // Расход записи — тоже из записи, а не свайпом в ленте.
     assert.equal(deletableByHand(tx({ type: "expense", appointment_id: "a1" })), false);
     assert.equal(deletableByHand(tx({ invoice_id: "i1" })), false);
     assert.equal(deletableByHand(tx({ source: "auto" })), false);
@@ -39,7 +39,7 @@ describe("свайп «Удалить» в ленте", () => {
     assert.equal(refundDeleteNotice(tx({}), undefined), null);
   });
 
-  test("суммы возвратов не приехали — не «есть возврат» (F-11)", () => {
+  test("суммы возвратов не приехали — не «есть возврат»", () => {
     const notice = refundDeleteNotice(tx({ type: "income" }), undefined);
     assert.ok(notice && !/есть возврат/.test(notice.message));
   });

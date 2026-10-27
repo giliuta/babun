@@ -29,7 +29,7 @@ describe("повтор выставления", () => {
     assert.match(src, /issued\.current = already\.id;/);
   });
 
-  test("повтор, наткнувшийся на выставленный инвойс, дописывает его язык (F-31)", () => {
+  test("повтор, наткнувшийся на выставленный инвойс, дописывает его язык", () => {
     const queries = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "../finances/invoices-queries.ts"),
       "utf8",

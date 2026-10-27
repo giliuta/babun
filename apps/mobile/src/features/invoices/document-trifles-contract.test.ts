@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// МЕЛОЧИ ДОКУМЕНТОВ (аудит 035, F-37). По исходнику: модули тянут react-native.
+// МЕЛОЧИ ДОКУМЕНТОВ. По исходнику: модули тянут react-native.
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (file: string) => readFileSync(resolve(here, "..", file), "utf8");
 
@@ -32,7 +32,7 @@ describe("убранная позиция инвойса", () => {
 });
 
 describe("меню инвойса", () => {
-  test("«Удалить инвойс» не показан, когда номер не последний в серии (F-55)", () => {
+  test("«Удалить инвойс» не показан, когда номер не последний в серии", () => {
     const menu = read("finances/invoice-menu.ts");
     assert.match(menu, /untouched && invoiceDeleteBlock\(invoice, ctx\.all, false\) !== "not-last"\s*\? \[\{ key: "delete" as const/);
   });

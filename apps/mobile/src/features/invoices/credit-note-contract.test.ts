@@ -31,7 +31,7 @@ describe("кредит-нота", () => {
     assert.match(form, /cancel\.mutateAsync\(/);
   });
 
-  test("превью частичной ноты — «Partial cancellation», как выпущенная (F-33)", () => {
+  test("превью частичной ноты — «Partial cancellation», как выпущенная", () => {
     assert.match(read("credit-note.tsx"), /credit_partial: !whole,/);
   });
 });

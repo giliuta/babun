@@ -62,7 +62,7 @@ describe("отмена перевода: слова о минусе", () => {
   });
 });
 
-describe("отмена перевода — одно слово (F-48)", () => {
+describe("отмена перевода — одно слово", () => {
   test("кнопка, вопрос и подтверждение говорят «Удалить перевод»", () => {
     const popup = readFileSync(path.resolve(here, "../TransactionPopup.tsx"), "utf8");
     assert.match(popup, /tx\.type === "transfer" \? "Удалить перевод" : "Удалить операцию"/);

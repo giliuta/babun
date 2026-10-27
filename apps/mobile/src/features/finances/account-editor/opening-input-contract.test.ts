@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { moneyInputProblem } from "@babun/shared/common/utils/money";
 
-// ОСТАТОК НОВОГО СЧЁТА: причина отказа — настоящая (аудит 035, F-43), поле —
+// ОСТАТОК НОВОГО СЧЁТА: причина отказа — настоящая, поле —
 // без полосы текстовых подсказок (K-22). Лист тянет react-native — по исходнику.
 const here = dirname(fileURLToPath(import.meta.url));
 const sheet = readFileSync(resolve(here, "CreateAccountSheet.tsx"), "utf8");

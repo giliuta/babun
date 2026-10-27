@@ -33,7 +33,7 @@ const row = (accountId: string, amount: number): PaymentRow => ({
   cancellable: true,
 });
 
-describe("деньги на счёте, ушедшем из оплаты записи (F-13)", () => {
+describe("деньги на счёте, ушедшем из оплаты записи", () => {
   test("платёж на скрытый счёт — оплаченная плитка с именем счёта", () => {
     const rows = new Map([["cash", [row("cash", 50)]]]);
     const all = [account({ id: "cash", name: "Наличные", is_hidden: true })];
@@ -53,7 +53,7 @@ describe("деньги на счёте, ушедшем из оплаты зап�
   });
 });
 
-describe("пустой блок оплаты называет причину (F-14)", () => {
+describe("пустой блок оплаты называет причину", () => {
   test("нет права — не «нет счёта»", () => {
     assert.equal(noAccountsReason({ canTakeMoney: false, teamId: "team-1", all: [account({})] }), "right");
   });

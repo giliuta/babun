@@ -60,7 +60,7 @@ import { useThemeColors } from "@/theme/colors";
 // (`_issue_credit_note`): весь остаток инвойса, его строки с минусом, его язык
 // и «Отмена инвойса …». Превью строилось как нота к чеку — человек утверждал
 // «−€60 · Refund for receipt» на английском, а выходило «−€100 · Cancellation
-// of INV-…» на русском (аудит 035, F-32).
+// of INV-…» на русском.
 export default function ReceiptRefundScreen() {
   const t = useThemeColors();
   const router = useRouter();
@@ -242,7 +242,7 @@ export default function ReceiptRefundScreen() {
   ]);
 
   // ЗАПОЛНЕННАЯ ФОРМА НЕ ИСЧЕЗАЕТ МОЛЧА: сумму и причину свайп от края и
-  // «‹» стирали без вопроса (аудит 035, I-06). Спрашивает сама навигация,
+  // «‹» стирали без вопроса. Спрашивает сама навигация,
   // теми же словами, что черновик инвойса (`app/invoices/new.tsx`);
   // выписанный документ уходит без вопроса.
   const dirty = amount !== null || reason.trim() !== "";

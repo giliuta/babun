@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// «ВЕРНУТЬ» ИЗ КОРЗИНЫ — ТОЖЕ ЗАПИСЬ РАСХОДА (аудит 035, F-25): вернувшийся
+// «ВЕРНУТЬ» ИЗ КОРЗИНЫ — ТОЖЕ ЗАПИСЬ РАСХОДА: вернувшийся
 // расход, перешедший лимит категории, должен дать уведомление о бюджете, как
 // вставка и правка. Хук тянет react-query — по исходнику.
 const here = dirname(fileURLToPath(import.meta.url));
