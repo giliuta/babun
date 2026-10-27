@@ -59,6 +59,7 @@ export function useClientCard() {
     onNameChange: onDraftNameChange,
     save: saveDraft,
     isSavingNow,
+    forgetDraft,
   } = useClientDraft(isDraft, {
     forBooking: handBack,
     name: prefillName,
@@ -124,6 +125,7 @@ export function useClientCard() {
       },
       () => {
         leavingRef.current = true;
+        forgetDraft();
         navigation.dispatch(data.action);
       },
     );
