@@ -62,11 +62,29 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *  имени — «Личный». Само имя в базе не трогается: его меняют в настройках
  *  календаря. */
 export function calendarChipName(name: string, viewer?: ChipViewer | null): string {
-  const address = name.trim().toLowerCase();
-  if (!EMAIL.test(address)) return name;
-  const mine = !!viewer?.email && viewer.email.trim().toLowerCase() === address;
+  if (!isEmailOnly(name)) return name;
+  return viewerNameFor(name, viewer) ?? "Личный";
+}
+
+/** Строка целиком — адрес почты. */
+export function isEmailOnly(text: string | null | undefined): boolean {
+  return EMAIL.test((text ?? "").trim().toLowerCase());
+}
+
+/** Имя смотрящего из профиля, если `address` — его почта входа; иначе `null`
+ *  (чужая почта человека не называет: имени по ней телефон не знает). */
+export function viewerNameFor(address: string, viewer?: ChipViewer | null): string | null {
+  const mine = !!viewer?.email && viewer.email.trim().toLowerCase() === address.trim().toLowerCase();
   const person = viewer?.name?.trim();
-  return mine && person ? person : "Личный";
+  return mine && person ? person : null;
+}
+
+/** ПОЧТА В СТРОКЕ СОБЫТИЯ — ТА ЖЕ БОЛЕЗНЬ, ЧТО У ЧИПА. Заметка или заголовок
+ *  события, целиком равные адресу почты, — это аккаунт, а не слова: своя
+ *  почта показывается именем из профиля, чужая или без имени — не
+ *  показывается вовсе. Остальной текст — как набран. */
+export function eventLineShown(text: string, viewer?: ChipViewer | null): string | null {
+  return isEmailOnly(text) ? viewerNameFor(text, viewer) : text;
 }
 
 /** Ключ календаря в порядке человека: компания и команда — один и тот же по

@@ -2,6 +2,8 @@ import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ThemeColors } from "@/theme/colors";
 import { recordComment } from "@/features/calendar/record-title";
+import { eventLineShown } from "@/session/calendar-chips";
+import { useSession } from "@/providers/SessionProvider";
 
 // Событие — свой шаблон (web design-keeper #6): title из comment, знак
 // записи слева, превью заметок — иначе событие выглядело как «битая запись»
@@ -21,9 +23,14 @@ export function EventRow({
   cancelled: boolean;
   t: ThemeColors;
 }) {
-  const title = recordComment(apt) || "Событие";
+  // Почта входа в заголовке или заметке — не слова человека, а его аккаунт:
+  // своя называется именем, чужая не печатается (`eventLineShown`).
+  const { session } = useSession();
+  const fullName: unknown = session?.user.user_metadata?.full_name;
+  const viewer = { email: session?.user.email, name: typeof fullName === "string" ? fullName : null };
+  const title = eventLineShown(recordComment(apt), viewer) || "Событие";
   const address = apt.address?.trim();
-  const notes = apt.event_notes?.trim();
+  const notes = eventLineShown(apt.event_notes?.trim() ?? "", viewer);
   return (
     <Pressable
       onPress={onPress}

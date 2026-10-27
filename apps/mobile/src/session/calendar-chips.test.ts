@@ -5,6 +5,7 @@ import {
   applyCalendarOrder,
   calendarChipName,
   calendarOrderKey,
+  eventLineShown,
   composeCalendarChips,
   type ChipSourceCalendar,
 } from "./calendar-chips";
@@ -151,3 +152,19 @@ describe("подпись календаря, названного почтой",
     assert.deepEqual(names(chips), ["Анна", "Личный"]);
   });
 });
+
+describe("почта в строке события («Список»)", () => {
+  const me = { email: "babun.app+review@gmail.com", name: "Анна" };
+
+  test("своя почта — имя человека, без имени — ничего", () => {
+    assert.equal(eventLineShown("babun.app+review@gmail.com", me), "Анна");
+    assert.equal(eventLineShown("babun.app+review@gmail.com", { email: me.email }), null);
+  });
+
+  test("чужая почта не печатается, слова — как набраны", () => {
+    assert.equal(eventLineShown("other@mail.com", me), null);
+    assert.equal(eventLineShown("Написать other@mail.com про счёт", me), "Написать other@mail.com про счёт");
+    assert.equal(eventLineShown("Обед", me), "Обед");
+  });
+});
+
