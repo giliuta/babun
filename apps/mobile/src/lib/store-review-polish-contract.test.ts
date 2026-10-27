@@ -32,7 +32,8 @@ describe("импорт из контактов телефона", () => {
 
   test("«Добавить N» — в футере листа, над полосой home-индикатора", () => {
     const src = sheet();
-    assert.match(src, /footer=\{\s*<View[^>]*>\s*<Pressable\s+onPress=\{\(\) => void run\(\)\}/);
+    // Кнопка — канонический `Button` в футере (вне прокрутки листа).
+    assert.match(src, /footer=\{\s*<View[^>]*>\s*<Button\b[\s\S]{0,240}?onPress=\{\(\) => void run\(\)\}/);
   });
 });
 
