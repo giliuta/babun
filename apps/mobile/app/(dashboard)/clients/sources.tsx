@@ -12,6 +12,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PageFooter } from "@/components/ui/PageFooter";
@@ -271,11 +272,20 @@ function SourceSheet({
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [seeded, setSeeded] = useState<Editing | null>(null);
+  const seedName = isEdit ? editing.source.name : "";
   if (editing !== seeded) {
     setSeeded(editing);
     setPicking(false);
-    setName(isEdit ? editing.source.name : "");
+    setName(seedName);
   }
+  // НАБРАННОЕ НЕ ПРОПАДАЕТ ОТ СКРИМА И СВАЙПА — как у тега и метки: сначала
+  // вопрос.
+  const guard = useGuardedClose({
+    dirty: editing !== null && name !== seedName,
+    busy,
+    onClose,
+    message: "Набранное в источнике не сохранится.",
+  });
 
   const applyTemplate = (tpl: ClientSource) => {
     setName(sourceDisplayName(tpl));
@@ -284,8 +294,9 @@ function SourceSheet({
 
   return (
     <BottomSheet
-      visible={editing !== null}
-      onClose={onClose}
+      visible={editing !== null && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={isEdit ? "Источник" : "Новый источник"}
       avoidKeyboard
       footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
