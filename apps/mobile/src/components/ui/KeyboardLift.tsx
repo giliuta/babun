@@ -72,6 +72,12 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
 
   useEffect(() => {
     let alive = true;
+    // КЛАВИАТУРА СЕЙЧАС СТОИТ — по нашим же событиям, а не `Keyboard.isVisible()`:
+    // на iOS подъём идёт с `keyboardWillShow`, когда тот ещё `false`. Замер
+    // асинхронный, и на медленном Android его ответ приходил ПОСЛЕ
+    // `keyboardDidHide`: подъём возвращался, и лист висел посреди экрана с
+    // пустотой под ним, хотя клавиатуры уже нет.
+    let shown = false;
     const setLift = (next: number, e: KeyboardEvent | null) => {
       if (liftNow.current === next) return;
       liftNow.current = next;
@@ -82,6 +88,7 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
       // «Предпочитать плавные переходы» (Универсальный доступ iOS): событие
       // приходит с `screenY` 0 — клавиатура не выезжает, поднимать нечего.
       if (kb.screenY <= 0) return;
+      shown = true;
       const known = frame.current;
       if (known) setLift(Math.max(0, Math.round(known.pageY + known.h - kb.screenY)), e);
       // Низ рамки до подъёма: рамка уже поднята на `lift`, её paddingBottom
@@ -95,6 +102,7 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
       ref.current?.measure((_x, _y, _w, h, _pageX, pageY) => {
         if (!alive) return;
         frame.current = { pageY, h };
+        if (!shown) return;
         setLift(Math.max(0, Math.round(pageY + h - kb.screenY)), e);
       });
     };
@@ -104,9 +112,10 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
     const show = Keyboard.addListener(IOS ? "keyboardWillShow" : "keyboardDidShow", (e) =>
       raise(e.endCoordinates, e),
     );
-    const hide = Keyboard.addListener(IOS ? "keyboardWillHide" : "keyboardDidHide", (e) =>
-      setLift(0, e),
-    );
+    const hide = Keyboard.addListener(IOS ? "keyboardWillHide" : "keyboardDidHide", (e) => {
+      shown = false;
+      setLift(0, e);
+    });
     // Лист открылся, когда клавиатура уже стояла (поле на экране под ним).
     const now = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
     if (now) raise(now, null);

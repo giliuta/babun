@@ -31,6 +31,8 @@ test("подъём меряет рамку от корня экрана в мо�
   // iOS — в такт анимации клавиатуры и при смене её высоты.
   assert.match(lift, /IOS \? "keyboardWillShow" : "keyboardDidShow"/);
   assert.match(lift, /IOS \? "keyboardWillHide" : "keyboardDidHide"/);
+  // Ответ замера после скрытия клавиатуры подъём не возвращает.
+  assert.match(lift, /frame\.current = \{ pageY, h \};\s+if \(!shown\) return;/);
   // Ручной сдвиг больше не участвует в расчёте.
   assert.doesNotMatch(lift, /keyboardVerticalOffset=\{/);
 });
