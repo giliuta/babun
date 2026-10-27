@@ -34,6 +34,7 @@ import { useThemeColors } from "@/theme/colors";
 import { Chip } from "@/components/ui/Chip";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole, useTenant } from "@/session/tenant";
 import {
@@ -75,6 +76,11 @@ export function BulkSmsSheet({
   const [body, setBody] = useState("");
   // Sequential cursor — index of the recipient whose composer opens next.
   const [seqIdx, setSeqIdx] = useState<number | null>(null);
+  // ПЛАН «КАЖДОМУ ПО ИМЕНИ» — СНИМОК НА СТАРТЕ. Живой план пересобирается
+  // из выбранных клиентов, а список перечитывается, пока человек в
+  // «Сообщениях»: порядок мог смениться, и «Дальше» по номеру шага открыло
+  // бы переписку соседа.
+  const [frozenPlan, setFrozenPlan] = useState<ReturnType<typeof buildSequentialSms> | null>(null);
 
   // ЧЕРЕЗ СЕРВИС (STORY-089): рассылка с баланса компании, от одной
   // выбранной команды — её имя отправителя стоит подписью. Только владельцу
@@ -118,6 +124,7 @@ export function BulkSmsSheet({
   const reset = () => {
     setBody("");
     setSeqIdx(null);
+    setFrozenPlan(null);
     setMode("phone");
   };
 
@@ -163,6 +170,14 @@ export function BulkSmsSheet({
     reset();
     onClose();
   };
+  // НАБРАННЫЙ ТЕКСТ НЕ ПРОПАДАЕТ ОТ СВАЙПА И СКРИМА — сначала вопрос.
+  // Отправка (и «Остановить рассылку») закрывает лист сама, без вопроса.
+  const guard = useGuardedClose({
+    dirty: seqIdx === null && body.trim() !== "",
+    busy: bulk.isPending,
+    onClose: close,
+    message: "Набранный текст рассылки не сохранится.",
+  });
 
   // «Всем сразу» — one composer, all numbers, neutral body.
   const sendBlast = async () => {
@@ -183,11 +198,13 @@ export function BulkSmsSheet({
   // openURL the OS would collapse into one.
   const startSequential = async () => {
     if (seqPlan.length === 0 || problem) return;
+    setFrozenPlan(seqPlan);
     setSeqIdx(0);
-    await openSeq(0);
+    await openSeq(0, seqPlan);
   };
-  const openSeq = async (idx: number) => {
-    const step = seqPlan[idx];
+  const plan = frozenPlan ?? seqPlan;
+  const openSeq = async (idx: number, steps = plan) => {
+    const step = steps[idx];
     if (!step) return;
     try {
       await Linking.openURL(step.url);
@@ -198,7 +215,7 @@ export function BulkSmsSheet({
   const advanceSeq = async () => {
     if (seqIdx === null) return;
     const next = seqIdx + 1;
-    if (next >= seqPlan.length) {
+    if (next >= plan.length) {
       onSent();
       close();
       return;
@@ -211,10 +228,11 @@ export function BulkSmsSheet({
 
   return (
     <BottomSheet
-      visible={visible}
-      onClose={close}
+      visible={visible && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title="SMS-рассылка"
-      subtitle={`${withPhone.length} ${countWordRu(withPhone.length, "получатель", "получателя", "получателей")}${noPhone > 0 ? ` · ${noPhone} без телефона пропущены` : ""}`}
+      subtitle={`${withPhone.length} ${countWordRu(withPhone.length, "получатель", "получателя", "получателей")}${noPhone > 0 ? ` · ${noPhone} без телефона ${countWordRu(noPhone, "пропущен", "пропущены", "пропущены")}` : ""}`}
       // КАНОНИЧЕСКИЙ ЛИСТ, А НЕ СЫРОЙ Modal. Вопрос «Отправить через
       // сервис?» ложится в окно этого листа (`sheet-overlay.tsx`); поверх
       // сырого Modal он был третьим окном, iOS его не показывал, и невидимый
@@ -232,18 +250,18 @@ export function BulkSmsSheet({
               Отправка по одному — «Сообщения» открылись для клиента:
             </Text>
             <Text className="mt-1 text-xl font-bold" style={{ color: t.ink }}>
-              {seqPlan[seqIdx]?.client.full_name || "Клиент"}
+              {plan[seqIdx]?.client.full_name || "Клиент"}
             </Text>
             <Text className="mt-1 text-xs" style={{ color: t.faint }}>
-              {(seqIdx ?? 0) + 1} из {seqPlan.length}. Отправьте сообщение в
+              {(seqIdx ?? 0) + 1} из {plan.length}. Отправьте сообщение в
               «Сообщениях», вернитесь и нажмите «Дальше».
             </Text>
             <View className="mt-4">
               <Button
                 label={
-                  seqIdx! + 1 >= seqPlan.length
+                  seqIdx! + 1 >= plan.length
                     ? "Готово"
-                    : `Дальше — ${seqPlan[seqIdx! + 1]?.client.full_name || "следующий"}`
+                    : `Дальше — ${plan[seqIdx! + 1]?.client.full_name || "следующий"}`
                 }
                 onPress={advanceSeq}
               />
@@ -312,10 +330,10 @@ export function BulkSmsSheet({
                         accessibilityLabel={`Шаблон ${tpl.name}`}
                         accessibilityState={{ selected: active }}
                       >
-                        {active ? <Check color="#fff" size={13} strokeWidth={3} /> : null}
+                        {active ? <Check color={t.onAccent} size={13} strokeWidth={3} /> : null}
                         <Text
                           className="text-[13px] font-medium"
-                          style={{ color: active ? "#fff" : t.body }}
+                          style={{ color: active ? t.onAccent : t.body }}
                           numberOfLines={1}
                         >
                           {tpl.name}
