@@ -8,6 +8,7 @@ import {
   pricePerUnit,
 } from "@babun/shared/local/services";
 import { round2 } from "@babun/shared/local/finance/appointment-calc";
+import { normalizeMoneyInput } from "@babun/shared/common/utils/money";
 import type { Service } from "@/features/services/queries";
 import {
   parseDurationTiers,
@@ -71,11 +72,13 @@ export function minutesBetweenHM(start: string, end: string): number {
   return from == null || to == null || to <= from ? 0 : to - from;
 }
 
-// Денежный ввод с клавиатуры: запятая — десятичный разделитель
-// (EU-раскладка decimal-pad шлёт «12,5»), мусор и отрицательные → 0.
+// Денежный ввод с клавиатуры — тем же разбором, что во всех суммах
+// продукта (`normalizeMoneyInput`): запятая и точка, пробелы разрядов
+// («1 200»), знак валюты, «1.234,50». Вставленное «1 200» второй, упрощённый
+// парсер молча превращал в 0. Мусор и отрицательные → 0; до центов.
 export function parseMoneyInput(s: string): number {
-  const n = Number(s.trim().replace(",", "."));
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  const n = Number(normalizeMoneyInput(s));
+  return Number.isFinite(n) && n > 0 ? round2(n) : 0;
 }
 
 // Зеркало payment-объекта из ПОЛНОГО леджера payments[] (единственный
