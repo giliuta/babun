@@ -161,6 +161,12 @@ const anyTeamClient = norm(readFileSync(join(MIGRATIONS_DIR, ANY_TEAM_CLIENT), "
 // — это держит сверка тел «только место тега» ниже.
 const TAG_ORDER = "20261021113300_client_tag_order.sql";
 
+// СКИДКА НОВОЙ ЗАПИСИ — ПО ПРАВУ «СУММА»: создание записи партнёром переписано
+// по живому телу ANY_TEAM_CLIENT ради одной проверки денег; клиент любой
+// команды остаётся за `member_client_bookable` — это держит сверка ниже.
+const CREATE_AMOUNT = "20261027150000_member_create_amount_needs_right.sql";
+const createAmount = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_AMOUNT), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -175,13 +181,13 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of [
       "list_master_clients_safe",
       "member_appointment_copy",
-      "member_appointment_create",
       "member_appointment_update",
       "member_client_bookable",
       "member_find_client_by_phone",
     ]) {
       assert.equal(lastDefiner(fn), ANY_TEAM_CLIENT, `${fn} переопределён позже`);
     }
+    assert.equal(lastDefiner("member_appointment_create"), CREATE_AMOUNT, "создание записи переопределено позже");
     for (const fn of [
       "access_client_ids_in",
       "access_client_blocks",
@@ -413,6 +419,19 @@ describe("сервер: клиенты по уровням", () => {
       assert.ok(start >= 0 && body.includes(check), `${fn}: клиент не по member_client_bookable`);
       assert.ok(!body.includes("member_client_in_team"), `${fn}: снова клиент только своей команды`);
     }
+    // Последнее создание записи держит то же правило клиента и вдобавок
+    // спрашивает «Сумму» у скидки и своей цены.
+    const createStart = createAmount.search(/create or replace function public\.member_appointment_create\(/i);
+    const createBody = createAmount.slice(createStart, createAmount.indexOf("$function$;", createStart));
+    assert.ok(
+      createBody.includes("if not public.member_client_bookable((v_rest ->> 'client_id')::uuid) then raise exception 'access:client'"),
+      "member_appointment_create: клиент не по member_client_bookable",
+    );
+    assert.ok(!createBody.includes("member_client_in_team"), "member_appointment_create: снова клиент только своей команды");
+    assert.ok(
+      createBody.includes("if v_money_set and not public.member_can('record.amount', 'write', v_team) then raise exception 'access:block:record.amount'"),
+      "member_appointment_create: скидка без права «Сумма»",
+    );
     // Право на запись не ослабло: «Новые записи» в команде записи.
     assert.ok(anyTeamClient.includes("if v_kind = 'work' and not public.member_can('calendar.create', 'write', v_team) then raise exception 'access:block:calendar.create'"));
     // Имя клиента своей записи — в окне «Ограничения»; номер — прежним правилом.
