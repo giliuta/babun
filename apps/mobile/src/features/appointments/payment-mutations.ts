@@ -90,6 +90,9 @@ function useSettleFreshAppointment() {
     void qc.invalidateQueries({ queryKey: ["transactions"] });
     void qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
     void qc.invalidateQueries({ queryKey: accountBalancesQueryKey(tenantId) });
+    // «VAT €x» листа счёта живёт рядом с остатками (`accountVatDueQueryKey`)
+    // и сбрасывается с ними: оплата с налогом меняет и то и другое.
+    void qc.invalidateQueries({ queryKey: ["accounts", tenantId, "vat-due"] });
     void qc.invalidateQueries({ queryKey: ["receipts"] });
   };
 }
