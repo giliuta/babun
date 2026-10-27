@@ -12,7 +12,7 @@ import { useDeleteTransfer } from "../accounts";
 import type { FinanceDocument } from "../documents";
 import type { FinancePageAccess } from "../finance-page-access";
 import type { HomeView } from "../FinanceOverview";
-import { deletableByHand, refundBlocksDelete } from "../operation-delete";
+import { deletableByHand, refundDeleteNotice } from "../operation-delete";
 import { useDeleteTransaction, useInsertTransaction } from "../queries";
 import type { RecordRow } from "../record-rows";
 import { buildRefundDraft } from "../refund";
@@ -137,9 +137,10 @@ export function useRowActions(input: RowActionsInput) {
     const tx = rowTx(row);
     if (!tx) return;
     // Доход с возвратом сервер не удалит — причина словами до вопроса.
-    if (refundBlocksDelete(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined)) {
+    const blocked = refundDeleteNotice(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined);
+    if (blocked) {
       haptics.warning();
-      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      notify(blocked.title, blocked.message);
       return;
     }
     const text = tx.type === "transfer" ? deleteTransferAlert(undoMinus(tx)) : deleteOperationAlert();
