@@ -1,0 +1,143 @@
+// СЕРВЕРНАЯ ГИГИЕНА (аудит 035, пачка В). Десять миграций закрывают дыры,
+// которые не видны на экране: прямой DELETE денег мимо корзины, дату оплаты
+// с часов телефона, мёртвые денежные двери, возврат без сохранения итога,
+// SMS отписанному клиенту и в чужую страну, клиента, стёртого при живой
+// записи в корзине, перебор базы по номеру, функции без входа и медленный
+// список клиентов партнёра. Каждая проверена прогоном с откатом на боевой;
+// здесь сторожится, что их смысл не уплывёт при правке файла до наката.
+
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+
+/** До наката файл лежит в `supabase/parked/`, после — в `supabase/migrations/`. */
+function migration(file: string): string {
+  for (const dir of ["supabase/migrations", "supabase/parked"]) {
+    const full = path.join(REPO_ROOT, dir, file);
+    if (existsSync(full)) return readFileSync(full, "utf8");
+  }
+  assert.fail(`нет ${file} ни в migrations, ни в parked`);
+}
+
+/** SQL без строковых комментариев: проверки не должны сходиться на пояснении. */
+function code(sql: string): string {
+  return sql.replace(/^\s*--.*$/gm, "");
+}
+
+describe("server hygiene migrations", () => {
+  test("money rows are deleted by people only through the trash flag", () => {
+    const sql = code(migration("20261027225210_finance_delete_only_through_trash.sql"));
+    assert.match(sql, /current_user in \('authenticated', 'anon'\)/);
+    assert.match(sql, /current_setting\('babun\.operation_trash', true\), ''\) <> 'on'/);
+    assert.match(sql, /before delete on public\.finance_transactions/);
+    // DELETE-политики не снимаются: через них `delete_operation` проверяет право.
+    assert.doesNotMatch(sql, /drop policy/i);
+  });
+
+  test("payment time is corrected by the phone clock skew, offline replays keep their day", () => {
+    const sql = code(migration("20261027225220_appointment_payment_clock_skew.sql"));
+    assert.match(sql, /abs\(extract\(epoch from \(now\(\) - p_sent_at\)\)\) <= 120/);
+    assert.match(sql, /p_sent_at timestamp with time zone DEFAULT NULL::timestamp with time zone\)/);
+    assert.match(sql, /coalesce\(p_paid_at, now\(\)\) \+ public\.client_clock_skew\(p_sent_at\)/);
+    assert.match(sql, /не найден ровно один раз/);
+    assert.match(sql, /grant execute on function public\.record_appointment_payment\([^)]*timestamptz\)\s+to authenticated/);
+  });
+
+  test("dead money doors are closed to people", () => {
+    const sql = code(migration("20261027225230_dead_money_rpcs_closed.sql"));
+    for (const fn of ["reset_appointment_payment\\(uuid\\)", "set_appointment_prepayment\\(uuid, numeric, text\\)"]) {
+      assert.match(sql, new RegExp(`revoke execute on function public\\.${fn}\\s+from public, anon, authenticated`));
+    }
+  });
+
+  test("refund and new total are one transaction, stale check happens before money moves", () => {
+    const sql = code(migration("20261027225240_refund_overpayment_and_save.sql"));
+    const header = sql.slice(sql.indexOf("create or replace function public.refund_overpayment_and_save"), sql.indexOf("as $function$"));
+    assert.doesNotMatch(header, /security definer/i, "invoker: права решают RLS и проверенные двери");
+    const stale = sql.indexOf("appointment:stale");
+    const refund = sql.indexOf("perform public.refund_appointment_overpayment(");
+    assert.ok(stale > 0 && refund > stale, "проверка «запись не менялась» — до возврата");
+    assert.match(sql, /return public\.member_appointment_update\(p_appointment_id, p_patch\)/);
+    assert.match(sql, /set_config\('babun\.member_write', prev_flag, true\)/);
+  });
+
+  test("sms queue skips unavailable clients, numbers without a country code are refused", () => {
+    const sql = code(migration("20261027225250_sms_queue_respects_client.sql"));
+    assert.match(sql, /if n ~ '\^\[0-9\]\{8\}\$' then\s+n := '\+357' \|\| n;\s+else\s+return false;/);
+    assert.match(sql, /c\.deleted_at is not null or c\.sms_opt_out or coalesce\(c\.blacklisted, false\)/);
+    assert.match(sql, /set status = ''blocked''/);
+  });
+
+  test("client history knows debts and both trashes; labels purge on the server", () => {
+    const sql = code(migration("20261027225305_trash_knows_client_history.sql"));
+    for (const table of ["debts", "deleted_appointments", "deleted_operations"]) {
+      assert.match(sql, new RegExp(`from public\\.${table}\\b`));
+    }
+    assert.match(sql, /client_has_history\(new\.id, false\)/, "корзины не обнуляют purge_at");
+    assert.match(sql, /not public\.client_has_history\(c\.id, true\)/, "ночная чистка ждёт пустых корзин");
+    assert.match(sql, /appointment:team_archived/);
+    assert.match(sql, /cron\.schedule\('purge-deleted-cities'/);
+  });
+
+  test("phone lookup: 100 distinct numbers a day, owner exempt, only a fingerprint is kept", () => {
+    const sql = code(migration("20261027225310_client_phone_lookup_limit.sql"));
+    assert.match(sql, /if caller_role is distinct from ''owner'' then/);
+    assert.match(sql, />= 100 then/);
+    assert.match(sql, /md5\(p_phone_e164\)/);
+    assert.match(sql, /access:phone_lookup_limit/);
+    assert.match(sql, /revoke all on table public\.client_phone_lookups from public, anon, authenticated/);
+  });
+
+  test("anon keeps only token pages; buckets go only when empty", () => {
+    const sql = code(migration("20261027225315_anon_helpers_and_empty_buckets.sql"));
+    assert.doesNotMatch(sql, /\bto\b[^;]*\banon\b/i, "никому без входа право не выдаётся");
+    assert.match(sql, /grant execute on function public\.calendar_delete_in_progress\(\) to authenticated, service_role/);
+    assert.match(sql, /and not exists \(select 1 from storage\.objects o where o\.bucket_id = b\.id\)/);
+  });
+
+  test("partner client list computes its sets once", () => {
+    const sql = code(migration("20261027225320_master_clients_list_once.sql"));
+    for (const cte of ["me as materialized", "client_teams as materialized", "contact_sets as materialized"]) {
+      assert.ok(sql.includes(cte), `нет ${cte}`);
+    }
+    assert.match(sql, /a\.master_id = me\.master_id or a\.team_id = any\(me\.team_ids\)/);
+  });
+
+  test("foreign key indexes leave auth.users keys alone", () => {
+    const sql = code(migration("20261027225300_foreign_key_indexes.sql"));
+    assert.match(sql, /finance_transactions \(refund_of_id\)/);
+    assert.doesNotMatch(sql, /\((created_by|deleted_by|granted_by|invited_by_user_id)\)/);
+  });
+
+  test("payment door keeps the records window for partners", () => {
+    const sql = code(migration("20261027225220_appointment_payment_clock_skew.sql"));
+    assert.match(sql, /public\.member_record_hidden\(appt\.kind, appt\.team_id, appt\.date\)/);
+    assert.match(sql, /appointment:outside_window/);
+  });
+
+  test("document dates: not future, this year, not before the last of the series", () => {
+    const sql = code(migration("20261027225321_document_dates_in_series.sql"));
+    for (const hint of ["document:future_date", "document:other_year", "document:before_last"]) {
+      assert.ok(sql.includes(hint), `нет ${hint}`);
+    }
+    assert.match(sql, /coalesce\(p_issued_on, public\.tenant_business_date\(p_tx\.tenant_id\), current_date\)/);
+    assert.match(sql, /assert_document_date\(tenant_uuid, resolved_company_id, ''invoice'', p_issued_on\)/);
+  });
+
+  test("records window also guards note, files and sms doors", () => {
+    const sql = code(migration("20261027225322_record_window_side_doors.sql"));
+    assert.equal(sql.match(/member_record_hidden\(/g)?.length, 3);
+    assert.match(sql, /is_owner or not public\.member_record_hidden/);
+  });
+
+  test("documents: hidden-account invoices, no dispatcher, english by default", () => {
+    const sql = code(migration("20261027225323_documents_policies_and_language.sql"));
+    assert.match(sql, /create policy invoices_hidden_owner_only on public\.invoices\s+as restrictive/);
+    assert.doesNotMatch(sql, /dispatcher/);
+    assert.match(sql, /alter column language set default 'en'/);
+  });
+});
