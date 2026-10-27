@@ -61,6 +61,11 @@ export interface BookDraftSnapshot {
   colorOverride: string | null;
   city: string | null;
   cityTouched: boolean;
+  /** Номер новой записи. Форму могут пересоздать посреди «Создать» (Android
+   *  убил активность, обновление по воздуху): без номера поднятый черновик
+   *  получал новый id, и второй тап заводил дубль уже вставшей записи. С
+   *  номером повтор упирается в ту же запись — сервер считает это успехом. */
+  newRecordId?: string;
 }
 
 const key = (tenantId: string) => tenantPrefKey(BASE, tenantId);

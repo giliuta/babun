@@ -175,7 +175,7 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const businessNow = useBusinessNow(teamId);
   // Номер новой записи — один на всю жизнь формы (см. `booking.save`).
-  const newRecordIdRef = useRef(randomUuid());
+  const newRecordIdRef = useRef(restored?.newRecordId ?? randomUuid());
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();

@@ -65,6 +65,11 @@ describe("черновик новой записи на телефоне", () =>
     assert.deepEqual(back, snap());
   });
 
+  test("номер новой записи едет в черновике — повтор после пересоздания формы не заводит дубль", () => {
+    writeBookDraft("tenant-1", snap({ newRecordId: "rec-1" }));
+    assert.equal(readBookDraft("tenant-1", "work", NOW + 60_000)?.newRecordId, "rec-1");
+  });
+
   test("черновик записи не всплывает в «Создать событие» и в другой компании", () => {
     writeBookDraft("tenant-1", snap());
     assert.equal(readBookDraft("tenant-1", "event", NOW), null);

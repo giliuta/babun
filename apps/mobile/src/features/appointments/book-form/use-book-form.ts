@@ -320,6 +320,7 @@ export function useBookForm() {
       reminderOn: draft.reminderOn,
       colorOverride: draft.colorOverride,
       city: draft.city,
+      newRecordId: draft.newRecordIdRef.current,
       cityTouched: draft.cityTouched,
     },
     toast,
