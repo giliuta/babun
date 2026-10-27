@@ -1,6 +1,7 @@
-import { Pressable, Text, TextInput, View } from "react-native";
-import { Search, Settings, SlidersHorizontal } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { Settings, SlidersHorizontal } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { SelectSearch } from "@/components/ui/select-rows";
 import { TYPE } from "@/components/ui/tokens";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { clientsSettingsHref } from "@/session/clients-company";
@@ -129,45 +130,22 @@ export function ListTopBar({ list }: { list: ClientsList }) {
           </TourTarget>
 
           <TourTarget id="clients.search" shape="control" flex>
-          <View
-            className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
-            style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
-          >
-            <Search color={t.faint} size={16} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              // Приём Jobber: активные фильтры меняют плейсхолдер — статус
-              // «список отфильтрован» виден даже без открытия панели.
-              placeholder={
-                result.activeCount > 0
-                  ? "Поиск среди отфильтрованных"
-                  : "Имя, телефон, адрес"
-              }
-              accessibilityLabel="Поиск клиентов"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-              maxFontSizeMultiplier={1.3}
-              // ПОЛЕ РАСТЯНУТО НА ВСЮ ВЫСОТУ ПЛАШКИ. Без этого iOS после
-              // перерисовки ронял подсказку ниже плашки — «Имя, телефон,
-              // адрес» обрезалась снизу.
-              // Не числом: `h-9` плашки — это rem NativeWind, а не 36pt.
-              style={{
-                flex: 1,
-                alignSelf: "stretch",
-                paddingVertical: 0,
-                fontSize: 15,
-                textAlignVertical: "center",
-                color: t.ink,
-              }}
-            />
-          </View>
+          {/* ПОИСК ОДИН НА ПРОДУКТ — `SelectSearch`, тот же, что в шторках.
+              Приём Jobber: активные фильтры меняют плейсхолдер — статус
+              «список отфильтрован» виден даже без открытия панели. */}
+          <SelectSearch
+            bare
+            value={query}
+            onChange={setQuery}
+            onClear={() => setQuery("")}
+            placeholder={
+              result.activeCount > 0
+                ? "Поиск среди отфильтрованных"
+                : "Имя, телефон, адрес"
+            }
+            accessibilityLabel="Поиск клиентов"
+            autoCapitalize="none"
+          />
           </TourTarget>
 
           {/* ФИЛЬТРЫ — ЗНАЧКОМ СПРАВА, вверху (фильтры лежат рядом с
