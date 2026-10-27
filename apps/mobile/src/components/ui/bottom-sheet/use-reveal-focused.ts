@@ -72,7 +72,12 @@ export function useRevealFocused(enabled: boolean, outerRef?: RefObject<ScrollVi
       offset.current = e.nativeEvent.contentOffset.y;
     },
     onLayout: (e: LayoutChangeEvent) => {
+      const before = viewport.current;
       viewport.current = e.nativeEvent.layout.height;
+      // ANDROID: подъём и докрутка слушают один `keyboardDidShow`, и докрутка
+      // считала по ещё не сжатому телу — поле вставало впритык к футеру.
+      // Тело сжалось при открытой клавиатуре — доводим поле ещё раз.
+      if (enabled && viewport.current < before && Keyboard.isVisible()) revealRef.current();
     },
     // Многострочное поле выросло на строку — каретка не уходит под футер.
     onContentSizeChange: () => {
