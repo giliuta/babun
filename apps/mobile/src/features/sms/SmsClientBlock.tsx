@@ -96,6 +96,20 @@ export function SmsClientBlock({
     setNameDraft(null);
     if (next !== smsName) void update({ sms_name: next });
   };
+  // НАБРАННОЕ ИМЯ НЕ ТЕРЯЕТСЯ НА УХОДЕ. Запись висит на `onBlur`, а поле,
+  // которое снимают с экрана в фокусе (жест «назад», стрелка), blur не
+  // получает. Последний черновик держим в ref и дописываем при снятии.
+  const latestName = useRef({ nameDraft, smsName, update });
+  latestName.current = { nameDraft, smsName, update };
+  useEffect(
+    () => () => {
+      const { nameDraft: left, smsName: saved, update: write } = latestName.current;
+      if (left === null) return;
+      const next = left.trim();
+      if (next !== saved) void write({ sms_name: next });
+    },
+    [],
+  );
   const setSend = (send: boolean) => {
     setSmsOff(!send);
     optOut.mutate(
