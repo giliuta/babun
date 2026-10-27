@@ -69,6 +69,9 @@ export interface InvoiceDocument {
   totals: DocumentTotal[];
   /** Реквизиты для оплаты — печатаются отдельным блоком под итогом. */
   payTo: string[];
+  /** «Получено · К оплате» — под историей оплат, когда по документу уже
+   *  что-то получено (в том числе деньгами записи мимо инвойса). Пусто —
+   *  ничего не получено или это кредит-нота. */
   settlement: { label: string; value: string }[];
   payments: DocumentPayment[];
   notes: string;
