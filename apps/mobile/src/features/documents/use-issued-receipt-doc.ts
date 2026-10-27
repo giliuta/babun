@@ -44,6 +44,9 @@ export function useIssuedReceiptDoc(receipt: Receipt | null): {
     ((!!invoiceId && invoiceQuery.isLoading) ||
       (!invoiceId && !!receipt.appointment_id && appointmentQuery.isLoading));
 
+  // Как у черновика: язык инвойса, без инвойса — английский.
+  const paperLanguage = invoiceQuery.data?.language;
+  const language: InvoiceLanguage = isUiLocale(paperLanguage) ? paperLanguage : "en";
   let lineItems: ReceiptLineItemsInput | undefined;
   if (receipt.lines && receipt.lines.length > 0) {
     lineItems = { lines: receipt.lines };
@@ -53,12 +56,9 @@ export function useIssuedReceiptDoc(receipt: Receipt | null): {
     }
   } else if (appointment) {
     if (receiptCoversFullAmount(receipt.amount, appointment.total_amount)) {
-      lineItems = receiptLinesFromAppointment(appointment);
+      lineItems = receiptLinesFromAppointment(appointment, language);
     }
   }
-  // Как у черновика: язык инвойса, без инвойса — английский.
-  const paperLanguage = invoiceQuery.data?.language;
-  const language: InvoiceLanguage = isUiLocale(paperLanguage) ? paperLanguage : "en";
   const invoiceNumber = invoiceQuery.data?.number ?? null;
   return {
     doc: buildReceiptDocument(receipt, lineItems, language, invoiceNumber),

@@ -39,6 +39,10 @@ export interface InvoiceDictionary {
   price: string;
   amount: string;
   untitled: string;
+  /** Название строки, когда расписывать нечего (запись без услуг, режим
+   *  «одной строкой»). На языке бумаги: русское «Услуги» в английском счёте
+   *  заказчик прочесть не сможет. */
+  servicesLine: string;
   subtotal: string;
   vatInclusive: string;
   vatExclusive: string;
@@ -143,6 +147,7 @@ const RU: InvoiceDictionary = {
   price: "Цена",
   amount: "Сумма",
   untitled: "Без названия",
+  servicesLine: "Услуги",
   subtotal: "Сумма",
   // VAT, А НЕ «НДС»: слово меняется ВЕЗДЕ, где его читает человек: бумага, шторка
   // «Итого», форма операции. Один документ, говорящий на двух языках про один
@@ -224,6 +229,7 @@ const EN: InvoiceDictionary = {
   price: "Price",
   amount: "Amount",
   untitled: "Untitled",
+  servicesLine: "Services",
   subtotal: "Subtotal",
   vatInclusive: "incl. VAT",
   vatExclusive: "VAT",
