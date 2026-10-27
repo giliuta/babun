@@ -1,9 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Constants from "expo-constants";
+import * as Updates from "expo-updates";
+import { Platform } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { useCurrentRole } from "@/session/tenant";
 import { CHAPTER_ORDER, type ChapterId } from "./chapter-order";
+import { onboardingServerReady } from "./onboarding-gate";
 
 // ПРОГРЕСС ОБУЧЕНИЯ — В БАЗЕ (`onboarding_progress`), а не на телефоне: на
 // втором устройстве пройденное не начинается заново. `null` — обучения у
@@ -21,13 +25,18 @@ export {
 const onboardingKey = (tenantId: string | null, userId: string | null) =>
   ["onboarding", tenantId, userId] as const;
 
-// СЕРВЕР ОБУЧЕНИЯ ЕЩЁ НЕ ВКЛЮЧЁН. Функции `my_onboarding` и `onboarding_done`
-// приходят миграцией `20261018100000_signup_without_calendar`, а её накат меняет
-// и регистрацию — он идёт отдельным решением. До него запрос не уходит вовсе:
-// иначе каждый запуск у владельца — три ответа 404 (запрос и два повтора), а
-// обучение всё равно молчит (`done` пуст — разделы открыты). Включается этим
-// флагом в том же коммите, что и накат.
-export const ONBOARDING_SERVER_READY = false;
+// ОБУЧЕНИЕ ХОДИТ НА СЕРВЕР ТОЛЬКО В СБОРКЕ 1.0.4 И НОВЕЕ (`onboarding-gate.ts`).
+// Функции `my_onboarding` и `onboarding_done` приходят миграцией
+// `20261018100000_signup_without_calendar`, её накатывают к отправке 1.0.4 на
+// проверку. В 1.0.3 запрос не уходит вовсе, даже с кодом по воздуху: иначе
+// регистрация менялась бы мимо проверки Apple, а до наката каждый запуск давал
+// бы три ответа 404.
+export const ONBOARDING_SERVER_READY = onboardingServerReady({
+  platform: Platform.OS,
+  dev: __DEV__,
+  runtimeVersion: Updates.runtimeVersion,
+  configVersion: Constants.expoConfig?.version,
+});
 
 export function useOnboardingDone() {
   const tenantId = useTenantId();
