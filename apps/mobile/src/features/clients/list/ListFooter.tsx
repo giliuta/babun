@@ -75,7 +75,10 @@ export function ListFooter({ list }: { list: ClientsList }) {
               тариф». Партнёр без своего тарифа видит общий список, но своего
               клиента не заведёт — сервер отбил бы его на сохранении. */}
           <TourTarget id="clients.create" shape="control">
-          <TariffLocked locked={!clientsInPlan}>
+          {/* Под чипом команды работодателя клиент заводится в ЕГО базу и
+              считается по ЕГО тарифу (квоту проверяет запись) — свой тариф
+              партнёра кнопку там не запирает. */}
+          <TariffLocked locked={!chipGuest && !clientsInPlan}>
             <GradientButton
               label={typed ? `Создать «${typed}»` : "Создать клиента"}
               onPress={() => {
