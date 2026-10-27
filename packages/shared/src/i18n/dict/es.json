@@ -2094,13 +2094,9 @@
  "Название компании": "Nombre de la empresa",
  "Название меняет владелец аккаунта": "El nombre lo cambia el propietario de la cuenta",
  "Название метки": "Nombre de la etiqueta",
- "Название метки": "Nombre de la etiqueta",
  "Название позиции слишком длинное": "El nombre de la línea es demasiado largo",
  "Название своей услуги": "Nombre del servicio propio",
  "Название счёта": "Nombre de la cuenta",
- "Название тега": "Nombre del distintivo",
- "Название типа": "Nombre del tipo",
- "Название типа события": "Nombre del tipo de evento",
  "Название тега": "Nombre del distintivo",
  "Название типа": "Nombre del tipo",
  "Название типа события": "Nombre del tipo de evento",
@@ -5204,5 +5200,7 @@
  "＋ Перерыв после услуги": "＋ Descanso tras el servicio",
  "＋ По дням недели": "＋ Por días de la semana",
  "Этот номер уже у клиента «{0}»": "Este número ya pertenece al cliente «{0}»",
- "Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда": "El cliente de esta fila está en «Clientes eliminados»; restáurelo desde allí"
+ "Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда": "El cliente de esta fila está en «Clientes eliminados»; restáurelo desde allí",
+ "CSV не выгружен": "CSV no exportado",
+ "Клиенты не удалены. Проверьте соединение и попробуйте ещё раз.": "Los clientes no se eliminaron. Compruebe la conexión e inténtelo de nuevo."
 }

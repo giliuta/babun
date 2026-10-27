@@ -2094,13 +2094,9 @@
  "Название компании": "Company name",
  "Название меняет владелец аккаунта": "Only the account owner changes the name",
  "Название метки": "Label name",
- "Название метки": "Label name",
  "Название позиции слишком длинное": "Line item name is too long",
  "Название своей услуги": "Custom service name",
  "Название счёта": "Account name",
- "Название тега": "Tag name",
- "Название типа": "Type name",
- "Название типа события": "Event type name",
  "Название тега": "Tag name",
  "Название типа": "Type name",
  "Название типа события": "Event type name",
@@ -5204,5 +5200,7 @@
  "＋ Перерыв после услуги": "＋ Break after service",
  "＋ По дням недели": "＋ By weekday",
  "Этот номер уже у клиента «{0}»": "This number already belongs to “{0}”",
- "Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда": "The client from this row is in “Deleted clients” — restore them from there"
+ "Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда": "The client from this row is in “Deleted clients” — restore them from there",
+ "CSV не выгружен": "CSV not exported",
+ "Клиенты не удалены. Проверьте соединение и попробуйте ещё раз.": "Clients were not deleted. Check your connection and try again."
 }
