@@ -43,6 +43,7 @@ export function paymentActions(
     billUnsaved,
     rowsByAccount,
     busy,
+    tileLock,
     amountMode,
     amountCents,
     problem,
@@ -81,7 +82,7 @@ export function paymentActions(
   };
 
   const handleTileTap = (account: PaymentAccountOption) => {
-    if (outstanding <= 0 || busy || invoicePay.busy || invoicePay.loading) return;
+    if (outstanding <= 0 || busy || tileLock.current || invoicePay.busy || invoicePay.loading) return;
     if (!bookingInPlan) {
       tariffNudge();
       return;
@@ -130,6 +131,7 @@ export function paymentActions(
     // закрывается его зачётом, чек выписывается на этот платёж.
     if (invoicePay.open && appointment) {
       const source = appointment;
+      tileLock.current = true;
       haptics.success();
       setPartText(null);
       invoicePay
@@ -147,6 +149,9 @@ export function paymentActions(
           haptics.error();
           onAppointmentChanged(source);
           toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+        })
+        .finally(() => {
+          tileLock.current = false;
         });
       return;
     }
@@ -180,6 +185,7 @@ export function paymentActions(
       closeVisit,
       paidAt: new Date().toISOString(),
     });
+    tileLock.current = true;
     haptics.success();
     onAppointmentChanged(optimistic);
     setPartText(null);
@@ -204,6 +210,9 @@ export function paymentActions(
         haptics.error();
         onAppointmentChanged(source);
         toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+      })
+      .finally(() => {
+        tileLock.current = false;
       });
   };
 

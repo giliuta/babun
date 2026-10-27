@@ -1,5 +1,5 @@
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { usePaymentRights } from "../usePaymentRights";
@@ -138,6 +138,10 @@ export function usePaymentBlock({
   }, [rows]);
   const unattributed = rows.filter((row) => !row.accountId);
   const busy = record.isPending || cancel.isPending;
+  // ЗАМОК ПЛИТКИ — СИНХРОННЫЙ. `busy` — значение последней перерисовки: два
+  // тапа в одном кадре оба видят «свободно», и каждый шлёт свой платёж со своим
+  // id. Ref встаёт на первом тапе и снимается, когда платёж ответил.
+  const tileLock = useRef(false);
   const amountMode = partText != null;
   // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.
   // Запись, уже отмеченная выполненной или начатой, платит оплатой и до
@@ -261,6 +265,7 @@ export function usePaymentBlock({
     rowsByAccount,
     unattributed,
     busy,
+    tileLock,
     amountMode,
     kindForTap,
     amountCents,
