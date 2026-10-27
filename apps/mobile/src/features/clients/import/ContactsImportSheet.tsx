@@ -201,7 +201,7 @@ export function ContactsImportSheet({
     (r) => !needle || r.name.toLowerCase().includes(needle) || r.phone.replace(/\D/g, "").includes(needle.replace(/\D/g, "") || "\u0000"),
   );
 
-  // АНАТОМИЯ — КАНОН ШТОРКИ ВЫБОРА (5.2): шапка пропом, поиск, строки
+  // АНАТОМИЯ — КАНОН ШТОРКИ ВЫБОРА (правило 5.2): шапка пропом, поиск, строки
   // `SelectRow`, одна кнопка в футере. Выбор здесь множественный, поэтому
   // кнопка есть и называет число: «Добавить N».
   return (
