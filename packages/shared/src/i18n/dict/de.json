@@ -5174,5 +5174,7 @@
  "＋ Добавить": "＋ Hinzufügen",
  "＋ Описание": "＋ Beschreibung",
  "＋ Перерыв после услуги": "＋ Pause nach der Leistung",
- "＋ По дням недели": "＋ Nach Wochentagen"
+ "＋ По дням недели": "＋ Nach Wochentagen",
+ "Этот номер уже у клиента «{0}»": "Diese Nummer gehört bereits zum Kunden „{0}“",
+ "Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда": "Der Kunde aus dieser Zeile liegt in „Gelöschte Kunden“ — stellen Sie ihn dort wieder her"
 }
