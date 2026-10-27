@@ -166,8 +166,10 @@ export function useOperationDraft({
       setTime(businessNow().hm);
       setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
+      // Снимок «чистой» формы — с той стороной, на которой она открылась:
+      // иначе пустая форма «только доходов» считалась правленой.
       initialDraftKey.current = operationDraftKey({
-        type: defaultType,
+        type: startType,
         amount: debtPayment ? String(debtPayment.amount) : "",
         categoryId: null,
         notes: debtPayment ? `Долг: ${debtPayment.counterparty}` : "",

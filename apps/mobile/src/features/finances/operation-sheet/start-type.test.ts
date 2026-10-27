@@ -39,4 +39,11 @@ describe("сторона новой операции", () => {
     const draft = readFileSync(resolve(here, "use-operation-draft.ts"), "utf8");
     assert.match(draft, /operationStartType\(\{ defaultType, debtPayment: !!debtPayment, typeWritable \}\)/);
   });
+
+  test("снимок пустой формы — с той же стороной, что и форма (F-10)", () => {
+    const draft = readFileSync(resolve(here, "use-operation-draft.ts"), "utf8");
+    assert.match(draft, /setType\(startType\);/);
+    assert.match(draft, /initialDraftKey\.current = operationDraftKey\(\{\s*type: startType,/);
+    assert.doesNotMatch(draft, /operationDraftKey\(\{\s*type: defaultType,/);
+  });
 });
