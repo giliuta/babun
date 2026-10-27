@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Star } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
@@ -18,7 +18,7 @@ import {
 import { objectTarget, primaryLine } from "@/features/clients/object-address";
 import { useAddressPartsEdit } from "@/features/clients/use-address-parts-edit";
 import { snapObjectType } from "@/features/clients/object-types";
-import { useReferenceHref } from "@/lib/reference-href";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmAction } from "@/lib/confirm";
@@ -75,8 +75,9 @@ export function ObjectEditSheet({
   const t = useThemeColors();
   const router = useRouter();
   const doorway = useSheetDoorway();
-  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
-  const typesHref = useReferenceHref().objectTypes;
+  // Шестерёнка типов — та же дверь, что у остальных строк шестерёнки
+  // клиентов: компания в адресе, нет права или команда чужая — двери нет.
+  const typesDoor = useClientSettingsDoor("objects", client.team_id ?? null);
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
 
@@ -250,19 +251,17 @@ export function ObjectEditSheet({
                 }
               : undefined
           }
-          onTypeSettings={() => {
-            // Коммит набранного остаётся: адрес, недописанный в строке, иначе
-            // теряется по дороге. А вот ЗАКРЫВАТЬ лист больше не надо —
-            // он паркуется и возвращается по «назад» (как везде, AGENTS 5.4).
-            commitAll();
-            doorway.open(() =>
-              router.push(
-                (client.team_id
-                  ? { pathname: typesHref, params: { team: client.team_id } }
-                  : typesHref) as Href,
-              ),
-            );
-          }}
+          onTypeSettings={
+            typesDoor
+              ? () => {
+                  // Коммит набранного остаётся: адрес, недописанный в строке, иначе
+                  // теряется по дороге. А вот ЗАКРЫВАТЬ лист больше не надо —
+                  // он паркуется и возвращается по «назад» (как везде, AGENTS 5.4).
+                  commitAll();
+                  doorway.open(() => router.push(typesDoor));
+                }
+              : undefined
+          }
         />
 
         {/* «УДАЛИТЬ ОБЪЕКТ» СТРОКОЙ ЗДЕСЬ НЕТ: удаление — свайп вправо, как

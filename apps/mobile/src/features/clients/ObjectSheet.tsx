@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { AccessibilityInfo, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -14,7 +14,7 @@ import {
 import { hasAddressPlace, objectPlacePatch } from "@/features/clients/object-address";
 import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { snapObjectType } from "@/features/clients/object-types";
-import { useReferenceHref } from "@/lib/reference-href";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
@@ -79,8 +79,9 @@ export function ObjectSheet({
   const t = useThemeColors();
   const router = useRouter();
   const doorway = useSheetDoorway();
-  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
-  const typesHref = useReferenceHref().objectTypes;
+  // Шестерёнка типов — та же дверь, что у остальных строк шестерёнки
+  // клиентов: компания в адресе, нет права или команда чужая — двери нет.
+  const typesDoor = useClientSettingsDoor("objects", teamId);
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
 
@@ -222,17 +223,17 @@ export function ObjectSheet({
           value={draft}
           typeOptions={typeOptions}
           onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
-          onTypeSettings={() => {
-            // ДВЕРЬ ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ ЕГО, как выбор категории:
-            // закрытый лист вернул бы «назад» на карточку, а начатый объект
-            // пришлось бы заводить заново. Лист уезжает вниз и
-            // возвращается с набранным (`use-sheet-doorway`, AGENTS 5.4).
-            doorway.open(() =>
-              router.push(
-                (teamId ? { pathname: typesHref, params: { team: teamId } } : typesHref) as Href,
-              ),
-            );
-          }}
+          onTypeSettings={
+            typesDoor
+              ? () => {
+                  // ДВЕРЬ ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ ЕГО, как выбор категории:
+                  // закрытый лист вернул бы «назад» на карточку, а начатый объект
+                  // пришлось бы заводить заново. Лист уезжает вниз и
+                  // возвращается с набранным (`use-sheet-doorway`, AGENTS 5.4).
+                  doorway.open(() => router.push(typesDoor));
+                }
+              : undefined
+          }
           onRequestFromClient={
             onRequestFromClient
               ? () => {
