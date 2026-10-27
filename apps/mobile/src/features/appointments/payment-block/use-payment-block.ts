@@ -138,9 +138,7 @@ export function usePaymentBlock({
   }, [rows]);
   const unattributed = rows.filter((row) => !row.accountId);
   const busy = record.isPending || cancel.isPending;
-  // ЗАМОК ПЛИТКИ — СИНХРОННЫЙ. `busy` — значение последней перерисовки: два
-  // тапа в одном кадре оба видят «свободно», и каждый шлёт свой платёж со своим
-  // id. Ref встаёт на первом тапе и снимается, когда платёж ответил.
+  // Замок плитки — ref, а не `busy` из рендера (`tile-lock.ts`).
   const tileLock = useRef(false);
   const amountMode = partText != null;
   // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.

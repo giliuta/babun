@@ -15,6 +15,7 @@ import {
 import { optimisticCancelPayment, optimisticRecordPayment } from "../payment-optimistic";
 import type { PaymentBlockProps } from "../PaymentBlock";
 import type { PaymentBlockState } from "./use-payment-block";
+import { withTileLock } from "./tile-lock";
 
 /** Права на оплату записи у этого человека в этом календаре нет: сервер
  *  откажет, поэтому плитки гаснут заранее и называют причину. */
@@ -131,28 +132,26 @@ export function paymentActions(
     // закрывается его зачётом, чек выписывается на этот платёж.
     if (invoicePay.open && appointment) {
       const source = appointment;
-      tileLock.current = true;
-      haptics.success();
-      setPartText(null);
-      invoicePay
-        .pay({
-          accountId: account.id,
-          accountKind: account.kind,
-          amountCents,
-          businessToday: businessNow().ymd,
-        })
-        .then((fresh) => {
-          if (fresh) onAppointmentChanged(fresh);
-          toast(`Оплата ${formatEURExact(amountCents / 100)} по ${invoicePay.number} · ${account.name}`, "success");
-        })
-        .catch((error: unknown) => {
-          haptics.error();
-          onAppointmentChanged(source);
-          toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
-        })
-        .finally(() => {
-          tileLock.current = false;
-        });
+      withTileLock(tileLock, () => {
+        haptics.success();
+        setPartText(null);
+        return invoicePay
+          .pay({
+            accountId: account.id,
+            accountKind: account.kind,
+            amountCents,
+            businessToday: businessNow().ymd,
+          })
+          .then((fresh) => {
+            if (fresh) onAppointmentChanged(fresh);
+            toast(`Оплата ${formatEURExact(amountCents / 100)} по ${invoicePay.number} · ${account.name}`, "success");
+          })
+          .catch((error: unknown) => {
+            haptics.error();
+            onAppointmentChanged(source);
+            toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+          });
+      });
       return;
     }
     const amount = amountCents / 100;
@@ -185,35 +184,33 @@ export function paymentActions(
       closeVisit,
       paidAt: new Date().toISOString(),
     });
-    tileLock.current = true;
-    haptics.success();
-    onAppointmentChanged(optimistic);
-    setPartText(null);
-    toast(
-      recordedToast({ kind, amount, already, accountName: account.name }),
-      "success",
-      { label: "Снять", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
-    );
-    // Ответ — обещанием, как у снятия выше: отказ слышен и после ухода.
-    record
-      .mutateAsync({
-        appointmentId: source.id,
-        accountId: account.id,
-        amount,
-        requestId,
-        kind,
-        closeVisit,
-        optimistic,
-      })
-      .then((fresh) => onAppointmentChanged(fresh))
-      .catch((error: unknown) => {
-        haptics.error();
-        onAppointmentChanged(source);
-        toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
-      })
-      .finally(() => {
-        tileLock.current = false;
-      });
+    withTileLock(tileLock, () => {
+      haptics.success();
+      onAppointmentChanged(optimistic);
+      setPartText(null);
+      toast(
+        recordedToast({ kind, amount, already, accountName: account.name }),
+        "success",
+        { label: "Снять", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
+      );
+      // Ответ — обещанием, как у снятия выше: отказ слышен и после ухода.
+      return record
+        .mutateAsync({
+          appointmentId: source.id,
+          accountId: account.id,
+          amount,
+          requestId,
+          kind,
+          closeVisit,
+          optimistic,
+        })
+        .then((fresh) => onAppointmentChanged(fresh))
+        .catch((error: unknown) => {
+          haptics.error();
+          onAppointmentChanged(source);
+          toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+        });
+    });
   };
 
   const handlePaidTileTap = async (
