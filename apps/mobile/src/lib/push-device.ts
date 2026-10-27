@@ -126,3 +126,12 @@ export async function forgetOtherDevices(): Promise<void> {
     ),
   );
 }
+
+/** Открыт календарь — новое за день прочитано: значок гаснет и здесь, и на
+ *  сервере (иначе следующий пуш вернул бы вчерашнюю цифру плюс один). */
+export async function clearPushBadge(): Promise<void> {
+  const Notifications = getNotificationsModule();
+  if (Platform.OS === "web" || !Notifications) return;
+  await Notifications.setBadgeCountAsync(0).catch(() => false);
+  await withTimeout(Promise.resolve(supabase.rpc("reset_push_badge")));
+}

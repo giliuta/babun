@@ -6697,6 +6697,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reset_push_badge: { Args: never; Returns: undefined }
       resolve_appointment_finance_account: {
         Args: {
           p_payment_method: string

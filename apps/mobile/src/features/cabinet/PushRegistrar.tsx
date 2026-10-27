@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
-import { registerThisDevice } from "@/lib/push-device";
+import { usePathname } from "expo-router";
+import { clearPushBadge, registerThisDevice } from "@/lib/push-device";
 import { registerPushCategories } from "@/features/calendar/push-actions";
 import { useSession } from "@/providers/SessionProvider";
 
@@ -31,6 +32,18 @@ export function PushRegistrar() {
     });
     return () => sub.remove();
   }, [me]);
+
+  // ЦИФРА НА ЗНАЧКЕ — новое за день; открыл календарь — прочитано.
+  const pathname = usePathname();
+  const onCalendar = pathname === "/";
+  useEffect(() => {
+    if (!me || !onCalendar) return;
+    void clearPushBadge();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void clearPushBadge();
+    });
+    return () => sub.remove();
+  }, [me, onCalendar]);
 
   return null;
 }

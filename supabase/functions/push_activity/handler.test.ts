@@ -21,6 +21,7 @@ const APPT = "11111111-2222-4333-8444-555555555555";
 function fake(overrides: Partial<{ log: LogRow; appointment: AppointmentRow | null; devices: DeviceRow[]; tickets: (m: ExpoMessage[]) => ExpoTicket[] }> = {}) {
   const sent: ExpoMessage[][] = [];
   const dropped: string[][] = [];
+  const badgeCalls: [string, number][] = [];
   const log: LogRow = overrides.log ?? {
     id: 7,
     tenant_id: TENANT,
@@ -56,9 +57,13 @@ function fake(overrides: Partial<{ log: LogRow; appointment: AppointmentRow | nu
     dropTokens: async (tokens) => {
       dropped.push(tokens);
     },
+    bumpBadge: async (userId, by) => {
+      badgeCalls.push([userId, by]);
+      return 4;
+    },
     now: () => new Date("2026-10-27T10:00:00Z"),
   };
-  return { deps, sent, dropped };
+  return { deps, sent, dropped, badgeCalls };
 }
 
 const target = (user_id: string, kind: string, show_client = true) => ({ user_id, kind, team_id: "team-1", show_client });
@@ -213,5 +218,22 @@ describe("push_activity: сборка пушей", () => {
     assert.equal(ru?.body, "Сегодня 3 визита, первый в 9:00, Limassol");
     assert.deepEqual(ru?.data, { type: "calendar-day", date: "2026-10-30", tenantId: TENANT });
     assert.equal(parseInput({ digest: [] }), null);
+  });
+
+  test("значок: одна прибавка на человека за событие, итог — на все его телефоны", async () => {
+    const { deps, sent, badgeCalls } = fake();
+    await handlePushActivity({ log_id: 7, targets: [target(MASTER, "new")] }, deps);
+    assert.deepEqual(badgeCalls, [[MASTER, 1]]);
+    assert.deepEqual(sent[0].map((m) => m.badge), [4, 4]);
+  });
+
+  test("значок: сводка цифру не трогает", async () => {
+    const { deps, sent, badgeCalls } = fake();
+    await handlePushActivity(
+      { digest: [{ user_id: MASTER, tenant_id: TENANT, slot: "evening", date: "2026-10-30", count: 1, first_time: null, first_city: null }] },
+      deps,
+    );
+    assert.deepEqual(badgeCalls, []);
+    assert.equal(sent[0][0].badge, undefined);
   });
 });

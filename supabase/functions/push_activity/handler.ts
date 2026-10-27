@@ -44,6 +44,8 @@ export interface ExpoMessage {
   sound: "default";
   priority: "high";
   data: Record<string, string>;
+  /** Цифра на значке: новое за день (`push_badge_bump`). */
+  badge?: number;
   /** Кнопки уведомления; приложение заводит категории при входе
    *  (`apps/mobile/src/features/calendar/push-action-ids.ts`). */
   categoryId?: string;
@@ -70,6 +72,8 @@ export interface PushDeps {
   loadDevices(userIds: string[]): Promise<DeviceRow[]>;
   sendExpo(messages: ExpoMessage[]): Promise<ExpoTicket[]>;
   dropTokens(tokens: string[]): Promise<void>;
+  /** +N к счёту дня человека; итог или `null`, если счёта нет (не накачено). */
+  bumpBadge(userId: string, by: number, day: string): Promise<number | null>;
   now(): Date;
 }
 
@@ -215,6 +219,13 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
     deps.loadDevices(userIds),
   ]);
 
+  // Цифра на значке — одна прибавка на человека за событие, на все его телефоны.
+  const badgeDay = localToday(deps.now(), null);
+  const badges = new Map<string, number | null>();
+  for (const userId of userIds) {
+    if (devices.some((d) => d.user_id === userId)) badges.set(userId, await deps.bumpBadge(userId, 1, badgeDay));
+  }
+
   const messages: ExpoMessage[] = [];
   for (const target of input.targets) {
     // Тап открывает запись. Удалённую или ушедшую в чужой календарь открыть
@@ -271,6 +282,7 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
         priority: "high",
         data,
         ...(categoryId ? { categoryId } : {}),
+        ...(typeof badges.get(target.user_id) === "number" ? { badge: badges.get(target.user_id) as number } : {}),
       });
     }
   }
