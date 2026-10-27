@@ -27,8 +27,3 @@ export const LEGAL_OPERATOR: LegalOperator = {
 
 /** Почта для вопросов о данных и удаления аккаунта — та же, что в «Помощи». */
 export const legalEmail = (): string => SUPPORT_CONTACTS.email.trim();
-
-/** Заполнено ли всё, без чего документы выкладывать нельзя. */
-export function isLegalReady(operator: LegalOperator = LEGAL_OPERATOR, email = legalEmail()): boolean {
-  return operator.name.trim() !== "" && operator.address.trim() !== "" && email !== "";
-}

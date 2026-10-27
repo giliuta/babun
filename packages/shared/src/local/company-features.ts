@@ -91,21 +91,7 @@ export function isFeatureOn(
   return !disabled || !disabled.includes(key);
 }
 
-/** Список после переключения одной функции: без повторов, в порядке
- *  страницы — чтобы одинаковое состояние всегда писалось одинаково. */
-export function withFeature(
-  disabled: readonly string[] | undefined,
-  key: CompanyFeatureKey,
-  on: boolean,
-): CompanyFeatureKey[] {
-  const current = new Set(sanitizeDisabledFeatures(disabled ?? []));
-  if (on) current.delete(key);
-  else current.add(key);
-  return COMPANY_FEATURES.map((feature) => feature.key).filter((k) => current.has(k));
-}
-
 /** Функция, которая включает блок формы записи (`object` → `objects`). */
 export function featureOfBookingBlock(blockId: string): CompanyFeatureKey | null {
   return COMPANY_FEATURES.find((feature) => feature.bookingBlock === blockId)?.key ?? null;
 }
-

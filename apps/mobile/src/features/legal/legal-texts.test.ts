@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 import { helpFaq, LEGAL_LINKS } from "../cabinet/help";
 import { fillLegal, LEGAL_TEXTS, LEGAL_TEXTS_APP, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
-import { isLegalReady } from "./operator";
 
 // ДОКУМЕНТЫ ДЛЯ МАГАЗИНОВ. Ссылки из карточек App Store и Google Play
 // обязаны открываться без входа и называть, кто обрабатывает данные; русский
@@ -97,12 +96,6 @@ test("язык: явный параметр, иначе русский толь�
   assert.equal(legalLang(undefined, "ru"), "ru");
   assert.equal(legalLang(undefined, "el"), "en");
   assert.equal(legalLang("fr", "uk"), "en");
-});
-
-test("готовность: без имени, адреса и почты документы не выкладывают", () => {
-  assert.equal(isLegalReady({ name: "", address: "x" }, "a@b.c"), false);
-  assert.equal(isLegalReady({ name: "x", address: "x" }, ""), false);
-  assert.equal(isLegalReady({ name: "x", address: "x" }, "a@b.c"), true);
 });
 
 test("адреса без входа: файл маршрута и строка в корневом стеке", () => {

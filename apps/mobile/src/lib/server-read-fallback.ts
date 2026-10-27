@@ -39,19 +39,6 @@ export function isMissingCalendarSettingsContract(
   );
 }
 
-/** SMS templates moved from the legacy tenant blob behind two narrow RPCs.
- * During a rolling deploy the read cache may bridge an actually missing RPC,
- * but permission, validation and database failures must remain visible. */
-export function isMissingSmsTemplatesContract(
-  error: ServerReadError,
-): boolean {
-  if (error.code === "42883" || error.code === "PGRST202") return true;
-  const text = `${error.message ?? ""} ${error.details ?? ""}`;
-  return /could not find the function.*(?:read|write)_sms_templates_safe|function .*?(?:read|write)_sms_templates_safe.*does not exist/i.test(
-    text,
-  );
-}
-
 function isMissingTableContract(
   error: ServerReadError,
   tableName: string,

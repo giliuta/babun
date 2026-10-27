@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
-import { CHIP_GAP, dropIndex, shiftOf } from "./chip-drag-math";
+import { dropIndex } from "./chip-drag-math";
 
 // ПОРЯДОК КАЛЕНДАРЕЙ — ЗАЖАТЬ И ПЕРЕТАЩИТЬ В ЛЕНТЕ ШЕСТЕРЁНКИ.
 
@@ -30,15 +30,6 @@ describe("место чипа под пальцем", () => {
     assert.equal(dropIndex(boxes, 2, 20 + 40 - 1), 0);
   });
 
-  test("соседи расступаются на ширину тянущегося чипа", () => {
-    // Тянем «Личный» (0) на место 2: «Y&D» и «Команда 2» уходят влево.
-    assert.equal(shiftOf(1, 0, 2, 80), -(80 + CHIP_GAP));
-    assert.equal(shiftOf(2, 0, 2, 80), -(80 + CHIP_GAP));
-    // Тянем «Команда 2» (2) на место 0: остальные — вправо.
-    assert.equal(shiftOf(0, 2, 0, 100), 100 + CHIP_GAP);
-    assert.equal(shiftOf(1, 2, 0, 100), 100 + CHIP_GAP);
-    assert.equal(shiftOf(1, -1, -1, 0), 0);
-  });
 });
 
 test("шестерёнка календаря: лента перетаскивается, отдельной страницы порядка нет", () => {

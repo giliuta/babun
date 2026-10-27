@@ -4,7 +4,6 @@ import type { ClientRequisites } from "./clients";
 import {
   LEGACY_REQUISITES_ID,
   clientRequisitesOf,
-  invoiceNeedsRequisitesChoice,
   invoiceRequisites,
   NO_CLIENT_REQUISITES,
   makeDefaultRequisites,
@@ -159,12 +158,6 @@ describe("писатель: добавить, править, удалить, с
 
 describe("выбор набора в инвойсе", () => {
   const all = [set("main", { is_default: true }), set("second")];
-
-  test("строка выбора — только когда наборов больше одного", () => {
-    assert.equal(invoiceNeedsRequisitesChoice([]), false);
-    assert.equal(invoiceNeedsRequisitesChoice([all[0]]), false);
-    assert.equal(invoiceNeedsRequisitesChoice(all), true);
-  });
 
   test("выбран неосновной — его id; основной или пропавший — null", () => {
     assert.equal(resolveInvoiceRequisitesId(all, "second"), "second");
