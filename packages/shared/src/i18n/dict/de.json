@@ -5204,5 +5204,10 @@
  "＋ Добавить": "＋ Hinzufügen",
  "＋ Описание": "＋ Beschreibung",
  "＋ Перерыв после услуги": "＋ Pause nach der Leistung",
- "＋ По дням недели": "＋ Nach Wochentagen"
+ "＋ По дням недели": "＋ Nach Wochentagen",
+ "Вернуть клиента {0}": "Kunden {0} wiederherstellen",
+ "Удалить клиента {0} насовсем": "Kunden {0} endgültig löschen",
+ "Вернуть клиента": "Kunden wiederherstellen",
+ "Не удалось вернуть клиента": "Kunde konnte nicht wiederhergestellt werden",
+ "Удалить клиента насовсем может только владелец.": "Nur der Inhaber kann einen Kunden endgültig löschen."
 }

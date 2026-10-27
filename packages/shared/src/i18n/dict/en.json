@@ -5204,5 +5204,10 @@
  "＋ Добавить": "＋ Add",
  "＋ Описание": "＋ Description",
  "＋ Перерыв после услуги": "＋ Break after service",
- "＋ По дням недели": "＋ By weekday"
+ "＋ По дням недели": "＋ By weekday",
+ "Вернуть клиента {0}": "Restore client {0}",
+ "Удалить клиента {0} насовсем": "Delete client {0} permanently",
+ "Вернуть клиента": "Restore client",
+ "Не удалось вернуть клиента": "Couldn't restore the client",
+ "Удалить клиента насовсем может только владелец.": "Only the owner can delete a client permanently."
 }
