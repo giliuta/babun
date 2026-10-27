@@ -64,7 +64,7 @@ describe("пуш о делах команды", () => {
   });
 
   test("миграция: устройства пишет только функция, помощники закрыты от клиента", () => {
-    const sql = read("../../../../supabase/migrations/20261027141700_mobile_push.sql");
+    const sql = read("../../../../supabase/migrations/20261027162300_mobile_push.sql");
     assert.match(sql, /grant select, delete on public\.push_devices to authenticated;/);
     assert.match(sql, /revoke all on function public\.push_activity_targets\(public\.change_log\) from public, anon, authenticated;/);
     assert.match(sql, /revoke all on function public\.register_push_device\(text, text, text\) from public, anon;/);

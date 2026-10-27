@@ -165,7 +165,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "sms_set_team_template_enabled",
   "start_trial",
   "undo_appointment_payment",
-  // Телефон в получателях пушей и выход из них (миграция 20261027141700).
+  // Телефон в получателях пушей и выход из них (миграция 20261027162300).
   "unregister_push_device",
   "update_client_with_tags",
   "update_invoice_draft",

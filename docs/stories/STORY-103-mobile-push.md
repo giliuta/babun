@@ -12,7 +12,7 @@
 
 | Слой | Где | Что |
 |---|---|---|
-| База | `supabase/migrations/20261027141700_mobile_push.sql` | `push_devices` (Expo push token, язык телефона; RLS — свои строки, писать только функцией), `register_push_device` / `unregister_push_device`, `push_activity_targets` (кому сказать о строке журнала), триггер `zz_push_activity` на `change_log` → `net.http_post` в функцию, выключатель `app_settings.mobile_push_enabled` (стартует `off`) |
+| База | `supabase/migrations/20261027162300_mobile_push.sql` | `push_devices` (Expo push token, язык телефона; RLS — свои строки, писать только функцией), `register_push_device` / `unregister_push_device`, `push_activity_targets` (кому сказать о строке журнала), триггер `zz_push_activity` на `change_log` → `net.http_post` в функцию, выключатель `app_settings.mobile_push_enabled` (стартует `off`) |
 | Сервер | `supabase/functions/push_activity/` | текст на языке телефона (7 языков), отправка в Expo Push пачками по 100, забывает `DeviceNotRegistered` |
 | Телефон | `src/lib/push-device.ts`, `features/cabinet/PushRegistrar.tsx` | токен при входе и раз в 6 ч; системный вопрос о разрешении — один раз при входе; канал Android «Babun» с баннером |
 | Выход | `lib/auth-clear.ts`, `cabinet/account/DevicesSection.tsx` | телефон уходит из получателей ДО выхода; «Выйти на других устройствах» снимает и их |
