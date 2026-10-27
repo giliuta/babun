@@ -50,7 +50,6 @@ export function ClientCardPage({
     prefillName,
     prefillPhone,
     openOnArrive,
-    insets,
     tags,
     appointments,
     menuOpen,
@@ -127,14 +126,9 @@ export function ClientCardPage({
         onMenuExited={split.onMenuExited}
       />
 
-      {/* ОТСТУП НА ВЫСОТУ ХРОМА. Без него нижние поля страницы уходили под
-          клавиатуру: `padding` меряет расстояние от низа ОКНА, а карточка
-          начинается ниже — на безопасной зоне сверху и своей шапке. Ровно эта
-          ошибка уже ловилась на записи. */}
-      <KeyboardLift
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={insets.top}
-      >
+      {/* Подъём над клавиатурой: нижние поля и «Создать клиента» не уходят
+          под клавиатуру. Высоту выреза и шапки `KeyboardLift` учитывает сам. */}
+      <KeyboardLift style={{ flex: 1 }}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}

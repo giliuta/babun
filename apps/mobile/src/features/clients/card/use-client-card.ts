@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
@@ -26,7 +25,6 @@ import { useCardSms } from "./use-card-sms";
  *  the order the screen always called them. */
 export function useClientCard() {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
   const route = useCardRoute();
   const {
     id,
@@ -181,7 +179,6 @@ export function useClientCard() {
     ...route,
     ...queries,
     t,
-    insets,
     menuOpen,
     setMenuOpen,
     remindOpen,

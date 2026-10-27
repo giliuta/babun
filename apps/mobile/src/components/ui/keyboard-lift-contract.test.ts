@@ -54,3 +54,10 @@ test("лист докручивает тело к полю в фокусе по�
   assert.match(hook, /getInnerViewRef\?\.\(\)/);
   assert.doesNotMatch(hook, /getInnerViewNode\(\)/);
 });
+
+test("сдвиг выреза никто не передаёт вручную — подъём меряет его сам", () => {
+  const offenders = [...walk(resolve(app, "src")), ...walk(resolve(app, "app"))]
+    .filter((f) => /keyboardVerticalOffset/.test(read(f)) && !f.endsWith("KeyboardLift.tsx"))
+    .map((f) => relative(app, f));
+  assert.deepEqual(offenders, []);
+});

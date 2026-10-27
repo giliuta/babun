@@ -46,7 +46,6 @@ function BookForm() {
   const form = useBookForm();
   const {
     t,
-    insets,
     scrollRef,
     isEdit,
     editing,
@@ -101,17 +100,9 @@ function BookForm() {
       <PageWash color={identityC} strength={WASH} />
       <BookHeader form={form} />
 
-      {/* KAV МЕРЯЕТ СЕБЯ ОТНОСИТЕЛЬНО РОДИТЕЛЯ, А КЛАВИАТУРУ — В ОКНЕ.
-          `Screen` кладёт верхний safe-area отступ во внешний View, и `layout.y`
-          у KAV начинается ПОД ним: перекрытие с клавиатурой недооценивалось
-          ровно на высоту «острова» (59pt), и кнопка «Создать запись» уезжала
-          под клавиатуру наполовину (заметно в симуляторе при отключённой
-          аппаратной клавиатуре). `keyboardVerticalOffset` и
-          есть это расстояние от верха окна до View. */}
-      <KeyboardLift
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={insets.top}
-      >
+      {/* Подъём над клавиатурой: «Создать запись» и нижние поля не уходят
+          под клавиатуру. Высоту выреза `KeyboardLift` учитывает сам. */}
+      <KeyboardLift style={{ flex: 1 }}>
         <ScrollView
           // СКРОЛЛ УПИРАЕТСЯ В КРАЙ БЛОКОВ, А НЕ ТЯНЕТСЯ: фиксируется на конце
           // блока, а не поднимается сколько угодно. Резинка iOS у формы
