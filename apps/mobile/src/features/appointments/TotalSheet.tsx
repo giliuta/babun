@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { parseMoneyInput } from "@/features/appointments/helpers";
 import { ColumnHeader, ServiceLine } from "./total-sheet/ServiceLine";
+import { clampedDiscountText } from "./total-sheet/line-math";
 
 // ДЕНЬГИ ЗАПИСИ ОДНИМ ЛИСТОМ: «Итого» открывает снизу вверх шторку, где
 // прописаны каждая услуга, их количество, правка с «Применить» и скидки (в евро
@@ -109,11 +111,24 @@ export function TotalSheet({
     ? applyTxVat(total, vatControl.mode, vatControl.rate)
     : null;
   const shownTotal = money ? money.gross : total;
+  // Закрытие листа — и «Применить», и затемнение — применяет то, что было
+  // показано: скидка больше суммы работ уходит в черновик обрезанной.
+  const apply = () => {
+    if (discount) {
+      const next = clampedDiscountText(
+        parseMoneyInput(discount.value),
+        discount.kind === "percent",
+        lines.reduce((sum, line) => sum + line.total, 0),
+      );
+      if (next !== null) discount.onValueChange(next);
+    }
+    onClose();
+  };
 
   return (
     <BottomSheet
       visible={visible}
-      onClose={onClose}
+      onClose={apply}
       title="Итого"
       headerAction={
         onAddLine ? (
@@ -140,7 +155,7 @@ export function TotalSheet({
       maxHeightRatio={0.8}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
-          <Button label="Применить" onPress={onClose} />
+          <Button label="Применить" onPress={apply} />
         </View>
       }
     >
