@@ -11,12 +11,14 @@ import { useSession } from "@/providers/SessionProvider";
 import type { ChangeLogRow } from "@/lib/change-log";
 import { activityNotification, shouldNotify } from "@/lib/notification-prefs";
 import { readTeamNotifyPrefs } from "@/lib/notification-prefs-cache";
+import { serverPushLive } from "@/lib/push-device";
 
 // ЧТО ПРОИСХОДИТ В КОМАНДЕ — УВЕДОМЛЕНИЯ ИЗ ИСТОРИИ ИЗМЕНЕНИЙ (настраиваются на каждую команду).
 //
-// Сервер пушей на iPhone пока не шлёт (нужен ключ Apple), поэтому, пока
-// приложение открыто, телефон сам раз в полминуты — и при каждом возвращении
-// в приложение — читает новые строки журнала `change_log` и по настройкам
+// Пока сервер не шлёт пуши (`push_activity` выключен до ключей Apple и
+// Google — `serverPushLive`), телефон, пока приложение открыто, сам раз в
+// полминуты — и при каждом возвращении в приложение — читает новые строки
+// журнала `change_log` и по настройкам
 // команды показывает уведомление: «Запись создана · Y&D / Анастасия · 4 окт,
 // 14:00 — Иван». Свои действия не присылаются. Больше трёх за раз — одно
 // сводное. Старше 12 часов — не присылаются: после долгого перерыва это уже
@@ -59,7 +61,8 @@ export function TeamActivityNotifier() {
     let cancelled = false;
 
     const tick = async () => {
-      if (busy || cancelled || AppState.currentState !== "active") return;
+      // Сервер шлёт пуши — та же новость пришла бы второй раз.
+      if (busy || cancelled || AppState.currentState !== "active" || serverPushLive()) return;
       busy = true;
       try {
         const storage = getStorage();

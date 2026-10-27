@@ -6,6 +6,7 @@ import { Divider } from "@/components/ui/Divider";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { signOutScopeAndWipe, unsentChangesNow } from "@/lib/auth-clear";
+import { forgetOtherDevices } from "@/lib/push-device";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -24,6 +25,8 @@ export function DevicesSection() {
     try {
       const { error } = await supabase.auth.signOut({ scope: "others" });
       if (error) throw new Error(error.message);
+      // Их сессии отозваны — пуши с клиентами туда тоже больше не идут.
+      await forgetOtherDevices();
       notify("Готово", "Сессии на других устройствах завершены.");
     } catch (e) {
       const words = writeErrorWords(e, {

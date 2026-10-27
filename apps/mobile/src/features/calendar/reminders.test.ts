@@ -19,6 +19,29 @@ describe("parseAppointmentNotificationTarget", () => {
     );
   });
 
+  test("пуш с сервера несёт аккаунт записи; битый аккаунт отвергается", () => {
+    const tenantId = "2dfef93d-cf0e-4885-ba8b-0f9fcebcefd5";
+    assert.deepEqual(
+      parseAppointmentNotificationTarget({
+        type: "calendar-appointment",
+        appointmentId: "appointment-1",
+        date: "2026-07-20",
+        teamId: "team-1",
+        tenantId,
+      }),
+      { appointmentId: "appointment-1", date: "2026-07-20", teamId: "team-1", tenantId },
+    );
+    assert.equal(
+      parseAppointmentNotificationTarget({
+        type: "calendar-appointment",
+        appointmentId: "appointment-1",
+        date: "2026-07-20",
+        tenantId: "../../etc",
+      }),
+      null,
+    );
+  });
+
   test("rejects unrelated and malformed notification data", () => {
     assert.equal(
       parseAppointmentNotificationTarget({

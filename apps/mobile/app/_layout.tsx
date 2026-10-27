@@ -28,6 +28,8 @@ import {
   type ClientNotificationTarget,
 } from "@/features/clients/reminders";
 import { reconcileBabunNotifications } from "@/lib/notifications";
+import { getActiveTenantId } from "@/lib/active-tenant";
+import { switchTenant } from "@/session/switch-tenant";
 
 void SplashScreen.preventAutoHideAsync();
 // Свежее обновление по воздуху — с первого запуска, пока видна заставка.
@@ -79,6 +81,14 @@ function RootNavigator() {
       // dashboard then resolves the id through its role-scoped query and
       // shows a safe "not available" state for foreign/deleted records.
       if (!session || !active) return;
+      // Пуш с сервера о записи из другого аккаунта человека: календарь
+      // ищет запись в активном аккаунте, поэтому сперва переход в её.
+      if (target.tenantId && target.tenantId !== getActiveTenantId()) {
+        void switchTenant(target.tenantId)
+          .then(() => openAppointment({ ...target, tenantId: undefined }))
+          .catch(() => {});
+        return;
+      }
       router.push({
         pathname: "/",
         params: {

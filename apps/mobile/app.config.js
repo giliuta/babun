@@ -22,6 +22,17 @@ const GOOGLE_IOS_SCHEME = GOOGLE_OAUTH.ios
 // домен не берёт.
 const APP_LINK_PATHS = ["/invite", "/reset-password", "/login"];
 
+// ПУШ НА ANDROID ИДЁТ ЧЕРЕЗ FCM: сборке нужен файл проекта Firebase
+// `google-services.json`. На EAS он приходит переменной-файлом
+// `GOOGLE_SERVICES_JSON`, локально — файлом рядом с этим. Нет файла — сборка
+// идёт как раньше, а пуши о делах команды на Android не приходят (опрос
+// журнала при открытом приложении остаётся).
+const GOOGLE_SERVICES_FILE =
+  process.env.GOOGLE_SERVICES_JSON ??
+  (require("fs").existsSync(require("path").join(__dirname, "google-services.json"))
+    ? "./google-services.json"
+    : undefined);
+
 // ТЕКСТ КАМЕРЫ — ОДИН (выпуск в App Store, 06.10). Ключ в Info.plist один
 // (NSCameraUsageDescription), а пишут его два плагина: expo-image-picker из
 // app.json и сканер ниже. Свой текст у сканера молча перетирал бы общий
@@ -79,6 +90,7 @@ module.exports = ({ config }) => ({
   // MapPicker на провайдер Google без его SDK в сборке.
   android: {
     ...config.android,
+    ...(GOOGLE_SERVICES_FILE ? { googleServicesFile: GOOGLE_SERVICES_FILE } : null),
     ...(IS_DEV
       ? null
       : {
