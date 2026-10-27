@@ -84,11 +84,12 @@ export function useTeamLabel({
   // на субботе «Лимассол» по расписанию, а запись на ту же субботу
   // показывала пустую «Метку» — два экрана говорили о разных метках одного
   // дня, ровно то, ради чего правило и переехало в `features/calendar`.
-  const todayYmd = useMemo(() => {
+  // Минуты «сейчас» — для долга по сегодняшней записи: календарь красит её
+  // долгом сразу после конца, и шапка страницы обязана сказать то же.
+  const { todayYmd, nowMinutes } = useMemo(() => {
     const timeZone = team?.timezone ?? calendarSettings?.timezone;
-    return formatYMD(
-      timeZone ? getCurrentTimeInZone(timeZone) : getCurrentCyprusTime(),
-    );
+    const now = timeZone ? getCurrentTimeInZone(timeZone) : getCurrentCyprusTime();
+    return { todayYmd: formatYMD(now), nowMinutes: now.getHours() * 60 + now.getMinutes() };
   }, [team?.timezone, calendarSettings?.timezone]);
   const dayLabelResolved = useMemo(
     () =>
@@ -139,5 +140,5 @@ export function useTeamLabel({
     );
   }, [labelClash, clientId, date, toast]);
   const slotFallback = team?.default_slot_minutes ?? 30;
-  return { archivedRecord, team, todayYmd, effectiveLabel, slotFallback };
+  return { archivedRecord, team, todayYmd, nowMinutes, effectiveLabel, slotFallback };
 }

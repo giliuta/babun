@@ -71,8 +71,8 @@ describe("люди карточки — только у сохранённой �
   test("блок людей гейтится черновиком, правом и ответом сервера", () => {
     assert.match(
       people(),
-      /const showLinks =\s*!isDraft && caps\.links && !members\.unavailable && !members\.isLoading;/,
-      "блок людей перестал спрашивать право, сервер или первый ответ — «видно, но не всё» либо «пусто, пока несут»",
+      /const blockOn = !isDraft && caps\.links && !members\.unavailable;\s*const showLinks = blockOn && !members\.isLoading;/,
+      "блок людей перестал спрашивать право или сервер, либо строки встают до первого ответа — «пусто, пока несут»",
     );
     assert.match(people(), /const peopleRows = showLinks \?/);
     assert.doesNotMatch(page(), /memberOf=\{/, "строка «чей он» снова в шапке клиента");
@@ -101,7 +101,7 @@ describe("люди карточки — только у сохранённой �
     );
     assert.match(
       people(),
-      /const onAddPerson =\s*showLinks && caps\.edit && !members\.isError\s*\?\s*\(\) => askLink\(\{ title: "Кто это", role: "" \}\)\s*:\s*isDraft && caps\.edit && caps\.links\s*\?\s*onDraftAddPerson\s*:\s*undefined;/,
+      /const onAddPerson =\s*blockOn && caps\.edit && !members\.isError\s*\?\s*\(\) => askLink\(\{ title: "Кто это", role: "" \}\)\s*:\s*isDraft && caps\.edit && caps\.links\s*\?\s*onDraftAddPerson\s*:\s*undefined;/,
       "дверь людей видна без права или при упавшем перечне, предрешает роль — либо пропала из нового клиента",
     );
     // В НОВОМ КЛИЕНТЕ дверь сперва создаёт клиента гейтом футера и на карточке
