@@ -114,15 +114,22 @@ export function SmsSendSheet({
   const [composeOpen, setComposeOpen] = useState(false);
   // Текст в поле — шаблон, заполненный полями, и правки поверх него.
   const [text, setText] = useState("");
-  // Каждое открытие — с шаблонов: прошлый выбор не живёт.
+  // НЕ УШЛА — ТЕКСТ НЕ ПРОПАЛ. Листы закрываются до ответа сервера (иначе
+  // второй тап отправил бы вторую платную SMS), и на «SMS не отправлена»
+  // правленый текст исчезал. Его запоминаем, и следующее открытие SMS
+  // возвращает его в шторку текста.
+  const failed = useRef<{ picked: string; text: string } | null>(null);
+  // Каждое открытие — с шаблонов: прошлый выбор не живёт (кроме неушедшего).
   const [wasVisible, setWasVisible] = useState(false);
   if (visible !== wasVisible) {
     setWasVisible(visible);
     if (visible) {
+      const back = failed.current;
+      failed.current = null;
       setChoosingTeam(false);
-      setPicked(null);
-      setComposeOpen(false);
-      setText("");
+      setPicked(back?.picked ?? null);
+      setComposeOpen(!!back);
+      setText(back?.text ?? "");
       setPickedTeam(null);
     }
   }
@@ -156,6 +163,7 @@ export function SmsSendSheet({
     if (sendingRef.current) return;
     sendingRef.current = true;
     haptics.tap();
+    const sent = chosen ? { picked: chosen.template.id, text } : null;
     closeAll();
     send.mutate(
       {
@@ -168,7 +176,10 @@ export function SmsSendSheet({
       },
       {
         onSuccess: () => toast("SMS отправляется", "success"),
-        onError: (e) => notify("SMS не отправлена", smsErrorText(e)),
+        onError: (e) => {
+          failed.current = sent;
+          notify("SMS не отправлена", smsErrorText(e));
+        },
         onSettled: () => {
           sendingRef.current = false;
         },
@@ -268,8 +279,10 @@ export function SmsSendSheet({
               onPress={() => {
                 if (!text) return;
                 haptics.tap();
+                // Тот же шаблон ещё раз — правки поверх него не стираются
+                // (смахнул шторку текста и вернулся к ней).
+                if (template.id !== picked) setText(text);
                 setPicked(template.id);
-                setText(text);
                 setComposeOpen(true);
               }}
             />
