@@ -63,6 +63,24 @@ describe("пуш о делах команды", () => {
     assert.match(registrar, /void registerThisDevice\(\);/);
   });
 
+  test("тап сперва перечитывает записи: у мастера живого канала нет", () => {
+    const layout = read("../../app/_layout.tsx");
+    assert.match(layout, /void refreshAppointmentsForTap\(\)\.then\(\(\) => \{\s*if \(!active\) return;\s*router\.push\(\{\s*pathname: "\/",/);
+    const tap = read("notification-tap.ts");
+    // Только активный аккаунт: чужой ключ получил бы записи текущего заголовка.
+    assert.match(tap, /refetchQueries\(\{ queryKey: \["appointments", tenantId\], type: "all" \}\)/);
+  });
+
+  test("старый веб-пуш ведёт на настоящие маршруты и говорит на «вы»", () => {
+    const legacy = read("../../../../supabase/functions/send_push/index.ts");
+    assert.doesNotMatch(legacy, /\/dashboard/);
+    assert.doesNotMatch(legacy, /"Открой /);
+    for (const [, url] of legacy.matchAll(/url: "(\/[^"]*)"/g)) {
+      const route = url === "/" ? "(dashboard)/(home)/index.tsx" : `(dashboard)${url}/index.tsx`;
+      assert.ok(readFileSync(resolve(here, "../../app", route)), url);
+    }
+  });
+
   test("миграция: устройства пишет только функция, помощники закрыты от клиента", () => {
     const sql = read("../../../../supabase/migrations/20261027162300_mobile_push.sql");
     assert.match(sql, /grant select, delete on public\.push_devices to authenticated;/);

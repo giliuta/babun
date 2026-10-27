@@ -30,6 +30,7 @@ import {
 import { reconcileBabunNotifications } from "@/lib/notifications";
 import { getActiveTenantId } from "@/lib/active-tenant";
 import { switchTenant } from "@/session/switch-tenant";
+import { refreshAppointmentsForTap } from "@/lib/notification-tap";
 
 void SplashScreen.preventAutoHideAsync();
 // Свежее обновление по воздуху — с первого запуска, пока видна заставка.
@@ -89,13 +90,16 @@ function RootNavigator() {
           .catch(() => {});
         return;
       }
-      router.push({
-        pathname: "/",
-        params: {
-          appointmentId: target.appointmentId,
-          date: target.date,
-          ...(target.teamId ? { teamId: target.teamId } : {}),
-        },
+      void refreshAppointmentsForTap().then(() => {
+        if (!active) return;
+        router.push({
+          pathname: "/",
+          params: {
+            appointmentId: target.appointmentId,
+            date: target.date,
+            ...(target.teamId ? { teamId: target.teamId } : {}),
+          },
+        });
       });
     };
     const openClient = (target: ClientNotificationTarget) => {
