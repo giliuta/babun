@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import type { RecordInvoicePaymentDraft } from "@babun/shared/db/repositories/invoice-payments";
@@ -27,7 +27,8 @@ import {
   useInvoices,
   useRecordInvoicePayment,
 } from "@/features/finances/invoices-queries";
-import { shareInvoicePdf } from "../share-pdf";
+import { prepareInvoicePdf, shareInvoicePdf, type InvoicePdfInput } from "../share-pdf";
+import { accessGate } from "@/session/my-access";
 import { earliestPayment } from "./payment-meta";
 import { sendPayment } from "./payment-request";
 
@@ -170,9 +171,55 @@ export function useInvoiceDetail() {
   // Одна печать за раз: действие из меню и тап по кнопке не должны запускать
   // две сборки PDF разом (состояние `pdfBusy` до перерисовки этого не видит).
   const pdfRunning = useRef(false);
+  /** Что печатается — одно для заготовки и для «Поделиться»: иначе готовый
+   *  файл не совпал бы с нажатием и печать пошла бы заново. */
+  const pdfInput: InvoicePdfInput | null =
+    invoice.data && settlement && (tenant || invoice.data.seller_snapshot)
+      ? {
+          // ЯЗЫК ДОКУМЕНТА ЕДЕТ ВМЕСТЕ С НИМ. Он выбран при выставлении и лежит
+          // в строке инвойса; без него PDF уходил клиенту всегда по-русски,
+          // даже собранный на английском.
+          language: invoice.data.language as "ru" | "en" | undefined,
+          invoice: invoice.data,
+          tenant: tenant ?? undefined,
+          client,
+          settlement,
+          payments,
+          accountNames: accountById,
+          businessToday,
+          creditNote,
+        }
+      : null;
+  // «Меняет» — весь блок: оплата, чек, возврат, «Поделиться» и меню — у всех,
+  // кто «Документы: Видит и меняет» в команде инвойса; без команды — владельцу.
+  const docWrite =
+    role === "owner" ||
+    (!!invoice.data?.brigade_id &&
+      accessGate({
+        role,
+        map: myAccess,
+        blockKey: "finance.documents",
+        scope: "calendar",
+        teamId: invoice.data.brigade_id,
+      }) === "write");
+  // PDF ПЕЧАТАЕТСЯ ЗАРАНЕЕ, пока страницу смотрят: печать в скрытом WebView
+  // занимает секунды, и «Поделиться» ~5 с крутило спиннер (аудит 035, F-60).
+  // Тем, кто поделиться не может, печатать нечего. Пауза — чтобы не спорить
+  // с первой отрисовкой страницы; одинаковый документ второй раз не печатается.
+  const preparedInput = useRef<InvoicePdfInput | null>(null);
+  preparedInput.current = pdfInput;
+  const pdfReady = docWrite && !!pdfInput;
+  useEffect(() => {
+    if (!pdfReady) return;
+    const timer = setTimeout(() => {
+      if (preparedInput.current) prepareInvoicePdf(preparedInput.current);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [pdfReady, invoice.data, settlement, payments, tenant, client, accountById, businessToday, creditNote]);
+
   const sharePdf = async () => {
     if (!invoice.data || !settlement || pdfRunning.current) return;
-    if (!tenant && !invoice.data.seller_snapshot) {
+    if (!pdfInput) {
       notify(
         "PDF пока недоступен",
         "Реквизиты ещё загружаются. Попробуйте через несколько секунд.",
@@ -182,20 +229,7 @@ export function useInvoiceDetail() {
     pdfRunning.current = true;
     setPdfBusy(true);
     try {
-      await shareInvoicePdf({
-        // ЯЗЫК ДОКУМЕНТА ЕДЕТ ВМЕСТЕ С НИМ. Он выбран при выставлении и лежит
-        // в строке инвойса; без него PDF уходил клиенту всегда по-русски,
-        // даже собранный на английском.
-        language: invoice.data.language as "ru" | "en" | undefined,
-        invoice: invoice.data,
-        tenant: tenant ?? undefined,
-        client,
-        settlement,
-        payments,
-        accountNames: accountById,
-        businessToday,
-        creditNote,
-      });
+      await shareInvoicePdf(pdfInput);
     } catch (error) {
       notify("Не удалось поделиться PDF", (error as Error).message);
     } finally {
@@ -245,5 +279,6 @@ export function useInvoiceDetail() {
     receiptTransactionIds,
     issueReceipts,
     sharePdf,
+    docWrite,
   };
 }

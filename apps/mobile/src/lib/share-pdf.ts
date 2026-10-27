@@ -32,33 +32,30 @@ export function withTimeout<T>(work: Promise<T>, ms: number, message: string): P
   return Promise.race([work, limit]).finally(() => clearTimeout(timer));
 }
 
-export async function shareHtmlAsPdf({
-  html,
-  fileName,
-  dialogTitle,
-}: SharePdfInput): Promise<void> {
-  // БРАУЗЕР — печать САМОГО документа, до любых импортов expo. Ветка стоит
-  // ПЕРВОЙ строкой, чтобы веб-бандл вообще не тянул expo-print/expo-sharing.
-  if (typeof document !== "undefined") {
-    printHtmlInIframe(html, fileName);
-    return;
-  }
+type PdfModules = {
+  Print: typeof import("expo-print");
+  Sharing: typeof import("expo-sharing");
+  FileSystem: typeof import("expo-file-system");
+};
 
-  let Print: typeof import("expo-print");
-  let Sharing: typeof import("expo-sharing");
-  let FileSystem: typeof import("expo-file-system");
+async function pdfModules(): Promise<PdfModules> {
   try {
-    [Print, Sharing, FileSystem] = await Promise.all([
+    const [Print, Sharing, FileSystem] = await Promise.all([
       import("expo-print"),
       import("expo-sharing"),
       import("expo-file-system"),
     ]);
+    return { Print, Sharing, FileSystem };
   } catch {
     throw new Error(
       "PDF-модуль ещё не установлен в текущую сборку приложения. Обновите приложение и попробуйте снова.",
     );
   }
+}
 
+/** HTML → файл PDF под человеческим именем. */
+async function printToNamedFile(html: string, fileName: string): Promise<string> {
+  const { Print, FileSystem } = await pdfModules();
   let uri: string;
   try {
     // ПРЕДЕЛ ОЖИДАНИЯ. Печать идёт в скрытом WebView; на Android она
@@ -79,15 +76,64 @@ export async function shareHtmlAsPdf({
   } catch (error) {
     throw new Error(`Не удалось создать PDF. ${errorMessage(error)}`);
   }
-
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error("PDF создан, но системное меню экспорта на этом устройстве недоступно.");
-  }
   // ИМЯ ФАЙЛА ЧИТАЕТ КЛИЕНТ, А НЕ МЫ. `printToFileAsync` кладёт PDF под
   // случайным UUID, и в WhatsApp уезжает «9B4FE7E6-FEC4…pdf» — документ без
   // имени. Переносим его рядом с понятным именем; если перенос не удался,
   // отправляем как есть: имя — удобство, а не условие отправки.
-  const sendUri = renameForHuman(FileSystem, uri, fileName);
+  return renameForHuman(FileSystem, uri, fileName);
+}
+
+/** ГОТОВЫЙ PDF — ОДИН, ПОСЛЕДНИЙ. Печать в скрытом WebView занимает секунды, и
+ *  «Поделиться» инвойса ~5 с крутило спиннер до системного меню (аудит 035,
+ *  F-60). Страница документа печатает его заранее (`preparePdf`), кнопка берёт
+ *  готовый файл. Запись одна: файл лежит под именем документа, и вторая
+ *  печать с тем же именем заменила бы его на диске — ключ «имя + HTML»
+ *  тогда указывал бы на чужое содержимое. */
+let prepared: { key: string; uri: Promise<string> } | null = null;
+
+function preparedFile(html: string, fileName: string): Promise<string> {
+  const key = `${fileName}\n${html}`;
+  if (prepared?.key === key) return prepared.uri;
+  const uri = printToNamedFile(html, fileName);
+  const entry = { key, uri };
+  prepared = entry;
+  // Не вышло — следующая попытка печатает заново, а не повторяет ошибку.
+  uri.catch(() => {
+    if (prepared === entry) prepared = null;
+  });
+  return uri;
+}
+
+/** Напечатать PDF заранее, пока человек смотрит документ. Ошибки молчат —
+ *  их скажет само «Поделиться», если до него дойдёт. Веб печатает сам
+ *  документ по нажатию, готовить ему нечего. */
+export function preparePdf({ html, fileName }: Pick<SharePdfInput, "html" | "fileName">): void {
+  if (typeof document !== "undefined") return;
+  preparedFile(html, fileName).catch(() => {});
+}
+
+export async function shareHtmlAsPdf({
+  html,
+  fileName,
+  dialogTitle,
+}: SharePdfInput): Promise<void> {
+  // БРАУЗЕР — печать САМОГО документа, до любых импортов expo. Ветка стоит
+  // ПЕРВОЙ строкой, чтобы веб-бандл вообще не тянул expo-print/expo-sharing.
+  if (typeof document !== "undefined") {
+    printHtmlInIframe(html, fileName);
+    return;
+  }
+
+  const { Sharing, FileSystem } = await pdfModules();
+  let sendUri = await preparedFile(html, fileName);
+  // Заготовку мог стереть сам iOS (это кэш) — тогда печатаем заново.
+  if (!fileExists(FileSystem, sendUri)) {
+    prepared = null;
+    sendUri = await preparedFile(html, fileName);
+  }
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error("PDF создан, но системное меню экспорта на этом устройстве недоступно.");
+  }
   try {
     await Sharing.shareAsync(sendUri, {
       mimeType: "application/pdf",
@@ -96,6 +142,15 @@ export async function shareHtmlAsPdf({
     });
   } catch (error) {
     throw new Error(`PDF создан, но открыть меню экспорта не удалось. ${errorMessage(error)}`);
+  }
+}
+
+function fileExists(FileSystem: typeof import("expo-file-system"), uri: string): boolean {
+  try {
+    return new FileSystem.File(uri).exists;
+  } catch {
+    // Не смогли спросить — считаем, что файл на месте: ответит само меню.
+    return true;
   }
 }
 
