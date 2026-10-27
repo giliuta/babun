@@ -30,6 +30,12 @@ export interface ChipSourceCalendar {
   isActive: boolean;
 }
 
+/** Кто смотрит на ленту: почта входа и имя из профиля. */
+export interface ChipViewer {
+  email?: string | null;
+  name?: string | null;
+}
+
 export function composeCalendarChips(input: {
   /** Календари активной компании — как их знает экран (с архивными). */
   own: readonly { id: string; name: string; color?: string | null }[];
@@ -39,8 +45,28 @@ export function composeCalendarChips(input: {
   activeTenantId: string | null;
   /** Порядок человека (`user_calendar_order`): ключи `calendarOrderKey`. */
   order?: readonly string[] | null;
+  viewer?: ChipViewer | null;
 }): CalendarChip[] {
-  return applyCalendarOrder(composeDefault(input), input.activeTenantId, input.order);
+  const chips = composeDefault(input).map((chip) => ({
+    ...chip,
+    name: calendarChipName(chip.name, input.viewer),
+  }));
+  return applyCalendarOrder(chips, input.activeTenantId, input.order);
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** ПОЧТА — НЕ ИМЯ КАЛЕНДАРЯ. Календарь, названный адресом почты, назван
+ *  аккаунтом, а не человеком, и в узком чипе обрезается в «babun.app+r…».
+ *  Свой такой календарь подписывается именем из профиля, чужой или без
+ *  имени — «Личный». Само имя в базе не трогается: его меняют в настройках
+ *  календаря. */
+export function calendarChipName(name: string, viewer?: ChipViewer | null): string {
+  const address = name.trim().toLowerCase();
+  if (!EMAIL.test(address)) return name;
+  const mine = !!viewer?.email && viewer.email.trim().toLowerCase() === address;
+  const person = viewer?.name?.trim();
+  return mine && person ? person : "Личный";
 }
 
 /** Ключ календаря в порядке человека: компания и команда — один и тот же по
