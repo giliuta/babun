@@ -93,7 +93,10 @@ export function ClientExtraContacts({
   const t = useThemeColors();
   const country = useDefaultCountry(teamId);
   const copy = useCopyValue();
-  const warnIfTaken = useExtraPhoneTaken(client.id, country);
+  // У строк сотрудника (`EmployeeIdentityBlock`) id клиента нет — тогда
+  // сверяется со всеми клиентами.
+  const ownId = "id" in client ? (client as { id?: string }).id : undefined;
+  const warnIfTaken = useExtraPhoneTaken(ownId, country);
 
   const extras = client.phones ?? EMPTY_PHONES;
   // Номера — тот же jsonb-массив, что объекты: писать его можно только из
@@ -102,7 +105,7 @@ export function ClientExtraContacts({
   const phones = useJsonArrayWriter<PhoneEntry>(extras, (next) =>
     Promise.resolve(update({ phones: next })).then((ok) => ok !== false),
   );
-  const finishRow = useExtraPhoneFinish(phones, client.id, country);
+  const finishRow = useExtraPhoneFinish(phones, ownId, country);
 
   // Новый номер живёт ЛОКАЛЬНО, пока в нём нет цифр: тап по «+ Добавить
   // номер» раньше сразу писал в базу пустую запись, и у клиента навсегда
