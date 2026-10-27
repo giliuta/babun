@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { buildQuickClientDraft } from "@/features/appointments/booking-prefill";
@@ -63,7 +64,10 @@ export function ListFooter({ list }: { list: ClientsList }) {
         // рост страницы вместе с правами.
         // НАД КЛАВИАТУРОЙ: искали и не нашли — следующий шаг «Создать», и
         // клавиатура поиска не имеет права его закрывать.
-        <KeyboardLift
+        // Отступы — на внутреннем View: KeyboardLift пишет подъём в свой
+        // paddingBottom и затёр бы наш.
+        <KeyboardLift>
+        <View
           style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
         >
           {/* ТАРИФ БЕЗ КЛИЕНТОВ — КНОПКА СЕРАЯ, а не спрятана (всё видно, новое
@@ -87,6 +91,7 @@ export function ListFooter({ list }: { list: ClientsList }) {
             />
           </TariffLocked>
           </TourTarget>
+        </View>
         </KeyboardLift>
       )}
     </>
