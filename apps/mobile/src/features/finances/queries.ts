@@ -332,6 +332,9 @@ export function useUpdateCategory() {
 export function useReorderFinanceCategories() {
   const qc = useQueryClient();
   return useMutation({
+    // Без сети мутация не встаёт в паузу молча, а отказывает: порядок — запись
+    // на сервер, и «крутится вечно без ошибки» хуже понятного отказа.
+    ...NEVER_PAUSE,
     mutationFn: (orderedIds: string[]) =>
       setFinanceCategoryOrder(supabase, orderedIds),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
