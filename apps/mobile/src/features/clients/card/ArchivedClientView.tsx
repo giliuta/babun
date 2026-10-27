@@ -28,7 +28,9 @@ export function ArchivedClientView({
   services: readonly { id: string; name: string }[];
   restoring: boolean;
   onBack: () => void;
-  onRestore: () => Promise<void>;
+  /** Вернуть клиента. Нет — кнопки нет: вернуть может только владелец своей
+   *  базы (так же решает сервер), остальным кнопка обещала бы отказ. */
+  onRestore?: () => Promise<void>;
 }) {
   const t = useThemeColors();
   // УДАЛЁННЫЙ КЛИЕНТ (архива нет). Срок есть — страница говорит,
@@ -122,16 +124,18 @@ export function ArchivedClientView({
           )}
         </SectionCard>
 
-        <View className="px-4 pt-5">
-          {/* КНОПКА ОДНА НА ПРОДУКТ: была своя, 48pt со значком внутри.
-              Значка у канонической кнопки нет — слово и так называет
-              действие, а спиннер ожидания она умеет сама. */}
-          <Button
-            label="Вернуть клиента"
-            loading={restoring}
-            onPress={() => void onRestore()}
-          />
-        </View>
+        {onRestore ? (
+          <View className="px-4 pt-5">
+            {/* КНОПКА ОДНА НА ПРОДУКТ: была своя, 48pt со значком внутри.
+                Значка у канонической кнопки нет — слово и так называет
+                действие, а спиннер ожидания она умеет сама. */}
+            <Button
+              label="Вернуть клиента"
+              loading={restoring}
+              onPress={() => void onRestore()}
+            />
+          </View>
+        ) : null}
       </ScrollView>
     </Screen>
   );

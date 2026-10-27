@@ -162,6 +162,9 @@ export function ClientDetailScreen() {
   }
 
   if (c.deleted_at) {
+    // Вернуть клиента может только владелец своей базы — так же решает
+    // сервер (`clients_update_owner`); партнёру кнопка обещала бы отказ.
+    const canRestore = scope ? scope.kind === "own" && scope.role === "owner" : role === "owner";
     return (
       <ArchivedClientView
         client={c}
@@ -169,16 +172,20 @@ export function ClientDetailScreen() {
         services={services}
         restoring={restoreClient.isPending}
         onBack={() => router.back()}
-        onRestore={async () => {
-          try {
-            await restoreClient.mutateAsync(c);
-          } catch (error) {
-            notify(
-              "Не удалось вернуть клиента",
-              (error as Error).message || "Проверьте соединение и повторите.",
-            );
-          }
-        }}
+        onRestore={
+          canRestore
+            ? async () => {
+                try {
+                  await restoreClient.mutateAsync(c);
+                } catch (error) {
+                  notify(
+                    "Не удалось вернуть клиента",
+                    (error as Error).message || "Проверьте соединение и повторите.",
+                  );
+                }
+              }
+            : undefined
+        }
       />
     );
   }
