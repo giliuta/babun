@@ -30,6 +30,7 @@ import {
   type CachedClient,
   type QueuedOp,
 } from "../db/cache/sql";
+import { SERVER_TRANSIENT_STREAK_LIMIT } from "./replayer/drain";
 import {
   __resetReplayerForTests,
   BOUND_TENANT_FIELD,
@@ -664,6 +665,60 @@ describe("replayer — обрыв связи не тратит попыток (�
     await kickReplayer({ supabase: asSupabase(client) });
     const [left] = await dequeueAll();
     expect(left?.attempts).toBe(1);
+  });
+
+  test("ответ сервера «обрывом» дольше предела идёт в счёт попыток — календарь не замерзает", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { message: "canceling statement due to statement timeout" },
+    }));
+    for (let i = 0; i < SERVER_TRANSIENT_STREAK_LIMIT - 1; i += 1) {
+      await kickReplayer({ supabase: asSupabase(client) });
+    }
+    expect((await dequeueAll())[0]?.attempts).toBe(0);
+    await kickReplayer({ supabase: asSupabase(client) });
+    expect((await dequeueAll())[0]?.attempts).toBe(1);
+  });
+
+  test("чистый обрыв (ответа не было) попыток не тратит сколько угодно долго", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { message: "TypeError: Network request failed" },
+    }));
+    for (let i = 0; i < SERVER_TRANSIENT_STREAK_LIMIT + 5; i += 1) {
+      await kickReplayer({ supabase: asSupabase(client) });
+    }
+    expect((await dequeueAll())[0]?.attempts).toBe(0);
+  });
+
+  test("отказ функции базы с числом 503 в тексте — попытка, а не вечный обрыв", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { code: "P0001", message: "Сумма 503 больше итога" },
+    }));
+    await kickReplayer({ supabase: asSupabase(client) });
+    expect((await dequeueAll())[0]?.attempts).toBe(1);
   });
 
   test("без сети слив не начинается; перечитка — только когда очередь изменилась", async () => {

@@ -11,7 +11,7 @@ import {
 // moment the replayer succeeds/fails an op, instead of waiting for the 5-s
 // safety poll.
 import { writesBlocked } from "../write-guard";
-import { isTransientNetworkError } from "../transient-error";
+import { isTransientNetworkError, isTransportFailure } from "../transient-error";
 import { isUuid } from "../uuid";
 import {
   removeOpAndEmit as removeOp,
@@ -37,6 +37,35 @@ import {
   GUARDED_CONFLICT_MESSAGE,
   parentInsertId,
 } from "./table-rules";
+
+// ОБРЫВ С ОТВЕТОМ СЕРВЕРА НЕ ДЕРЖИТ ПРАВКУ ВЕЧНО.
+//
+// Обрыв попытки не тратит — иначе минута лежащей базы хоронила бы всю
+// офлайн-работу. Но «обрыв», на который сервер ОТВЕЧАЕТ (5xx, таймаут
+// запроса на тяжёлом триггере), может оказаться постоянным: такая правка
+// крутилась бы каждые 30 с без конца и держала перечитку календаря
+// (`tenant-refresh.ts`) — чужие брони и оплаты на телефоне не появлялись бы.
+// Поэтому ответы сервера считаются подряд по правке: после
+// `SERVER_TRANSIENT_STREAK_LIMIT` проходов (около десяти минут) каждый
+// следующий идёт в счёт попыток, и правка по исчерпании уходит в «не
+// удалось». Чистый обрыв (ответа не было) не считается никогда: это сеть, и
+// она вернётся.
+export const SERVER_TRANSIENT_STREAK_LIMIT = 20;
+const serverTransientStreak = new Map<QueuedOp["id"], number>();
+
+/** ТОЛЬКО ДЛЯ ТЕСТОВ: счёт живёт в памяти процесса, а номера операций в
+ *  каждом тесте начинаются заново. */
+export function __resetTransientStreaksForTests(): void {
+  serverTransientStreak.clear();
+}
+
+/** Обрыв держит правку без траты попытки — или его пора считать. */
+function transientHolds(op: QueuedOp, err: unknown): boolean {
+  if (isTransportFailure(err)) return true;
+  const streak = (serverTransientStreak.get(op.id) ?? 0) + 1;
+  serverTransientStreak.set(op.id, streak);
+  return streak < SERVER_TRANSIENT_STREAK_LIMIT;
+}
 
 /** Отпечаток очереди: менялось ли в ней что-то за проход. */
 function queueSignature(ops: readonly QueuedOp[]): string {
@@ -269,6 +298,7 @@ export async function drain(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",
         );
       }
+      serverTransientStreak.delete(op.id);
       await removeOp(op.id);
     } catch (err) {
       // Сменилась компания — не ошибка операции: попытку не считаем, слив
@@ -277,7 +307,7 @@ export async function drain(
       const msg = err instanceof Error ? err.message : String(err);
       hold(op);
       // Обрыв — попытку не тратим: строка ждёт следующего прохода.
-      if (isTransientNetworkError(err)) {
+      if (isTransientNetworkError(err) && transientHolds(op, err)) {
         transientFailure = true;
         continue;
       }
