@@ -11,7 +11,7 @@ import { randomUuid } from "@babun/shared/sync";
 import { useInvoicePayments, useRecordInvoicePayment } from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { finishPayAttempt, payAttemptId, payAttemptKey, type PayAttempt } from "./invoice-pay-request";
+import { finishPayAttempt, payAttempt, payAttemptKey, type PayAttempt } from "./invoice-pay-request";
 
 // ДЕНЬГИ ЗАПИСИ С ИНВОЙСОМ — В ИНВОЙС (иначе после предоплаты и чека инвойс
 // оставался бы неоплаченным — расхождение во всех слоях финансов). Пока по записи есть
@@ -49,17 +49,18 @@ export function useAppointmentInvoicePay(
     businessToday: string;
   }): Promise<Appointment | null> => {
     if (!invoice) return null;
-    const requestId = payAttemptId(
+    const { id: requestId, occurredOn } = payAttempt(
       attempt,
       payAttemptKey({ invoiceId: invoice.id, accountId: input.accountId, amountCents: input.amountCents }),
       randomUuid,
+      input.businessToday,
     );
     await record.mutateAsync({
       request_id: requestId,
       amount: input.amountCents / 100,
       account_id: input.accountId,
       payment_method: METHOD_BY_KIND[input.accountKind] ?? "other",
-      occurred_on: input.businessToday,
+      occurred_on: occurredOn,
       business_today: input.businessToday,
     });
     finishPayAttempt(attempt);
