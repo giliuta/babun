@@ -50,6 +50,7 @@ import {
 } from "@/features/clients/settings-summary";
 import { anyClientSetting } from "@/features/clients/settings-levels";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
+import { CallerIdSettingsGroup } from "@/features/clients/caller-id/CallerIdSettingsGroup";
 import { SettingsGroup } from "./SettingsGroup";
 
 // «НАСТРОЙКИ КЛИЕНТОВ» — шестерёнка списка клиентов. Разложены ПО
@@ -256,6 +257,8 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
               ) : null,
             ]}
           />
+
+          <CallerIdSettingsGroup />
 
           {typesRow || mapsInObjects ? (
             <SettingsGroup

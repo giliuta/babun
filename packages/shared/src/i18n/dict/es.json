@@ -5123,5 +5123,12 @@
  "Раскрывает выбор": "Despliega las opciones",
  "Убрать всё в «{0}»": "Quitar todo en «{0}»",
  "Типов объектов пока нет": "Aún no hay tipos de propiedad",
- "«{0}» исчезнет из выбора, а объекты этого типа ({1}) останутся без типа.": "«{0}» desaparecerá de la lista y las propiedades de este tipo ({1}) se quedarán sin tipo."
+ "«{0}» исчезнет из выбора, а объекты этого типа ({1}) останутся без типа.": "«{0}» desaparecerá de la lista y las propiedades de este tipo ({1}) se quedarán sin tipo.",
+ "Включено на этом iPhone": "Activado en este iPhone",
+ "Включить в настройках iPhone": "Activar en los ajustes del iPhone",
+ "Выключено в настройках iPhone": "Desactivado en ajustes del iPhone",
+ "Для номеров не из контактов": "Para números fuera de contactos",
+ "Звонки": "Llamadas",
+ "Имя клиента при звонке": "Nombre del cliente al llamar",
+ "Телефон → Блокировка и идентификация вызовов → Babun": "Teléfono → Bloqueo e identificación de llamadas → Babun"
 }
