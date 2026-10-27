@@ -50,6 +50,7 @@ export function GradientButton({
   loading,
   tint,
   accessibilityHint,
+  accessibilityLabel,
   onDisabledPress,
 }: {
   label: string;
@@ -58,6 +59,9 @@ export function GradientButton({
   loading?: boolean;
   tint?: string;
   accessibilityHint?: string;
+  /** Когда VoiceOver должен услышать не то, что написано («Готово, 3 тега»
+   *  вместо «Готово · 3 тега»). */
+  accessibilityLabel?: string;
   /** Тап по НЕАКТИВНОЙ кнопке — сказать, чего не хватает (уведомлением сверху:
    *  «выберите услугу»).
    *  Кнопка остаётся серой и ничего не сохраняет. */
@@ -135,7 +139,7 @@ export function GradientButton({
       }}
       disabled={!pressable && !(onDisabledPress && !loading)}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !pressable, busy: !!loading }}
     >

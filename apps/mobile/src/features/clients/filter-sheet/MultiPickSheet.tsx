@@ -195,7 +195,6 @@ export function MultiPickSheet({
             : `Готово, ${shownCount} ${countWordRu(shownCount, ...noun)}`
         }
         a11yHint="Возвращает к фильтрам"
-        reduced={reduced}
         onPress={onClose}
       />
     </BottomSheet>

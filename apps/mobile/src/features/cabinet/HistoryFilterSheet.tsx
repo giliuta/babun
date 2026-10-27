@@ -183,7 +183,6 @@ export function HistoryFilterSheet({
           hint={shownCount === 0 ? "Ничего не найдено — снимите условия" : null}
           a11yLabel={shownCount === 0 ? "К списку" : `Показать ${countAcc}`}
           a11yHint="Закрывает фильтры"
-          reduced={reduced}
           onPress={onClose}
         />
       </View>

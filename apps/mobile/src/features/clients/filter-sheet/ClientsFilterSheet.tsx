@@ -218,7 +218,6 @@ export function ClientsFilterSheet({
               ? "Закрывает фильтры"
               : "Закрывает фильтры и показывает список"
           }
-          reduced={reduced}
           onPress={onClose}
         />
       </View>
