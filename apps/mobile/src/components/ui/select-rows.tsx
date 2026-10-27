@@ -99,6 +99,9 @@ export function SelectSearch({
         spellCheck={false}
         autoCapitalize={autoCapitalize}
         autoFocus={autoFocus}
+        // Return у поиска — «Найти» и убирает клавиатуру: поиск идёт по
+        // мере набора, а «⏎» обещал перенос строки, которого нет.
+        returnKeyType="search"
         style={{ flex: 1, fontSize: 15, color: t.ink }}
       />
       {value && onClear ? (
