@@ -19,6 +19,7 @@ import {
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
+import { isHumanText } from "@babun/shared/i18n/runtime";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -222,7 +223,7 @@ export function ClientTagsScreen() {
           state="error"
           fill
           subtitle={
-            tagsQuery.error instanceof Error
+            tagsQuery.error instanceof Error && isHumanText(tagsQuery.error.message)
               ? tagsQuery.error.message
               : undefined
           }

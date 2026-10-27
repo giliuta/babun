@@ -23,6 +23,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
+import { isHumanText, tDynamic } from "@babun/shared/i18n/runtime";
 import { confirmThen } from "@/lib/confirm";
 import { teamSources, type ClientSource, sourceDisplayName } from "@/features/clients/acquisition-source";
 import { useDataRole } from "@/session/tenant";
@@ -104,13 +105,23 @@ function ClientSourcesScreen() {
     [isOwner, query.data, teamId, ownTeams],
   );
   const busy = createSource.isPending || renameSource.isPending;
-  const failed = (title: string, error: unknown) =>
-    notify(title, (error as Error).message || "Проверьте соединение и попробуйте ещё раз.");
+  // Текст сервера — только человеческий и переведённый; технический код
+  // («PGRST…», «duplicate key…») человеку ничего не скажет.
+  const failed = (title: string, error: unknown) => {
+    const text = (error as Error)?.message ?? "";
+    notify(title, isHumanText(text) ? tDynamic(text) : "Проверьте соединение и попробуйте ещё раз.");
+  };
 
   const submit = async (name: string) => {
     if (!name.trim() || busy || !editing) return;
     try {
       if (editing.mode === "edit") {
+        // Готовый источник показан на языке интерфейса; имя не тронули —
+        // в базе остаётся исходное, иначе перевод лёг бы вместо него.
+        if (name.trim() === sourceDisplayName(editing.source)) {
+          setEditing(null);
+          return;
+        }
         await renameSource.mutateAsync({ id: editing.source.id, name });
         toast("Источник обновлён", "success");
       } else {
@@ -137,7 +148,7 @@ function ClientSourcesScreen() {
     confirmThen(
       "Удалить источник?",
       {
-        message: `Клиенты из «${source.name}» останутся без источника.`,
+        message: `Клиенты из «${sourceDisplayName(source)}» останутся без источника.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
@@ -163,7 +174,11 @@ function ClientSourcesScreen() {
         <EmptyState
           state="error"
           fill
-          subtitle={query.error instanceof Error ? query.error.message : undefined}
+          subtitle={
+            query.error instanceof Error && isHumanText(query.error.message)
+              ? query.error.message
+              : undefined
+          }
           action={{ label: "Повторить", onPress: () => void query.refetch() }}
         />
       ) : list.length === 0 ? (
@@ -194,7 +209,7 @@ function ClientSourcesScreen() {
                     label={readOnly ? undefined : "Удалить"}
                     color={t.danger}
                     icon={Trash2}
-                    accessibilityLabel={`Удалить источник ${source.name}`}
+                    accessibilityLabel={`Удалить источник ${sourceDisplayName(source)}`}
                     onAction={readOnly ? undefined : () => remove(source)}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: t.surface }}>
@@ -203,7 +218,9 @@ function ClientSourcesScreen() {
                         onPress={() => setEditing({ mode: "edit", source })}
                         accessibilityRole={readOnly ? "text" : "button"}
                         accessibilityLabel={
-                          readOnly ? `Источник ${source.name}` : `Источник ${source.name}, переименовать`
+                          readOnly
+                            ? `Источник ${sourceDisplayName(source)}`
+                            : `Источник ${sourceDisplayName(source)}, переименовать`
                         }
                         style={({ pressed }) => ({
                           flex: 1,
@@ -272,7 +289,7 @@ function SourceSheet({
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [seeded, setSeeded] = useState<Editing | null>(null);
-  const seedName = isEdit ? editing.source.name : "";
+  const seedName = isEdit ? sourceDisplayName(editing.source) : "";
   if (editing !== seeded) {
     setSeeded(editing);
     setPicking(false);
