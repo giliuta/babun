@@ -69,7 +69,7 @@ function ClientSourcesScreen() {
   const toast = useToast();
   const query = useClientSources();
   const { team } = useLocalSearchParams<{ team?: string }>();
-  const { data: ownTeams = [] } = useTeams();
+  const { data: ownTeams = [] } = useTeams({ display: true });
   const teamId =
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??

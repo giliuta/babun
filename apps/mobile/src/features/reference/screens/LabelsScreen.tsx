@@ -74,7 +74,7 @@ export function LabelsScreen() {
       )?.teamId
     : undefined;
   const t = useThemeColors();
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   // ПАРАМЕТР ПОБЕЖДАЕТ: его шлёт шестерёнка календаря, и это команда, чьи
   // настройки открыты СЕЙЧАС. MMKV — только запасной путь (прямой заход

@@ -45,7 +45,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
   // ТИПЫ КОМАНДЫ: команда едет адресом (`?team=`) из «Дизайна», пропом — из
   // формы события; без неё — первая команда.
   const params = useLocalSearchParams<{ team?: string }>();
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const teamId =
     teamProp ?? teams.find((x) => x.id === params.team)?.id ?? teams[0]?.id ?? null;
   const teamName = teams.find((x) => x.id === teamId)?.name;

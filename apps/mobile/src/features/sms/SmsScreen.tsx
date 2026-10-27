@@ -71,7 +71,7 @@ export function SmsScreen() {
   const [topupOpen, setTopupOpen] = useState(false);
   // Тап по строке истории — тот же лист сообщения, что в записи и у клиента.
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const awaitingPayment = useRef(false);
 
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает

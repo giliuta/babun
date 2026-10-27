@@ -57,7 +57,7 @@ export function SmsTeamScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams<{ team?: string }>();
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const team = teams.find((x) => x.id === params.team) ?? teams[0];
   const teamId = team?.id ?? "";
   const account = useSmsAccount();

@@ -123,7 +123,7 @@ export default function CategoriesScreen() {
   // меняет». Владелец правит всё. Правку пускает сервер (политика вида).
   const owner = useCurrentRole().data === "owner";
   const levelsOf = useFinanceSettingLevelsOf();
-  const allTeams = useTeams().data ?? [];
+  const allTeams = useTeams({ display: true }).data ?? [];
   const kindRow = CATEGORY_KIND_ROW[fixedKind ?? pickedType];
   const teams = owner ? allTeams : allTeams.filter((team) => levelsOf(team.id)[kindRow] !== "hidden");
   // КОМАНДА — В АДРЕСЕ (`?team=`): «Настройки финансов» открывают справочник
