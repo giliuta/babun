@@ -178,6 +178,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "undo_appointment_payment",
   // Телефон в получателях пушей и выход из них (миграция 20261027162300).
   "unregister_push_device",
+  "reset_push_badge",
   "update_client_with_tags",
   "update_invoice_draft",
   "update_master_appointment_safe",

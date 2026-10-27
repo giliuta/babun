@@ -2,7 +2,7 @@
 // чтобы правила гонялись `bun test`. Всё, что ходит в базу или в Expo, —
 // в `PushDeps`; настоящие реализации — в `index.ts`.
 
-import { PUSH_KINDS, renderActivity, type PushKind } from "./render.ts";
+import { PUSH_KINDS, renderActivity, renderDigest, renderHeld, type HeldCounts, type PushKind } from "./render.ts";
 
 export interface PushTarget {
   user_id: string;
@@ -44,7 +44,17 @@ export interface ExpoMessage {
   sound: "default";
   priority: "high";
   data: Record<string, string>;
+  /** Цифра на значке: новое за день (`push_badge_bump`). */
+  badge?: number;
+  /** Кнопки уведомления; приложение заводит категории при входе
+   *  (`apps/mobile/src/features/calendar/push-action-ids.ts`). */
+  categoryId?: string;
 }
+
+/** «Открыть · Позвонить клиенту · Маршрут» — у новой и перенесённой работы. */
+export const APPOINTMENT_CATEGORY = "babun-appointment";
+/** «Открыть день» — у отмены. */
+export const CANCEL_CATEGORY = "babun-cancel";
 
 export type ExpoTicket =
   | { status: "ok"; id?: string }
@@ -62,6 +72,8 @@ export interface PushDeps {
   loadDevices(userIds: string[]): Promise<DeviceRow[]>;
   sendExpo(messages: ExpoMessage[]): Promise<ExpoTicket[]>;
   dropTokens(tokens: string[]): Promise<void>;
+  /** +N к счёту дня человека; итог или `null`, если счёта нет (не накачено). */
+  bumpBadge(userId: string, by: number, day: string): Promise<number | null>;
   now(): Date;
 }
 
@@ -114,7 +126,127 @@ export function localToday(now: Date, timeZone: string | null): string {
 
 const str = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
 
+/** Строка сводки из `push_digest_dispatch`. */
+export interface DigestItem {
+  user_id: string;
+  tenant_id: string;
+  slot: "morning" | "evening";
+  date: string;
+  count: number;
+  first_time: string | null;
+  first_city: string | null;
+}
+
+export function parseDigest(raw: unknown): DigestItem[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const items = (raw as { digest?: unknown }).digest;
+  if (!Array.isArray(items) || items.length === 0 || items.length > 500) return null;
+  const out: DigestItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return null;
+    const d = item as Record<string, unknown>;
+    if (typeof d.user_id !== "string" || !UUID_RE.test(d.user_id)) return null;
+    if (typeof d.tenant_id !== "string" || !UUID_RE.test(d.tenant_id)) return null;
+    if (d.slot !== "morning" && d.slot !== "evening") return null;
+    if (typeof d.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return null;
+    if (typeof d.count !== "number" || !Number.isSafeInteger(d.count) || d.count <= 0) return null;
+    out.push({
+      user_id: d.user_id,
+      tenant_id: d.tenant_id,
+      slot: d.slot,
+      date: d.date,
+      count: d.count,
+      first_time: str(d.first_time),
+      first_city: str(d.first_city),
+    });
+  }
+  return out;
+}
+
+async function handleDigest(items: DigestItem[], deps: PushDeps): Promise<PushResult> {
+  const devices = await deps.loadDevices([...new Set(items.map((i) => i.user_id))]);
+  const messages: ExpoMessage[] = [];
+  for (const item of items) {
+    for (const device of devices) {
+      if (device.user_id !== item.user_id) continue;
+      const { title, body } = renderDigest(
+        { slot: item.slot, count: item.count, firstTime: item.first_time, firstCity: item.first_city },
+        device.locale,
+      );
+      // Тап открывает этот день календаря.
+      messages.push({
+        to: device.token,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data: { type: "calendar-day", date: item.date, tenantId: item.tenant_id },
+      });
+    }
+  }
+  return deliver(messages, deps);
+}
+
+/** Строка сводки после тихих часов из `push_quiet_flush`. */
+export interface HeldItem {
+  user_id: string;
+  tenant_id: string;
+  counts: HeldCounts;
+}
+
+export function parseHeld(raw: unknown): HeldItem[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const items = (raw as { held?: unknown }).held;
+  if (!Array.isArray(items) || items.length === 0 || items.length > 500) return null;
+  const out: HeldItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return null;
+    const h = item as Record<string, unknown>;
+    if (typeof h.user_id !== "string" || !UUID_RE.test(h.user_id)) return null;
+    if (typeof h.tenant_id !== "string" || !UUID_RE.test(h.tenant_id)) return null;
+    if (!h.counts || typeof h.counts !== "object") return null;
+    const counts: HeldCounts = {};
+    for (const [kind, n] of Object.entries(h.counts as Record<string, unknown>)) {
+      if (PUSH_KINDS.includes(kind as PushKind) && typeof n === "number" && Number.isSafeInteger(n) && n > 0) {
+        counts[kind as PushKind] = n;
+      }
+    }
+    out.push({ user_id: h.user_id, tenant_id: h.tenant_id, counts });
+  }
+  return out;
+}
+
+async function handleHeld(items: HeldItem[], deps: PushDeps): Promise<PushResult> {
+  const devices = await deps.loadDevices([...new Set(items.map((i) => i.user_id))]);
+  const day = localToday(deps.now(), null);
+  const messages: ExpoMessage[] = [];
+  for (const item of items) {
+    const total = Object.values(item.counts).reduce((a, b) => a + (b ?? 0), 0);
+    const mine = devices.filter((d) => d.user_id === item.user_id);
+    if (total === 0 || mine.length === 0) continue;
+    // Каждая накопленная новость — единица на значке, как если бы пришла сразу.
+    const badge = await deps.bumpBadge(item.user_id, total, day);
+    for (const device of mine) {
+      const { title, body } = renderHeld(item.counts, device.locale);
+      messages.push({
+        to: device.token,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data: { type: "team-activity", tenantId: item.tenant_id },
+        ...(typeof badge === "number" ? { badge } : {}),
+      });
+    }
+  }
+  return deliver(messages, deps);
+}
+
 export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<PushResult | null> {
+  const digest = parseDigest(raw);
+  if (digest) return handleDigest(digest, deps);
+  const held = parseHeld(raw);
+  if (held) return handleHeld(held, deps);
   const input = parseInput(raw);
   if (!input) return null;
   const log = await deps.loadLog(input.logId);
@@ -144,20 +276,44 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
     deps.loadDevices(userIds),
   ]);
 
+  // Цифра на значке — одна прибавка на человека за событие, на все его телефоны.
+  const badgeDay = localToday(deps.now(), null);
+  const badges = new Map<string, number | null>();
+  for (const userId of userIds) {
+    if (devices.some((d) => d.user_id === userId)) badges.set(userId, await deps.bumpBadge(userId, 1, badgeDay));
+  }
+
   const messages: ExpoMessage[] = [];
   for (const target of input.targets) {
     // Тап открывает запись. Удалённую или ушедшую в чужой календарь открыть
-    // нельзя — такой пуш просто открывает приложение.
+    // нельзя — такой пуш открывает её день, а без даты — просто приложение.
+    const day = appointment?.date ?? str(log.meta?.date);
+    const opensRecord = Boolean(appointment && appointment.date && target.kind !== "moved");
     const data: Record<string, string> =
-      appointment && appointment.date && target.kind !== "moved"
+      opensRecord && appointment
         ? {
             type: "calendar-appointment",
             appointmentId: appointment.id,
-            date: appointment.date,
+            date: appointment.date as string,
             ...(appointment.team_id ? { teamId: appointment.team_id } : {}),
             tenantId: log.tenant_id,
           }
-        : { type: "team-activity", tenantId: log.tenant_id };
+        : day && log.entity === "appointments"
+          ? {
+              type: "calendar-day",
+              date: day,
+              ...(target.team_id ? { teamId: target.team_id } : {}),
+              tenantId: log.tenant_id,
+            }
+          : { type: "team-activity", tenantId: log.tenant_id };
+    const categoryId =
+      target.kind === "cancel" || target.kind === "cancel_link"
+        ? data.type === "team-activity"
+          ? undefined
+          : CANCEL_CATEGORY
+        : opensRecord && (target.kind === "new" || target.kind === "change")
+          ? APPOINTMENT_CATEGORY
+          : undefined;
     for (const device of devices) {
       if (device.user_id !== target.user_id) continue;
       const { title, body } = renderActivity(
@@ -175,10 +331,24 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
         },
         device.locale,
       );
-      messages.push({ to: device.token, title, body, sound: "default", priority: "high", data });
+      messages.push({
+        to: device.token,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data,
+        ...(categoryId ? { categoryId } : {}),
+        ...(typeof badges.get(target.user_id) === "number" ? { badge: badges.get(target.user_id) as number } : {}),
+      });
     }
   }
 
+  return deliver(messages, deps);
+}
+
+/** Отправка пачками по сто; мёртвые токены забываются. */
+async function deliver(messages: ExpoMessage[], deps: PushDeps): Promise<PushResult> {
   let sent = 0;
   let failed = 0;
   const dead: string[] = [];

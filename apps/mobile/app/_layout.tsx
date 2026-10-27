@@ -20,9 +20,12 @@ import { MemberQueueToasts } from "@/features/appointments/MemberQueueToasts";
 import { AppUpdateGate } from "@/features/app-update/AppUpdateGate";
 import {
   consumeLastAppointmentNotificationTarget,
+  consumeLastDayNotificationTarget,
   subscribeToAppointmentNotificationResponses,
   type AppointmentNotificationTarget,
+  type DayNotificationTarget,
 } from "@/features/calendar/reminders";
+import { runPushAction } from "@/features/calendar/push-actions";
 import {
   consumeLastClientNotificationTarget,
   subscribeToClientNotificationResponses,
@@ -91,8 +94,17 @@ function RootNavigator() {
           .catch(() => {});
         return;
       }
+      if (target.action === "day") {
+        openDay(target);
+        return;
+      }
       void refreshAppointmentsForTap().then(() => {
         if (!active) return;
+        // Кнопка уведомления: позвонить или проложить маршрут сразу. Нет
+        // номера или адреса в загруженном — открывается сама запись.
+        if (target.action && runPushAction(target.action, target.appointmentId, target.teamId ?? null)) {
+          return;
+        }
         router.push({
           pathname: "/",
           params: {
@@ -100,6 +112,23 @@ function RootNavigator() {
             date: target.date,
             ...(target.teamId ? { teamId: target.teamId } : {}),
           },
+        });
+      });
+    };
+    // «Открыть день»: отменённая или удалённая работа — её день в календаре.
+    const openDay = (target: DayNotificationTarget) => {
+      if (!session || !active) return;
+      if (target.tenantId && target.tenantId !== getActiveTenantId()) {
+        void switchTenant(target.tenantId)
+          .then(() => openDay({ ...target, tenantId: undefined }))
+          .catch(() => {});
+        return;
+      }
+      void refreshAppointmentsForTap().then(() => {
+        if (!active) return;
+        router.push({
+          pathname: "/",
+          params: { date: target.date, ...(target.teamId ? { teamId: target.teamId } : {}) },
         });
       });
     };
@@ -111,7 +140,7 @@ function RootNavigator() {
       });
     };
     const unsubscribeAppointment =
-      subscribeToAppointmentNotificationResponses(openAppointment);
+      subscribeToAppointmentNotificationResponses(openAppointment, openDay);
     const unsubscribeClient =
       subscribeToClientNotificationResponses(openClient);
     void (async () => {
@@ -119,6 +148,11 @@ function RootNavigator() {
         await consumeLastAppointmentNotificationTarget();
       if (appointmentTarget) {
         openAppointment(appointmentTarget);
+        return;
+      }
+      const dayTarget = await consumeLastDayNotificationTarget();
+      if (dayTarget) {
+        openDay(dayTarget);
         return;
       }
       const clientTarget = await consumeLastClientNotificationTarget();

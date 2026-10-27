@@ -21,6 +21,7 @@ const APPT = "11111111-2222-4333-8444-555555555555";
 function fake(overrides: Partial<{ log: LogRow; appointment: AppointmentRow | null; devices: DeviceRow[]; tickets: (m: ExpoMessage[]) => ExpoTicket[] }> = {}) {
   const sent: ExpoMessage[][] = [];
   const dropped: string[][] = [];
+  const badgeCalls: [string, number][] = [];
   const log: LogRow = overrides.log ?? {
     id: 7,
     tenant_id: TENANT,
@@ -56,9 +57,13 @@ function fake(overrides: Partial<{ log: LogRow; appointment: AppointmentRow | nu
     dropTokens: async (tokens) => {
       dropped.push(tokens);
     },
+    bumpBadge: async (userId, by) => {
+      badgeCalls.push([userId, by]);
+      return 4;
+    },
     now: () => new Date("2026-10-27T10:00:00Z"),
   };
-  return { deps, sent, dropped };
+  return { deps, sent, dropped, badgeCalls };
 }
 
 const target = (user_id: string, kind: string, show_client = true) => ({ user_id, kind, team_id: "team-1", show_client });
@@ -86,6 +91,7 @@ describe("push_activity: сборка пушей", () => {
       ],
     );
     // Та же форма, что разбирает `parseAppointmentNotificationTarget` в приложении.
+    assert.equal(batch[0].categoryId, "babun-appointment");
     assert.deepEqual(batch[0].data, {
       type: "calendar-appointment",
       appointmentId: APPT,
@@ -119,7 +125,9 @@ describe("push_activity: сборка пушей", () => {
     await handlePushActivity({ log_id: 7, targets: [target(MASTER, "cancel")] }, deps);
     const message = sent[0].find((m) => m.to === "ExponentPushToken[master-b]");
     assert.equal(message?.body, "14:00, Иван из журнала");
-    assert.deepEqual(message?.data, { type: "team-activity", tenantId: TENANT });
+    // Записи нет — открывается её день, и кнопка у отмены «Открыть день».
+    assert.deepEqual(message?.data, { type: "calendar-day", date: "2026-10-27", teamId: "team-1", tenantId: TENANT });
+    assert.equal(message?.categoryId, "babun-cancel");
   });
 
   test("доход: сумма и клиент записи, тап — в запись", async () => {
@@ -140,12 +148,16 @@ describe("push_activity: сборка пушей", () => {
     assert.equal(sent[0][0].title, "Оплачено 120 €");
     assert.equal(sent[0][0].body, "Мария · Y&D");
     assert.equal(sent[0][0].data.type, "calendar-appointment");
+    // У дохода кнопок записи нет.
+    assert.equal(sent[0][0].categoryId, undefined);
   });
 
   test("работу забрали в чужой календарь — тап не ведёт в запись", async () => {
     const { deps, sent } = fake();
     await handlePushActivity({ log_id: 7, targets: [target(MASTER, "moved", false)] }, deps);
-    assert.equal(sent[0][0].data.type, "team-activity");
+    assert.equal(sent[0][0].data.type, "calendar-day");
+    assert.equal(sent[0][0].data.appointmentId, undefined);
+    assert.equal(sent[0][0].categoryId, undefined);
   });
 
   test("DeviceNotRegistered — токен забывается, остальные считаются", async () => {
@@ -188,5 +200,54 @@ describe("push_activity: сборка пушей", () => {
     // 22:30 UTC 27 октября — на Кипре уже 28-е.
     assert.equal(localToday(new Date("2026-10-27T22:30:00Z"), null), "2026-10-28");
     assert.equal(localToday(new Date("2026-10-27T22:30:00Z"), "UTC"), "2026-10-27");
+  });
+
+  test("сводка: каждому телефону своя, тап открывает день", async () => {
+    const { deps, sent } = fake();
+    const result = await handlePushActivity(
+      {
+        digest: [
+          { user_id: MASTER, tenant_id: TENANT, slot: "morning", date: "2026-10-30", count: 3, first_time: "09:00", first_city: "Limassol" },
+        ],
+      },
+      deps,
+    );
+    assert.deepEqual(result, { sent: 2, failed: 0, dropped: 0 });
+    const ru = sent[0].find((m) => m.to === "ExponentPushToken[master-b]");
+    assert.equal(ru?.title, "План на сегодня");
+    assert.equal(ru?.body, "Сегодня 3 визита, первый в 9:00, Limassol");
+    assert.deepEqual(ru?.data, { type: "calendar-day", date: "2026-10-30", tenantId: TENANT });
+    assert.equal(parseInput({ digest: [] }), null);
+  });
+
+  test("значок: одна прибавка на человека за событие, итог — на все его телефоны", async () => {
+    const { deps, sent, badgeCalls } = fake();
+    await handlePushActivity({ log_id: 7, targets: [target(MASTER, "new")] }, deps);
+    assert.deepEqual(badgeCalls, [[MASTER, 1]]);
+    assert.deepEqual(sent[0].map((m) => m.badge), [4, 4]);
+  });
+
+  test("значок: сводка цифру не трогает", async () => {
+    const { deps, sent, badgeCalls } = fake();
+    await handlePushActivity(
+      { digest: [{ user_id: MASTER, tenant_id: TENANT, slot: "evening", date: "2026-10-30", count: 1, first_time: null, first_city: null }] },
+      deps,
+    );
+    assert.deepEqual(badgeCalls, []);
+    assert.equal(sent[0][0].badge, undefined);
+  });
+
+  test("тихие часы: одна сводка на человека, на значке — все накопленные", async () => {
+    const { deps, sent, badgeCalls } = fake();
+    const result = await handlePushActivity(
+      { held: [{ user_id: MASTER, tenant_id: TENANT, counts: { new: 2, change: 1, cancel_link: 1, hack: 9 } }] },
+      deps,
+    );
+    assert.deepEqual(result, { sent: 2, failed: 0, dropped: 0 });
+    assert.deepEqual(badgeCalls, [[MASTER, 4]]);
+    const ru = sent[0].find((m) => m.to === "ExponentPushToken[master-b]");
+    assert.equal(ru?.title, "Пока были тихие часы");
+    assert.equal(ru?.body, "Новые работы: 2 · Переносы: 1 · Отмены: 1");
+    assert.equal(ru?.badge, 4);
   });
 });

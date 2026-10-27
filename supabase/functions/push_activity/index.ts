@@ -126,6 +126,10 @@ function deps(sb: SupabaseClient): PushDeps {
     async dropTokens(tokens) {
       await sb.from("push_devices").delete().in("token", tokens);
     },
+    async bumpBadge(userId, by, day) {
+      const { data, error } = await sb.rpc("push_badge_bump", { p_user: userId, p_by: by, p_day: day });
+      return error || typeof data !== "number" ? null : data;
+    },
     now: () => new Date(),
   };
 }

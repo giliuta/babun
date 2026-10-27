@@ -56,11 +56,15 @@ async function ensureAndroidChannel(): Promise<void> {
 }
 
 /** Записать этот телефон в получатели. Без разрешения на уведомления
- *  ничего не делает — спросить может только `askOnce`. */
+ *  ничего не делает — спросить может только `askOnce` (при входе и строкой
+ *  разрешения на «Уведомлениях»). */
 export async function registerThisDevice(options: { askOnce?: boolean } = {}): Promise<"registered" | "denied" | "unavailable"> {
   const Notifications = getNotificationsModule();
   if (Platform.OS === "web" || !Notifications) return "unavailable";
   try {
+    // Канал — ДО вопроса: Android 13+ без единого канала окно разрешения
+    // (POST_NOTIFICATIONS) не показывает вовсе.
+    await ensureAndroidChannel();
     let permission = await Notifications.getPermissionsAsync();
     // Системный вопрос — один раз за установку: после ответа iOS и Android
     // второго окна не показывают, дальше разрешение меняют в настройках.
@@ -68,7 +72,6 @@ export async function registerThisDevice(options: { askOnce?: boolean } = {}): P
       permission = await Notifications.requestPermissionsAsync();
     }
     if (!permission.granted) return "denied";
-    await ensureAndroidChannel();
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: projectId() });
     const { data, error } = await supabase.rpc("register_push_device", {
       p_token: token,
@@ -122,4 +125,13 @@ export async function forgetOtherDevices(): Promise<void> {
       supabase.rpc("unregister_push_device", { p_token: storedToken() ?? "", p_other_devices: true }),
     ),
   );
+}
+
+/** Открыт календарь — новое за день прочитано: значок гаснет и здесь, и на
+ *  сервере (иначе следующий пуш вернул бы вчерашнюю цифру плюс один). */
+export async function clearPushBadge(): Promise<void> {
+  const Notifications = getNotificationsModule();
+  if (Platform.OS === "web" || !Notifications) return;
+  await Notifications.setBadgeCountAsync(0).catch(() => false);
+  await withTimeout(Promise.resolve(supabase.rpc("reset_push_badge")));
 }

@@ -18,6 +18,7 @@ import {
   type ReminderNotification,
   type ReminderResult,
 } from "./reminders/shared";
+import { pushActionFrom, type PushAction } from "./push-action-ids";
 
 // Shared helpers and the device-local groups (`self:`, `auto:`) live in
 // `./reminders/`; record and event reminders and notification taps stay here.
@@ -42,6 +43,33 @@ export interface AppointmentNotificationTarget {
   /** Аккаунт записи — только у пуша с сервера: человек может состоять в
    *  нескольких, а открыть запись можно лишь в её собственном. */
   tenantId?: string;
+  /** Нажатая кнопка уведомления («Позвонить клиенту», «Маршрут», «Открыть
+   *  день»); тап по самому уведомлению — без неё. */
+  action?: PushAction;
+}
+
+/** Уведомление о дне без записи — удалённая работа: открыть можно только день. */
+export interface DayNotificationTarget {
+  date: string;
+  teamId?: string;
+  tenantId?: string;
+}
+
+export function parseDayNotificationTarget(
+  data: Record<string, unknown> | null | undefined,
+): DayNotificationTarget | null {
+  if (!data || data.type !== "calendar-day") return null;
+  const date = typeof data.date === "string" ? data.date.trim() : "";
+  const teamId = typeof data.teamId === "string" ? data.teamId.trim() : "";
+  const tenantId = typeof data.tenantId === "string" ? data.tenantId.trim() : "";
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    teamId.length > 128 ||
+    (tenantId && !/^[0-9a-f-]{36}$/i.test(tenantId))
+  ) {
+    return null;
+  }
+  return { date, ...(teamId ? { teamId } : {}), ...(tenantId ? { tenantId } : {}) };
 }
 
 /** Cancel every local notification attached to one appointment. This is
@@ -140,15 +168,19 @@ export function parseAppointmentNotificationTarget(
 
 export function subscribeToAppointmentNotificationResponses(
   onTarget: (target: AppointmentNotificationTarget) => void,
+  onDay?: (target: DayNotificationTarget) => void,
 ): () => void {
   if (!Notifications) return () => {};
   const subscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
-      const target = parseAppointmentNotificationTarget(
-        response.notification.request.content.data,
-      );
-      if (target) {
-        onTarget(target);
+      const data = response.notification.request.content.data;
+      const parsed = parseAppointmentNotificationTarget(data);
+      const action = pushActionFrom(response.actionIdentifier);
+      const day = parsed ? null : parseDayNotificationTarget(data);
+      const target = parsed ? { ...parsed, ...(action ? { action } : {}) } : null;
+      if (day && onDay) onDay(day);
+      if (target || (day && onDay)) {
+        if (target) onTarget(target);
         // Clear only a handled Babun response. Unrelated notification
         // payloads belong to their own feature and must stay available.
         void Notifications!.clearLastNotificationResponseAsync().catch(() => {});
@@ -167,9 +199,24 @@ export async function consumeLastAppointmentNotificationTarget(): Promise<
   try {
     const response = await Notifications.getLastNotificationResponseAsync();
     if (!response) return null;
-    const target = parseAppointmentNotificationTarget(
+    const parsed = parseAppointmentNotificationTarget(
       response.notification.request.content.data,
     );
+    if (!parsed) return null;
+    await Notifications.clearLastNotificationResponseAsync();
+    const action = pushActionFrom(response.actionIdentifier);
+    return action ? { ...parsed, action } : parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Стартовый тап по уведомлению об удалённой работе — открыть её день. */
+export async function consumeLastDayNotificationTarget(): Promise<DayNotificationTarget | null> {
+  if (!Notifications) return null;
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    const target = response ? parseDayNotificationTarget(response.notification.request.content.data) : null;
     if (target) await Notifications.clearLastNotificationResponseAsync();
     return target;
   } catch {

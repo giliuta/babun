@@ -3241,6 +3241,36 @@ export type Database = {
         }
         Relationships: []
       }
+      push_settings: {
+        Row: {
+          digest_evening: boolean
+          digest_morning: boolean
+          quiet_end: number | null
+          quiet_start: number | null
+          time_zone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          digest_evening?: boolean
+          digest_morning?: boolean
+          quiet_end?: number | null
+          quiet_start?: number | null
+          time_zone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          digest_evening?: boolean
+          digest_morning?: boolean
+          quiet_end?: number | null
+          quiet_start?: number | null
+          time_zone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           created_at: string
@@ -6684,6 +6714,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reset_push_badge: { Args: never; Returns: undefined }
       resolve_appointment_finance_account: {
         Args: {
           p_payment_method: string
