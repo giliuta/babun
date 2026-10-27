@@ -43,6 +43,8 @@ export interface BookChromeInput {
   customTotal: boolean;
   effectiveTotal: number;
   todayYmd: string;
+  /** Минуты «сейчас» в поясе команды: сегодняшняя запись после конца — долг. */
+  nowMinutes?: number | null;
   situationPalette: RecordColorInput["palette"];
   activeSituations: ColorSituation[];
   /** Цвета отмены и оплаты из «Цвета записи»; `null` — случай не красит. */
@@ -110,7 +112,7 @@ export function bookChrome(input: BookChromeInput) {
             input.prepaidColor && input.activeSituations.includes("unpaid") && partlyPaid(live)
               ? input.prepaidColor
               : null,
-          filled: recordFilled(live, todayYmd),
+          filled: recordFilled(live, todayYmd, input.nowMinutes),
           base: autoBase,
           palette: input.situationPalette,
           active: input.activeSituations,

@@ -303,6 +303,7 @@ export function useBookForm() {
     customTotal: draft.customTotal,
     effectiveTotal: totals.effectiveTotal,
     todayYmd: label.todayYmd,
+    nowMinutes: label.nowMinutes,
     situationPalette: look.situationPalette,
     activeSituations: look.activeSituations,
     cancelledColor: look.cancelledColor,
