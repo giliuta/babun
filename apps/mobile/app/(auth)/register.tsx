@@ -157,6 +157,7 @@ function RegisterScreen() {
           onChangeText={edit(setFullName)}
           placeholder="Ваше имя"
           accessibilityLabel="Ваше имя"
+          autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
           maxLength={120}
