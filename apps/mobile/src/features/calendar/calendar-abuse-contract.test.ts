@@ -420,7 +420,7 @@ describe("повторный аудит календаря 03.10", () => {
   test("«Список»: у отменённой сумма зачёркнута и без «к оплате»", () => {
     const agenda = agendaList();
     assert.match(agenda, /textDecorationLine: cancelled \? "line-through" : "none",/);
-    assert.match(agenda, /\{debt > 0 && !cancelled \? \(/);
+    assert.match(agenda, /if \(cancelled \|\| !\(debt > 0\)\) return plain;/);
   });
 
   test("SMS за месяц — в частях, как баланс и тариф («€1,20 · 10 SMS» при €0,12)", () => {
