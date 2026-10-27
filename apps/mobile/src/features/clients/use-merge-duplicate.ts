@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
-import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
@@ -16,11 +15,9 @@ import {
   teamTagIds,
 } from "@/features/clients/merge-clients";
 import {
-  useArchiveClients,
   useClient,
   useClientTags,
   useClientsSourceScope,
-  useUpdateClientById,
 } from "@/features/clients/queries";
 import { useClientMembers } from "@/features/clients/use-client-links";
 import { clientMembersQueryKey, parseLinkKey } from "@/features/clients/use-link-writer";
@@ -28,7 +25,6 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
-import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
 import { clientKeys } from "@/lib/client-query-keys";
 import { MergeNotOnServer, mergeClientsOnServer } from "@/features/clients/merge-clients-rpc";
 
@@ -40,11 +36,7 @@ import { MergeNotOnServer, mergeClientsOnServer } from "@/features/clients/merge
 //
 // СЛИВАЕТ СЕРВЕР ОДНИМ ВЫЗОВОМ (`merge-clients-rpc.ts`): правка основной,
 // визиты, «Удалённые записи», файлы, долги и корзина дубля — одна транзакция.
-// Пока функции на сервере нет, слияние идёт прежним путём по шагам
-// (`mergeStepByStep`), и там ПОРЯДОК НЕ МЕНЯТЬ: патч основной → записи дубля →
-// архив дубля. Патч не лёг — записи не едут (иначе они уедут к карточке без
-// данных дубля); архив не прошёл — это ошибка словами: живой дубль вернул бы
-// плашку, а второе слияние сложило бы всё ещё раз.
+// Пока функции на сервере нет, пункт отвечает отказом словами.
 
 interface MergeDuplicateInput {
   /** Карточка страницы; черновик и архив пункта не получают. */
@@ -92,8 +84,8 @@ export function useMergeDuplicate({
   const sourceScope = useClientsSourceScope();
   const activeTenantId = useTenantId();
   const tenantId = scope?.tenantId ?? activeTenantId;
-  // Записи переносятся клиентом АКТИВНОЙ компании (`useUpdateAppointment`):
-  // своя база, открытая не в календаре, ушла бы под чужой заголовок.
+  // Сервер сливает под АКТИВНОЙ компанией (заголовок запроса): своя база,
+  // открытая не в календаре, ушла бы под чужой заголовок.
   const eligible =
     !!client && !isDraft && !client.deleted_at && canManage && (scope?.isActive ?? true);
   const dupId = useDuplicateOf(eligible ? client : null);
@@ -101,54 +93,10 @@ export function useMergeDuplicate({
   const members = useClientMembers(dupId);
   const dupAppts = useClientAppointments(dupId ?? "");
   const tagsQuery = useClientTags();
-  const updateById = useUpdateClientById();
-  const updateAppt = useUpdateAppointment();
-  const archive = useArchiveClients();
-  const setOptOut = useSetClientSmsOptOut();
   const running = useRef(false);
 
   if (!eligible || !client || !dupId) return undefined;
   const primary = client;
-
-  /** Прежнее слияние по шагам — пока на сервере нет `merge_clients`. */
-  const mergeStepByStep = async (
-    dupRow: Client,
-    fresh: Client,
-    patch: Partial<Client>,
-    remap: ReadonlyMap<string, string>,
-  ) => {
-    // 1. Дополняем основную. Не записалось — дальше не идём.
-    if (Object.keys(patch).length > 0) {
-      await updateById.mutateAsync({ id: primary.id, patch });
-    }
-    // «Клиент просил не писать» переезжает вместе с данными: правка клиента
-    // его не несёт — у отказа своя функция, — и без переноса основная
-    // карточка обещала бы SMS человеку, который просил не писать.
-    if (dupRow.sms_opt_out === true && fresh.sms_opt_out !== true) {
-      await setOptOut.mutateAsync({
-        clientId: primary.id,
-        value: true,
-        tenantId: sourceScope?.tenantId ?? null,
-      });
-    }
-    // 2. Визиты дубля — ради них слияние и затевается.
-    for (const a of dupAppts.data ?? []) {
-      const location = a.location_id ? remap.get(a.location_id) : undefined;
-      await updateAppt.mutateAsync({
-        id: a.id,
-        patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },
-      });
-    }
-    // 3. Дубль — в «Удалённые клиенты» (архива нет): визиты уже
-    //    у основной, и без истории он сотрётся через 30 дней; оставшиеся
-    //    за ним инвойсы или деньги база не даст стереть сама
-    //    (`client_history_never_purges`). Мутация отчитывается числами, а
-    //    не исключением: без проверки живой дубль сошёл бы за успех.
-    const res = await archive.mutateAsync({ ids: [dupRow.id], trash: true });
-    if (res.failed > 0 || res.archived === 0) {
-      throw new Error("Карточка объединена, но дубль не удалился");
-    }
-  };
 
   const merge = async (dupRow: Client) => {
     // Засов рефом, а не состоянием: два тапа в одном кадре оба видели бы
@@ -184,8 +132,12 @@ export function useMergeDuplicate({
           void qc.invalidateQueries({ queryKey: key });
         }
       } catch (e) {
-        if (!(e instanceof MergeNotOnServer)) throw e;
-        await mergeStepByStep(dupRow, fresh, patch, remap);
+        // Пока функции на сервере нет, слияния НЕТ: прежний путь по шагам
+        // терял файлы и долги дубля и оставлял полуслияние на обрыве.
+        if (e instanceof MergeNotOnServer) {
+          throw new Error("Объединение карточек включится после обновления сервера");
+        }
+        throw e;
       }
       haptics.success();
       toast("Объединили");
