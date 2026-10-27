@@ -57,6 +57,52 @@ comment on function public.client_attachment_owner(text) is
 revoke all on function public.client_attachment_owner(text) from public, anon;
 grant execute on function public.client_attachment_owner(text) to authenticated;
 
+-- СТРОКА ФАЙЛА НЕ ПЕРЕПИСЫВАЕТ ЧУЖОЙ ФАЙЛ. Раз политики Storage верят
+-- строке, строке нельзя назвать чужой путь: партнёр с «Файлы: Меняет» у своего
+-- клиента X вставил бы строку {client_id: X, storage_path: файл клиента Y} — и
+-- читал бы и удалял файл Y. Поэтому:
+--   • путь — один на строку (уникальный индекс);
+--   • при вставке путь начинается с `<компания строки>/<клиент строки>/`;
+--   • путь и компанию строки не правит никто, а клиента — только слияние
+--     (`merge_clients` ставит флаг транзакции `babun.merge_clients`).
+create unique index if not exists client_attachments_storage_path_key
+  on public.client_attachments (storage_path);
+
+create or replace function public.client_attachments_path_guard()
+returns trigger
+language plpgsql
+set search_path = public
+as $function$
+begin
+  if tg_op = 'INSERT' then
+    if split_part(new.storage_path, '/', 1) is distinct from new.tenant_id::text
+       or split_part(new.storage_path, '/', 2) is distinct from new.client_id::text then
+      raise exception 'attachment path must belong to its client'
+        using errcode = '42501', hint = 'block:clients.files';
+    end if;
+    return new;
+  end if;
+  if new.storage_path is distinct from old.storage_path
+     or new.tenant_id is distinct from old.tenant_id then
+    raise exception 'attachment path cannot change'
+      using errcode = '42501', hint = 'block:clients.files';
+  end if;
+  if new.client_id is distinct from old.client_id
+     and coalesce(current_setting('babun.merge_clients', true), '') <> 'on' then
+    raise exception 'attachment moves to another client only by merge'
+      using errcode = '42501', hint = 'block:clients.files';
+  end if;
+  return new;
+end;
+$function$;
+
+revoke all on function public.client_attachments_path_guard() from public, anon, authenticated;
+
+drop trigger if exists client_attachments_path_guard on public.client_attachments;
+create trigger client_attachments_path_guard
+  before insert or update on public.client_attachments
+  for each row execute function public.client_attachments_path_guard();
+
 alter policy storage_client_attachments_select on storage.objects
   using ((bucket_id = 'client-attachments'::text) AND (( SELECT current_user_role() AS current_user_role) = ANY (ARRAY['owner'::text, 'dispatcher'::text])) AND ((storage.foldername(name))[1] = (( SELECT current_tenant_id() AS current_tenant_id))::text) AND current_user_can_access_client(public.client_attachment_owner(name)));
 
@@ -176,10 +222,14 @@ begin
   get diagnostics moved_trash = row_count;
 
   -- 4. Файлы карточки (путь не меняется — см. `client_attachment_owner`).
+  --    Клиента строки файла меняет только слияние: флаг до конца транзакции
+  --    (`client_attachments_path_guard`), снимается сразу после.
+  perform set_config('babun.merge_clients', 'on', true);
   update public.client_attachments
      set client_id = p_primary
    where tenant_id = active_tenant and client_id = p_duplicate;
   get diagnostics moved_files = row_count;
+  perform set_config('babun.merge_clients', '', true);
 
   -- 5. Долги.
   update public.debts
@@ -253,6 +303,12 @@ begin
             or coalesce(with_check, '') like '%foldername(name))[2]%')
   ) then
     raise exception 'merge clients: a client-attachments policy still takes the client from the path';
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'client_attachments_path_guard'
+                    and tgrelid = 'public.client_attachments'::regclass)
+     or not exists (select 1 from pg_indexes where schemaname = 'public'
+                    and indexname = 'client_attachments_storage_path_key') then
+    raise exception 'merge clients: attachment path guard is missing';
   end if;
 end;
 $guard$;

@@ -69,3 +69,21 @@ test("функции закрыты от anon", () => {
   assert.match(sql, /revoke all on function public\.merge_clients\(uuid, uuid, jsonb, uuid\[\], jsonb\) from public, anon;/);
   assert.match(sql, /revoke all on function public\.client_attachment_owner\(text\) from public, anon;/);
 });
+
+// СТРОКА ФАЙЛА НЕ НАЗЫВАЕТ ЧУЖОЙ ФАЙЛ. Политики Storage верят строке, значит
+// партнёр со своим клиентом X не должен суметь записать строку на путь файла
+// клиента Y — иначе он читал бы и удалял чужой файл.
+test("путь файла — уникальный, свой при вставке, неизменный; клиента меняет только слияние", () => {
+  assert.match(sql, /create unique index if not exists client_attachments_storage_path_key\s+on public\.client_attachments \(storage_path\);/);
+  const guard = sql.slice(sql.indexOf("create or replace function public.client_attachments_path_guard()"));
+  assert.match(guard, /split_part\(new\.storage_path, '\/', 1\) is distinct from new\.tenant_id::text/);
+  assert.match(guard, /split_part\(new\.storage_path, '\/', 2\) is distinct from new\.client_id::text/);
+  assert.match(guard, /new\.storage_path is distinct from old\.storage_path/);
+  assert.match(guard, /coalesce\(current_setting\('babun\.merge_clients', true\), ''\) <> 'on'/);
+  assert.match(sql, /before insert or update on public\.client_attachments/);
+  // флаг поднимается только вокруг переноса файлов и сразу опускается
+  const on = body.indexOf("perform set_config('babun.merge_clients', 'on', true);");
+  const move = body.indexOf("update public.client_attachments");
+  const off = body.indexOf("perform set_config('babun.merge_clients', '', true);");
+  assert.ok(on > -1 && on < move && move < off, "флаг слияния открыт шире переноса файлов");
+});
