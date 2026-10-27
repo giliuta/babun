@@ -17,7 +17,7 @@ import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useTenant } from "@/session/tenant";
 import { useFeatureOn } from "@/features/settings/company-features";
 import type { Team } from "@/features/reference/queries";
-import { deleteOperationAlert, deleteTransferAlert, transferUndoMinus } from "./account-alerts";
+import { deleteOperationAlert, deleteTransferAlert, minusAfterSpend } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 import { randomUuid } from "@babun/shared/sync";
 import { createRefundRequestIds } from "./operation-sheet/request-ids";
@@ -222,7 +222,7 @@ export function TransactionPopup({
     // а не одна строка ленты.
     const text =
       tx.type === "transfer"
-        ? deleteTransferAlert(transferUndoMinus(accounts.find((a) => a.id === transferLegs?.to.id), tx.amount))
+        ? deleteTransferAlert(minusAfterSpend(accounts.find((a) => a.id === transferLegs?.to.id), tx.amount))
         : // Один текст на свайп ленты, лист дня и эту витрину.
           deleteOperationAlert();
     // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (правило дизайн-системы) — вопрос

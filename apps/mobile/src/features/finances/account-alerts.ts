@@ -160,9 +160,9 @@ export function minusWarning({ name, after }: AccountMinus): string {
   return `Счёт «${name}» уйдёт в минус: ${money(after)}.`;
 }
 
-/** Отмена перевода снимает сумму с получателя. Увела бы в минус — кто и сколько.
- *  Остаток получателя неизвестен — молчим: обещать минус наугад нельзя. */
-export function transferUndoMinus(
+/** Сумма уходит со счёта (расход; отмена перевода — для получателя). Увела бы в
+ *  минус — кто и сколько. Остаток неизвестен — молчим: обещать минус наугад нельзя. */
+export function minusAfterSpend(
   destination: { name: string; balance: number; balance_known?: boolean } | null | undefined,
   amount: number,
 ): AccountMinus | null {

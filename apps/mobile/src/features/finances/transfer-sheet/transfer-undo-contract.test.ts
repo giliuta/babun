@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
-import { deleteTransferAlert, minusWarning, transferUndoMinus } from "../account-alerts";
+import { deleteTransferAlert, minusWarning, minusAfterSpend } from "../account-alerts";
 
 // ОТМЕНА ПЕРЕВОДА НЕ ЗАПРЕЩАЕТСЯ. Минус на счёте разрешён всем: расход уводит
 // в минус без отказа, а отмена перевода для получателя — тот же расход. Сервер
@@ -33,7 +33,7 @@ describe("отмена перевода: миграция", () => {
 
 describe("отмена перевода: слова о минусе", () => {
   test("получатель уйдёт в минус — вопрос называет счёт и остаток после", () => {
-    const minus = transferUndoMinus({ name: "Test QA", balance: 209.75, balance_known: true }, 260);
+    const minus = minusAfterSpend({ name: "Test QA", balance: 209.75, balance_known: true }, 260);
     assert.deepEqual(minus, { name: "Test QA", after: -50.25 });
     const alert = deleteTransferAlert(minus);
     assert.ok(alert.message.endsWith(minusWarning({ name: "Test QA", after: -50.25 })));
@@ -42,15 +42,15 @@ describe("отмена перевода: слова о минусе", () => {
 
   test("сумма ноги со знаком минус — та же сумма отмены", () => {
     assert.deepEqual(
-      transferUndoMinus({ name: "Карта", balance: 10, balance_known: true }, -30),
+      minusAfterSpend({ name: "Карта", balance: 10, balance_known: true }, -30),
       { name: "Карта", after: -20 },
     );
   });
 
   test("минуса нет или остаток неизвестен — вопрос прежний, без догадок", () => {
-    assert.equal(transferUndoMinus({ name: "Cash", balance: 260, balance_known: true }, 260), null);
-    assert.equal(transferUndoMinus({ name: "Cash", balance: 0, balance_known: false }, 260), null);
-    assert.equal(transferUndoMinus(undefined, 260), null);
+    assert.equal(minusAfterSpend({ name: "Cash", balance: 260, balance_known: true }, 260), null);
+    assert.equal(minusAfterSpend({ name: "Cash", balance: 0, balance_known: false }, 260), null);
+    assert.equal(minusAfterSpend(undefined, 260), null);
     assert.equal(deleteTransferAlert(null).message, deleteTransferAlert().message);
   });
 
@@ -58,6 +58,6 @@ describe("отмена перевода: слова о минусе", () => {
     const rows = readFileSync(path.resolve(here, "../home/use-row-actions.ts"), "utf8");
     assert.match(rows, /deleteTransferAlert\(undoMinus\(tx\)\)/);
     const popup = readFileSync(path.resolve(here, "../TransactionPopup.tsx"), "utf8");
-    assert.match(popup, /deleteTransferAlert\(transferUndoMinus\(/);
+    assert.match(popup, /deleteTransferAlert\(minusAfterSpend\(/);
   });
 });

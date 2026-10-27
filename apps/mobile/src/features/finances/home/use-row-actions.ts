@@ -7,7 +7,7 @@ import { confirmThen } from "@/lib/confirm";
 import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import { deleteOperationAlert, deleteTransferAlert, transferUndoMinus } from "../account-alerts";
+import { deleteOperationAlert, deleteTransferAlert, minusAfterSpend } from "../account-alerts";
 import { useDeleteTransfer } from "../accounts";
 import type { FinanceDocument } from "../documents";
 import type { FinancePageAccess } from "../finance-page-access";
@@ -131,7 +131,7 @@ export function useRowActions(input: RowActionsInput) {
     const legs = [...scopedTransactions, ...(input.allTimeFound ?? [])];
     const incoming =
       tx.amount > 0 ? tx : legs.find((x) => x.transfer_group_id === tx.transfer_group_id && x.amount > 0);
-    return transferUndoMinus(allAccounts.find((a) => a.id === incoming?.account_id), tx.amount);
+    return minusAfterSpend(allAccounts.find((a) => a.id === incoming?.account_id), tx.amount);
   };
   const deleteRow = (row: RecordRow) => {
     const tx = rowTx(row);

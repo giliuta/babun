@@ -20,7 +20,7 @@ import {
 } from "./queries";
 import { useCurrentRole } from "@/session/tenant";
 import {
-  operationCanSave,
+  minusAfterSpend, operationCanSave,
   operationInputReason,
   operationReason,
   refundGuards,
@@ -162,7 +162,7 @@ export function OperationSheet({
     canCreateCategory: isOwner,
     debtRemainderCents: debtPayment ? Math.round(debtPayment.amount * 100) : null,
     grossCents,
-    receiptLocked,
+    receiptLocked, minus: type === "expense" && !isEdit && grossCents != null ? minusAfterSpend(acc.selectedAccount, grossCents / 100) : null,
   };
   const canSave = operationCanSave({ ...gate, canWrite, busy });
   const isExpense = type === "expense";
