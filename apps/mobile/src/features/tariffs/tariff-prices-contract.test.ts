@@ -43,7 +43,6 @@ describe("цена за календарь: страница и Stripe", () => {
 
   test("в подписке столько календарей, сколько живых; людей не считаем", () => {
     assert.match(FN, /"line_items\[0\]\[quantity\]": String\(quantity\)/);
-    assert.match(FN, /\.eq\("is_active", true\)/);
     assert.doesNotMatch(FN, /too_many_partners/);
     assert.match(FN, /proration_behavior: "none"/);
     assert.equal(TIER_LIMITS.max.partners, 1000);
@@ -69,15 +68,17 @@ describe("цена за календарь: страница и Stripe", () => {
   });
 });
 
-// КОЛИЧЕСТВО = ЖИВЫЕ КАЛЕНДАРИ, А НЕ «ОДИН ПРИ ОШИБКЕ». Подсчёт, который при
-// отказе чтения молча возвращает 1, выставляет счёт за один календарь при
-// пяти живых: ошибка должна дойти до 5xx (оплата) и до повтора Stripe
-// (вебхук перед счётом).
+// КОЛИЧЕСТВО = КАЛЕНДАРИ С РАБОТОЙ, А НЕ «ОДИН ПРИ ОШИБКЕ». Подсчёт, который
+// при отказе чтения молча возвращает 1, выставляет счёт за один календарь при
+// пяти рабочих: ошибка должна дойти до 5xx (оплата) и до повтора Stripe
+// (вебхук перед счётом). Само правило и его сверка с приложением —
+// `paid-calendars-parity.test.ts`.
 describe("подсчёт календарей для подписки", () => {
-  test("ошибка чтения календарей — исключение, а не один календарь", () => {
+  test("обе функции считают общим помощником, ошибка чтения — исключение", () => {
+    const helper = readFileSync(path.join(ROOT, "supabase/functions/_shared/paid-calendars.ts"), "utf8");
+    assert.match(helper, /if \(error \|\| typeof data !== "number"\) \{\s*throw new Error/, "сбой подсчёта превращается в 1");
     for (const [name, source] of [["tariff-checkout", FN], ["stripe-webhook", WEBHOOK]] as const) {
-      assert.match(source, /const \{ count, error \} = await \w+\s*\.from\("teams"\)/, `${name}: ошибка чтения teams не проверяется`);
-      assert.match(source, /if \(error \|\| typeof count !== "number"\) \{\s*throw new Error/, `${name}: сбой подсчёта превращается в 1`);
+      assert.match(source, /await paidCalendars\((service|sbs), tenantId\)/, `${name}: считает не общим помощником`);
       assert.doesNotMatch(source, /typeof count === "number" \? count : 1/, `${name}: остался молчаливый откат на 1`);
     }
   });

@@ -3,7 +3,8 @@
 // бесплатно). Оплата — не через Apple, а в браузере.
 //
 // Подписка одна на аккаунт: одна цена «календарь», количество — живые
-// календари аккаунта. Добавили или убрали календарь — количество меняется со
+// календари аккаунта, в которых есть работа (запись, операция, SMS);
+// календарь только с событиями бесплатен. Добавили или убрали календарь — количество меняется со
 // следующего платежа (`proration_behavior: none`): действие "sync" после
 // создания/архива и сверка вебхуком перед счётом (`invoice.upcoming`).
 // Старые клиенты шлют `tier` solo/pro/max — любой означает «календари».
@@ -36,6 +37,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { keyFromEnv, serviceClient } from "../_shared/service-client.ts";
 import { json as jsonResponse } from "../_shared/http.ts";
+import { paidCalendars } from "../_shared/paid-calendars.ts";
 import {
   checkoutIdempotencyKey,
   liveSubscriptionOf,
@@ -149,22 +151,6 @@ async function priceFor(key: string, period: Period): Promise<string> {
   return price.id as string;
 }
 
-/** Живые календари аккаунта — столько и в подписке (не меньше одного).
- *  Ошибка чтения — исключение, а не «один календарь»: молчаливая единица
- *  выставила бы счёт за один календарь при пяти живых. */
-// deno-lint-ignore no-explicit-any
-async function liveCalendars(service: any, tenantId: string): Promise<number> {
-  const { count, error } = await service
-    .from("teams")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
-  if (error || typeof count !== "number") {
-    throw new Error(`live calendars unreadable: ${error?.code ?? "no count"}`);
-  }
-  return Math.max(1, count);
-}
-
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -231,7 +217,8 @@ Deno.serve(async (request: Request) => {
     }
 
     const live = ["active", "trialing", "past_due"].includes(String(tenant.subscription_status ?? ""));
-    const liveNow = await liveCalendars(service, tenantId);
+    // Платят только календари с работой (`_shared/paid-calendars.ts`).
+    const liveNow = await paidCalendars(service, tenantId);
     // Предложение «Новый календарь» платит и за тот, что заводят: живые + 1,
     // не больше (12.10). Сверка «sync» ставит ровно живые.
     const asked = Number(body.calendars);

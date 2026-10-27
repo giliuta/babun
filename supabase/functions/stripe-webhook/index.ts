@@ -43,6 +43,7 @@
 import { serviceClient } from "../_shared/service-client.ts";
 import { json } from "../_shared/http.ts";
 import { duplicateVerdict, LIVE_TARIFF_STATUSES } from "../_shared/tariff-duplicates.ts";
+import { paidCalendars } from "../_shared/paid-calendars.ts";
 // `npm:`, а не `esm.sh`: сборка esm.sh тянула node-совместимость Deno std, и
 // она на каждое событие писала в логи «event loop error:
 // Deno.core.runMicrotasks() is not supported» — настоящий сбой вебхука в
@@ -558,7 +559,8 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
  *  Приложение после создания или архива календаря само зовёт
  *  `tariff-checkout` (sync), но из приложения магазина и без сети этот шаг
  *  пропадает. Перед каждым счётом (`invoice.upcoming`) количество в подписке
- *  ставится по живым календарям — без доплаты сегодня. */
+ *  ставится по живым календарям с работой — без доплаты сегодня; так же
+ *  календарь, где появилась первая запись, становится платным. */
 async function syncCalendarsBeforeInvoice(
   event: Stripe.Event,
   stripe: Stripe,
@@ -581,16 +583,9 @@ async function syncCalendarsBeforeInvoice(
   const sub = await stripe.subscriptions.retrieve(subId);
   const item = sub.items?.data?.[0];
   if (!item || !/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return;
-  const { count, error } = await sbs
-    .from("teams")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
-  // Не прочли календари — 5xx и повтор от Stripe, а не счёт за один.
-  if (error || typeof count !== "number") {
-    throw new Error(`live calendars unreadable: ${error?.code ?? "no count"}`);
-  }
-  const live = Math.max(1, count);
+  // Платят календари с работой; не прочли — исключение, 5xx и повтор от
+  // Stripe, а не счёт за один.
+  const live = await paidCalendars(sbs, tenantId);
   if (item.quantity === live) return;
   await stripe.subscriptions.update(subId, {
     items: [{ id: item.id, quantity: live }],
