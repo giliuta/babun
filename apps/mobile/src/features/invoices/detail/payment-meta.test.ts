@@ -76,3 +76,11 @@ describe("earliestPayment", () => {
     assert.equal(earliestPayment([]), undefined);
   });
 });
+
+test("дата платежа — по языку интерфейса, а не «ru-RU» по умолчанию (F-58)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "payment-meta.ts"), "utf8");
+  assert.match(source, /formatInvoiceDate\(payment\.occurred_on, intlLocale\(\)\)/);
+});
