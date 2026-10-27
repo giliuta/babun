@@ -5216,5 +5216,6 @@
  "Сворачивает выбор": "Collapses the options",
  "Раскрывает выбор": "Expands the options",
  "Убрать всё в «{0}»": "Clear all in “{0}”",
- "Типов объектов пока нет": "No property types yet"
+ "Типов объектов пока нет": "No property types yet",
+ "«{0}» исчезнет из выбора, а объекты этого типа ({1}) останутся без типа.": "“{0}” will disappear from the list, and properties of this type ({1}) will be left without a type."
 }

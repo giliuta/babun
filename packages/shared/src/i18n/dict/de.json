@@ -5216,5 +5216,6 @@
  "Сворачивает выбор": "Klappt die Auswahl ein",
  "Раскрывает выбор": "Klappt die Auswahl auf",
  "Убрать всё в «{0}»": "Alles in „{0}“ entfernen",
- "Типов объектов пока нет": "Noch keine Objekttypen"
+ "Типов объектов пока нет": "Noch keine Objekttypen",
+ "«{0}» исчезнет из выбора, а объекты этого типа ({1}) останутся без типа.": "„{0}“ verschwindet aus der Auswahl, und Objekte dieses Typs ({1}) bleiben ohne Typ."
 }
