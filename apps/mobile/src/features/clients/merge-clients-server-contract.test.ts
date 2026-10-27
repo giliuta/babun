@@ -43,6 +43,10 @@ test("к основной переезжает всё, что держится �
   }
   assert.match(body, /'\{client_id\}', to_jsonb\(p_primary::text\)\)/);
   assert.match(body, /set referred_by_client_id = p_primary/);
+  // «Люди» дубля: связь хранится у того, кто входит, — переписывается у них
+  assert.match(body, /when e\.value ->> 'group_id' = p_duplicate::text then/);
+  assert.match(body, /and c\.id not in \(p_primary, p_duplicate\)/);
+  assert.match(body, /select distinct on \(x\.item ->> 'group_id', coalesce\(x\.item ->> 'location_id', ''\)\)/);
   // дубль — в корзину, а не насовсем
   assert.match(body, /set deleted_at = now\(\),\s+purge_at = now\(\) \+ interval '30 days'/);
   assert.doesNotMatch(body, /delete from public\.clients/);

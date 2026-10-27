@@ -14,7 +14,7 @@
 -- карточку (тем же `update_client_with_tags`, что и обычная правка — те же
 -- поля и проверки), переносит отказ от SMS, визиты (с переездом объекта),
 -- снимки в «Удалённых записях», файлы, долги, напоминания, SMS, оценки,
--- запросы адреса и ссылки «Кто привёл», и кладёт дубль в «Удалённые
+-- запросы адреса, ссылки «Кто привёл» и «Люди» дубля, и кладёт дубль в «Удалённые
 -- клиенты». Что-то не легло — не легло ничего.
 --
 -- Деньги и документы дубля (операции, инвойсы, чеки) НЕ переносятся: у
@@ -260,6 +260,35 @@ begin
    where tenant_id = active_tenant
      and referred_by_client_id = p_duplicate
      and id <> p_primary;
+  get diagnostics n = row_count; moved_other := moved_other + n;
+
+  -- «Люди» дубля: связь хранится у ТОГО, КТО ВХОДИТ (`memberships`), поэтому
+  -- жена и жильцы дубля переписываются у себя — в карточку основной, с
+  -- переездом места по тем же объектам; совпавшая связь не двоится.
+  update public.clients c
+     set memberships = (
+       select coalesce(jsonb_agg(m.item order by m.ord), '[]'::jsonb)
+         from (
+           select distinct on (x.item ->> 'group_id', coalesce(x.item ->> 'location_id', ''))
+                  x.item, x.ord
+             from (
+               select case
+                        when e.value ->> 'group_id' = p_duplicate::text then
+                          e.value || jsonb_build_object(
+                            'group_id', p_primary::text,
+                            'location_id', coalesce(remap -> (e.value ->> 'location_id'), e.value -> 'location_id'))
+                        else e.value
+                      end as item,
+                      e.ordinality as ord
+                 from jsonb_array_elements(c.memberships) with ordinality e
+             ) x
+            order by x.item ->> 'group_id', coalesce(x.item ->> 'location_id', ''), x.ord
+         ) m
+     )
+   where c.tenant_id = active_tenant
+     and c.id not in (p_primary, p_duplicate)
+     and jsonb_typeof(c.memberships) = 'array'
+     and c.memberships @> jsonb_build_array(jsonb_build_object('group_id', p_duplicate::text));
   get diagnostics n = row_count; moved_other := moved_other + n;
 
   -- 7. Дубль — в «Удалённые клиенты». Визитов у него больше нет, поэтому

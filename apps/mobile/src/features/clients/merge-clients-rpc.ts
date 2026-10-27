@@ -32,7 +32,7 @@ const MISSING_FUNCTION = new Set(["PGRST202", "42883"]);
 export class MergeNotOnServer extends Error {}
 
 /** Слить дубля в основную. `MergeNotOnServer` — сервер не знает функции:
- *  зовущий сливает прежним путём по шагам. */
+ *  слияния нет, зовущий отвечает отказом словами. */
 export async function mergeClientsOnServer(input: {
   primaryId: string;
   duplicateId: string;
