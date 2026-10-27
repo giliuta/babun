@@ -64,7 +64,11 @@ export function InvoiceRequisitesBlock({
 
   const rows = companies.data ?? [];
   const live = rows.filter((c) => !c.archived_at);
-  const company = live.find((c) => c.id === companyId) ?? defaultCompany(rows);
+  // Выбранный набор показывается, даже если его потом скрыли: документ уже
+  // выпущен от него (правка, кредит-нота, возврат по чеку), и подмена на набор
+  // по умолчанию печатала чужое имя рядом с номером из его серии. Выбирают —
+  // только из живых (`live`).
+  const company = rows.find((c) => c.id === companyId) ?? defaultCompany(rows);
   const empty = !company || !companyFilled(company);
 
   const edit = (target: Company | null) => {
