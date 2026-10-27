@@ -117,6 +117,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     // копия встаёт туда же, где оригинал, какой бы чип ни был выбран.
     if (isCrew) {
       const attempt = `copy|${apt.id}|${dateYmd}|${timeStart}`;
+      // Номер попытки запомнен по ключу — тот же номер несёт и откат в тосте.
       const copyId = attemptId(attempt);
       memberCopy.mutate(
         {
@@ -124,7 +125,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
           date: dateYmd,
           timeStart,
           timeEnd: addMinutesHM(timeStart, moveWindowMin),
-          id: copyId,
+          id: attemptId(attempt),
         },
         {
           onSuccess: () => {
