@@ -57,14 +57,33 @@ function animateWith(e: KeyboardEvent | null) {
 
 export function KeyboardLift({ style, pointerEvents, children }: Props) {
   const ref = useRef<View>(null);
-  const [lift, setLift] = useState(0);
+  const [lift, setLiftState] = useState(0);
+  const liftNow = useRef(0);
+  // ПОСЛЕДНИЙ ЗАМЕР РАМКИ — чтобы поднять В ТОМ ЖЕ КАДРЕ, что пришло событие.
+  // Замер асинхронный, и подъём, пришедший кадром позже, опаздывал к
+  // докрутке формы к полю (запись докручивает к заметке через 300 мс после
+  // фокуса): прокрутка считалась по ещё не сжатой странице, и заметка
+  // оставалась под футером. Свежий замер потом уточняет подъём.
+  const frame = useRef<{ pageY: number; h: number } | null>(null);
+  const remember = () =>
+    ref.current?.measure((_x, _y, _w, h, _pageX, pageY) => {
+      frame.current = { pageY, h };
+    });
 
   useEffect(() => {
     let alive = true;
+    const setLift = (next: number, e: KeyboardEvent | null) => {
+      if (liftNow.current === next) return;
+      liftNow.current = next;
+      animateWith(e);
+      setLiftState(next);
+    };
     const raise = (kb: KeyboardMetrics, e: KeyboardEvent | null) => {
       // «Предпочитать плавные переходы» (Универсальный доступ iOS): событие
       // приходит с `screenY` 0 — клавиатура не выезжает, поднимать нечего.
       if (kb.screenY <= 0) return;
+      const known = frame.current;
+      if (known) setLift(Math.max(0, Math.round(known.pageY + known.h - kb.screenY)), e);
       // Низ рамки до подъёма: рамка уже поднята на `lift`, её paddingBottom
       // входит в высоту, поэтому меряем всю рамку — она не сжимается.
       //
@@ -75,8 +94,8 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
       // экран — и на странице, и в шторке (своё окно `Modal`).
       ref.current?.measure((_x, _y, _w, h, _pageX, pageY) => {
         if (!alive) return;
-        animateWith(e);
-        setLift(Math.max(0, Math.round(pageY + h - kb.screenY)));
+        frame.current = { pageY, h };
+        setLift(Math.max(0, Math.round(pageY + h - kb.screenY)), e);
       });
     };
     // iOS: `will*` — подъём в такт анимации клавиатуры, и `keyboardWillShow`
@@ -85,10 +104,9 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
     const show = Keyboard.addListener(IOS ? "keyboardWillShow" : "keyboardDidShow", (e) =>
       raise(e.endCoordinates, e),
     );
-    const hide = Keyboard.addListener(IOS ? "keyboardWillHide" : "keyboardDidHide", (e) => {
-      animateWith(e);
-      setLift(0);
-    });
+    const hide = Keyboard.addListener(IOS ? "keyboardWillHide" : "keyboardDidHide", (e) =>
+      setLift(0, e),
+    );
     // Лист открылся, когда клавиатура уже стояла (поле на экране под ним).
     const now = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
     if (now) raise(now, null);
@@ -100,7 +118,14 @@ export function KeyboardLift({ style, pointerEvents, children }: Props) {
   }, []);
 
   return (
-    <View ref={ref} pointerEvents={pointerEvents} style={[style, { paddingBottom: lift }]}>
+    <View
+      ref={ref}
+      pointerEvents={pointerEvents}
+      // Замер — через `ref`: `currentTarget` события к моменту ответа уже
+      // обнулён, и `measure` падал на null.
+      onLayout={remember}
+      style={[style, { paddingBottom: lift }]}
+    >
       {children}
     </View>
   );
