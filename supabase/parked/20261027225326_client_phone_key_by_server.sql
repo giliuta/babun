@@ -11,6 +11,11 @@
 -- кода у компании на Кипре (`tenants.country = 'CY'`) — кипрский. Где сервер
 -- однозначно не знает (местный номер другой страны), остаётся ключ,
 -- присланный телефоном. Разовым пересчётом заполняются строки без ключа.
+--
+-- Ключ, уже занятый другим клиентом той же компании, не ставится ни
+-- триггером, ни пересчётом — строка остаётся без ключа до слияния дублей
+-- («Объединить с дублем», `merge_clients`). На 27.10 такая строка одна:
+-- Giliuta, «Артем» `5755ed12…` (+357 97469998) — дубль «Артема» `c4cb733f…`.
 
 create or replace function public.phone_to_e164(p_phone text, p_country text)
 returns text
@@ -59,7 +64,13 @@ begin
     new.phone,
     (select t.country from public.tenants t where t.id = new.tenant_id)
   );
-  if computed is not null then
+  -- Ключ, уже занятый другим клиентом той же компании, не ставится: это
+  -- дубль, его сливают «Объединить с дублем». Иначе любая правка такого
+  -- клиента падала бы на уникальности ключа.
+  if computed is not null and not exists (
+    select 1 from public.clients o
+     where o.tenant_id = new.tenant_id and o.phone_e164 = computed and o.id <> new.id
+  ) then
     new.phone_e164 := computed;
   end if;
   return new;

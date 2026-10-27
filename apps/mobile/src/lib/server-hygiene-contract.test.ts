@@ -161,6 +161,7 @@ describe("server hygiene migrations", () => {
     assert.match(sql, /before insert or update of phone, phone_e164 on public\.clients/);
     assert.match(sql, /coalesce\(p_country, 'CY'\) = 'CY' and n ~ '\^\[0-9\]\{8\}\$'/);
     assert.match(sql, /o\.phone_e164 = k\.key and o\.id <> k\.id/, "занятый ключ не ставится — дубль разбирают руками");
+    assert.match(sql, /o\.tenant_id = new\.tenant_id and o\.phone_e164 = computed and o\.id <> new\.id/, "и триггер не ставит занятый ключ");
   });
 
   test("client list handed to a partner is journaled", () => {
@@ -174,5 +175,30 @@ describe("server hygiene migrations", () => {
     const sql = code(migration("20261027225328_director_seed_not_above_own.sql"));
     assert.match(sql, /access_team_level\(p_tenant, p_by, 'calendar\.records', mc\.team_id\) in \('read', 'write'\) then 'read'/);
     assert.match(sql, /else 'off'/);
+  });
+
+  test("amount and payment rights follow services, payment follows amount", () => {
+    const sql = code(migration("20261027225329_record_money_rights_follow_services.sql"));
+    assert.match(sql, /block_row\.key not in \(''record\.amount'', ''record\.payment''\)/);
+    assert.match(sql, /block_row\.key <> ''record\.payment''/);
+  });
+
+  test("director's invitation is capped at accept time", () => {
+    const sql = code(migration("20261027225330_invitation_capped_at_accept.sql"));
+    assert.match(sql, /and mc\.user_id = p_invitation\.invited_by_user_id/);
+    assert.match(sql, /ma\.user_id = p_invitation\.invited_by_user_id/);
+    assert.match(sql, /v_by_owner := p_invitation\.invited_by_user_id is null or exists/);
+  });
+
+  test("partner's new record without amount right gets catalog prices — same formula as the app", () => {
+    const sql = code(migration("20261027225331_member_create_catalog_prices.sql"));
+    assert.match(sql, /\(t\.value ->> 'min_qty'\)::integer >= 2/);
+    assert.match(sql, /coalesce\(p_bulk_threshold, 0\) >= 2 and coalesce\(p_bulk_price, 0\) > 0/);
+    assert.match(sql, /'totalPrice', round\(unit \* qty, 2\)/);
+    // Формула сервера — копия `pricePerUnit`: поменялась она — меняй и SQL.
+    const shared = readFileSync(path.join(REPO_ROOT, "packages/shared/src/local/services.ts"), "utf8");
+    assert.match(shared, /tier\.min_qty >= 2/);
+    assert.match(shared, /service\.bulk_threshold >= 2/);
+    assert.match(shared, /service\.bulk_price > 0/);
   });
 });
