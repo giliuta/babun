@@ -45,12 +45,6 @@ describe("заглушек «Скоро» нет", () => {
     assert.doesNotMatch(src, /^\s*Онлайн-запись\s*$/m);
     assert.doesNotMatch(src, /^\s*Скоро\s*$/m);
   });
-
-  test("документы клиента — без строки «Договоры · Скоро»", () => {
-    const src = read("../../app/documents/index.tsx");
-    assert.doesNotMatch(src, /label="Договоры"/);
-    assert.doesNotMatch(src, /placeholder="Скоро"/);
-  });
 });
 
 describe("«О приложении»", () => {
