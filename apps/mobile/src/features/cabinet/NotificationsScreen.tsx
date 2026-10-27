@@ -35,13 +35,11 @@ import {
 } from "@/features/calendar/reminders";
 import { reconcileClientReminders } from "@/features/clients/reminders";
 import { chooseOption } from "@/lib/choose";
-import {
-  getNotificationsModule,
-  reconcileBabunNotifications,
-} from "@/lib/notifications";
+import { reconcileBabunNotifications } from "@/lib/notifications";
 import { useThemeColors } from "@/theme/colors";
 
 import { useDevicePermission, useDeviceReminders } from "./device-notifications";
+import { registerThisDevice } from "@/lib/push-device";
 import {
   CLIENT_TIME_OPTIONS,
   RECORD_REMINDER_OPTIONS,
@@ -99,7 +97,7 @@ export function NotificationsScreen() {
   const permissionQuery = useDevicePermission();
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
-  const permissionView = permission ? permissionRow(permission, Platform.OS === "android") : null;
+  const permissionView = permission ? permissionRow(permission) : null;
   const [picker, setPicker] = useState<"records" | "clients" | null>(null);
   const { data: teams = [] } = useTeams();
   const isOwner = useDataRole().data === "owner";
@@ -121,12 +119,10 @@ export function NotificationsScreen() {
   // Правило выбрано, а iPhone ещё не спрашивали — спросить сейчас: это явное
   // действие человека, иначе напоминание молча не зазвонит.
   const askIfUndetermined = async () => {
-    if (permission !== "undetermined") return;
-    try {
-      await getNotificationsModule()?.requestPermissionsAsync();
-    } catch {
-      // Метода нет в этой сборке — перечитка покажет «недоступны».
-    }
+    if (permission !== "undetermined" && permission !== "askable") return;
+    // Тот же вопрос, что при входе: разрешили — телефон сразу встаёт и в
+    // получатели пушей о делах команды.
+    await registerThisDevice({ askOnce: true });
     void permissionQuery.refetch();
   };
 
@@ -138,6 +134,8 @@ export function NotificationsScreen() {
       seenPermission.current !== "granted"
     ) {
       void reconcileBabunNotifications().catch(() => {});
+      // Включили в настройках телефона и вернулись — токен для пушей.
+      void registerThisDevice();
     }
     if (permission) seenPermission.current = permission;
   }, [permission]);
@@ -147,11 +145,9 @@ export function NotificationsScreen() {
       void Linking.openSettings();
       return;
     }
-    try {
-      await getNotificationsModule()?.requestPermissionsAsync();
-    } catch {
-      // Метода нет в этой сборке — перечитка покажет «недоступны».
-    }
+    // Тот же вопрос, что при входе: разрешили — телефон сразу встаёт и в
+    // получатели пушей о делах команды.
+    await registerThisDevice({ askOnce: true });
     void permissionQuery.refetch();
   };
 
