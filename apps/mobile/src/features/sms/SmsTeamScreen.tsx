@@ -7,13 +7,13 @@ import { BadgeCheck, EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-nati
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { GUTTER } from "@/components/ui/tokens";
 import { useTeams } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -262,9 +262,9 @@ export function SmsTeamScreen() {
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА, как у меток и типов событий. */}
       {!loading && !failed && teamId ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton label="Добавить шаблон" onPress={() => openTemplate(null)} />
-        </View>
+        </PageFooter>
       ) : null}
 
       {teamId ? (

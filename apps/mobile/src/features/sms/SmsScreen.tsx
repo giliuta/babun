@@ -5,6 +5,7 @@ import { History } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -210,14 +211,14 @@ export function SmsScreen() {
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ: пополнить баланс. */}
       {data.serviceOn && canTopUp ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton
             label={subtitle ? `Пополнить баланс ${subtitle}` : "Пополнить баланс"}
             disabled={!smsInPlan}
             onDisabledPress={nudgeTariff}
             onPress={() => setTopupOpen(true)}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <SmsTopupSheet

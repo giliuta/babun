@@ -3,11 +3,11 @@ import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { CalendarRange } from "lucide-react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { useToast } from "@/components/ui/Toast";
-import { GUTTER } from "@/components/ui/tokens";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
 import { TIER_LIMITS, tierName, workingTeamIds } from "@/session/tiers";
@@ -79,7 +79,7 @@ export function WorkingTeamsScreen() {
           </SelectList>
         </View>
       </ScrollView>
-      <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+      <PageFooter>
         <GradientButton
           label="Сохранить"
           disabled={!changed || chosen.length === 0}
@@ -89,7 +89,7 @@ export function WorkingTeamsScreen() {
           }
           onPress={() => void save()}
         />
-      </View>
+      </PageFooter>
     </Screen>
   );
 }

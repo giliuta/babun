@@ -1,8 +1,9 @@
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, Text } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { CalendarCheck, Link2 } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -115,9 +116,9 @@ export function OnlineBookingSettingsScreen() {
       )}
 
       {data?.enabled && url ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton label="Скопировать ссылку" onPress={() => copy(url)} />
-        </View>
+        </PageFooter>
       ) : null}
     </Screen>
   );

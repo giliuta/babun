@@ -9,6 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
@@ -268,12 +269,12 @@ export function LabelsScreen() {
           пачкой, и после первой не должно приходиться доскролливать список,
           чтобы завести вторую. Ровно тот же приём, что на экране услуг. */}
       {readOnly ? null : (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton
             label="Добавить метку"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       )}
 
       <LabelEditSheet
