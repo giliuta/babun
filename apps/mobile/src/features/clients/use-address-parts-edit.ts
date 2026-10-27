@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AddressParts, Location } from "@babun/shared/local/clients";
 import {
   composeDetails,
+  hasAddressPlace,
   objectPlacePatch,
   withoutStreet,
 } from "./object-address";
@@ -55,6 +56,12 @@ export function useAddressPartsEdit(
       address: loc.address,
       mapUrl: pinCleared ? "" : loc.mapUrl,
     });
+    // ОБЪЕКТ БЕЗ МЕСТА — НЕ ОБЪЕКТ. Создание не пускает пустой объект
+    // (адрес, части с «где» или точка), правка тоже не стирает его до пустоты:
+    // прежнее место остаётся, лист при следующем открытии покажет его.
+    const empty =
+      !next.address.trim() && !next.mapUrl?.trim() && !hasAddressPlace(next.addressParts);
+    if (empty) return;
     // Улица живёт внутри собранной строки, поэтому сравниваем строку, пин и
     // уточнение: прежний объект без частей не переписывается от одного
     // открытия листа.
