@@ -13,6 +13,7 @@ import {
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
+import { UNTYPED_EVENT } from "@/features/calendar/record-title";
 
 export interface BookPatchInput {
   kind: "work" | "event";
@@ -128,7 +129,9 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       // creator through RLS. A hidden stale work-master must not leak in.
       master_id: null,
       status: "scheduled",
-      comment: (eventTypeLabel ?? eventTitle.trim()) || "Событие",
+      // Без типа — маркер базы, всегда русский (`UNTYPED_EVENT`): переведённое
+      // слово читалось бы на телефоне с другим языком как имя типа.
+      comment: (eventTypeLabel ?? eventTitle.trim()) || UNTYPED_EVENT,
       address: placeIsUrl ? "" : place,
       color_override: eventColor,
       // Метка события — та же метка выезда, что у записи: null значит «как
