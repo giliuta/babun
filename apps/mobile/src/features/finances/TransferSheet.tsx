@@ -5,7 +5,10 @@ import { todayYmd } from "@/lib/paper/format";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useTenant } from "@/session/tenant";
+import { useCurrentRole, useTenant } from "@/session/tenant";
+import { minusWarning } from "./account-alerts";
+import { pastTransferMinus } from "./transfer-sheet/past-minus";
+import { useMovesAfter } from "./transfer-sheet/past-minus-query";
 import type { Team } from "@/features/reference/queries";
 import type { AccountWithBalance } from "./accounts";
 import {
@@ -151,6 +154,27 @@ export function TransferSheet({
       ? amountProblem
       : transferReason(online, from, to, amountNum);
   const canSend = reason === null && !draft.sending;
+  // Задним числом — остаток источника на те дни, а не на сегодня
+  // (`past-minus.ts`): минус в прошлом не запрет, а слова под кнопкой.
+  const isOwner = useCurrentRole().data === "owner";
+  const backdated = draft.occurredOn < businessToday;
+  const movesAfter = useMovesAfter(
+    from?.id ?? null,
+    draft.occurredOn,
+    visible && isOwner && backdated && !!from?.balance_known,
+  );
+  const pastMinus =
+    reason === null && from && movesAfter.data
+      ? pastTransferMinus({
+          name: label(from),
+          balance: from.balance,
+          date: draft.occurredOn,
+          today: businessToday,
+          movesAfter: movesAfter.data,
+          amount: amountNum,
+        })
+      : null;
+  const warning = pastMinus ? minusWarning(pastMinus) : null;
   // ПОКА ПЕРЕВОД ЛЕТИТ, ЛИСТ НЕ ЗАКРЫВАЕТСЯ: смахнутый в
   // этот момент лист прятал отказ сервера, и человек думал, что деньги ушли.
   // НАБРАННОЕ — ТОЛЬКО ПОСЛЕ ВОПРОСА: свайп вниз молча
@@ -203,6 +227,7 @@ export function TransferSheet({
     spansTeams,
     label,
     reason,
+    warning,
     canSend,
     amountNum,
     send,
