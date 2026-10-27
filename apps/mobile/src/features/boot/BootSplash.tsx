@@ -8,6 +8,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from "react-native-reanimated";
+import { markSplashLeft } from "./splash-state";
 
 // ЗАСТАВКА ЗАГРУЗКИ: логотип и снизу слово Babun. Системная заставка iPhone —
 // белый лист и знак по центру — вшита в сборку и по воздуху не меняется.
@@ -46,10 +47,12 @@ export function BootSplash({ hold }: { hold: boolean }) {
 
   useEffect(() => {
     if (gone) return;
-    const leave = () =>
-      (fade.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.quad) }, (done) => {
+    const leave = () => {
+      markSplashLeft();
+      fade.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.quad) }, (done) => {
         if (done) runOnJS(setGone)(true);
-      }));
+      });
+    };
     if (!hold || ready) {
       leave();
       return;

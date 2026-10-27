@@ -56,6 +56,10 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "my_invitations",
   // STORY-102: пройденные главы обучения, `stable`.
   "my_onboarding",
+  // Онлайн-запись (20261027141700): страница заказчика и шестерёнка владельца — `stable`.
+  "online_booking_page",
+  "online_booking_settings",
+  "online_booking_slots",
   // STORY-101: предпросмотр номера из серии юрлица, `stable`
   // (миграция 20261001001000).
   "peek_document_number",
@@ -122,6 +126,10 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "member_rename_day_label",
   // STORY-102: отметить главу обучения пройденной.
   "onboarding_done",
+  // Онлайн-запись (20261027141700): заявка заказчика и выключатели владельца — `volatile`.
+  "online_booking_create",
+  "online_booking_set",
+  "online_booking_set_service",
   "patch_master_profile",
   "record_account_transfer",
   "record_appointment_payment",

@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { Image, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CircleCheck, CircleX, Clock, MapPin, Wrench, type LucideIcon } from "lucide-react-native";
+import { PublicBusinessHeader } from "@/components/blocks/PublicBusinessHeader";
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { NoticeBar } from "@/components/ui/NoticeBar";
@@ -80,44 +81,13 @@ export default function AppointmentLinkScreen() {
       ) : null}
       <ScrollView contentContainerStyle={{ paddingTop: 12, paddingBottom: 48 }}>
         <View style={{ width: "100%", maxWidth: 560, alignSelf: "center" }}>
-          {info && (info.businessName || info.logoUrl) ? <Business info={info} /> : null}
+          {info && (info.businessName || info.logoUrl) ? (
+            <PublicBusinessHeader name={info.businessName} logoUrl={info.logoUrl} />
+          ) : null}
           {body}
         </View>
       </ScrollView>
     </Screen>
-  );
-}
-
-function Business({ info }: { info: AppointmentLinkInfo }) {
-  const t = useThemeColors();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 8 }}>
-      {info.logoUrl ? (
-        <Image
-          source={{ uri: info.logoUrl }}
-          accessibilityIgnoresInvertColors
-          style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: t.fill }}
-        />
-      ) : (
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 9,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: `${t.accent}14`,
-          }}
-        >
-          <Text style={{ fontSize: 16, fontWeight: "700", color: t.accent }}>
-            {info.businessName.trim().charAt(0).toUpperCase() || "•"}
-          </Text>
-        </View>
-      )}
-      <Text numberOfLines={1} style={{ flex: 1, fontSize: 17, fontWeight: "700", color: t.ink }}>
-        {info.businessName}
-      </Text>
-    </View>
   );
 }
 

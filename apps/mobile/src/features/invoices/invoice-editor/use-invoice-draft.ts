@@ -11,6 +11,7 @@ import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { addDaysYmd, type EditableInvoiceLine } from "@/lib/paper/format";
+import { paperLineTitle } from "../generator-settings";
 import {
   appointmentVatOf,
   existingDiscountOf,
@@ -115,7 +116,11 @@ export function useInvoiceDraft({
             total_amount: inputFromGross(appointment.total_amount, "exclusive", vat.rate),
           }
         : appointment;
-    return generateInvoiceFromAppointment(base, generator, serviceName);
+    return generateInvoiceFromAppointment(
+      base,
+      { ...generator, defaultLineTitle: paperLineTitle(generator.defaultLineTitle, language) },
+      serviceName,
+    );
   };
   // Черновик по записи, с которой пришли. Считается ОДИН РАЗ при рождении
   // формы: пересчёт на каждый рендер стирал бы то, что человек уже правит.
@@ -290,7 +295,7 @@ export function useInvoiceDraft({
     if (prefill?.amount && prefill.amount > 0) {
       return [
         newLine(
-          prefill.title?.trim() || generator.defaultLineTitle,
+          prefill.title?.trim() || paperLineTitle(generator.defaultLineTitle, language),
           "1",
           String(prefill.amount),
         ),
@@ -308,6 +313,19 @@ export function useInvoiceDraft({
   const [discountValue, setDiscountValue] = useState<string>(
     existingDiscount > 0 ? String(existingDiscount) : "",
   );
+  // СМЕНА ЯЗЫКА БУМАГИ ПЕРЕВОДИТ И СТРОКУ ПО УМОЛЧАНИЮ. Строка «Services»
+  // рождается вместе с формой, когда язык ещё английский; выбрали греческий —
+  // она становится «Υπηρεσίες». Строку, которую человек переписал, не трогаем.
+  const changeLanguage = (next: InvoiceLanguage) => {
+    const was = paperLineTitle(generator.defaultLineTitle, language);
+    const now = paperLineTitle(generator.defaultLineTitle, next);
+    if (was !== now) {
+      setLines((current) =>
+        current.map((line) => (line.title === was ? { ...line, title: now } : line)),
+      );
+    }
+    setLanguage(next);
+  };
   const [error, setError] = useState<string | null>(null);
   /** Какими реквизитами подписан счёт, если их выбрали руками. `null` —
    *  основные (`pickedCompany`): документ не должен требовать выбора там, где
@@ -321,7 +339,7 @@ export function useInvoiceDraft({
 
   return {
     language,
-    setLanguage,
+    setLanguage: changeLanguage,
     languageOpen,
     setLanguageOpen,
     newLine,

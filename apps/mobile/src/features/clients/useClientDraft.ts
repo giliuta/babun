@@ -122,6 +122,7 @@ export function useClientDraft(
   const [createError, setCreateError] = useState<string | null>(null);
   const e164 = active ? tryToE164(draft.phone.trim(), country) : null;
   const { duplicate, setDuplicate, findDuplicate, checkedFor } = useDraftDuplicate({
+    selfId: draft.id,
     active,
     e164,
     tenantId,

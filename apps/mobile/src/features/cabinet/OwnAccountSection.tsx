@@ -11,6 +11,7 @@ import { useMirror } from "@/session/mirror-state";
 import { useMyMemberships } from "@/session/my-memberships";
 import { useCurrentRole } from "@/session/tenant";
 import { useSwitchWorkspace } from "@/session/workspaces";
+import { InventoryCabinetRow } from "@/features/inventory/InventoryCabinetRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useTenantId } from "@/lib/tenant";
@@ -92,6 +93,9 @@ export function OwnAccountSection() {
             <CabinetRequisitesRow />
           </TourTarget>
           <Divider inset={48} />
+          {/* СКЛАД ОБОРУДОВАНИЯ — один на аккаунт, пока в разработке. */}
+          <InventoryCabinetRow />
+          <Divider inset={48} />
           {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
               календарях — он сам и каждый партнёр. */}
           <TourTarget id="cabinet.history">
@@ -146,6 +150,8 @@ export function OwnAccountSection() {
         />
         <Divider inset={48} />
         <CabinetRequisitesRow tenantId={own} />
+        <Divider inset={48} />
+        <InventoryCabinetRow />
         <Divider inset={48} />
         <HistoryRow tenantId={own} />
         <Divider inset={48} />

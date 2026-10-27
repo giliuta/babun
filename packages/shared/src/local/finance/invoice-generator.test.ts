@@ -171,8 +171,17 @@ describe("режим «одной строкой» и вырожденные з�
       name,
     );
     assert.deepEqual(draft.lines, [
-      { title: "Монтаж двух блоков", qty: 1, unitPrice: 160 },
+      { title: "Услуги", qty: 1, unitPrice: 160 },
     ]);
+  });
+
+  test("заметка записи не попадает на бумагу заказчику", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({ total_amount: 90, comment: "Код домофона 1234", services: [] }),
+      settings({ defaultLineTitle: "Services" }),
+      name,
+    );
+    assert.deepEqual(draft.lines, [{ title: "Services", qty: 1, unitPrice: 90 }]);
   });
 
   test("без услуг — одна строка с названием из настроек", () => {

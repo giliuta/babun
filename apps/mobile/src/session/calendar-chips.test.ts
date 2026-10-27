@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
   FOREIGN_PREFIX,
   applyCalendarOrder,
+  calendarChipName,
   calendarOrderKey,
   composeCalendarChips,
   type ChipSourceCalendar,
@@ -108,5 +109,45 @@ describe("порядок человека (владелец 11.10: «менят�
     const inB = composeCalendarChips({ own: [{ id: "x", name: "Чужая" }], myCalendars, activeTenantId: "B", order });
     assert.deepEqual(inA.map((c) => c.name), ["Чужая", "Личный"]);
     assert.deepEqual(inB.map((c) => c.name), ["Чужая", "Личный"]);
+  });
+});
+
+// Календарь, названный почтой, в узком чипе обрезался в «babun.app+r…».
+describe("подпись календаря, названного почтой", () => {
+  const me = { email: "babun.app+review@gmail.com", name: "Анна" };
+
+  test("свой — именем из профиля", () => {
+    assert.equal(calendarChipName("babun.app+review@gmail.com", me), "Анна");
+  });
+
+  test("почта сверяется без регистра и пробелов", () => {
+    assert.equal(calendarChipName(" Babun.App+Review@Gmail.com ", me), "Анна");
+  });
+
+  test("без имени в профиле — «Личный»", () => {
+    assert.equal(calendarChipName("babun.app+review@gmail.com", { email: me.email }), "Личный");
+  });
+
+  test("чужая почта — «Личный», а не моё имя", () => {
+    assert.equal(calendarChipName("other@mail.com", me), "Личный");
+  });
+
+  test("обычное имя не меняется", () => {
+    assert.equal(calendarChipName("Y&D", me), "Y&D");
+    assert.equal(calendarChipName("Команда @ Лимассол", me), "Команда @ Лимассол");
+  });
+
+  test("лента подписывает и свой, и чужой чип", () => {
+    const chips = composeCalendarChips({
+      own: [{ id: "team-p", name: "babun.app+review@gmail.com" }],
+      myCalendars: [
+        { tenantId: AIRFIX, tenantName: "AirFix LTD", teamId: "team-p",
+          teamName: "babun.app+review@gmail.com", teamColor: null, isActive: true },
+        { ...k1(false), teamName: "dima@airfix.cy" },
+      ],
+      activeTenantId: AIRFIX,
+      viewer: me,
+    });
+    assert.deepEqual(names(chips), ["Анна", "Личный"]);
   });
 });

@@ -6125,6 +6125,31 @@ export type Database = {
         Returns: string[]
       }
       onboarding_done: { Args: { p_chapter: string }; Returns: string[] }
+      online_booking_create: {
+        Args: {
+          p_date: string
+          p_name: string
+          p_phone: string
+          p_service: string
+          p_time: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      online_booking_page: { Args: { p_token: string }; Returns: Json }
+      online_booking_set: {
+        Args: { p_enabled: boolean; p_team: string }
+        Returns: Json
+      }
+      online_booking_set_service: {
+        Args: { p_online: boolean; p_service: string; p_team: string }
+        Returns: Json
+      }
+      online_booking_settings: { Args: { p_team: string }; Returns: Json }
+      online_booking_slots: {
+        Args: { p_service: string; p_token: string }
+        Returns: Json
+      }
       partners_card_manageable: {
         Args: { p_master_id: string }
         Returns: boolean

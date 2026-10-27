@@ -80,9 +80,10 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   );
   const updateMut = useUpdateAppointment();
 
-  // ── роли на этой странице пока нет: скидка открыта всем, кто дошёл до
-  //    формы; owner-only гейт не расширен на правку — иначе правило существовало
-  //    бы в одной дороге из двух. ──
+  // ── СКИДКА — ЧАСТЬ БЛОКА «СУММА»: её ставят только в шторке «Итого», а
+  //    шторку открывает `can.editTotal` (`bookRights`) — сотруднику только с
+  //    «Сумма и услуги записи: Меняет». Сервер проверяет то же поле за полем
+  //    (`member_check_appointment_field` → `record.amount`). ──
 
   // ── состояние ──
   const initialKind = first(params.kind) === "event" ? "event" : "work";

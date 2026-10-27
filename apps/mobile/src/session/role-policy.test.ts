@@ -45,7 +45,7 @@ describe("role policy", () => {
   test("uses an explicit cabinet route allow-list for non-owners", () => {
     assert.equal(canAccessCabinetPath("owner", "/cabinet/accounts"), true);
     assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/inventory"), true);
-    assert.equal(canAccessCabinetPath("master", "/cabinet/business/"), true);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/inventory/"), true);
     assert.equal(canAccessCabinetPath(null, "/cabinet"), false);
   });
 
@@ -70,8 +70,6 @@ describe("role policy", () => {
       "/cabinet/languages",
       "/cabinet/about",
       "/cabinet/help",
-      "/cabinet/company",
-      "/cabinet/company?tenant=0b6f2d1e-3c4a-4b5d-8e9f-a1b2c3d4e5f6",
     ]) {
       assert.equal(canAccessCabinetPath("owner", path), true, path);
       assert.equal(canAccessCabinetPath("dispatcher", path), true, path);
@@ -84,7 +82,6 @@ describe("role policy", () => {
     const dispatcherLinks = [
       "/cabinet",
       "/cabinet/account",
-      "/cabinet/business",
       "/cabinet/inventory",
       "/cabinet/invitations",
       "/cabinet/profile",
@@ -92,12 +89,10 @@ describe("role policy", () => {
       "/cabinet/languages",
       "/cabinet/about",
       "/cabinet/help",
-      "/cabinet/company",
     ];
     const masterLinks = [
       "/cabinet",
       "/cabinet/account",
-      "/cabinet/business",
       "/cabinet/inventory",
       "/cabinet/invitations",
       "/cabinet/profile",
@@ -105,7 +100,6 @@ describe("role policy", () => {
       "/cabinet/languages",
       "/cabinet/about",
       "/cabinet/help",
-      "/cabinet/company",
     ];
     // «Сводка» переехала из владельческих в общие (значок аналитики стоит всегда,
     // данных может не быть).

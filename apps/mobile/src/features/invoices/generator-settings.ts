@@ -2,6 +2,7 @@ import {
   INVOICE_GENERATOR_DEFAULTS,
   type InvoiceGeneratorSettings,
 } from "@babun/shared/local/finance/invoice-generator";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
 import type { Tenant } from "@/session/tenant";
 
 // ПЕРЕВОДЧИК НАСТРОЕК КОМПАНИИ В ПРАВИЛА ГЕНЕРАТОРА.
@@ -30,4 +31,19 @@ export function invoiceGeneratorSettings(
       INVOICE_GENERATOR_DEFAULTS.defaultLineTitle,
     footerNote: tenant.invoice_footer_note ?? null,
   };
+}
+
+/** Название строки «одной строкой» на языке бумаги.
+ *
+ *  В базе у каждой компании лежит дефолт колонки — русское «Услуги»: его
+ *  никто не выбирал, поэтому он переводится на язык документа. Своё название
+ *  компании (любое другое) печатается как есть — это её слова. */
+export function paperLineTitle(
+  companyTitle: string,
+  language: InvoiceLanguage,
+): string {
+  const own = companyTitle.trim();
+  return own && own !== /* i18n-ignore */ "Услуги"
+    ? own
+    : invoiceDictionary(language).servicesLine;
 }

@@ -461,6 +461,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
 | Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `cabinet/requisites.tsx` (с 03.10 — Кабинет, строка «Реквизиты»: «единый блок на все компании»), `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
+| Онлайн-запись (страница заказчика `babun.app/b/<токен>` + шестерёнка календаря) | заказчик — `src/features/online-booking/OnlineBookingScreen.tsx` (форма — `BookingForm.tsx`, время — `BookingSlotPicker.tsx`); владелец — `OnlineBookingSettingsScreen.tsx` (выключатель, ссылка, услуги) и строка `OnlineBookingSettingsRow.tsx`; шапка бизнеса публичных страниц — `components/blocks/PublicBusinessHeader.tsx` (её же берёт `/r`) | `app/b/[token].tsx`, `app/(dashboard)/(home)/calendar/online-booking.tsx`. Право — только владелец компании календаря; сервер — `online_booking_settings` / `_set` / `_set_service`, страница без входа — `online_booking_page` / `_slots` / `_create` (anon, только токен) |
 
 **Реестр выбора — какой блок открывает какую шторку и что написано на кнопке.**
 «Добавь блок с услугой» значит именно эту строку: блок оттуда, шторка оттуда,

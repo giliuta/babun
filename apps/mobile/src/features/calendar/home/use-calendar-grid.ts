@@ -8,7 +8,7 @@ import {
   effectiveWorkHours,
 } from "@/features/calendar/setting-options";
 import {
-  deriveScrollHour,
+  deriveOpenHour,
   deriveWindow,
   effectiveCalendarWindow,
   hmToMinutes,
@@ -129,13 +129,21 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
   const visStartHour = visWindow.startHour;
   const visEndHour = visWindow.endHour;
 
-  // Час открытия — начало работы просматриваемого дня (стабильное значение:
-  // «сейчас» тикает раз в минуту, а openScroll перезапускается на каждое его
-  // изменение — рельс дёргался бы под пальцем. Вернуться к текущему часу есть
-  // чем: «Сегодня» в шапке и «к сейчас» на сетке).
+  // Час открытия: сегодня — «сейчас» с запасом, другой день — начало работы
+  // или первая запись (`deriveOpenHour`). Сетка читает его только пока своего
+  // места в этом запуске нет, поэтому тиканье «сейчас» прокрутку не дёргает.
   const scrollToHour = useMemo(
-    () => deriveScrollHour(workBandFor?.(dayYmd), globalWork, visWindow),
-    [workBandFor, dayYmd, globalWork, visWindow],
+    () =>
+      deriveOpenHour({
+        days: visibleDays,
+        todayYmd,
+        nowMinutes,
+        bandFor: workBandFor,
+        fallback: globalWork,
+        appts: visibleAppts,
+        window: visWindow,
+      }),
+    [visibleDays, todayYmd, nowMinutes, workBandFor, globalWork, visibleAppts, visWindow],
   );
 
   // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь

@@ -106,7 +106,7 @@ function buildLines(
   if (settings.lineSource === "total" || services.length === 0) {
     return [
       {
-        title: lineTitle(appointment, settings),
+        title: lineTitle(settings),
         qty: 1,
         unitPrice: total,
       },
@@ -118,7 +118,7 @@ function buildLines(
   // прайс на бесплатной работе значит обещать клиенту счёт, которого не будет.
   if (gross <= 0) {
     return [
-      { title: lineTitle(appointment, settings), qty: 1, unitPrice: total },
+      { title: lineTitle(settings), qty: 1, unitPrice: total },
     ];
   }
 
@@ -204,15 +204,14 @@ function buildLines(
   return lines;
 }
 
-/** Название строки для «одной строкой»: сначала то, что написал диспетчер в
- *  записи, потом дефолт компании. Пустая строка недопустима — документ без
- *  предмета не читается. */
-function lineTitle(
-  appointment: Appointment,
-  settings: InvoiceGeneratorSettings,
-): string {
+/** Название строки для «одной строкой» — только из настроек. Пустая строка
+ *  недопустима: документ без предмета не читается.
+ *
+ *  «ЗАМЕТКА ЗАПИСИ» СЮДА НЕ ИДЁТ: она внутренняя, для своих, а инвойс и чек
+ *  уходят заказчику — иначе он читал бы на бумаге «код домофона 1234,
+ *  злая собака». */
+function lineTitle(settings: InvoiceGeneratorSettings): string {
   return (
-    appointment.comment?.trim() ||
     settings.defaultLineTitle.trim() ||
     INVOICE_GENERATOR_DEFAULTS.defaultLineTitle
   );
