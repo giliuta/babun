@@ -215,6 +215,7 @@ export function TariffScreen() {
             key={card.tier}
             card={card}
             calendars={calendars}
+            forever={state.forever}
             selected={selected === card.tier}
             mark={
               current === card.tier
@@ -263,6 +264,7 @@ const PERIOD_OPTIONS = [
 function TierTile({
   card,
   calendars,
+  forever,
   selected: on,
   mark,
   onPress,
@@ -270,6 +272,9 @@ function TierTile({
   card: TierCard;
   /** Живых календарей аккаунта — итог в месяц под ценой одного. */
   calendars: number;
+  /** Тариф выдан навсегда: аккаунт не платит, и счёт «за столько-то
+   *  календарей» ему не про что. */
+  forever: boolean;
   selected: boolean;
   mark: string | null;
   onPress?: () => void;
@@ -321,9 +326,11 @@ function TierTile({
       </View>
       {CAN_PAY_HERE ? (
         <View style={{ gap: 2 }}>
-          <Text style={{ ...TYPE.subhead, color: t.ink }}>
-            {`Ваших календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
-          </Text>
+          {forever ? null : (
+            <Text style={{ ...TYPE.subhead, color: t.ink }}>
+              {`Ваших календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
+            </Text>
+          )}
           <Text style={{ ...TYPE.subhead, color: t.faint }}>
             {`За год — ${card.yearlyMonthly} за календарь в месяц`}
           </Text>
