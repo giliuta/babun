@@ -67,9 +67,12 @@ export function TransferSheet({
   presetFromId,
   presetToId,
   presetAmount,
+  onSent,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Перевод записан (до закрытия листа). */
+  onSent?: () => void;
   /** Активные счета с балансами (owner-only данные). Фильтр экрана на перевод
    *  не распространяется: деньги ходят между всеми счетами тенанта. */
   accounts: AccountWithBalance[];
@@ -175,6 +178,7 @@ export function TransferSheet({
     setSending: draft.setSending,
     setFailure: draft.setFailure,
     onClose,
+    onSent,
   });
 
   const title = transferTitle(step);

@@ -79,10 +79,13 @@ function explain(target: AccountWithBalance) {
 export function useCloseFlow({
   onDone,
   alertError,
+  canFinishAfterTransfer,
 }: {
   /** Счёт закрыт, удалён или разговор оборвался ошибкой — лист закрывается. */
   onDone: () => void;
   alertError: AlertError;
+  /** Лист счёта можно закрыть после перевода (в нём нет несохранённых правок). */
+  canFinishAfterTransfer?: () => boolean;
 }) {
   const qc = useQueryClient();
   const tenantId = useTenantId();
@@ -221,12 +224,20 @@ export function useCloseFlow({
     run?.();
   };
 
+  // ПЕРЕВОД ИЗ ЛИСТА СЧЁТА ЗАКРЫВАЕТ И ЛИСТ. Тост «Переведено · Отменить»
+  // рисуется в окне страницы, а вернувшийся лист — модальное окно поверх:
+  // скрим ложился на тост, и тап по «Отменить» закрывал лист вместо отмены
+  // перевода. Несохранённые правки листа важнее — тогда лист возвращается.
+  const sent = useRef(false);
   const onTransferClose = () => {
     setTransferOpen(false);
     const before = closingFrom.current;
     closingFrom.current = null;
+    const wasSent = sent.current;
+    sent.current = false;
     if (!before) {
-      returnSheet();
+      if (wasSent && (canFinishAfterTransfer?.() ?? true)) onDone();
+      else returnSheet();
       return;
     }
     const from = before;
@@ -257,6 +268,9 @@ export function useCloseFlow({
       toId: preset?.toId ?? null,
       amount: preset?.amount ?? null,
       onClose: onTransferClose,
+      onSent: () => {
+        sent.current = true;
+      },
     },
   };
 }
