@@ -41,3 +41,16 @@ test("штатный KeyboardAvoidingView нигде не используетс
     .map((f) => relative(app, f));
   assert.deepEqual(offenders, []);
 });
+
+test("лист докручивает тело к полю в фокусе после подъёма", () => {
+  // Заметка внизу листа в момент тапа видна, а после подъёма уходила под
+  // футер — набиралась вслепую.
+  const sheet = read(resolve(here, "BottomSheet.tsx"));
+  assert.match(sheet, /const reveal = useRevealFocused\(scroll && visible, scrollRef\);/);
+  assert.match(sheet, /<ScrollView\s+\{\.\.\.reveal\}/);
+  const hook = read(resolve(here, "bottom-sheet/use-reveal-focused.ts"));
+  assert.match(hook, /Keyboard\.addListener\("keyboardDidShow"/);
+  // По номеру вида `measureLayout` в новой архитектуре молчит — нужен сам вид.
+  assert.match(hook, /getInnerViewRef\?\.\(\)/);
+  assert.doesNotMatch(hook, /getInnerViewNode\(\)/);
+});

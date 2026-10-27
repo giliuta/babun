@@ -38,6 +38,7 @@ import { OverlayLayers } from "@/components/ui/bottom-sheet/OverlayLayers";
 import { SheetFooter } from "@/components/ui/bottom-sheet/SheetFooter";
 import { SheetHeader } from "@/components/ui/bottom-sheet/SheetHeader";
 import { useSheetMotion } from "@/components/ui/bottom-sheet/use-sheet-motion";
+import { useRevealFocused } from "@/components/ui/bottom-sheet/use-reveal-focused";
 import { TourWindow } from "@/components/tour/TourWindow";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
@@ -146,6 +147,8 @@ export function BottomSheet({
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
+  // Поле в фокусе — в видимой части тела после подъёма (`use-reveal-focused`).
+  const reveal = useRevealFocused(scroll && visible, scrollRef);
   // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ. В браузере
   // вкладка, открытая «за кадром», грузит код при окне 0×0: константа
   // модуля давала `maxHeight: 0`, лист схлопывался, и строки уходили под
@@ -284,7 +287,7 @@ export function BottomSheet({
       ) : null}
       {scroll ? (
         <ScrollView
-          ref={scrollRef}
+          {...reveal}
           // flexShrink, а не flex: тело сжимается под клавиатурой, но короткий
           // лист не растягивается на весь потолок.
           style={{ flexShrink: 1 }}
