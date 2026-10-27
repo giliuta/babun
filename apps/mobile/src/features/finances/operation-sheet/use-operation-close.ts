@@ -104,5 +104,5 @@ export function useOperationClose({
     return true;
   };
 
-  return { askingClose, guardedClose, runAfterExit };
+  return { askingClose, guardedClose, runAfterExit, dirty };
 }

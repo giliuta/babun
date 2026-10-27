@@ -9,7 +9,7 @@ import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { iconPreset } from "@/components/ui/icon-set";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { GUTTER, ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/session/tenant";
@@ -74,7 +74,7 @@ export function SmsSendSheet({
   const toast = useToast();
   const send = useSendSmsViaService();
   const service = useSmsServiceFor(context);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const role = useCurrentRole().data;
 
   // ОТ КАКОЙ КОМАНДЫ: у записи — её команда; без записи —
@@ -114,15 +114,22 @@ export function SmsSendSheet({
   const [composeOpen, setComposeOpen] = useState(false);
   // Текст в поле — шаблон, заполненный полями, и правки поверх него.
   const [text, setText] = useState("");
-  // Каждое открытие — с шаблонов: прошлый выбор не живёт.
+  // НЕ УШЛА — ТЕКСТ НЕ ПРОПАЛ. Листы закрываются до ответа сервера (иначе
+  // второй тап отправил бы вторую платную SMS), и на «SMS не отправлена»
+  // правленый текст исчезал. Его запоминаем, и следующее открытие SMS
+  // возвращает его в шторку текста.
+  const failed = useRef<{ picked: string; text: string } | null>(null);
+  // Каждое открытие — с шаблонов: прошлый выбор не живёт (кроме неушедшего).
   const [wasVisible, setWasVisible] = useState(false);
   if (visible !== wasVisible) {
     setWasVisible(visible);
     if (visible) {
+      const back = failed.current;
+      failed.current = null;
       setChoosingTeam(false);
-      setPicked(null);
-      setComposeOpen(false);
-      setText("");
+      setPicked(back?.picked ?? null);
+      setComposeOpen(!!back);
+      setText(back?.text ?? "");
       setPickedTeam(null);
     }
   }
@@ -156,6 +163,7 @@ export function SmsSendSheet({
     if (sendingRef.current) return;
     sendingRef.current = true;
     haptics.tap();
+    const sent = chosen ? { picked: chosen.template.id, text } : null;
     closeAll();
     send.mutate(
       {
@@ -168,7 +176,10 @@ export function SmsSendSheet({
       },
       {
         onSuccess: () => toast("SMS отправляется", "success"),
-        onError: (e) => notify("SMS не отправлена", smsErrorText(e)),
+        onError: (e) => {
+          failed.current = sent;
+          notify("SMS не отправлена", smsErrorText(e));
+        },
         onSettled: () => {
           sendingRef.current = false;
         },
@@ -216,7 +227,7 @@ export function SmsSendSheet({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }
@@ -268,8 +279,10 @@ export function SmsSendSheet({
               onPress={() => {
                 if (!text) return;
                 haptics.tap();
+                // Тот же шаблон ещё раз — правки поверх него не стираются
+                // (смахнул шторку текста и вернулся к ней).
+                if (template.id !== picked) setText(text);
                 setPicked(template.id);
-                setText(text);
                 setComposeOpen(true);
               }}
             />

@@ -33,6 +33,7 @@ export function accountsFooterAction({
   selectedId,
   shown,
   company,
+  teamHidden = 0,
 }: {
   /** Выбор экрана (адрес или тап), как есть. */
   selectedId: string | null;
@@ -40,8 +41,11 @@ export function accountsFooterAction({
   shown: readonly { id: string }[];
   /** Все открытые счета компании: деньги ходят между командами. */
   company: readonly { id: string }[];
+  /** Скрытые счета команды: плиткой их нет, но счёт у команды есть —
+   *  «Создать счёт» завёл бы второй такой же. */
+  teamHidden?: number;
 }): AccountsFooterAction {
-  if (shown.length === 0) return { kind: "create" };
+  if (shown.length === 0 && teamHidden === 0) return { kind: "create" };
   if (company.length < 2) return { kind: "needs-second" };
   const visible =
     selectedId !== null &&

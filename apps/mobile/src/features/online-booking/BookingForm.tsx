@@ -12,6 +12,7 @@ import { useThemeColors } from "@/theme/colors";
 import { BookingSlotPicker } from "./BookingSlotPicker";
 import { durationWords, type BookingDone, type BookingPage } from "./online-booking";
 import { BookingError, createBooking, useBookingSlots } from "./online-booking-public";
+import { TYPE } from "@/components/ui/tokens";
 
 // ФОРМА ПУБЛИЧНОЙ ЗАПИСИ (`OnlineBookingScreen`): услуга → время → имя и
 // телефон → «Записаться». Шаги видны сразу один под другим: следующий
@@ -80,7 +81,7 @@ export function BookingForm({
       <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 26, lineHeight: 32, fontWeight: "800", letterSpacing: -0.4, color: t.ink }}
+          style={{ ...TYPE.title, color: t.ink }}
         >
           Онлайн-запись
         </Text>

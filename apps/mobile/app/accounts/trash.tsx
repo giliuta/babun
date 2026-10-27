@@ -13,6 +13,9 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER } from "@/components/ui/tokens";
 import { confirmThen } from "@/lib/confirm";
+import { useCurrentRole } from "@/session/tenant";
+import { useTeams } from "@/features/reference/queries";
+import { archivedCalendarIds } from "@/features/finances/archived-calendar-accounts";
 import { useThemeColors } from "@/theme/colors";
 import { DaysLeft, DeletedOn } from "@/features/clients/HiddenClientsScreen";
 import { deleteAccountAlert } from "@/features/finances/account-alerts";
@@ -41,10 +44,18 @@ export default function AccountsTrashRoute() {
   const restore = useRestoreAccount();
   const erase = useDeleteAccount();
   const rows = (deleted.data ?? []).filter((account) => !team || account.brigade_id === team);
+  // КОРЗИНА СЧЕТОВ — ВЛАДЕЛЬЦУ. Дверь сюда есть только у него («Счета»), а
+  // по прямой ссылке партнёр видел бы список и «Вернуть» под своими правами.
+  const role = useCurrentRole().data;
   const [menu, setMenu] = useState<Account | null>(null);
 
+  // Календарь счёта в архиве — вернувшийся счёт не встал бы нигде: живые
+  // финансы счетов архивных календарей не показывают. Сначала календарь.
+  const archived = archivedCalendarIds(useTeams({ includeInactive: true }).data ?? []);
   const giveBack = (account: Account) =>
-    restore.mutate(account.id, {
+    account.brigade_id && archived.has(account.brigade_id)
+      ? toast("Календарь этого счёта в архиве — сначала верните календарь", "info")
+      : restore.mutate(account.id, {
       onSuccess: () => toast(`Счёт «${account.name}» возвращён`),
       onError: (e) =>
         toast(
@@ -78,7 +89,9 @@ export default function AccountsTrashRoute() {
         title="Удалённые счета"
         fallbackHref={(team ? `/accounts/settings?team=${encodeURIComponent(team)}` : "/accounts/settings") as Href}
       />
-      {deleted.data === undefined ? (
+      {role !== undefined && role !== "owner" ? (
+        <EmptyState fill title="Удалённые счета видит владелец" />
+      ) : deleted.data === undefined ? (
         deleted.error ? (
           <EmptyState
             state="error"
@@ -91,7 +104,11 @@ export default function AccountsTrashRoute() {
           <EmptyState state="loading" fill title="Загружаем счета" />
         )
       ) : rows.length === 0 ? (
-        <EmptyState fill title="Пусто" />
+        <EmptyState
+          fill
+          title="Удалённых счетов нет"
+          subtitle="Удалённый счёт лежит здесь, пока его не вернут или не удалят насовсем"
+        />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}>
           <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>

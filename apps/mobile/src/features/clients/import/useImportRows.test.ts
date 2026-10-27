@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { importClientId, rowToClient } from "./import-client";
+import { importClientId, importIdCollision, rowToClient } from "./import-client";
+
+describe("CSV import: строка уже в базе под тем же id", () => {
+  test("живая — повтор после обрыва, строка засчитана", () => {
+    assert.equal(importIdCollision({ deleted_at: null }), "resume");
+  });
+  test("в «Удалённых клиентах» — не засчитывается вставленной", () => {
+    assert.equal(importIdCollision({ deleted_at: "2026-10-27T12:00:00Z" }), "deleted");
+  });
+  test("строки не видно — настоящая ошибка", () => {
+    assert.equal(importIdCollision(null), "missing");
+  });
+});
 
 describe("CSV import client projection", () => {
   test("always stamps a Postgres-compatible UUID on Hermes", () => {

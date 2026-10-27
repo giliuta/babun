@@ -3,7 +3,6 @@ import { describe, test } from "node:test";
 import {
   assertQuotaAvailable,
   createQuotaGate,
-  fetchRemainingQuota,
   MobileQuotaExceededError,
   preflightQuotaForCreate,
 } from "./quota";
@@ -67,14 +66,6 @@ describe("mobile quota preflight", () => {
         assert.match(error.message, /можно добавить ещё 2/);
         return true;
       },
-    );
-  });
-
-  test("reports the exact remaining allowance", async () => {
-    const { client } = quotaStub({ clientLimit: 1000, clients: 247 });
-    assert.equal(
-      await fetchRemainingQuota(client, "tenant-a", "clients"),
-      753,
     );
   });
 

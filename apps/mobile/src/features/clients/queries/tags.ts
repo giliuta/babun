@@ -44,6 +44,9 @@ export interface CreateClientTagInput {
   icon?: string | null;
   /** Команда тега — у каждой команды свои теги. */
   teamId: string;
+  /** Место в списке: новый тег встаёт последним, иначе у всех 0 и порядок
+   *  страницы и шторки решал алфавит каждого по-своему. */
+  position?: number;
 }
 
 export interface UpdateClientTagInput {
@@ -89,13 +92,13 @@ export function useCreateClientTag() {
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, CreateClientTagInput>({
     ...NEVER_PAUSE,
-    mutationFn: ({ name, color, icon, teamId }) => {
+    mutationFn: ({ name, color, icon, teamId, position }) => {
       assertCanManageClientTags(scope);
       const normalizedName = name.trim();
       if (!normalizedName) throw new Error("Введите название тега.");
       return createClientTagCached(
         writeClientOf(scope),
-        { name: normalizedName, color, icon: icon ?? null, team_id: teamId },
+        { name: normalizedName, color, icon: icon ?? null, team_id: teamId, position },
         scope.tenantId,
         scope.writeOpts,
       );

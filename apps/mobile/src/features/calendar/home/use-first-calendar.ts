@@ -34,5 +34,3 @@ export function useFirstCalendar(deps: UseFirstCalendarDeps) {
 
   return { onFirstCalendarCreated, onFirstCalendarExisting };
 }
-
-export type FirstCalendar = ReturnType<typeof useFirstCalendar>;

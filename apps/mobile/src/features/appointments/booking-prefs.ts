@@ -66,6 +66,7 @@ export {
   usePaidColor,
   usePrepaidColor,
   useSetSituationColor,
+  useRememberedColor,
   useSituationPalette,
   type AutoColorRule,
   type PaletteKey,

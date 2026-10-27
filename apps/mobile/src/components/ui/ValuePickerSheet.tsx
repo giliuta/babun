@@ -9,6 +9,7 @@ import {
   SelectRow,
 } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "./tokens";
 
 // ВЫБОР ОДНОГО ЗНАЧЕНИЯ ИЗ ДЛИННОГО СПИСКА.
 //
@@ -176,7 +177,7 @@ export function ValuePickerSheet({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }

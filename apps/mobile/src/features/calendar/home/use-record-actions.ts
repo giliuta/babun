@@ -1,5 +1,5 @@
 import type { Href } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, Linking } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { parseYMD } from "@/features/appointments/helpers";
 import { setSelfReminder } from "@/features/calendar/reminders";
@@ -50,7 +50,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   const createAppt = useCreateAppointment();
   const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
-  const { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed } =
+  const { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed, canDelete } =
     useRecordLifecycle({ toast });
 
   // Тап по свободному слоту / действие из агенды / «Записать» с карточки открывает
@@ -157,7 +157,12 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
         else if (res === "scheduled" && rule) {
           const l = selfReminderLabel(rule);
           toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
-        } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
+        } else if (res === "denied")
+          // Запрет снимается только в Настройках телефона — туда и ведёт тост.
+          toast("Разрешите уведомления в Настройках", "error", {
+            label: "Настройки",
+            onPress: () => void Linking.openSettings(),
+          });
         else if (res === "past") toast("Это время уже прошло", "info");
         else if (res === "deferred")
           toast(
@@ -175,7 +180,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   return {
     createAppt, memberCopy, deleteAppt, bookAt, openEdit, setCancelled,
     restoreCancelled, cancelVisit, deleteAppointmentConfirmed, startFreeMove, startMove,
-    openReminderMenu, pickReminderFor, recordRoute,
+    openReminderMenu, pickReminderFor, recordRoute, canDelete,
   };
 }
 

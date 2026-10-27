@@ -85,7 +85,7 @@ export default function FinanceSettingsScreen() {
   const levelsOf = useFinanceSettingLevelsOf();
 
   const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
-  const allTeams = useTeams().data ?? [];
+  const allTeams = useTeams({ display: true }).data ?? [];
   // В ленте — команды, где у человека открыта хоть одна строка (у владельца —
   // все), как в шестерёнке клиентов.
   const teams = owner ? allTeams : allTeams.filter((team) => anyFinanceSetting(levelsOf(team.id)));

@@ -4,6 +4,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { InvoiceNumberRow } from "@/features/finances/InvoiceNumberRow";
 import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useThemeColors } from "@/theme/colors";
 import { NUMBER_PADDINGS, cleanSeriesPrefix, documentNumberPreview } from "../company-rules";
 import type { Company, CompanyDraft } from "../queries";
@@ -23,7 +24,9 @@ export function SeriesBlock({
   children: ReactNode;
 }) {
   const t = useThemeColors();
-  const year = new Date().getFullYear();
+  // Год серии — год компании, как у сервера (`tenant_business_date`), а не
+  // телефона: в новогоднюю ночь в другом поясе номер показывал чужой год.
+  const year = Number(useBusinessToday().slice(0, 4));
   const next = useNextInvoiceSeries(year, company?.id ?? null).data ?? null;
   const padding = draft.number_padding ?? company?.number_padding ?? 4;
   const prefix =

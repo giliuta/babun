@@ -60,5 +60,3 @@ export function useCalendarLoadState(deps: UseCalendarLoadStateDeps) {
     calendarLoading, calendarError,
   };
 }
-
-export type CalendarLoadState = ReturnType<typeof useCalendarLoadState>;

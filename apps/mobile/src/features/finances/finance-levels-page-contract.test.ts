@@ -47,7 +47,7 @@ describe("экран «Финансы» спрашивает уровень од
     // (`finances/settings-levels.ts`). Сторож следит, чтобы её снова не закрыли.
     assert.doesNotMatch(index, /disabled=\{!access\.settings\}/);
     assert.doesNotMatch(index, /accessibilityState=\{\{ disabled: !access\.settings \}\}/);
-    assert.match(index, /<Settings color=\{t\.sub\} size=\{21\}/);
+    assert.match(index, /<Settings color=\{t\.sub\} size=\{ICON\.header\}/);
   });
 
   test("поиск не принимает ввод без ленты", () => {

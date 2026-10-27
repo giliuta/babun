@@ -28,8 +28,7 @@ test("только что созданная запись под своим id �
     status: "scheduled",
   };
   const slot = { editId: "new-1", teamId: "t1", date: "2026-12-01", timeStart: "13:00", timeEnd: "13:30" };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const day = [created] as any[];
+  const day = [created] as never[];
   assert.equal(findOverlap(draftSlot(slot), day, { withTeamEvents: true }), null);
   assert.notEqual(
     findOverlap(draftSlot({ ...slot, editId: null }), day, { withTeamEvents: true }),

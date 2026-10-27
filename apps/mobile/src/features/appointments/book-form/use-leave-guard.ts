@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Href, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "@react-navigation/native";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { useAndroidBack } from "@/lib/android-back";
 import { chooseOption } from "@/lib/choose";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { resolveReturnTo } from "@/features/appointments/return-to";
@@ -25,10 +26,13 @@ export interface LeaveGuardInput {
   from: string | undefined;
   /** Сохранить сейчас можно (всё обязательное есть, тариф позволяет). */
   saveable: boolean;
+  /** Чего не хватает для сохранения («Выберите услугу») — вопрос при
+   *  несохраняемой форме называет это, а не молча убирает «Сохранить». */
+  missingHint?: string;
   navigation: { dispatch: (action: NavigationAction) => void };
   router: ReturnType<typeof useRouter>;
-  /** «Не сохранять» — человек выбросил новую запись: черновик на телефоне
-   *  тоже уходит (`book-draft-store.ts`). */
+  /** «Не сохранять» — человек выбросил новую запись или правку: черновик на
+   *  телефоне тоже уходит (`book-draft-store.ts`). */
   onDiscardDraft?: () => void;
 }
 
@@ -43,6 +47,7 @@ export function useLeaveGuard({
   draft,
   from,
   saveable,
+  missingHint,
   navigation,
   router,
   onDiscardDraft,
@@ -105,7 +110,7 @@ export function useLeaveGuard({
     // уезжала в объект при уходе экрана, хотя человек нажал «Закрыть»
     // (она же считается в `notesDirty`).
     eventObjectNote.discard();
-    if (!isEdit) onDiscardDraft?.();
+    onDiscardDraft?.();
   };
   // ВЫХОД С ИЗМЕНЕНИЯМИ — ВОПРОС «СОХРАНИТЬ?», А НЕ «ЗАКРЫТЬ?». Человек
   // нажал «назад», потому что закончил: чаще всего он хочет сохранить, и
@@ -120,11 +125,18 @@ export function useLeaveGuard({
     // СОХРАНИТЬ НЕЛЬЗЯ — НЕ ПРЕДЛАГАЕМ. Без услуги или без тарифа
     // «Сохранить» только показывал плашку и оставлял на форме: человек
     // хотел уйти, а вопрос возвращал его назад. Тогда вопрос один — уйти без них.
+    //
+    // НО ПОЧЕМУ «СОХРАНИТЬ» НЕТ — СКАЗАНО (CAL-11). Новая запись с клиентом
+    // без услуги спрашивала «Закрыть без сохранения?», а правка — «Сохранить
+    // изменения?», и человек не понимал, отчего вопросы разные. Теперь в
+    // вопросе то же, что под кнопкой «Создать»: «Выберите услугу».
     if (!saveable) {
+      const lost = isEdit ? "Изменения не сохранятся." : "Введённое не сохранится.";
+      const why = missingHint && !missingHint.endsWith("…") ? missingHint : null;
       void chooseOption(
         "Закрыть без сохранения?",
         [{ label: "Не сохранять", destructive: true }],
-        { message: isEdit ? "Изменения не сохранятся." : "Введённое не сохранится." },
+        { message: why ? `${why}. ${lost}` : lost },
       ).then((index) => {
         if (index !== 0) return;
         discardNotes();
@@ -165,6 +177,13 @@ export function useLeaveGuard({
   usePreventRemove(dirty && !leaving, ({ data }) => {
     confirmDiscard(() => navigation.dispatch(data.action));
   });
+  // ANDROID: ФОРМА БЕЗ ИСТОРИИ ПОД СОБОЙ. После пересоздания активности
+  // (система выгрузила приложение из фона) или по ссылке запись — единственный
+  // экран стека: системному «назад» нечего снимать, `usePreventRemove` молчит,
+  // и жест уходил системе — приложение сворачивалось вместе с набранным
+  // (QAA-11). Тогда «назад» — та же стрелка формы: вопрос при изменениях,
+  // уход на календарь.
+  useAndroidBack(!leaving && !router.canGoBack(), requestClose);
   // Уход — после того, как защита снята: навигатор узнаёт о снятии
   // следующим кадром, поэтому переход ждёт его.
   useEffect(() => {
@@ -176,7 +195,7 @@ export function useLeaveGuard({
       else router.replace("/");
     }, 0);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- уход один раз по флагу; from и router — из этого же рендера
   }, [leaving]);
 
   return { leaveBook, editBaselineRef, requestClose, saveRef, dirty };

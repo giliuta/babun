@@ -1,5 +1,6 @@
-// Replay of a queued UPDATE: last-write-wins via the `updated_at` sentinel,
-// the server-wins conflict path, and the force-update fallback.
+// Replay of a queued UPDATE through the `updated_at` sentinel. On a conflict
+// a fresher server row wins for appointments and clients (`serverNewerWins`);
+// tags keep last-write-wins with the force-update fallback.
 
 import type { QueuedOp } from "../../db/cache/sql";
 import { assertTenantStill } from "./guards";
@@ -10,7 +11,11 @@ import {
   type ReplayTable,
 } from "./relay";
 import { carrySentinel, type AppliedFn } from "./sentinel";
-import { cacheServerRow, touchesGuardedAppointmentFields } from "./table-rules";
+import {
+  cacheServerRow,
+  serverNewerWins,
+  touchesGuardedAppointmentFields,
+} from "./table-rules";
 
 export async function replayUpdate(
   supabase: DbSupabase,
@@ -24,7 +29,7 @@ export async function replayUpdate(
   onApplied?: AppliedFn,
   /** Компания устройства всё ещё та, под которой начат слив. */
   tenantStill?: () => boolean,
-): Promise<boolean | "server-won"> {
+): Promise<boolean | "server-won" | "server-newer"> {
   // op.op === 'update' — last-write-wins via updated_at sentinel.
   // Table-agnostic dispatch: cast through `unknown` to a
   // PostgrestFilterBuilder so we can chain `.eq("updated_at", ...)`
@@ -57,6 +62,29 @@ export async function replayUpdate(
 
     assertTenantStill(tenantStill);
     const guarded = touchesGuardedAppointmentFields(op.table, updatePayload);
+    if (serverNewerWins(op.table)) {
+      // Ноль строк у записи и клиента — либо строку изменили позже (её
+      // `updated_at` ушёл), либо сервер отказал в правке, либо строки не
+      // видно. Различает их сама строка сервера (`serverNewerWins`).
+      const { data: fresh, error: freshErr } = await supabase
+        .from(tableName)
+        .select()
+        .eq("id", op.row_id)
+        .maybeSingle();
+      if (freshErr) throw new Error(`replay refresh: ${freshErr.message}`);
+      // Строки не видно — удалили на другом устройстве: применять некуда,
+      // операцию снимаем молча, кэш догонит полная перечитка.
+      if (!fresh) return false;
+      const row = fresh as Record<string, unknown>;
+      const stamp = typeof row.updated_at === "string" ? row.updated_at : null;
+      // Версия та же, а правка не легла — это отказ сервера (права), а не
+      // чужая правка: операция остаётся с причиной.
+      if (stamp === null || stamp === op.expected_updated_at) {
+        throw new Error("Сервер не дал изменить эту запись: нет прав на неё.");
+      }
+      await cacheServerRow(op, row);
+      return guarded ? "server-won" : "server-newer";
+    }
     if (serverWinsOnConflict || guarded) {
       // Строку правили после того, как эта правка встала в очередь. Старая
       // правка поверх новой затёрла бы свежие изменения (время, услуги),

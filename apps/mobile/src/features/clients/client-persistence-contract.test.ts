@@ -43,7 +43,7 @@ describe("client native persistence contract", () => {
     const notes = read("blocks/NotesBlock.tsx");
     // Страниц объекта и техники нет: правка объекта живёт листом, уровня
     // техники нет. Правило проверяется на листе правки.
-    const objectSheet = read("ObjectEditSheet.tsx");
+    const objectSheet = read("object-sheet/use-object-edit.ts");
     assert.match(screen, /Promise<boolean>/);
     assert.match(screen, /await updateClient\.mutateAsync\(patch\)/);
     // Заметка клиента — ОДНО поле, привязанное к последней записи
@@ -56,12 +56,14 @@ describe("client native persistence contract", () => {
     assert.doesNotMatch(notes, /TextInput/);
     // Лист правки объекта пишет ТЕМ ЖЕ писателем и удаляет с подтверждением.
     assert.match(objectSheet, /writer: LocationWriter/);
-    assert.match(objectSheet, /Удалить объект/);
+    // Заголовок вопроса (с числом визитов) — в `object-delete.ts`.
+    assert.match(objectSheet, /confirmAction\(objectDeleteTitle\(visitsOnObject\(/);
     // Создание объекта — лист снизу. Форма пустеет ТОЛЬКО после подтверждённой
     // записи, иначе набранный адрес исчезал бы вместе с неудавшимся PATCH-ем.
     const sheet = read("ObjectSheet.tsx");
-    assert.match(sheet, /const id = await writer\.addLocation\(/);
-    assert.match(sheet, /if \(!id\) \{/);
+    const create = read("object-sheet/use-object-create.ts");
+    assert.match(create, /const id = await writer\.addLocation\(/);
+    assert.match(create, /if \(!id\) \{/);
     // Отказ записи выходит РАНЬШЕ очистки формы: сама очистка (сброс адреса и
     // заметки с сохранением выбранного типа) стоит уже за этой веткой.
     // ФОРМА ОБЪЕКТА ОДНА НА СОЗДАНИЕ И НА ПРАВКУ. Блоки живут в
@@ -70,9 +72,10 @@ describe("client native persistence contract", () => {
     // «править» разойдутся — до разных примитивов, разной подписи типа и
     // карты только в одном из двух.
     const fields = read("ObjectFields.tsx");
-    assert.match(sheet, /<ObjectFields/);
-    assert.match(objectSheet, /<ObjectFields/);
-    for (const door of [sheet, objectSheet]) {
+    // Лист один (`ObjectSheet` с режимом) — и тело в нём одно; режимы —
+    // только хуки записи, своей разметки у них нет.
+    assert.equal(sheet.match(/<ObjectFields\b/g)?.length, 1, "в листе объекта второе тело формы");
+    for (const door of [sheet, objectSheet, create]) {
       assert.doesNotMatch(door, /<FieldRow/);
       assert.doesNotMatch(door, /<AddressDetailsToggle/);
       assert.doesNotMatch(door, /<ChoiceRow/);
@@ -86,7 +89,7 @@ describe("client native persistence contract", () => {
       fields.indexOf("<AddressDetailsToggle"),
     );
     assert.match(addressRow, /\n\s+live\n/);
-    const afterGate = sheet.slice(sheet.indexOf("if (!id) {"));
+    const afterGate = create.slice(create.indexOf("if (!id) {"));
     assert.match(afterGate, /return false;/);
     assert.match(afterGate, /setDraft\(\(d\) => \(\{ \.\.\.EMPTY_DRAFT/);
     // Дорога создания объекта ОДНА — лист. Лист правки не создаёт: ни
@@ -112,7 +115,7 @@ describe("client native persistence contract", () => {
     assert.match(read("use-requisites-writer.ts"), /ownerKey, "requisites"\)/);
     assert.match(read("ClientObjectsSection.tsx"), /update,\s*\/\/[^\n]*\n\s*client\.id,\s*\)/);
     // Экраны и блоки не собирают массив сами.
-    assert.doesNotMatch(read("ObjectEditSheet.tsx"), /update\(\{\s*locations:/);
+    assert.doesNotMatch(read("object-sheet/use-object-edit.ts"), /update\(\{\s*locations:/);
     assert.doesNotMatch(
       readWithParts("blocks/ObjectsBlock.tsx"),
       /update\(\{\s*locations:/,
@@ -123,7 +126,7 @@ describe("client native persistence contract", () => {
     // массива, и правка в одном листе откатывалась записью из другого.
     assert.match(read("ObjectSheet.tsx"), /writer: LocationWriter/);
     assert.doesNotMatch(read("ObjectSheet.tsx"), /useLocationWriter\(/);
-    assert.doesNotMatch(read("ObjectEditSheet.tsx"), /useLocationWriter\(/);
+    assert.doesNotMatch(read("object-sheet/use-object-edit.ts"), /useLocationWriter\(/);
     assert.match(read("ClientObjectsSection.tsx"), /useLocationWriter\(/);
     assert.doesNotMatch(read("ObjectSheet.tsx"), /update\(\{\s*locations:/);
     // Доп. номера уехали из шапки в свои строки (STORY-085) — механика та же.

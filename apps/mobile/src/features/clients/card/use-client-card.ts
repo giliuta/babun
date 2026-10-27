@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
@@ -26,7 +25,6 @@ import { useCardSms } from "./use-card-sms";
  *  the order the screen always called them. */
 export function useClientCard() {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
   const route = useCardRoute();
   const {
     id,
@@ -61,6 +59,7 @@ export function useClientCard() {
     onNameChange: onDraftNameChange,
     save: saveDraft,
     isSavingNow,
+    forgetDraft,
   } = useClientDraft(isDraft, {
     forBooking: handBack,
     name: prefillName,
@@ -117,15 +116,18 @@ export function useClientCard() {
       navigation.dispatch(data.action);
       return;
     }
+    // Те же слова, что у формы записи: уход без сохранения — одно действие
+    // на весь продукт.
     confirmThen(
-      "Удалить черновик?",
+      "Закрыть без сохранения?",
       {
-        message: "Введённые данные клиента ещё не сохранены.",
-        confirmLabel: "Удалить черновик",
+        message: "Введённое не сохранится.",
+        confirmLabel: "Не сохранять",
         destructive: true,
       },
       () => {
         leavingRef.current = true;
+        forgetDraft();
         navigation.dispatch(data.action);
       },
     );
@@ -181,7 +183,6 @@ export function useClientCard() {
     ...route,
     ...queries,
     t,
-    insets,
     menuOpen,
     setMenuOpen,
     remindOpen,

@@ -102,6 +102,9 @@ describe("пустой черновик не спрашивает «Удалит
   test("код страны в поле номера — не набранное", () => {
     assert.equal(draft.draftHasInput(createBlankClient(), "+357"), false);
     assert.equal(draft.draftHasInput(createBlankClient({ phone: "+357 " }), "+357"), false);
+    // Стёрли номер до кода чужой страны — тоже пусто.
+    assert.equal(draft.draftHasInput(createBlankClient({ phone: "+30" }), "+357"), false);
+    assert.equal(draft.draftHasInput(createBlankClient({ phone: "+30 69" }), "+357"), true);
   });
 
   test("номер, имя или связь — набранное", () => {

@@ -39,7 +39,6 @@ describe("деньги, которые стираются при понижен�
       "finance.accounts",
       "finance.debts",
       "finance.documents",
-      "finance.profit",
       "finance.window",
       "finance.settings_accounts",
       "finance.settings_trash",

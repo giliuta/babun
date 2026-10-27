@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { Text, View } from "react-native";
-import { Banknote, CreditCard, PiggyBank, Receipt, ReceiptText } from "lucide-react-native";
+import { Banknote, CreditCard, Receipt, ReceiptText } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -101,14 +101,6 @@ export function MoneyPreview({ blockKey, level }: { blockKey: string; level: Acc
           {write ? <Action label="Выставить инвойс" /> : null}
         </PreviewFrame>
       );
-    // «Прибыль» (своё право) — плитка страницы: доход минус
-    // расход команды за период. Смотрят её, правки у неё нет.
-    case "finance.profit":
-      return (
-        <PreviewFrame state={levelState(level)}>
-          <ProfitPreview />
-        </PreviewFrame>
-      );
     default:
       return null;
   }
@@ -142,30 +134,6 @@ function DocumentsPreview() {
         trailing={amount("€120", t.success)}
         onPress={noop}
       />
-    </Card>
-  );
-}
-
-/** Плитка «Прибыль» — как на странице финансов. */
-function ProfitPreview() {
-  const t = useThemeColors();
-  const width = useTileWidth(2);
-  return (
-    <Card style={{ marginHorizontal: 16, marginTop: 8 }}>
-      <View style={{ padding: 16, paddingTop: 12 }}>
-        <PaymentTile
-          icon={PiggyBank}
-          label="Прибыль"
-          color={t.brandAccent}
-          tint={t.brandAccent}
-          width={width}
-          compact
-          state="idle"
-          amount="€1 430"
-          onPress={noop}
-          accessibilityLabel="Прибыль €1 430"
-        />
-      </View>
     </Card>
   );
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "../tokens";
 
 /** Строка-дверь: ярлык · значение · шеврон. Шеврон — единственный признак,
  *  отличающий «уводит» от «правится на месте», когда обе строки выглядят
@@ -95,8 +96,7 @@ export function NavRow({
       {onPress ? (
         <ChevronRight
           color={loud ? t.onAccent : t.chevron}
-          size={17}
-          strokeWidth={2.2}
+          size={ICON.chevron}
         />
       ) : null}
     </Pressable>

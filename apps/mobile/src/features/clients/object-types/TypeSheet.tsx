@@ -86,7 +86,7 @@ export function TypeSheet({
       title={isEdit ? "Тип объекта" : "Новый тип"}
       avoidKeyboard
       footer={picking ? undefined : (<Button
-          label={isEdit ? "Сохранить" : "Создать"}
+          label={isEdit ? "Сохранить" : "Создать тип объекта"}
           onPress={() => onSubmit({ name, color, icon })}
           disabled={!name.trim() || busy}
           loading={busy}
@@ -107,6 +107,7 @@ export function TypeSheet({
           блок… и используются везде»). */}
       <NameColorField
         name={name}
+        placeholder="Название типа"
         onNameChange={setName}
         color={color}
         onColorChange={setColor}

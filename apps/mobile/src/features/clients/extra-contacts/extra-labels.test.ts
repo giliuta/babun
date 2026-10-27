@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { PhoneEntry } from "@babun/shared/local/clients";
-import { EXTRA_LABELS, nextExtraLabel } from "./extra-labels";
+import { EXTRA_LABELS, extraLabelText, nextExtraLabel } from "./extra-labels";
 
 const phone = (label: string): PhoneEntry => ({ id: label, number: "", label });
 
@@ -14,5 +14,16 @@ describe("nextExtraLabel", () => {
 
   test("all standard labels used — «Другой»", () => {
     assert.equal(nextExtraLabel(EXTRA_LABELS.map(phone)), "Другой");
+  });
+});
+
+describe("extraLabelText", () => {
+  test("ключ показывается словом, пустая подпись — «Другой»", () => {
+    assert.equal(extraLabelText("Рабочий"), "Рабочий");
+    assert.equal(extraLabelText(""), "Другой");
+    assert.equal(extraLabelText(null), "Другой");
+  });
+  test("чужое слово (своя подпись, старые данные) — как есть", () => {
+    assert.equal(extraLabelText("Mobile"), "Mobile");
   });
 });

@@ -122,13 +122,17 @@ export function useOperationAccounts({
   // Дефолт счёта = счёт команды операции (командный раньше общего). Эффект
   // (а не разовый сет при открытии), потому что счета приезжают асинхронно
   // и команда меняется чипами; ручной выбор/сброс (accountTouched) дефолт
-  // отключает.
+  // отключает. СЧЁТ ЧУЖОЙ КОМАНДЫ — ТОЖЕ НЕ ВЫБОР: человек его не трогал, он
+  // остался от прошлого открытия или прежней команды, и форма встречала
+  // красным «Сохранённый счёт не подходит» вместо своего счёта команды.
+  // Счёт, названный карточкой счёта (`defaultAccountId`), ведёт эффект ниже.
   useEffect(() => {
-    if (!visible || accountTouched || isEdit) return;
-    if (!teamId || accountId !== null) return;
+    if (!visible || accountTouched || isEdit || !teamId) return;
+    if (defaultAccountId && accountId === defaultAccountId) return;
+    if (accountId !== null && teamAccounts.some((a) => a.id === accountId)) return;
     const def = teamAccounts[0];
-    if (def) setAccountId(def.id);
-  }, [visible, accountTouched, isEdit, teamId, accountId, teamAccounts, setAccountId]);
+    if (def && def.id !== accountId) setAccountId(def.id);
+  }, [visible, accountTouched, isEdit, teamId, accountId, teamAccounts, defaultAccountId, setAccountId]);
 
   // ПРИШЛИ С КАРТОЧКИ СЧЁТА — счёт уже назван, спрашивать его второй раз
   // незачем; способ оплаты выведется из вида счёта сам. Эффектом, а не

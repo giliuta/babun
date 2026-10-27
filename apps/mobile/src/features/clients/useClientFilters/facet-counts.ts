@@ -3,7 +3,6 @@ import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
   clientPropertyTypes,
   matchesSegment,
-  todayYMD,
   SEGMENT_OPTIONS,
   type FacetOption,
   type SegmentKey,
@@ -61,10 +60,13 @@ interface FacetCountsInput {
   customSources: ClientSource[];
   /** Lower-cased object type → the facet option value. */
   propertyValueByKey: Map<string, string>;
+  /** «Сегодня» компании — та же дата, что у списка (`useBusinessToday`). */
+  today: string;
 }
 
 export function countFacets(input: FacetCountsInput): FacetCounts {
   const {
+    today,
     withFacetCounts,
     clients,
     cityOptions,
@@ -117,7 +119,6 @@ export function countFacets(input: FacetCountsInput): FacetCounts {
     source: 0,
     property: 0,
   };
-  const today = todayYMD();
   for (const c of clients) {
     const sr = passesSearch(c);
     const pe = passesPeriod(c);

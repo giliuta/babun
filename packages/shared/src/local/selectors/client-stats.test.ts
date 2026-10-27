@@ -118,3 +118,27 @@ describe("сводка клиента считает от дня бизнеса"
     assert.equal(map.get("c1")?.debt, 100);
   });
 });
+
+// Событие без клиента («Перезвонить Анне») — не визит Анны: подбор по имени
+// в заметке остаётся только для работ без клиента.
+describe("событие с именем клиента в заметке — не его визит", () => {
+  const ANNA = { id: "anna", full_name: "Анна", created_at: "2026-10-01T08:00:00Z" } as never;
+  const event = {
+    id: "e1",
+    client_id: null,
+    kind: "event",
+    comment: "Перезвонить Анне",
+    date: "2026-10-25",
+    time_start: "10:00",
+    status: "scheduled",
+    total_amount: 0,
+    paid_amount: 0,
+    payments: [],
+  } as never;
+  const named = { ...(event as object), kind: "event", comment: "Анна — ключи у соседа" } as never;
+
+  test("buildStats и buildStatsMap не берут событие", () => {
+    assert.equal(buildStats(ANNA, [named], undefined, "2026-10-19").nextApt, null);
+    assert.equal(buildStatsMap([ANNA], [named, event], undefined, "2026-10-19").get("anna")?.nextApt, null);
+  });
+});

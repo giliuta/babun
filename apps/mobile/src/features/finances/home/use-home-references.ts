@@ -5,7 +5,11 @@ import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { useInvoicePayments, useInvoices } from "@/features/finances/invoices-queries";
+import {
+  useInvoiceAppointmentMoney,
+  useInvoicePayments,
+  useInvoices,
+} from "@/features/finances/invoices-queries";
 import { useAccountsWithBalances } from "../accounts";
 import { useFinanceCategories } from "../queries";
 
@@ -13,10 +17,10 @@ import { useFinanceCategories } from "../queries";
  *  on the period or the chip, plus their stable `?? []` views. */
 export function useHomeReferences() {
   const categoriesQuery = useFinanceCategories();
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   // Активные — для чипов скоупа; ВСЕ (вкл. удалённые) — для подписей
   // истории: лента/попап/CSV не должны терять имя расформированной команды.
-  const allTeamsQuery = useTeams({ includeInactive: true });
+  const allTeamsQuery = useTeams({ includeInactive: true, display: true });
   // Финансы считают СЛУЧИВШЕЕСЯ: расход материалов прошлой записи не
   // имеет права обнулиться от того, что услугу убрали из прайса.
   const servicesQuery = useAllServices();
@@ -24,6 +28,7 @@ export function useHomeReferences() {
   const clientsQuery = useClients();
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
+  const appointmentMoneyQuery = useInvoiceAppointmentMoney();
   const accountsQuery = useAccountsWithBalances();
   // Лист перевода — со СКРЫТЫМИ счетами (в конце месяца
   // переводят на накопительный); плитки и панель «Счета» их не знают.
@@ -68,6 +73,10 @@ export function useHomeReferences() {
   const invoices = useMemo(
     () => invoicesQuery.data ?? [],
     [invoicesQuery.data],
+  );
+  const invoiceAppointmentMoney = useMemo(
+    () => appointmentMoneyQuery.data ?? {},
+    [appointmentMoneyQuery.data],
   );
   const invoicePayments = useMemo(
     () => invoicePaymentsQuery.data ?? {},
@@ -131,6 +140,7 @@ export function useHomeReferences() {
     clients,
     invoices,
     invoicePayments,
+    invoiceAppointmentMoney,
     accounts,
     allAccounts,
     orphanAccounts,

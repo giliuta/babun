@@ -6,6 +6,8 @@ import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { RowActionButton } from "@/components/ui/card-rows";
+import { LIST_ROW, TYPE } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
 import { newestFirst, serviceNamesOf } from "./card-history";
@@ -33,41 +35,36 @@ export function MasterClientOperationalView({
     <Screen edges={["top"]}>
       <ScreenHeader title="Клиент" onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <View className="px-4 pb-2 pt-3">
-          <Text style={{ fontSize: 24, fontWeight: "700", color: t.ink }}>
-            {client.full_name || "Клиент"}
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
+        {/* ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ И КАРТОЧКЕ: имя 17/700, телефон
+            13, звонок круглой кнопкой строки. Своя шкала (имя-герой 24,
+            подписи 12/16/14) делала одного клиента у мастера другим. */}
+        <SectionCard title="Клиент">
+          <View className="flex-row items-center gap-3 px-4 py-2.5">
+            <View className="min-w-0 flex-1">
+              <Text numberOfLines={2} style={{ ...TYPE.headline, fontWeight: "700", color: t.ink }}>
+                {client.full_name || "Клиент"}
+              </Text>
+              <Text style={{ ...LIST_ROW.sub, marginTop: 2, color: phoneDigits ? t.sub : t.faint }}>
+                {phoneDigits ? client.phone : "Телефон не указан"}
+              </Text>
+            </View>
+            {phoneDigits ? (
+              <RowActionButton
+                icon={Phone}
+                color={t.accent}
+                label={`Позвонить ${client.phone}`}
+                onPress={() => void Linking.openURL(`tel:${phoneDigits}`)}
+              />
+            ) : null}
+          </View>
+          <Text style={{ ...LIST_ROW.sub, color: t.faint, paddingHorizontal: 16, paddingBottom: 10 }}>
             Только рабочая информация по назначенным записям.
           </Text>
-        </View>
-
-        <SectionCard title="Контакт">
-          {phoneDigits ? (
-            <Pressable
-              onPress={() => void Linking.openURL(`tel:${phoneDigits}`)}
-              accessibilityRole="button"
-              accessibilityLabel={`Позвонить ${client.phone}`}
-              className="min-h-14 flex-row items-center gap-3 px-4 py-3 active:opacity-70"
-            >
-              <Phone color={t.accent} size={20} />
-              <View className="flex-1">
-                <Text style={{ fontSize: 12, color: t.sub }}>Телефон для выезда</Text>
-                <Text style={{ marginTop: 2, fontSize: 16, color: t.ink }}>
-                  {client.phone}
-                </Text>
-              </View>
-            </Pressable>
-          ) : (
-            <Text style={{ padding: 16, fontSize: 14, color: t.sub }}>
-              Телефон не указан
-            </Text>
-          )}
         </SectionCard>
 
         <SectionCard title="Назначенные записи">
           {assigned.length === 0 ? (
-            <Text style={{ padding: 16, fontSize: 14, color: t.sub }}>
+            <Text style={{ padding: 16, ...LIST_ROW.sub, color: t.sub }}>
               Доступных заявок нет
             </Text>
           ) : (
@@ -82,14 +79,15 @@ export function MasterClientOperationalView({
                     onPress={() => onOpenAppointment(appointment)}
                     accessibilityRole="button"
                     accessibilityLabel={`Открыть запись ${humanDay(appointment.date)} ${appointment.time_start}`}
-                    className="min-h-[72px] flex-row items-center gap-3 px-4 py-3 active:opacity-70"
+                    className="flex-row items-center gap-3 px-4 py-2 active:opacity-70"
+                    style={{ minHeight: LIST_ROW.minHeight }}
                   >
                     <View className="min-w-0 flex-1">
-                      <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
+                      <Text style={{ ...LIST_ROW.name, color: t.ink }}>
                         {humanDay(appointment.date)} · {appointment.time_start}–{appointment.time_end}
                       </Text>
                       <Text
-                        style={{ marginTop: 3, fontSize: 13, color: t.sub }}
+                        style={{ marginTop: 1, ...LIST_ROW.sub, color: t.sub }}
                         numberOfLines={2}
                       >
                         {[

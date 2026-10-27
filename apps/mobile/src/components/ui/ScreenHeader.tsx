@@ -81,7 +81,7 @@ export function ScreenHeader({
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      <ChevronLeft color={t.body} size={ICON.md} />
+      <ChevronLeft color={t.body} size={ICON.header} />
     </Pressable>
   );
 

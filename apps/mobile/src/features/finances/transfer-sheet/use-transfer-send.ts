@@ -26,6 +26,8 @@ export function useTransferSend(s: {
   setSending: (sending: boolean) => void;
   setFailure: (failure: string | null) => void;
   onClose: () => void;
+  /** Деньги ушли — до `onClose`: вызывающий решает, что показать после. */
+  onSent?: () => void;
 }): () => Promise<void> {
   /** `request_id` привязан к НАМЕРЕНИЮ, а не к открытию листа: та же пара,
    *  сумма, день и комментарий — тот же ключ и серверный дедуп после
@@ -79,6 +81,7 @@ export function useTransferSend(s: {
       // отмена перевода: один продукт подтверждает успех
       // одинаково, чем бы человек ни занимался.
       haptics.success();
+      s.onSent?.();
       s.onClose();
     } catch (e) {
       // Лист остаётся открытым — набранное не теряется, а повтор попадёт в

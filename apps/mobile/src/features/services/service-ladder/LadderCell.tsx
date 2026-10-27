@@ -71,6 +71,10 @@ export function LadderCell({
         placeholder={placeholder}
         placeholderTextColor={t.placeholder}
         keyboardType="decimal-pad"
+        // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ, как в остальных денежных полях: у
+        // цифровой клавиатуры нет стрелок, и правка «135» на «140» давала
+        // «140135».
+        selectTextOnFocus
         accessibilityLabel={accessibilityLabel}
         selectionColor={t.accent}
         keyboardAppearance="light"

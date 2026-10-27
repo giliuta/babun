@@ -201,6 +201,8 @@ async function processClaim(
 ): Promise<ProcessResult> {
   let status = claim.status;
   let deletedTenantCount = claim.deletedTenantCount;
+  // Снимается до каскада, файлы сносятся после удаления входа (ниже).
+  let ownedTenantIds: string[] = [];
 
   // A batch is claimed at once but processed sequentially. Renew and verify
   // this row's lease immediately before touching Auth so a later row whose
@@ -265,7 +267,7 @@ async function processClaim(
     status = "soft_deleted";
 
     // Компании владельца — до каскада: после него членства уже нет.
-    const ownedTenantIds = await ownedTenants(service, claim.userId);
+    ownedTenantIds = await ownedTenants(service, claim.userId);
     const { data, error } = await service.rpc(
       "delete_sole_owned_tenants_for_account",
       { p_user_id: claim.userId },
@@ -287,9 +289,6 @@ async function processClaim(
       return "lease_lost";
     }
     status = "tenant_data_deleted";
-    // Файлы ушедших компаний (фото, чеки, файлы клиентов, публичные
-    // логотипы). Сбой не держит удаление: остаток подберёт `storage-janitor`.
-    await purgeGoneTenantsStorage(service, ownedTenantIds);
   }
 
   const { error: hardDeleteError } = await service.auth.admin.deleteUser(
@@ -304,6 +303,10 @@ async function processClaim(
       "AUTH_HARD_DELETE_FAILED",
     );
   }
+  // Файлы ушедших компаний — только после окончательного удаления входа:
+  // сорвись оно раньше, человек остался бы с аккаунтом, но без файлов. Сбой
+  // здесь не держит удаление — остаток подберёт `storage-janitor`.
+  await purgeGoneTenantsStorage(service, ownedTenantIds);
 
   return (await deleteClaim(service, claim)) ? "completed" : "lease_lost";
 }

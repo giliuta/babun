@@ -160,6 +160,11 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               {total.label}
             </Text>
             <Text
+              // Сумма — одной строкой: «€36,000.0 / 0» на двух строках читалась
+              // как две цифры. Не влезла — шрифт ужимается, а не переносится.
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={{
                 width: COL.amount,
                 fontSize: total.grand ? 12 : 10,
@@ -189,8 +194,9 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         </View>
       ) : null}
 
-      {/* История оплат — только у документа, по которому уже платили. */}
-      {doc.payments.length > 0 ? (
+      {/* История оплат — только у документа, по которому уже платили; под
+          ней — «Получено · К оплате». */}
+      {doc.payments.length > 0 || doc.settlement.length > 0 ? (
         <View style={{ marginTop: 16 }}>
           <Text style={eyebrow}>{doc.dict.payment}</Text>
           {doc.payments.map((payment, index) => (
@@ -217,6 +223,12 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               >
                 {payment.amount}
               </Text>
+            </View>
+          ))}
+          {doc.settlement.map((row) => (
+            <View key={row.label} style={{ flexDirection: "row", paddingVertical: 5 }}>
+              <Text style={{ flex: 1, fontSize: 10, color: PAPER.body }}>{row.label}</Text>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: PAPER.ink }}>{row.value}</Text>
             </View>
           ))}
         </View>

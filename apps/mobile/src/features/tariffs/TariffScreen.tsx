@@ -36,8 +36,8 @@ import {
 import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "./use-tariff";
 import { useLiveCalendarCount } from "./use-live-calendars";
 
-// КАБИНЕТ → ТАРИФ — ЦЕНА ЗА КАЛЕНДАРЬ (€9.99 в месяц за рабочий календарь,
-// €7.99 при оплате за год, люди бесплатно). Пробный 14 дней без карты — один раз; оплата —
+// КАБИНЕТ → ТАРИФ — ЦЕНА ЗА КАЛЕНДАРЬ (€9,99 в месяц за рабочий календарь,
+// €7,99 при оплате за год, люди бесплатно). Пробный 14 дней без карты — один раз; оплата —
 // страница Stripe в браузере.
 //
 // Сверху — что действует сейчас; ниже — карточка «Календарь»: цена одного и
@@ -105,9 +105,11 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
-  // Платят за каждый живой календарь — столько и в кнопке; счёт — по
-  // аккаунту страницы, а не по открытому в календаре.
-  const calendars = Math.max(1, liveCount ?? (scope.foreign ? 0 : live.length));
+  // Платят за каждый живой календарь с работой — столько и в кнопке; счёт —
+  // по аккаунту страницы, а не по открытому в календаре. Пока число не
+  // пришло — минимум подписки, а не все живые: календари только с событиями
+  // бесплатны.
+  const calendars = Math.max(1, liveCount ?? 0);
   const full = owner
     ? tariffAction(state, selected, calendars, period)
     : gate === "write"
@@ -215,6 +217,7 @@ export function TariffScreen() {
             key={card.tier}
             card={card}
             calendars={calendars}
+            forever={state.forever}
             selected={selected === card.tier}
             mark={
               current === card.tier
@@ -263,6 +266,7 @@ const PERIOD_OPTIONS = [
 function TierTile({
   card,
   calendars,
+  forever,
   selected: on,
   mark,
   onPress,
@@ -270,6 +274,9 @@ function TierTile({
   card: TierCard;
   /** Живых календарей аккаунта — итог в месяц под ценой одного. */
   calendars: number;
+  /** Тариф выдан навсегда: аккаунт не платит, и счёт «за столько-то
+   *  календарей» ему не про что. */
+  forever: boolean;
   selected: boolean;
   mark: string | null;
   onPress?: () => void;
@@ -321,9 +328,11 @@ function TierTile({
       </View>
       {CAN_PAY_HERE ? (
         <View style={{ gap: 2 }}>
-          <Text style={{ ...TYPE.subhead, color: t.ink }}>
-            {`Ваших календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
-          </Text>
+          {forever ? null : (
+            <Text style={{ ...TYPE.subhead, color: t.ink }}>
+              {`Рабочих календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
+            </Text>
+          )}
           <Text style={{ ...TYPE.subhead, color: t.faint }}>
             {`За год — ${card.yearlyMonthly} за календарь в месяц`}
           </Text>

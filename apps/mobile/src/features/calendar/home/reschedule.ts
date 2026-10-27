@@ -200,9 +200,19 @@ export function createReschedule(deps: CreateRescheduleDeps) {
         void gate.settled.then((ok) => {
           if (!ok) return;
           if (editingApt?.id === apt.id) setEditingApt({ ...apt });
+          // ВИД ВОЗВРАЩАЕТСЯ ЗА ЗАПИСЬЮ: перенос на другой день увёл календарь
+          // на новый день, и после отката запись «пропадала» с экрана.
+          if (dateMoves) setDay(startOfDay(parseYMD(apt.date)));
           updateAppt.mutate(
             { id: apt.id, patch: prev },
             {
+              // Напоминания события переставлены прямым ходом — откат
+              // возвращает их к прежнему времени, иначе пуш придёт по новому.
+              onSuccess: () => {
+                if (isCalendarEvent(apt) && visibilityTenantId) {
+                  void syncEventAppointmentReminders(apt, appointmentTimeZone(apt), visibilityTenantId);
+                }
+              },
               onError: (e) =>
                 toast(serverReason(e) ?? "Не удалось вернуть время", "error"),
             },

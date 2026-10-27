@@ -167,7 +167,7 @@ const EUROPEAN_GROUPED = /^-?\d{1,3}(?:\.\d{3})+,\d{1,2}$/;
  * иначе сумма, скопированная с соседнего экрана, не вводится обратно.
  * En dash сюда попадает из автозамены iOS.
  */
-function normalizeMoneyInput(value: string): string {
+export function normalizeMoneyInput(value: string): string {
   const cleaned = value
     .replace(/\s/g, "") // \s покрывает NBSP и узкие пробелы разрядов
     .replace(/[−–]/g, "-")

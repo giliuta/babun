@@ -5,22 +5,6 @@ import type { PaymentMethod } from "../../../local/finance/transaction";
 import type { DbSupabase } from "./shared";
 
 /**
- * Atomically undo an appointment payment on the server. The RPC locks the
- * appointment, writes linked refunds for every settlement receipt and clears
- * the settlement mirrors in the same transaction. Prepayment receipts remain;
- * invoice-linked refunds reopen the invoice through the ledger trigger.
- */
-export async function undoAppointmentPayment(
-  supabase: DbSupabase,
-  appointmentId: string,
-): Promise<void> {
-  const { error } = await supabase.rpc("undo_appointment_payment", {
-    p_appointment_id: appointmentId,
-  });
-  if (error) throw new Error(error.message || "Не удалось отменить оплату");
-}
-
-/**
  * Permanently reset every outstanding receipt for an appointment. The server
  * appends linked refunds for prepayment and settlement events, clears the
  * payment mirrors and reopens appointment/invoice debt in one transaction.

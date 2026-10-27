@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { isTransientNetworkError } from "./transient-error";
+import { isTransientNetworkError, isTransportFailure } from "./transient-error";
 
 describe("isTransientNetworkError", () => {
   test("fetch failures of every runtime are transient", () => {
@@ -25,5 +25,40 @@ describe("isTransientNetworkError", () => {
       false,
     );
     assert.equal(isTransientNetworkError(new Error("duplicate key value")), false);
+  });
+});
+
+describe("число в отказе сервера — не обрыв", () => {
+  test("отказ функции базы с 502/503/504 в тексте — попытка, а не вечный обрыв", () => {
+    for (const message of [
+      "replay update: Сумма 503 больше итога",
+      "replay update: номер 504 уже занят",
+      "Error 502",
+    ]) {
+      assert.equal(isTransientNetworkError(new Error(message)), false, message);
+    }
+  });
+
+  test("шлюз называет себя словами — обрыв", () => {
+    for (const message of [
+      "replay update: Gateway Timeout",
+      "replay update: Service Unavailable",
+      "replay update: The upstream server is timing out",
+      "replay update: An invalid response was received from the upstream server",
+    ]) {
+      assert.equal(isTransientNetworkError(new Error(message)), true, message);
+    }
+  });
+});
+
+describe("isTransportFailure", () => {
+  test("ответа не было — да; сервер ответил 5xx или таймаутом — нет", () => {
+    assert.equal(isTransportFailure(new TypeError("Network request failed")), true);
+    assert.equal(isTransportFailure(new Error("replay update: TypeError: Failed to fetch")), true);
+    assert.equal(isTransportFailure(new Error("replay update: Gateway Timeout")), false);
+    assert.equal(
+      isTransportFailure(new Error("replay update: canceling statement due to statement timeout")),
+      false,
+    );
   });
 });

@@ -24,6 +24,7 @@ import {
 } from "@/features/sms/appointment-link-public";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { TYPE } from "@/components/ui/tokens";
 
 // «ПОДТВЕРДИТЬ / ОТМЕНИТЬ» — СТРАНИЦА ЗАПИСИ ДЛЯ КЛИЕНТА (STORY-089,
 // волна 7). Кипрские номера ответных SMS не принимают, поэтому в SMS — поле
@@ -152,7 +153,7 @@ function Appointment({ token, info }: { token: string; info: AppointmentLinkInfo
         ) : null}
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 26, lineHeight: 32, fontWeight: "800", letterSpacing: -0.4, color: t.ink }}
+          style={{ ...TYPE.title, color: t.ink }}
         >
           {linkTitle(info)}
         </Text>

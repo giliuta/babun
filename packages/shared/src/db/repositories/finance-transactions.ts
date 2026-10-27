@@ -24,7 +24,6 @@ export {
 export {
   resetAppointmentPayment,
   setAppointmentPrepayment,
-  undoAppointmentPayment,
 } from "./finance-transactions/appointment-money";
 export {
   createTransfer,

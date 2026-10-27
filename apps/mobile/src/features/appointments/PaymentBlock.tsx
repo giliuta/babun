@@ -87,6 +87,8 @@ export function PaymentBlock(props: PaymentBlockProps) {
     outstanding,
     rowsByAccount,
     unattributed,
+    strayAccounts,
+    emptyReason,
     busy,
     amountMode,
     kindForTap,
@@ -193,15 +195,21 @@ export function PaymentBlock(props: PaymentBlockProps) {
         <Text style={{ marginHorizontal: 16, marginTop: 4, marginBottom: 12, fontSize: 13, color: t.sub }}>
           Счета не загрузились — пробуем ещё раз
         </Text>
-      ) : accounts.length === 0 ? (
-        <NoAccountsNotice canCreate={canCreateAccount} onCreate={() => setCreateOpen(true)} />
+      ) : accounts.length === 0 && strayAccounts.length === 0 ? (
+        <NoAccountsNotice
+          reason={emptyReason}
+          canCreate={canCreateAccount}
+          onCreate={() => setCreateOpen(true)}
+        />
       ) : (
         <View
           className="flex-row flex-wrap"
           style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, gap: TILE_GAP }}
         >
-          {accounts.map((account) => {
+          {[...accounts, ...strayAccounts].map((account) => {
             const accountRowsForTile = rowsByAccount.get(account.id) ?? [];
+            // Счёт ушёл из оплаты — плитка только снимает принятое.
+            const stray = strayAccounts.includes(account);
             const paid = accountRowsForTile.reduce((sum, row) => sum + row.amount, 0);
             const isPaid = paid > 0;
             const isPending = pending?.accountId === account.id;
@@ -221,13 +229,13 @@ export function PaymentBlock(props: PaymentBlockProps) {
                 amount={isPaid ? formatEURExact(paid) : undefined}
                 disabled={busy}
                 onPress={() =>
-                  isPaid && paidTileIntent(amountMode) === "cancel"
+                  isPaid && (stray || paidTileIntent(amountMode) === "cancel")
                     ? void handlePaidTileTap(account, accountRowsForTile)
                     : handleTileTap(account)
                 }
                 accessibilityLabel={
                   isPaid
-                    ? `${account.name}, получено ${formatEURExact(paid)}, ${amountMode ? `добавить ${formatEURExact(amountCents / 100)}` : "снять"}`
+                    ? `${account.name}, получено ${formatEURExact(paid)}, ${amountMode && !stray ? `добавить ${formatEURExact(amountCents / 100)}` : "снять"}`
                     : `${account.name}, ${kindForTap === "prepayment" ? "предоплата" : "оплачено"} ${formatEURExact(amountCents / 100)}`
                 }
               />

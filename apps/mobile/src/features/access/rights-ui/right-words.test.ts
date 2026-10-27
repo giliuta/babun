@@ -49,7 +49,6 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.income", ["off", "read", "write", "full"]],
   ["finance.expense", ["off", "read", "write", "full"]],
   ["finance.debts", ["off", "read", "write"]],
-  ["finance.profit", ["off", "read"]],
   ["finance.window", ["week", "near", "month", "quarter", "half", "own"]],
   ["finance.settings_accounts", ["off", "read", "write"]],
   ["finance.settings_trash", ["off", "read", "write"]],

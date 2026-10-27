@@ -3,6 +3,8 @@ import { useRef, useState } from "react";
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
+import { useTenantId } from "@/lib/tenant";
+import { clearStoredInvoiceDraft } from "@/features/invoices/invoice-editor/stored-draft";
 import { randomUuid } from "@babun/shared/sync";
 import { InvoiceAlreadyIssuedError } from "@babun/shared/db/repositories/invoices";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -123,6 +125,7 @@ export default function NewInvoiceScreen() {
     teamVat.refetch(),
   ]);
 
+  const tenantId = useTenantId();
   const submit = async (value: InvoiceEditorValue) => {
     if (editId) {
       const { link_to_tx_id: _link, ...draft } = value;
@@ -149,6 +152,7 @@ export default function NewInvoiceScreen() {
       // родили бы второй счёт.
       if (!(issueError instanceof InvoiceAlreadyIssuedError)) throw issueError;
       notify("Инвойс уже выставлен", "Прошлая попытка его создала — откроется выставленный документ.");
+      clearStoredInvoiceDraft(tenantId, params.teamId);
       leavingRef.current = true;
       router.replace(`/invoices/${issueError.invoice.id}` as Href);
       return;
@@ -162,6 +166,7 @@ export default function NewInvoiceScreen() {
       );
     }
     // Выставлен — черновика больше нет, уход без вопроса.
+    clearStoredInvoiceDraft(tenantId, params.teamId);
     leavingRef.current = true;
     router.replace(`/invoices/${invoice.id}` as Href);
   };
@@ -185,11 +190,13 @@ export default function NewInvoiceScreen() {
     confirmThen(
       "Черновик не сохранён",
       {
-        message: "Выйти и потерять заполненное?",
-        confirmLabel: "Выйти",
+        message: "Уйти и потерять заполненное?",
+        confirmLabel: "Уйти",
         destructive: true,
       },
       () => {
+        // «Уйти» — черновик брошен и после выгрузки не вернётся.
+        clearStoredInvoiceDraft(tenantId, params.teamId);
         leavingRef.current = true;
         navigation.dispatch(data.action);
       },

@@ -12,6 +12,7 @@ import {
 import { iconPreset } from "@/components/ui/icon-set";
 import type { Account, AccountKind } from "@babun/shared/local/finance/account";
 import type { AccountWithBalance } from "./accounts";
+import { sumAccountBalances } from "./accounts-sections";
 
 // Глиф по ВИДУ счёта — фолбэк для тех, у кого значок не выбран.
 export const KIND_ICON: Record<AccountKind, LucideIcon> = {
@@ -38,10 +39,11 @@ export function accountIcon(
 // СКРЫТЫХ БАЛАНСОВ В ПРОДУКТЕ НЕТ: перечёркнутого глаза нет, ничего не скрываем.
 // Итог всегда полный —
 // цифра, которая иногда неполная и говорит об этом значком, хуже отсутствия
-// цифры: её всё равно читают как «всего».
-export function accountsTotal(accounts: readonly AccountWithBalance[]): number {
-  let total = 0;
-  for (const a of accounts) total += a.balance;
-  return total;
+// цифры: её всё равно читают как «всего». Поэтому хоть один остаток неизвестен
+// (сервер не назвал его этому человеку) — итога нет, `null`, а не сумма с €0
+// вместо него. Сумма — в центах, той же функцией, что подытог страницы «Счета».
+export function accountsTotal(accounts: readonly AccountWithBalance[]): number | null {
+  if (accounts.some((a) => !a.balance_known)) return null;
+  return sumAccountBalances(accounts);
 }
 

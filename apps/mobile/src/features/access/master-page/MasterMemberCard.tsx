@@ -79,7 +79,7 @@ export function MasterMemberCard({
   const toast = useToast();
   const router = useRouter();
   const qc = useQueryClient();
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
   // ДИРЕКТОР: себя и директоров не правит, команды — только свои,

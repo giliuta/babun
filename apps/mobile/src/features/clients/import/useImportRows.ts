@@ -26,7 +26,7 @@ import {
   saveResumeState,
   type ImportResumeState,
 } from "./resume";
-import { importClientId, rowToClient } from "./import-client";
+import { importClientId, importIdCollision, rowToClient } from "./import-client";
 import { clientKeys } from "@/lib/client-query-keys";
 
 // Parallel round-trips per chunk. Same 10 the existing importer uses — the
@@ -102,7 +102,11 @@ async function createImportClient(
   } catch (error) {
     if (!isDuplicateImportId(error)) throw error;
     const existing = await getClientRepo(db, client.id, tenantId);
-    if (!existing) throw error;
+    const collision = importIdCollision(existing);
+    if (collision === "missing") throw error;
+    if (collision === "deleted") {
+      throw new Error("Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда");
+    }
     await ensureImportTag(db, client.id, tagId, tenantId);
   }
 }
@@ -227,22 +231,36 @@ export function useImportRows() {
 export async function fetchExistingPhoneSet(
   client: SupabaseClient,
   tenantId: string,
+  /** Страна команды: старые номера без кода разбираются по ней, как в
+   *  карточке, а не по стране по умолчанию. */
+  country?: CountryCode,
 ): Promise<Set<string>> {
   const set = new Set<string>();
   const PAGE_SIZE = 1000;
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await client
       .from("clients")
-      .select("id, phone, phone_e164")
+      .select("id, phone, phone_e164, phones")
       .eq("tenant_id", tenantId)
       .is("deleted_at", null)
       .order("id", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error(`Не удалось проверить дубли: ${error.message}`);
     if (!data || data.length === 0) break;
-    for (const row of data as { phone: string | null; phone_e164: string | null }[]) {
-      const key = row.phone_e164 ?? tryToE164(row.phone ?? "");
+    type Row = {
+      phone: string | null;
+      phone_e164: string | null;
+      phones: { number?: string | null }[] | null;
+    };
+    for (const row of data as Row[]) {
+      const key = row.phone_e164 ?? tryToE164(row.phone ?? "", country);
       if (key) set.add(key);
+      // Доп. номера — тоже чьи-то: человек, чей номер стоит «Телефоном 2»,
+      // заводился отдельной карточкой (импорт из контактов это уже ловит).
+      for (const extra of row.phones ?? []) {
+        const e = tryToE164(extra.number ?? "", country);
+        if (e) set.add(e);
+      }
     }
     if (data.length < PAGE_SIZE) break;
   }

@@ -1,6 +1,6 @@
 import { getStorage } from "@babun/shared/storage";
 import { makePeriod } from "@/lib/period";
-import { EMPTY_FILTER, SEGMENT_OPTIONS, todayYMD, type ClientsFilter } from "./filter";
+import { EMPTY_FILTER, SEGMENT_OPTIONS, type ClientsFilter } from "./filter";
 
 // ОДИН живой набор фильтров, переживающий выход из приложения — и ничего
 // больше: ни имён, ни списка сохранённых наборов (они не нужны).
@@ -22,11 +22,12 @@ interface Stored {
 
 /** Набор сегодняшнего дня или null. Никогда не бросает: настройка — не
  *  повод ронять экран. `now` — «сейчас» в поясе компании: от него
- *  пересобирается пресетный период. */
-export function loadDayFilter(now: Date): ClientsFilter | null {
+ *  пересобирается пресетный период; `today` — сегодня компании
+ *  (`useBusinessToday`): по часам телефона набор жил бы до чужой полуночи. */
+export function loadDayFilter(now: Date, today: string): ClientsFilter | null {
   try {
     const raw = getStorage().get<Stored>(KEY);
-    if (!raw || raw.ymd !== todayYMD()) return null;
+    if (!raw || raw.ymd !== today) return null;
     const f = raw.filter;
     if (!f || typeof f !== "object") return null;
     const period =
@@ -57,9 +58,9 @@ export function loadDayFilter(now: Date): ClientsFilter | null {
   }
 }
 
-export function saveDayFilter(filter: ClientsFilter): void {
+export function saveDayFilter(filter: ClientsFilter, today: string): void {
   try {
-    getStorage().set(KEY, { ymd: todayYMD(), filter } satisfies Stored);
+    getStorage().set(KEY, { ymd: today, filter } satisfies Stored);
   } catch {
     // Запись best-effort.
   }

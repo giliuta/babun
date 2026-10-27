@@ -59,6 +59,8 @@ export interface InvoiceSettlement {
   income: number;
   refunded: number;
   paid: number;
+  /** Из `paid` — деньги записи, принятые мимо инвойса. */
+  fromAppointment?: number;
   remaining: number;
   overpaid: number;
   isPartial: boolean;

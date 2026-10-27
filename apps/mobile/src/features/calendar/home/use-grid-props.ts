@@ -159,5 +159,3 @@ export function useGridProps(deps: UseGridPropsDeps) {
     onDayLabelTap, gridProps,
   };
 }
-
-export type GridHandlers = ReturnType<typeof useGridProps>;

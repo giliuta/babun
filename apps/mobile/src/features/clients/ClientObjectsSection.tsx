@@ -7,7 +7,6 @@ import { useLocationRequestActions } from "@/features/clients/location-request-a
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { cardObjectId, lastVisitByObject } from "@/features/clients/object-last-visit";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { useClientsCapabilities, useScopeCompany } from "@/session/company-scope";
 
 // ОБЪЕКТЫ КЛИЕНТА — ОДИН КУСОК НА ДВА МЕСТА: если у клиента 12 объектов, до
@@ -135,7 +134,8 @@ export function ClientObjectsSection({
       />
       {/* Свайп по строке открывает тот же лист сразу с вопросом об удалении —
           подтверждение и запись остаются в одном месте. */}
-      <ObjectEditSheet
+      <ObjectSheet
+        mode="edit"
         visible={sheet !== null}
         client={client}
         locationId={sheet?.id ?? null}
@@ -149,6 +149,7 @@ export function ClientObjectsSection({
       {/* Добавление объекта — лист снизу. Живёт рядом с
           блоком, а не в карточке: кроме открытия у карточки к нему дел нет. */}
       <ObjectSheet
+        mode="create"
         visible={objectsOpen}
         writer={locationWriter}
         teamId={client.team_id ?? null}

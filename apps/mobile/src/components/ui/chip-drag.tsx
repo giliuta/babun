@@ -206,7 +206,7 @@ export function DraggableChipRow({
   useLayoutEffect(() => {
     shared.order.value = [...ids];
     report(widthsRef.current, ids);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ключ — порядок (key); report и массив ids новые на каждом рендере
   }, [key]);
 
   const onMeasure = (id: string, w: number, h: number) => {

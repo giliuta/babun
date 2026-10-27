@@ -142,7 +142,7 @@ export function buildStats(
     // that pre-date client_id linkage.
     const matchById = a.client_id === cid;
     const matchByName =
-      a.client_id == null && nameInComment(normName(a.comment), cname);
+      a.client_id == null && a.kind !== "event" && nameInComment(normName(a.comment), cname);
     if (!matchById && !matchByName) continue;
 
     // ДОЛГ ВОЗНИКАЕТ И БЕЗ ОТМЕТКИ БРИГАДЫ: прошло время записи — она
@@ -276,7 +276,10 @@ export function buildStatsMap(
       const arr = byId.get(a.client_id);
       if (arr) arr.push(a);
       else byId.set(a.client_id, [a]);
-    } else {
+    } else if (a.kind !== "event") {
+      // СОБЫТИЕ — НЕ ВИЗИТ КЛИЕНТА. Без клиента в базе живут только личные
+      // события («Перезвонить Анне»), и подбор по имени в заметке делал их
+      // визитами Анны: дата, команда, «останется в отчётах» при удалении.
       const key = normName(a.comment);
       if (key) {
         const arr = orphanByName.get(key);

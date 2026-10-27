@@ -8,7 +8,7 @@ import {
   Platform,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { CheckCircle2, RefreshCw, Trash2, WifiOff } from "lucide-react-native";
+import { CheckCircle2, RefreshCw, Trash2 } from "lucide-react-native";
 import {
   kickReplayer,
   labelForOp,
@@ -25,6 +25,7 @@ import {
 } from "@babun/shared/db/cache/sql";
 import { Button } from "@/components/ui/Button";
 import { GUTTER } from "@/components/ui/tokens";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -187,18 +188,16 @@ export default function SyncStatusScreen() {
           />
         }
       >
+        {/* Без сети — общая плашка во всю ширину, как у календаря. */}
         {!online ? (
-          <View
-            className="mx-3 mt-3 flex-row items-center gap-3 rounded-[10px] px-4 py-3"
-            style={{ backgroundColor: `${t.warning}1A` }}
-          >
-            <WifiOff color={t.warning} size={20} />
-            <Text className="flex-1 text-sm" style={{ color: t.body }}>
-              {Platform.OS === "android"
+          <NoticeBar
+            tone="warn"
+            message={
+              Platform.OS === "android"
                 ? "Изменения хранятся только на этом телефоне и отправятся после подключения."
-                : "Изменения хранятся только на этом iPhone и отправятся после подключения."}
-            </Text>
-          </View>
+                : "Изменения хранятся только на этом iPhone и отправятся после подключения."
+            }
+          />
         ) : null}
 
         {/* Первое чтение очереди: раньше эту паузу «показывал» программно

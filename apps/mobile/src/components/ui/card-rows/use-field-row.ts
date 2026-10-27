@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { TextInput } from "react-native";
-import { LATIN_KEYBOARD } from "@/lib/keyboard";
+import { LATIN_KEYBOARD, SIGNED_NUMBER_KEYBOARD } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 import {
   cleanFieldInput,
+  fieldAutoCapitalize,
   fieldKeyboardTraits,
   initialFieldText,
   typedWithoutSeed,
@@ -15,6 +16,7 @@ import type { FieldRowProps } from "./field-row-props";
 export function useFieldRow({
   value,
   keyboardType,
+  autoCapitalize,
   autoFocus,
   live,
   big,
@@ -96,7 +98,13 @@ export function useFieldRow({
     selectOnFocus,
     // `latin` — имя смысла, а не платформы: на iOS и Android латиницу
     // включают разные значения.
-    nativeKeyboard: keyboardType === "latin" ? LATIN_KEYBOARD : keyboardType,
+    nativeKeyboard:
+      keyboardType === "latin"
+        ? LATIN_KEYBOARD
+        : keyboardType === "numbers-and-punctuation"
+          ? SIGNED_NUMBER_KEYBOARD
+          : keyboardType,
+    autoCapitalize: fieldAutoCapitalize(keyboardType, autoCapitalize),
     valueSize,
     valueWeight,
     setInput,

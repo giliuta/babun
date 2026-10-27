@@ -1,8 +1,9 @@
-// Варианты сборки: dev-клиент живёт ПОД СВОИМ bundle id, чтобы установка
-// боевого Babun из TestFlight (com.babun.crm) не перезаписывала стройку
-// и обе иконки жили на телефоне рядом.
+// Варианты сборки: dev-клиент живёт ПОД СВОИМ id (iOS bundle id и Android
+// package), чтобы установка боевого Babun из TestFlight или Google Play
+// (com.babun.crm) не перезаписывала стройку, обе иконки жили на телефоне
+// рядом, а ссылки babun.app открывал только боевой.
 //   APP_VARIANT=development → «Babun Dev», com.babun.crm.dev, scheme babundev
-//   без переменной         → боевой Babun как в app.json (релиз/TestFlight)
+//   без переменной         → боевой Babun как в app.json (релиз/магазины)
 const IS_DEV = process.env.APP_VARIANT === "development";
 // ВХОД ЧЕРЕЗ GOOGLE РОДНЫМ ОКНОМ (13.10): клиентские id Google — публичные,
 // живут в google-oauth.json (его же читает приложение). Плагин нужен iOS:
@@ -90,7 +91,11 @@ module.exports = ({ config }) => ({
   // MapPicker на провайдер Google без его SDK в сборке.
   android: {
     ...config.android,
-    ...(GOOGLE_SERVICES_FILE ? { googleServicesFile: GOOGLE_SERVICES_FILE } : null),
+    // Проект Firebase знает только боевой package: файл с ним в dev-сборке
+    // уронил бы gradle («No matching client»). Dev-клиент Android живёт без
+    // FCM — как без Google-входа на iOS.
+    ...(IS_DEV ? { package: "com.babun.crm.dev" } : null),
+    ...(GOOGLE_SERVICES_FILE && !IS_DEV ? { googleServicesFile: GOOGLE_SERVICES_FILE } : null),
     ...(IS_DEV
       ? null
       : {

@@ -39,7 +39,56 @@ import {
 
 type DbSupabase = SupabaseClient<Database>;
 
-const TAGS_ONLINE_ONLY = "Изменения тегов недоступны без сети — попробуй позже";
+const TAGS_ONLINE_ONLY = "Изменения тегов недоступны без сети — попробуйте позже";
+
+// МАССИВЫ КЛИЕНТА НЕ ПИШУТСЯ ПОВЕРХ БОЛЕЕ СВЕЖЕЙ СТРОКИ.
+//
+// Телефоны, объекты, заметки, реквизиты, связи и оборудование — каждый одна
+// jsonb-колонка, и правка пишет массив целиком. Если строку уже изменили на
+// другом телефоне (или заказчик прислал точку по ссылке), наш массив собран
+// из старой версии и стёр бы чужой объект или заметку. Функция правки сервера
+// версии не сверяет, поэтому сверяем перед ней: `updated_at` сервера ушёл от
+// кэша — не пишем, кэш берёт строку сервера, человек видит свежую. Офлайн-
+// правка уступает тем же правилом при сливе (`serverNewerWins`).
+const ARRAY_FIELDS = [
+  "phones",
+  "locations",
+  "notes",
+  "requisites",
+  "memberships",
+  "equipment",
+] as const satisfies readonly (keyof Client)[];
+
+export const CLIENT_NEWER_ON_SERVER =
+  "Карточку клиента изменили на другом устройстве — показываю свежую версию";
+
+/** Правку массива клиента не применили: строка на сервере свежее кэша. */
+export class ClientNewerOnServerError extends Error {
+  constructor() {
+    super(CLIENT_NEWER_ON_SERVER);
+    this.name = "ClientNewerOnServerError";
+  }
+}
+
+function touchesClientArrays(patch: Partial<Client>): boolean {
+  return ARRAY_FIELDS.some((field) => patch[field] !== undefined);
+}
+
+async function assertClientNotNewer(
+  supabase: DbSupabase,
+  id: string,
+  tenantId: string,
+  expectedUpdatedAt: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("updated_at")
+    .eq("id", id)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error) throw new Error(`updateClient: ${error.message}`);
+  if (data && data.updated_at !== expectedUpdatedAt) throw new ClientNewerOnServerError();
+}
 
 // ─── Write — create ───────────────────────────────────────────────
 
@@ -169,6 +218,9 @@ export async function updateClient(
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("clients", merged);
     try {
+      if (expectedUpdatedAt && touchesClientArrays(scrubbedPatch)) {
+        await assertClientNotNewer(supabase, id, tenantId, expectedUpdatedAt);
+      }
       const updated = await repoUpdateClient(
         supabase,
         id,
@@ -178,6 +230,10 @@ export async function updateClient(
       await refetchAndCacheOne(supabase, id, tenantId);
       return updated;
     } catch (err) {
+      if (err instanceof ClientNewerOnServerError) {
+        await refetchAndCacheOne(supabase, id, tenantId).catch(() => {});
+        throw err;
+      }
       if (!isTransientNetworkError(err)) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;

@@ -20,7 +20,7 @@ export function Halo({
   const hue = color ?? t.accentFrom;
   // Свой id градиента у каждого ореола: на вебе id в SVG общие на страницу, и
   // жёсткий «screenHalo» у двух ореолов подряд красил второй цветом первого
-  // (найдено сборкой для Claude Design 21.09; тот же приём — у PageWash).
+  // (тот же приём — у PageWash).
   const gid = `halo-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
     <Svg

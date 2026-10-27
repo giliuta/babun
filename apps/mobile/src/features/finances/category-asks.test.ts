@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   asksOf,
-  categoriesDoorLine,
   categoryInTeam,
   payeeName,
   payeeOptions,
@@ -71,15 +70,6 @@ describe("зарплата — расход с получателем", () => {
     assert.equal(categoryInTeam([cat("rent")], "fuel", "B"), "fuel");
   });
 
-  test("строка-дверь считает имена, а не копии команд", () => {
-    const list = [
-      cat("fuel", { name: "Топливо" }),
-      cat("fuel-b", { name: "Топливо", team_id: "B" }),
-      cat("tips", { type: "income", name: "Чаевые" }),
-    ];
-    assert.equal(categoriesDoorLine(list), "Расход 1 · доход 1");
-  });
-
   test("заголовок с получателем и без", () => {
     assert.equal(withPayee("Зарплата", "Даня"), "Зарплата · Даня");
     assert.equal(withPayee("Зарплата", null), "Зарплата");
@@ -107,20 +97,3 @@ describe("зарплата — расход с получателем", () => {
   });
 });
 
-describe("подпись строки категорий в настройках", () => {
-  let n = 0;
-  const cat = (type: string, over: Record<string, unknown> = {}) =>
-    ({
-      id: `c${++n}`, tenant_id: "t", slug: "x", name: `Категория ${n}`, type, icon: null,
-      color: null, hidden: false, position: 0, ask_employee: false, ask_client: false,
-      require_receipt: false, is_system: false, ...over,
-    }) as never;
-  test("считает свои по видам, без служебных и скрытых", () => {
-    assert.equal(
-      categoriesDoorLine([cat("expense"), cat("expense"), cat("income"), cat("income", { is_system: true }), cat("expense", { hidden: true })]),
-      "Расход 2 · доход 1",
-    );
-    assert.equal(categoriesDoorLine([cat("income")]), "Доход 1");
-    assert.equal(categoriesDoorLine([]), "Пока нет — создайте свои");
-  });
-});

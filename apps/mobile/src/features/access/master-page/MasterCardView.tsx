@@ -7,10 +7,11 @@ import {
   type TextInput,
 } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import { MoreHorizontal } from "lucide-react-native";
+import { MoreHorizontal, Users } from "lucide-react-native";
 
 import { NavRow } from "@/components/ui/card-rows";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { ChooseRow } from "@/components/ui/ChooseRow";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -67,7 +68,7 @@ export function HeaderMenuButton({ label, onPress }: { label: string; onPress: (
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      <MoreHorizontal color={t.body} size={ICON.md} />
+      <MoreHorizontal color={t.body} size={ICON.header} />
     </Pressable>
   );
 }
@@ -201,6 +202,11 @@ export function MasterCardView(p: MasterCardViewProps) {
     .filter((team): team is Team => team !== undefined);
   const anyUnchosen = p.teams.some((team) => !p.teamIds.includes(team.id));
   const openCalendars = p.onOpenCalendars;
+  // ЛЕНТЫ БЕЗ КОМАНД НЕТ: у нового партнёра пустая лента с одним «Добавить»
+  // читалась сломанной. Пока ни одной команды не выбрано, вместо неё —
+  // карточка «Команды» с дверью «Выбрать команды»; первая команда —
+  // и лента встаёт на своё место.
+  const noTeams = !!p.teamChips && !p.teams.some((team) => p.teamIds.includes(team.id));
 
   return (
     <Screen edges={["top"]}>
@@ -210,9 +216,9 @@ export function MasterCardView(p: MasterCardViewProps) {
         subtitle={p.subtitle}
         onBack={p.onBack}
         right={p.headerRight}
-        seam={!p.teamChips}
+        seam={!p.teamChips || noTeams}
       />
-      {p.teamChips ? (
+      {p.teamChips && !noTeams ? (
         <ScopeChips
           // В ПОРЯДКЕ КОМАНД КОМПАНИИ, как лента настроек календаря: одна и та
           // же команда стоит на одном месте в обеих лентах.
@@ -234,6 +240,11 @@ export function MasterCardView(p: MasterCardViewProps) {
           keyboardDismissMode="interactive"
         >
           <EmployeeIdentityBlock {...p} />
+          {noTeams && p.teamChips?.onAdd ? (
+            <SectionCard title="Команды" padded={false}>
+              <ChooseRow icon={Users} label="Выбрать команды" onPress={p.teamChips.onAdd} />
+            </SectionCard>
+          ) : null}
           {p.note ?? null}
 
           {/* КОМАНДЫ — ПРАВА ПО КАЖДОЙ КОМАНДЕ: строка на

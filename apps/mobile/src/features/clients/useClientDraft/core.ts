@@ -49,7 +49,9 @@ export function draftCanSave(gate: DraftGate): boolean {
  *  (`+357 `), и сам код номером не считается. */
 export function draftPhoneTyped(text: string, dial: string): boolean {
   const typed = text.trim();
-  return typed !== "" && typed !== dial.trim();
+  // «+30» — стёрли номер до кода чужой страны: тоже не номер. Код страны —
+  // не длиннее трёх цифр. Модуль без импортов (его читает тест исходником).
+  return typed !== "" && typed !== dial.trim() && !/^\+\d{1,3}$/.test(typed);
 }
 
 /** ЕСТЬ ЛИ В ЧЕРНОВИКЕ НАБРАННОЕ — то, что «Назад» не вправе выбросить молча.

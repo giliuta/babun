@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Banknote, Users, Wallet } from "lucide-react-native";
-import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { moneyInputProblem, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,6 +16,7 @@ import { setTourReady, tourEvent } from "@/components/tour/tour-store";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { GUTTER } from "@/components/ui/tokens";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
+import { SIGNED_NUMBER_KEYBOARD } from "@/lib/keyboard";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -68,7 +69,7 @@ export function CreateAccountSheet({
   const online = useIsOnline();
   const insert = useInsertAccount();
   // Активные команды — из них выбирается владелец счёта.
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const teamsLoaded = teamsQuery.data !== undefined;
   // Дубль имени — и среди скрытых: имя в команде одно на всех.
@@ -155,7 +156,13 @@ export function CreateAccountSheet({
       return;
     }
     if (openingCents == null) {
-      notify("Проверьте сумму", "Сумма на счёте — число, максимум два знака после запятой. Например: 1250,50");
+      // Причина — та, что на самом деле: «два знака» на огромной целой сумме
+      // не говорили, что исправить.
+      notify(
+        "Проверьте сумму",
+        moneyInputProblem(opening, { allowNegative: true, allowZero: true })
+          ?? "Сумма на счёте — число, максимум два знака после запятой. Например: 1250,50",
+      );
       return;
     }
     if (duplicate) {
@@ -363,7 +370,13 @@ function AmountInput({
         onChangeText={onChange}
         placeholder="0"
         placeholderTextColor={t.placeholder}
-        keyboardType="numbers-and-punctuation"
+        // Цифры со знаком «−» (остаток бывает в минусе), поэтому не decimal-pad;
+        // полоса текстовых подсказок над такой клавиатурой — лишняя.
+        keyboardType={SIGNED_NUMBER_KEYBOARD}
+        autoCorrect={false}
+        spellCheck={false}
+        autoComplete="off"
+        textContentType="none"
         returnKeyType="done"
         selectionColor={t.accent}
         accessibilityLabel="Сколько сейчас на счёте"

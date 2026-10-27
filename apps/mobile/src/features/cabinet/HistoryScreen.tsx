@@ -65,7 +65,7 @@ export function HistoryScreen() {
   // к записи и клиенту нет: они открылись бы в открытом аккаунте.
   const scope = useAccountScope();
   const accountName = useAccountName();
-  const { data: activeTeams = [] } = useTeams({ includeInactive: true });
+  const { data: activeTeams = [] } = useTeams({ includeInactive: true, display: true });
   const { data: calendars = [] } = useMyCalendars();
   const teams = useMemo(
     () =>

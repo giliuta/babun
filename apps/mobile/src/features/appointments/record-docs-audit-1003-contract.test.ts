@@ -67,7 +67,8 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("партнёр: один номер новой записи на форму, команда записи не меняется", () => {
     const book = bookFormSource();
     assert.match(book, /patch: \{ \.\.\.buildPatch\(\), id: newRecordIdRef\.current \},/);
-    assert.match(book, /const newRecordIdRef = useRef\(randomUuid\(\)\);/);
+    // Номер один на форму — и на форму, поднятую из черновика: тот же номер.
+    assert.match(book, /const newRecordIdRef = useRef\(restored\?\.newRecordId \?\? randomUuid\(\)\);/);
     assert.match(book, /teams=\{isMemberView && isEdit \? teams\.filter\(\(tm\) => tm\.id === teamId\) : teams\}/);
     assert.match(readModuleSource(resolve(here, "../calendar/mutations.ts")), /if \(error && !isOwnRecordAlreadyCreated\(error\)\) \{/);
   });

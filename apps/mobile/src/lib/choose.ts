@@ -93,17 +93,3 @@ export function chooseOption(
     ]);
   });
 }
-
-/** Частый случай: выбор ОДНОГО значения из списка подписей. */
-export async function chooseValue<T>(
-  title: string,
-  items: readonly { value: T; label: string }[],
-  opts?: { clearLabel?: string },
-): Promise<{ value: T | null } | null> {
-  const choices: Choice[] = items.map((i) => ({ label: i.label }));
-  if (opts?.clearLabel) choices.push({ label: opts.clearLabel });
-  const index = await chooseOption(title, choices);
-  if (index === null) return null;
-  if (index < items.length) return { value: items[index].value };
-  return { value: null };
-}

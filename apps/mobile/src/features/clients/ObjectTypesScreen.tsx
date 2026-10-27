@@ -5,19 +5,21 @@ import { useLocalSearchParams } from "expo-router";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Trash2 } from "lucide-react-native";
+import { Tag, Trash2 } from "lucide-react-native";
 import {
   generateLocationLabelId,
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { useTeamName } from "@/session/team-name";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   AppearanceTile,
   appearanceRowFill,
 } from "@/components/ui/AppearanceSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
@@ -61,6 +63,9 @@ export function ObjectTypesScreen() {
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
     null;
+  const teamName = useTeamName();
+  const teamRaw = ownTeams.find((tm) => tm.id === teamId)?.name;
+  const teamTitle = teamRaw ? teamName(teamRaw) : undefined;
   // «ТОЛЬКО ВИДИТ» (права партнёра): ни кнопки внизу, ни свайпов, ни ручек,
   // строка не открывает редактор. Вне вкладки «Клиенты» (Кабинет, запись) —
   // правка.
@@ -81,11 +86,11 @@ export function ObjectTypesScreen() {
             name: x.name,
             color: x.color ?? null,
             icon: x.icon ?? null,
-            sub: ownTeams.find((tm) => tm.id === x.teamId)?.name,
+            sub: teamName(ownTeams.find((tm) => tm.id === x.teamId)?.name),
             value: x,
           }))
         : [],
-    [isOwner, allLabels, teamId, ownTeams],
+    [isOwner, allLabels, teamId, ownTeams, teamName],
   );
   const {
     data: labels = [],
@@ -169,7 +174,9 @@ export function ObjectTypesScreen() {
       "Удалить тип объекта?",
       {
         message: used
-          ? `«${label.name}» исчезнет из выбора. Объекты, уже названные так (${used}), имя сохранят.`
+          ? // Объект показывает тип по справочнику: без строки в нём тип у
+            // объекта пропадает (домик без слова) — говорим правду.
+            `«${label.name}» исчезнет из выбора, а объекты этого типа (${used}) останутся без типа.`
           : `«${label.name}» исчезнет из выбора.`,
         confirmLabel: "Удалить",
         destructive: true,
@@ -195,7 +202,9 @@ export function ObjectTypesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Типы объектов" subtitle={ownTeams.find((tm) => tm.id === teamId)?.name} />
+      {/* Имя команды — тем же правилом показа, что везде: команда, названная
+          почтой, читается «Babun», а не адресом. */}
+      <ScreenHeader title="Типы объектов" subtitle={teamTitle} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -207,17 +216,10 @@ export function ObjectTypesScreen() {
           action={{ label: "Повторить", onPress: () => void refetch() }}
         />
       ) : labels.length === 0 ? (
-        <EmptyState
-          fill
-          title="Типов пока нет"
-          // ГОТОВОГО НАБОРА НЕТ: каждый человек сам создаёт свой тип объекта.
-          // Кнопка пустого списка — та же «Добавить тип», что внизу у полного.
-          action={
-            readOnly
-              ? undefined
-              : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }
-          }
-        />
+        // ГОТОВОГО НАБОРА НЕТ: каждый человек сам создаёт свой тип объекта.
+        // Пустое состояние — только слова: «Добавить тип» стоит внизу, там же,
+        // где у полного списка.
+        <EmptyState fill title="Типов пока нет" />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -280,6 +282,9 @@ export function ObjectTypesScreen() {
                       <AppearanceTile
                         color={label.color}
                         icon={label.icon}
+                        // Без своего значка — тот же ярлык, что в выборе типа и
+                        // в строке объекта: тип выглядит одинаково везде.
+                        fallback={Tag}
                         size={28}
                       />
                       <Text
@@ -302,16 +307,16 @@ export function ObjectTypesScreen() {
         </ScrollView>
       )}
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: типы
-          заводят пачкой, и после первого не должно приходиться доскролливать
-          список ради второго. Тот же приём, что у меток и услуг. */}
-      {!readOnly && !isLoading && !isError && labels.length > 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: пуст список или полон,
+          кнопка на одном месте (AGENTS 7.1). Типы заводят пачкой, и после
+          первого не должно приходиться доскролливать список ради второго. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton
             label="Добавить тип"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <TypeSheet

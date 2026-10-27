@@ -26,7 +26,7 @@ const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
 
 export function renderTransferFormStep(v: TransferView) {
   const {
-    visible, guard, title, t, failure, reason, amountCents, amountNum,
+    visible, guard, title, t, failure, reason, warning, amountCents, amountNum,
     currency, send, canSend, sending, occurredOn, businessToday, setDateDraft,
     setStep, from, to, swap, amount, setAmount, setFailure, note, setNote,
     label, sourceLocked,
@@ -76,7 +76,7 @@ export function renderTransferFormStep(v: TransferView) {
       avoidKeyboard
       footer={
         <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
-          {(failure ?? reason) ? (
+          {(failure ?? reason ?? warning) ? (
             <Text
               accessibilityLiveRegion="polite"
               maxFontSizeMultiplier={1.3}
@@ -87,7 +87,7 @@ export function renderTransferFormStep(v: TransferView) {
                 color: failure ? t.danger : t.sub,
               }}
             >
-              {failure ?? reason}
+              {failure ?? reason ?? warning}
             </Text>
           ) : null}
           {/* Получателя кнопка НЕ называет: он стоит в блоке «Куда» прямо над

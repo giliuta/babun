@@ -1,27 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { SmsTemplate } from "@babun/shared/local/sms-templates";
 import {
   acceptSmsInput,
   fillTemplate,
   fitsSmsLimit,
   MAX_SMS_PARTS,
   smsLanguageOf,
-  smsOptions,
   smsPartsOf,
   smsUrlWithBody,
   smsVars,
   stripEmoji,
 } from "./sms-compose";
-
-const tpl = (id: string, body: string, enabled = true): SmsTemplate => ({
-  id,
-  kind: "reminder",
-  name: id,
-  body,
-  enabled,
-});
 
 const RECORD = smsVars({
   name: "Мария",
@@ -106,25 +96,6 @@ describe("шаблон заполняется целиком или не пок�
 
   test("пустой шаблон отправлять нечего", () => {
     assert.equal(fillTemplate("   ", RECORD), null);
-  });
-
-  test("список: выключенные и незаполняемые уходят, порядок компании сохраняется", () => {
-    const options = smsOptions(
-      [
-        tpl("a", "[Имя], долг [Сумма]"),
-        tpl("b", "[Имя], до встречи [Дата]"),
-        tpl("c", "[Имя], привет", false),
-        tpl("d", "[Компания]: [Имя], спасибо"),
-      ],
-      RECORD,
-    );
-    assert.deepEqual(
-      options.map((o) => [o.template.id, o.text]),
-      [
-        ["b", "Мария, до встречи 24 сентября"],
-        ["d", "Giliuta: Мария, спасибо"],
-      ],
-    );
   });
 });
 

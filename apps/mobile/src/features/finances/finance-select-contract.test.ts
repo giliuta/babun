@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "@/lib/module-source";
 import { financesScreenSource } from "./home/screen-source";
 
 // КОМАНДА И СЧЁТ В ДЕНЬГАХ ЖИВУТ ТОЛЬКО В `select`.
@@ -140,7 +141,7 @@ describe("долги: ключ компании, команда — select", () 
   // `teamId` — и чужие команды увидят «свежие» нули без похода в сеть.
   // Типы это не ловят: `listDebts` честно принимает `{ teamId }`.
   test("прогрев читает долги тем же срезом, что и хук — без команды", () => {
-    const prefetch = sourceOf("../../lib/tenant-prefetch.ts");
+    const prefetch = stripComments(readModuleSource(join(here, "../../lib/tenant-prefetch.ts")));
     assert.equal(
       warmCase(prefetch, "debts"),
       'case "debts": return listDebts(client, tenantId, target.from as string, target.to as string);',

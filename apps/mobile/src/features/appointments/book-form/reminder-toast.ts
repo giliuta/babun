@@ -14,12 +14,21 @@ export const reminderToast = (
   rule: SelfReminder | null,
   // Тест без react-native: платформу называет вызывающий (`Platform.OS`).
   android = false,
+  // И переход в настройки телефона (`Linking.openSettings`) — тоже он.
+  openSettings?: () => void,
 ) => {
   if (res === "cleared") toast("Напоминание снято", "info");
   else if (res === "scheduled" && rule) {
     const l = selfReminderLabel(rule);
     toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
-  } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
+  } else if (res === "denied")
+    // Запрет снимается только в Настройках телефона — туда и ведёт тост
+    // (те же слова, что в меню записи календаря).
+    toast(
+      "Разрешите уведомления в Настройках",
+      "error",
+      openSettings ? { label: "Настройки", onPress: openSettings } : undefined,
+    );
   else if (res === "past") toast("Это время уже прошло", "info");
   else if (res === "deferred")
     toast(

@@ -34,6 +34,7 @@ import {
 import { useDraftDuplicate } from "@/features/clients/useClientDraft/duplicate";
 import type { ClientDraftOptions } from "@/features/clients/useClientDraft/options";
 import { useNewClientTeam } from "@/features/clients/useClientDraft/team";
+import { storedDraftKey, useStoredClientDraft } from "@/features/clients/useClientDraft/stored";
 import { useBusinessToday } from "@/features/settings/business-today";
 
 // The draft gate and route params are a pure core in `./useClientDraft/core`
@@ -175,6 +176,16 @@ export function useClientDraft(
     () => active && draftHasInput(draft, dial),
     [active, draft, dial],
   );
+  // Снимок в памяти телефона — только у обычного «Создать клиента»
+  // (`useClientDraft/stored.ts`).
+  const plainNew = !forBooking && !name?.trim() && !phone?.trim() && !link && !split;
+  const forgetDraft = useStoredClientDraft({
+    key: active && plainNew && tenantId ? storedDraftKey(tenantId, team) : null,
+    draft,
+    dirty: isDirty,
+    hasInput: () => draftHasInput(draftRef.current, dial),
+    restore: setDraft,
+  });
 
   // Телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
   // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —
@@ -297,6 +308,7 @@ export function useClientDraft(
         reg_number: d.reg_number?.trim() || null,
         billing_address: d.billing_address?.trim() || null,
       });
+      forgetDraft();
       haptics.success();
       tourEvent("client-created");
       // Связь уехала вместе с клиентом, но блок людей карточки-группы кормит
@@ -399,6 +411,8 @@ export function useClientDraft(
     /** В поле номера набрано что-то сверх кода страны. */
     phoneTyped,
     isSaving: create.isPending,
+    /** «Удалить черновик» — снимок в памяти телефона тоже уходит. */
+    forgetDraft,
     onPhoneChange,
     onNameChange,
     save,

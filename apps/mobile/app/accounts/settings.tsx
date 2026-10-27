@@ -46,9 +46,10 @@ import { useCurrentRole } from "@/session/tenant";
 // ОСТАТКИ В СТРОКАХ ЕСТЬ: шестерёнка ведёт сюда мимо панели, и другого места
 // увидеть деньги счёта у этой двери нет.
 //
-// ДЕНЬГИ АРХИВНОЙ КОМАНДЫ ЗДЕСЬ ВИДНЫ: «Финансы»
-// показывают только живые команды, и у этих счетов нет другой двери. Группа у
-// них своя, см. `accountOrderGroups`.
+// СЧЕТА АРХИВНОГО КАЛЕНДАРЯ ЗДЕСЬ НЕ ВИДНЫ: их отсекает
+// `useAccountsWithBalances` — деньги архива живут в самом архиве
+// (`archived-calendar-accounts.ts`). Открытые счета команды, которой уже нет
+// в справочнике, стоят своей группой (`accountOrderGroups`).
 //
 // ПРАВА: строка шестерёнки «Счета» команды. Владелец — всё и по всем
 // командам. Партнёр — только команды, где у него «Счета» открыты: «Только
@@ -71,7 +72,7 @@ export default function AccountsScreen() {
   const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   // ВСЕ команды, включая архивные: по ним называются группы осиротевших
   // счетов и строится подпись команды в листе перевода.
-  const teamsQuery = useTeams({ includeInactive: true });
+  const teamsQuery = useTeams({ includeInactive: true, display: true });
   const unassigned = useUnassignedMoney();
   const reorder = useReorderAccounts();
   const [dragging, setDragging] = useState(false);
@@ -130,9 +131,9 @@ export default function AccountsScreen() {
   // «Открыть» слева, «Удалить» пустого справа. Группа команды держит и те и
   // другие; итог над группой — только открытые: закрытый счёт не входит ни в
   // один итог.
-  // Закрытый счёт стёртой или архивной команды не показываем вовсе: деньги
-  // архива в живых финансах не существуют, и группа
-  // «Команда удалена» из одних серых строк по €0 — шум.
+  // Закрытый счёт команды, которой нет в живых, не показываем вовсе: архив
+  // отсекает уже хук, а группа «Команда удалена» из одних серых строк по
+  // €0 — шум.
   const groups = useMemo(
     () =>
       accountOrderGroups({

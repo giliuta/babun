@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { Image, Platform, ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
+import { PublicBusinessHeader } from "@/components/blocks/PublicBusinessHeader";
 import { Screen } from "@/components/ui/Screen";
 import { Spinner } from "@/components/ui/Spinner";
 import { isLocationRequestToken } from "@/features/clients/location-request-link";
 import type { LookupState } from "@/features/clients/location-request-form";
 import { useLocationRequestLookup } from "@/features/clients/location-request-public";
-import { useThemeColors } from "@/theme/colors";
 import { AddressForm } from "./AddressForm";
 import { Done, Message } from "./LinkMessages";
 
@@ -23,7 +23,6 @@ import { Done, Message } from "./LinkMessages";
 // повторное открытие говорит, что адрес уже получен.
 
 export function LocationLinkScreen() {
-  const t = useThemeColors();
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const raw = Array.isArray(params.token) ? params.token[0] : params.token;
   const token = isLocationRequestToken(raw) ? raw : null;
@@ -115,44 +114,7 @@ export function LocationLinkScreen() {
             формы рассчитаны на ширину телефона. */}
         <View style={{ width: "100%", maxWidth: 560, alignSelf: "center" }}>
           {info && (info.businessName || info.logoUrl) ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-              }}
-            >
-              {info.logoUrl ? (
-                <Image
-                  source={{ uri: info.logoUrl }}
-                  accessibilityIgnoresInvertColors
-                  style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: t.fill }}
-                />
-              ) : (
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 9,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: `${t.accent}14`,
-                  }}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: "700", color: t.accent }}>
-                    {info.businessName.trim().charAt(0).toUpperCase() || "•"}
-                  </Text>
-                </View>
-              )}
-              <Text
-                numberOfLines={1}
-                style={{ flex: 1, fontSize: 17, fontWeight: "700", color: t.ink }}
-              >
-                {info.businessName}
-              </Text>
-            </View>
+            <PublicBusinessHeader name={info.businessName} logoUrl={info.logoUrl ?? null} />
           ) : null}
           {body}
         </View>

@@ -5,7 +5,10 @@ import {
   View,
 } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
+import { confirmThen } from "@/lib/confirm";
 import {
   calculateInvoiceSettlement,
   type InvoiceLedgerWithLines,
@@ -38,7 +41,7 @@ import {
 } from "@/lib/paper/format";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
-import { useNextInvoiceSeries } from "@/features/finances/invoices-queries";
+import { useInvoice, useNextInvoiceSeries } from "@/features/finances/invoices-queries";
 import { useReceiptRefunds } from "@/features/documents/use-receipt-refunds";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useTenant } from "@/session/tenant";
@@ -52,6 +55,12 @@ import { useThemeColors } from "@/theme/colors";
 // пишет возврат на счёт чека и выписывает кредит-ноту: к чеку — на сумму
 // возврата, к инвойсу — целиком (инвойс гаснет «Отменён»). Деньги записи
 // возвращаются в самой записи — здесь только путь туда.
+//
+// ПРЕВЬЮ = ТО, ЧТО ВЫЙДЕТ. Нота к инвойсу собирается сервером из инвойса
+// (`_issue_credit_note`): весь остаток инвойса, его строки с минусом, его язык
+// и «Отмена инвойса …». Превью строилось как нота к чеку — человек утверждал
+// «−€60 · Refund for receipt» на английском, а выходило «−€100 · Cancellation
+// of INV-…» на русском.
 export default function ReceiptRefundScreen() {
   const t = useThemeColors();
   const router = useRouter();
@@ -60,6 +69,8 @@ export default function ReceiptRefundScreen() {
   const receipt = receiptQuery.data ?? null;
   const txQuery = useReceiptTransaction(receipt?.transaction_id);
   const tx = txQuery.data ?? null;
+  const invoiceQuery = useInvoice(receipt?.invoice_id ?? undefined);
+  const invoice = receipt?.invoice_id ? invoiceQuery.data ?? null : null;
   const clients = useClients();
   const tenant = useTenant();
   const accounts = useAccountsWithBalances({
@@ -93,14 +104,19 @@ export default function ReceiptRefundScreen() {
   const [language, setLanguage] = useState<InvoiceLanguage>("en");
   const [error, setError] = useState<string | null>(null);
 
+  const byInvoice = !!receipt?.invoice_id;
+  // Серия ноты к инвойсу — у юрлица инвойса, язык — инвойса (выбора нет).
+  const noteCompanyId = byInvoice ? invoice?.company_id ?? null : receipt?.company_id ?? null;
+  const paperLanguage: InvoiceLanguage = byInvoice
+    ? ((invoice?.language as InvoiceLanguage | undefined) ?? "en")
+    : language;
   const series = useNextInvoiceSeries(
     Number(businessToday.slice(0, 4)),
-    receipt?.company_id ?? null,
-    !!receipt,
+    noteCompanyId,
+    !!receipt && (!byInvoice || !!invoice),
     "credit_note",
   );
 
-  const byInvoice = !!receipt?.invoice_id;
   const amountText = amount ?? formatMoneyForInput(refundable);
   const parsed = documentOnly ? uncovered : byInvoice ? refundable : parseMoneyAmount(amountText);
   const value = parsed ?? 0;
@@ -109,11 +125,57 @@ export default function ReceiptRefundScreen() {
     (clients.data ?? []).find((c) => c.id === receipt?.client_id) ?? null;
   const account =
     (accounts.data ?? []).find((a) => a.id === receipt?.account_id) ?? null;
-  const defaultNote = receipt ? `Возврат по чеку ${receipt.number}` : "";
+  const defaultNote = invoice
+    ? `Отмена инвойса ${invoice.number}`
+    : receipt
+      ? `Возврат по чеку ${receipt.number}`
+      : "";
 
   // Черновик ноты — то, что выпустит сервер: суммы с минусом, стороны чека.
   const paperDoc = useMemo(() => {
     if (!receipt) return null;
+    if (byInvoice) {
+      if (!invoice) return null;
+      // Как сервер: остаток инвойса; налог — весь налог бумаги, если частичных
+      // нот не было (иначе его доля); строки — только у первой ноты.
+      const left = Math.round((invoice.total - (invoice.credited_amount ?? 0)) * 100) / 100;
+      const firstNote = (invoice.credited_amount ?? 0) === 0;
+      const noteVat = firstNote
+        ? invoice.vat_amount
+        : invoice.total > 0
+          ? Math.round(((invoice.vat_amount * left) / invoice.total) * 100) / 100
+          : 0;
+      const draft: InvoiceLedgerWithLines = {
+        ...invoice,
+        id: "receipt-credit-note-draft",
+        number: series.data?.number ?? "",
+        year: Number(businessToday.slice(0, 4)),
+        seq: series.data?.seq ?? 0,
+        kind: "credit_note",
+        credit_note_of_id: invoice.id,
+        credit_partial: false,
+        status: "issued",
+        issued_on: businessToday,
+        due_on: null,
+        subtotal_net: -(left - noteVat),
+        vat_amount: -noteVat,
+        total: -left,
+        credited_amount: 0,
+        notes: reason.trim() || defaultNote,
+        lines: firstNote
+          ? invoice.lines.map((line) => ({ ...line, unit_price: -line.unit_price, total: -line.total }))
+          : [],
+      };
+      return buildInvoiceDocument({
+        invoice: draft,
+        tenant: tenant.data ?? undefined,
+        client: client ?? undefined,
+        settlement: calculateInvoiceSettlement(draft, []),
+        payments: [],
+        language: paperLanguage,
+        creditNote: { originalNumber: invoice.number },
+      });
+    }
     const vat =
       receipt.vat_amount && receipt.amount > 0
         ? Math.round(((receipt.vat_amount * value) / receipt.amount) * 100) /
@@ -166,6 +228,9 @@ export default function ReceiptRefundScreen() {
     });
   }, [
     receipt,
+    byInvoice,
+    invoice,
+    paperLanguage,
     series.data,
     businessToday,
     value,
@@ -175,6 +240,33 @@ export default function ReceiptRefundScreen() {
     tenant.data,
     client,
   ]);
+
+  // ЗАПОЛНЕННАЯ ФОРМА НЕ ИСЧЕЗАЕТ МОЛЧА: сумму и причину свайп от края и
+  // «‹» стирали без вопроса. Спрашивает сама навигация,
+  // теми же словами, что черновик инвойса (`app/invoices/new.tsx`);
+  // выписанный документ уходит без вопроса.
+  const dirty = amount !== null || reason.trim() !== "";
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  useBeforeUnloadWhileDirty(dirty);
+  usePreventRemove(dirty, ({ data }) => {
+    if (leavingRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    confirmThen(
+      "Черновик не сохранён",
+      {
+        message: "Уйти и потерять заполненное?",
+        confirmLabel: "Уйти",
+        destructive: true,
+      },
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
+    );
+  });
 
   if (!receipt || (receipt.transaction_id && !tx && txQuery.isLoading)) {
     return (
@@ -279,13 +371,13 @@ export default function ReceiptRefundScreen() {
           keyboardDismissMode="on-drag"
         >
           <InvoiceRequisitesBlock
-            companyId={receipt.company_id ?? null}
+            companyId={noteCompanyId}
             onCompanyChange={() => {}}
             locked
             number={
-              receipt.company_id
+              noteCompanyId
                 ? {
-                    companyId: receipt.company_id,
+                    companyId: noteCompanyId,
                     year: Number(businessToday.slice(0, 4)),
                     next: series.data
                       ? { ...series.data, canSetStart: false }
@@ -369,7 +461,7 @@ export default function ReceiptRefundScreen() {
                   ? `Вернуть · ${money}`
                   : "Вернуть"
             }
-            disabled={!valid || !series.data}
+            disabled={!valid || !series.data || (byInvoice && !invoice)}
             onPress={() => setPreviewOpen(true)}
           />
         </View>
@@ -382,13 +474,14 @@ export default function ReceiptRefundScreen() {
         title="Кредит-нота"
         label="Выписать кредит-ноту"
         error={error}
-        language={language}
-        onChangeLanguage={setLanguage}
+        language={paperLanguage}
+        onChangeLanguage={byInvoice ? undefined : setLanguage}
         onIssue={() => void issue()}
         onClose={() => setPreviewOpen(false)}
         onExited={() => {
-          if (issued.current)
-            router.replace(`/invoices/${issued.current}` as Href);
+          if (!issued.current) return;
+          leavingRef.current = true;
+          router.replace(`/invoices/${issued.current}` as Href);
         }}
       />
     </Screen>

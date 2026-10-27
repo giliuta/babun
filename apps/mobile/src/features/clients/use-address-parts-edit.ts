@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AddressParts, Location } from "@babun/shared/local/clients";
 import {
   composeDetails,
+  hasAddressPlace,
   objectPlacePatch,
   withoutStreet,
 } from "./object-address";
@@ -24,7 +25,15 @@ export function useAddressPartsEdit(
   patchLocation: (id: string, patch: Partial<Location>) => void,
 ) {
   const [details, setDetails] = useState<AddressParts>({});
-  const [pin, setPin] = useState("");
+  const [pin, setPinValue] = useState("");
+  // ТОЧКУ УБРАЛИ — прежний `mapUrl` не держим. Пустой пин сам по себе значит
+  // «точки не ставили», и `objectPlacePatch` бережёт прежнюю ссылку объекта;
+  // «Убрать точку» должна её снять.
+  const [pinCleared, setPinCleared] = useState(false);
+  const setPin = (next: string) => {
+    setPinValue(next);
+    setPinCleared(next.trim() === "");
+  };
   const [open, setOpen] = useState(false);
 
   // Только на открытии (по locationId, не по объекту): `loc` — новая ссылка
@@ -33,7 +42,8 @@ export function useAddressPartsEdit(
     if (!visible || !locationId) return;
     const current = locations.find((l) => l.id === locationId);
     setDetails(withoutStreet(current?.addressParts));
-    setPin(current?.mapUrl ?? "");
+    setPinValue(current?.mapUrl ?? "");
+    setPinCleared(false);
     setOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только на открытии
   }, [visible, locationId]);
@@ -44,8 +54,14 @@ export function useAddressPartsEdit(
     if (!loc) return;
     const next = objectPlacePatch(line, details, pin, {
       address: loc.address,
-      mapUrl: loc.mapUrl,
+      mapUrl: pinCleared ? "" : loc.mapUrl,
     });
+    // ОБЪЕКТ БЕЗ МЕСТА — НЕ ОБЪЕКТ. Создание не пускает пустой объект
+    // (адрес, части с «где» или точка), правка тоже не стирает его до пустоты:
+    // прежнее место остаётся, лист при следующем открытии покажет его.
+    const empty =
+      !next.address.trim() && !next.mapUrl?.trim() && !hasAddressPlace(next.addressParts);
+    if (empty) return;
     // Улица живёт внутри собранной строки, поэтому сравниваем строку, пин и
     // уточнение: прежний объект без частей не переписывается от одного
     // открытия листа.

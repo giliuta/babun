@@ -145,7 +145,7 @@ export function CalendarExitRows({ screen }: { screen: CalendarSettingsState }) 
                 {
                   message:
                     "Команда пропадёт из вашего календаря, её записи и клиенты станут вам не видны. Вернуть доступ может владелец, пригласив вас снова.",
-                  confirmLabel: "Выйти",
+                  confirmLabel: "Выйти из команды",
                   destructive: true,
                 },
                 () =>

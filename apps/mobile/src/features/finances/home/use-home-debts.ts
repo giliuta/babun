@@ -13,7 +13,10 @@ import { forClient } from "./home-scope";
 import type { HomeReferences } from "./use-home-references";
 
 export interface HomeDebtsInput {
-  refs: Pick<HomeReferences, "invoices" | "invoicePayments" | "clients" | "categories">;
+  refs: Pick<
+    HomeReferences,
+    "invoices" | "invoicePayments" | "invoiceAppointmentMoney" | "clients" | "categories"
+  >;
   scopedInvoices: HomeReferences["invoices"];
   scopedAppointments: readonly Appointment[];
   debtsData: Debt[] | undefined;
@@ -29,7 +32,7 @@ export interface HomeDebtsInput {
  *  debts and their payments. */
 export function useHomeDebts(input: HomeDebtsInput) {
   const { scopedInvoices, scopedAppointments, period, businessToday, scope, readRules, requestedClientId } = input;
-  const { invoices, invoicePayments, clients, categories } = input.refs;
+  const { invoices, invoicePayments, invoiceAppointmentMoney, clients, categories } = input.refs;
   // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
   //
   // «Долги» — работа сделана, деньги не получены и ничем не оформлены. Как
@@ -58,9 +61,16 @@ export function useHomeDebts(input: HomeDebtsInput) {
     () =>
       scopedInvoices.map((inv) => ({
         ...inv,
-        remaining: calculateInvoiceSettlement(inv, invoicePayments[inv.id] ?? []).remaining,
+        // Одна работа — один долг: деньги, принятые записью мимо инвойса,
+        // остаток инвойса уже уменьшили (запись под инвойсом из долгов
+        // записей исключена — `invoicedAppointments`).
+        remaining: calculateInvoiceSettlement(
+          inv,
+          invoicePayments[inv.id] ?? [],
+          invoiceAppointmentMoney[inv.id] ?? 0,
+        ).remaining,
       })),
-    [scopedInvoices, invoicePayments],
+    [scopedInvoices, invoicePayments, invoiceAppointmentMoney],
   );
   const invoiceDebts = useMemo(
     () =>

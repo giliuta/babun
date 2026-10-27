@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import type { AccountDraft } from "@babun/shared/db/repositories/accounts";
@@ -68,7 +68,7 @@ export function EditAccountSheet({
   );
   // ВСЕ команды, включая архивные: счёт живёт дольше своей команды, и её имя
   // нужно листу перевода.
-  const teamsQuery = useTeams({ includeInactive: true });
+  const teamsQuery = useTeams({ includeInactive: true, display: true });
   const teamById = useMemo(
     () => new Map((teamsQuery.data ?? []).map((team) => [team.id, team])),
     [teamsQuery.data],
@@ -83,7 +83,9 @@ export function EditAccountSheet({
   const alertError: AlertError = (title) => (e) =>
     notify(title, isOnline() ? (e as Error).message : OFFLINE_ACCOUNT_EDIT);
   const save = accountSaver(update, accountId, alertError);
-  const flow = useCloseFlow({ onDone: onClose, alertError });
+  // Правки листа живут до «Применить» — перевод их не закрывает (`use-close-flow`).
+  const dirtyRef = useRef(false);
+  const flow = useCloseFlow({ onDone: onClose, alertError, canFinishAfterTransfer: () => !dirtyRef.current });
 
   // ЧЕРНОВИК ЛИСТА. Новый счёт или новое открытие — с чистого листа.
   const [pending, setPending] = useState<Partial<AccountDraft>>({});
@@ -103,6 +105,7 @@ export function EditAccountSheet({
   );
   const stage = (patch: Partial<AccountDraft>) => setPending((prev) => ({ ...prev, ...patch }));
   const dirty = Object.keys(pending).length > 0;
+  dirtyRef.current = dirty;
 
   const view = editorView({
     accountId,
@@ -258,6 +261,7 @@ export function EditAccountSheet({
       <TransferSheet
         visible={flow.transfer.visible}
         onClose={flow.transfer.onClose}
+        onSent={flow.transfer.onSent}
         accounts={activeAccounts}
         teamById={teamById}
         presetFromId={flow.transfer.fromId}

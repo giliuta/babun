@@ -144,10 +144,12 @@ export function useInvoicePaper({
   const pickedCompany = useMemo(() => {
     const rows = companies.data ?? [];
     return (
-      rows.filter((row) => !row.archived_at).find((row) => row.id === companyId)
+      // Выставленный документ — от своего набора, даже скрытого с тех пор;
+      // новый — только из живых.
+      rows.filter((row) => existing || !row.archived_at).find((row) => row.id === companyId)
       ?? defaultCompany(rows)
     );
-  }, [companies.data, companyId]);
+  }, [companies.data, companyId, existing]);
   // НОМЕР — ИЗ СЕРИИ ЭТИХ РЕКВИЗИТОВ И ГОДА ДАТЫ ВЫСТАВЛЕНИЯ (миграция
   // 20260922050000): сменил набор или год — сервер считает заново.
   const issuedYear = Number(issuedOn.slice(0, 4));
@@ -232,6 +234,7 @@ export function useInvoicePaper({
   );
 
   return {
+    dirty,
     companies,
     owner,
     currency,

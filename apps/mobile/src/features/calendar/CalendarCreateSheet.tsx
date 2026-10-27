@@ -80,14 +80,18 @@ export function CalendarCreateSheet({
 
   // Лист всегда в дереве и лишь гасится пропом `visible` (канон §5), поэтому
   // черновик надо сбрасывать явно — иначе имя прошлого календаря встретит
-  // человека при следующем открытии.
-  useEffect(() => {
+  // человека при следующем открытии. Сброс — ТОЛЬКО В МОМЕНТ ОТКРЫТИЯ: пока
+  // лист открыт, `nextColor` меняется, если другой телефон завёл календарь,
+  // и сброс по нему стирал набираемое имя.
+  const [wasVisible, setWasVisible] = useState(false);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (visible) {
       setName("");
       setColor(nextColor);
       setFailure(null);
     }
-  }, [visible, nextColor]);
+  }
 
   // Кнопка гаснет по двум причинам, но ОБЪЯСНЯЕТСЯ только одна.
   //

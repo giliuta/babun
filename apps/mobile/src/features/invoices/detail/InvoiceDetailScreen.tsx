@@ -14,7 +14,6 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { ActionMenuSheet } from "@/components/blocks/ActionMenuSheet";
-import { accessGate } from "@/session/my-access";
 import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
 import { receiptRefusal } from "@/lib/receipt-eligibility";
 import { usePageAction } from "@/lib/use-page-action";
@@ -40,8 +39,6 @@ export function InvoiceDetailScreen() {
     accountsQuery,
     tenantQuery,
     tenant,
-    role,
-    myAccess,
     calendarSettingsQuery,
     paymentRows,
     creditLinks,
@@ -70,6 +67,7 @@ export function InvoiceDetailScreen() {
     receiptTransactionIds,
     issueReceipts,
     sharePdf,
+    docWrite,
   } = useInvoiceDetail();
 
   const loading =
@@ -200,19 +198,6 @@ export function InvoiceDetailScreen() {
     language: row.language as "ru" | "en" | undefined,
     creditNote,
   });
-  const owner = role === "owner";
-  // «Меняет» — весь блок: оплата, чек, возврат и меню — у всех, кто
-  // «Документы: Видит и меняет» в команде инвойса; без команды — владельцу.
-  const docWrite =
-    owner ||
-    (!!row.brigade_id &&
-    accessGate({
-      role,
-      map: myAccess,
-      blockKey: "finance.documents",
-      scope: "calendar",
-      teamId: row.brigade_id,
-    }) === "write");
   // Действие из меню списка (`usePageAction`). Присваивание без побочных
   // эффектов: таймер ставит эффект, после отрисовки.
   runActionRef.current = (next) => {

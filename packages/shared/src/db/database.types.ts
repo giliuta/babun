@@ -6325,6 +6325,7 @@ export type Database = {
           p_kind?: string
           p_paid_at?: string
           p_request_id: string
+          p_sent_at?: string
         }
         Returns: {
           address: string
@@ -6557,6 +6558,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      refund_overpayment_and_save: {
+        Args: {
+          p_amount: number
+          p_appointment_id: string
+          p_expected_updated_at?: string
+          p_patch: Json
+          p_request_id: string
+        }
+        Returns: Json
       }
       refund_receipt: {
         Args: {

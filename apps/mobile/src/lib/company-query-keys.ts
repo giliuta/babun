@@ -46,8 +46,9 @@ export const sourceClientQueryKey = (
   view: string,
 ) => ["client", id, tenantId, view] as const;
 
-// `useTeams` читает только вариант с «all» (активные отбираются
-// `select`); ключ без суффикса остался лишь у плана прогрева — до его правки.
+// `useTeams` и прогрев берут вариант с «all» (активные отбираются `select`).
+// Форма без суффикса — для `includeInactive = false`; менять её незачем:
+// другой ключ один раз остудил бы кэш на телефоне.
 export const teamsQueryKey = (
   tenantId: string | null,
   role: Role,
@@ -57,16 +58,13 @@ export const teamsQueryKey = (
     ? (["teams", tenantId, rolePart(role), "all"] as const)
     : (["teams", tenantId, rolePart(role)] as const);
 
-// `useCities` читает ключ с `teamId = null` (команда — `select`);
-// ключи с командой остались лишь у плана прогрева — до его правки.
+// `useCities` и прогрев берут ключ с `teamId = null` (команду отбирает
+// `select`); место под команду в ключе осталось, чтобы не менять форму.
 export const citiesQueryKey = (
   tenantId: string | null,
   includeInactive: boolean,
   teamId: string | null,
 ) => ["cities", tenantId, includeInactive ? "all" : "live", teamId] as const;
-
-export const servicesQueryKey = (tenantId: string | null, role: Role) =>
-  ["services", tenantId, rolePart(role)] as const;
 
 export const allServicesQueryKey = (tenantId: string | null, role: Role) =>
   ["services", "with-archived", tenantId, rolePart(role)] as const;
@@ -80,14 +78,7 @@ export const dayCitiesQueryKey = (tenantId: string | null, role: Role) =>
 export const dayExtrasQueryKey = (tenantId: string | null, role: Role) =>
   ["day-extras", tenantId, rolePart(role)] as const;
 
-// Экраны читают только карту компании (`allTeamSchedulesQueryKey`,
-// команда — `select`); ключ одной команды остался лишь у плана прогрева.
-export const teamScheduleQueryKey = (
-  tenantId: string | null,
-  role: Role,
-  teamId: string | undefined,
-) => ["team-schedules", tenantId, rolePart(role), teamId] as const;
-
+// Экраны и прогрев читают карту компании целиком (команду отбирает `select`).
 export const allTeamSchedulesQueryKey = (tenantId: string | null, role: Role) =>
   ["team-schedules", tenantId, rolePart(role), "all"] as const;
 

@@ -107,7 +107,7 @@ export function EventTypeSheet({
       avoidKeyboard
       scroll
       footer={picking ? undefined : (<Button
-          label={type ? "Сохранить" : "Создать"}
+          label={type ? "Сохранить" : "Создать тип события"}
           onPress={() =>
             // «Весь день» у типа снят: ни форма события, ни «Быстрое
             // событие» его не читают — тумблер прятал длительность и не
@@ -133,6 +133,7 @@ export function EventTypeSheet({
           2026-09-10 цвет и значок — один вопрос и одна шторка. */}
       <NameColorField
         name={label}
+        placeholder="Название типа события"
         onNameChange={setLabel}
         color={color}
         onColorChange={setColor}

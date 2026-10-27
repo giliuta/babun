@@ -1,6 +1,8 @@
-import { Pressable, Text, TextInput, View } from "react-native";
-import { Search, Settings, SlidersHorizontal } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { Settings, SlidersHorizontal } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { SelectSearch } from "@/components/ui/select-rows";
+import { TYPE, ICON } from "@/components/ui/tokens";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { clientsSettingsHref } from "@/session/clients-company";
 import { ALL_TEAMS, toggleTeamChoice } from "@/features/clients/team-scope";
@@ -31,22 +33,42 @@ export function ListTopBar({ list }: { list: ClientsList }) {
   return (
     <>
       {selecting ? (
-        // Селекшн-хедер: Отмена · «Выбрано N» · Выбрать всё/Снять.
-        <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
+        // Селекшн-хедер: Отмена · «Выбрано N» · Выбрать всё/Снять. Та же
+        // полоса, что у поиска (48, surface, шов снизу), и кегль навбара —
+        // иначе список прыгал при входе в выбор.
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 8,
+            minHeight: 48,
+            backgroundColor: t.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: t.separator,
+          }}
+        >
           <Pressable
             onPress={exitSelection}
             accessibilityRole="button"
             accessibilityLabel="Отменить выбор"
-            className="min-h-11 justify-center px-1 active:opacity-60"
+            hitSlop={6}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              justifyContent: "center",
+              paddingHorizontal: 8,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Text
-              className="text-base font-semibold"
-              style={{ color: t.accent }}
-            >
+            <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.headline, color: t.accent }}>
               Отмена
             </Text>
           </Pressable>
-          <Text className="text-base font-semibold" style={{ color: t.ink }}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            accessibilityRole="header"
+            style={{ ...TYPE.headline, color: t.ink }}
+          >
             {pickedCount > 0
               ? `Выбрано ${pickedCount}`
               : "Выберите клиентов"}
@@ -55,12 +77,15 @@ export function ListTopBar({ list }: { list: ClientsList }) {
             onPress={toggleAll}
             accessibilityRole="button"
             accessibilityLabel={allSelected ? "Снять всё" : "Выбрать всё"}
-            className="min-h-11 justify-center px-1 active:opacity-60"
+            hitSlop={6}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              justifyContent: "center",
+              paddingHorizontal: 8,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Text
-              className="text-base font-semibold"
-              style={{ color: t.accent }}
-            >
+            <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.headline, color: t.accent }}>
               {allSelected ? "Снять" : "Всё"}
             </Text>
           </Pressable>
@@ -100,50 +125,27 @@ export function ListTopBar({ list }: { list: ClientsList }) {
               backgroundColor: pressed ? t.pressed : "transparent",
             })}
           >
-            <Settings color={t.sub} size={21} strokeWidth={2} />
+            <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
           </Pressable>
           </TourTarget>
 
           <TourTarget id="clients.search" shape="control" flex>
-          <View
-            className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
-            style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
-          >
-            <Search color={t.faint} size={16} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              // Приём Jobber: активные фильтры меняют плейсхолдер — статус
-              // «список отфильтрован» виден даже без открытия панели.
-              placeholder={
-                result.activeCount > 0
-                  ? "Поиск среди отфильтрованных"
-                  : "Имя, телефон, адрес"
-              }
-              accessibilityLabel="Поиск клиентов"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-              maxFontSizeMultiplier={1.3}
-              // ПОЛЕ РАСТЯНУТО НА ВСЮ ВЫСОТУ ПЛАШКИ. Без этого iOS после
-              // перерисовки ронял подсказку ниже плашки — «Имя, телефон,
-              // адрес» обрезалась снизу.
-              // Не числом: `h-9` плашки — это rem NativeWind, а не 36pt.
-              style={{
-                flex: 1,
-                alignSelf: "stretch",
-                paddingVertical: 0,
-                fontSize: 15,
-                textAlignVertical: "center",
-                color: t.ink,
-              }}
-            />
-          </View>
+          {/* ПОИСК ОДИН НА ПРОДУКТ — `SelectSearch`, тот же, что в шторках.
+              Приём Jobber: активные фильтры меняют плейсхолдер — статус
+              «список отфильтрован» виден даже без открытия панели. */}
+          <SelectSearch
+            bare
+            value={query}
+            onChange={setQuery}
+            onClear={() => setQuery("")}
+            placeholder={
+              result.activeCount > 0
+                ? "Поиск среди отфильтрованных"
+                : "Имя, телефон, адрес"
+            }
+            accessibilityLabel="Поиск клиентов"
+            autoCapitalize="none"
+          />
           </TourTarget>
 
           {/* ФИЛЬТРЫ — ЗНАЧКОМ СПРАВА, вверху (фильтры лежат рядом с
@@ -175,7 +177,7 @@ export function ListTopBar({ list }: { list: ClientsList }) {
           >
             <SlidersHorizontal
               color={result.activeCount > 0 ? t.accent : t.sub}
-              size={21}
+              size={ICON.header}
               strokeWidth={2}
             />
             {result.activeCount > 0 ? (

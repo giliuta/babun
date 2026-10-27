@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { useRouter, type Href } from "expo-router";
 
@@ -22,7 +22,7 @@ import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
-import { waitSheetExit } from "../InviteMemberSheet";
+import { waitSheetExit } from "../invitation-share";
 import { cardTeamIds } from "../masters-list";
 import { openMasterDraftFromCard } from "./draft-store";
 import { invitationSegment } from "./master-draft";
@@ -51,6 +51,21 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
   const removeFromTeams = useRemoveMasterFromTeams();
   const invitations = usePendingInvitations();
   const [nameText, setNameText] = useState<string | null>(null);
+  // НАБРАННОЕ ИМЯ НЕ ТЕРЯЕТСЯ НА УХОДЕ. Запись висит на `onBlur`, а поле,
+  // которое снимают с экрана в фокусе (стрелка «‹», жест «назад»), blur не
+  // получает. Последний черновик держим в ref и дописываем при снятии — как
+  // имя календаря (`CalendarIdentityCard`). Хук стоит до ранних выходов.
+  const leavingName = useRef<{ text: string | null; saved: string; write: ((name: string) => void) | null }>(
+    { text: null, saved: "", write: null },
+  );
+  useEffect(
+    () => () => {
+      const { text, saved, write } = leavingName.current;
+      const typed = text?.trim() ?? "";
+      if (write && typed && typed !== saved) write(typed);
+    },
+    [],
+  );
   const card = cardQuery.data ?? null;
   const profileWrite = useMasterProfileWrite(card);
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
@@ -87,6 +102,7 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
     setNameText(null);
     if (typed && typed !== name) patch({ full_name: typed });
   };
+  leavingName.current = { text: nameText, saved: name, write: (full_name) => patch({ full_name }) };
 
   const invite = () => {
     Keyboard.dismiss();

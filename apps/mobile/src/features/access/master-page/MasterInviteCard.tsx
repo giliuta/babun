@@ -20,7 +20,7 @@ import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
-import { shareInvitation, waitSheetExit } from "../InviteMemberSheet";
+import { shareInvitation, waitSheetExit } from "../invitation-share";
 import { useAccessBlocks } from "@/session/access-queries";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { useUpdateMasterInvitation } from "./invitation-api";

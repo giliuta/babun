@@ -74,7 +74,7 @@ export function PanelHeader({
           // с ним разъехались бы по краям и оставили дыру посередине.
           className={`${right ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
         >
-          <Settings2 color={t.sub} size={ICON.sm} strokeWidth={2} />
+          <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
         </Pressable>
       ) : null}
     </View>

@@ -35,6 +35,7 @@ export function ServiceNameBlock({ sheet }: { sheet: ServiceSheetState }) {
             услуги, как строка выбора, и рядом стоит её значок. */}
         <NameColorField
           label="Название"
+          placeholder="Название услуги"
           name={name}
           onNameChange={setName}
           color={color}

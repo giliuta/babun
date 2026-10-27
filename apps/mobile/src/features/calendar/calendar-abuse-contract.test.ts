@@ -395,14 +395,15 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("удалённая запись уходит с сетки вместе с тостом, а не после перечитывания", () => {
     const src = readModuleSource(resolve(here, "mutations.ts"));
-    const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
+    const del = src.slice(src.indexOf("export function useDeleteAppointment"));
     assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
 
-  test("у отменённой записи нет «Цвета» — он ничего не меняет на сетке", () => {
+  test("у отменённой записи и у той, чей цвет задают деньги, нет «Цвета»", () => {
     const src = screen();
-    assert.match(src, /if \(\(!event \|\| mutable\) && apt\.status !== "cancelled"\)\s*items\.push\(\{ label: "Цвет"/);
-    assert.match(src, /apt\.status !== "cancelled" &&\s*\(event \? ownEvent && eventRightsIn/);
+    assert.match(src, /const moneyColored = colorSetByMoney\(apt, todayYmd, paymentHiddenFor\(apt\)\);/);
+    assert.match(src, /if \(\(!event \|\| mutable\) && apt\.status !== "cancelled" && !moneyColored\)\s*items\.push\(\{ label: "Цвет"/);
+    assert.match(src, /apt\.status !== "cancelled" &&\s*!moneyColored &&\s*\(event \? ownEvent && eventRightsIn/);
   });
 
   test("ручки растяжки не ложатся на текст карточки", () => {

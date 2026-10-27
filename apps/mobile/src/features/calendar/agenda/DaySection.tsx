@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import type { MapService } from "@babun/shared/common/utils/map-links";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { pluralize } from "@babun/shared/common/utils/pluralize";
+import { TYPE } from "@/components/ui/tokens";
 import type { ThemeColors } from "@/theme/colors";
 import { AgendaRow } from "./AgendaRow";
 import { useEnabledMapServices } from "@/features/clients/map-services";
@@ -74,15 +75,12 @@ export function DaySection({
           className="flex-row items-center"
           style={{ gap: 6, flexShrink: 1, minWidth: 0 }}
         >
+          {/* Капс-подпись caption 11/700 — как `DayDivider` у остальных лент
+              (метка и «Маршрут →» в той же строке, поэтому разметка своя). */}
           <Text
             accessibilityRole="header"
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              letterSpacing: 0.6,
-              textTransform: "uppercase",
-              color: t.sub,
-            }}
+            maxFontSizeMultiplier={1.3}
+            style={{ ...TYPE.caption, textTransform: "uppercase", color: t.sub }}
           >
             {header}
           </Text>

@@ -124,7 +124,9 @@ export function composeAddress(
  *  улица места, подъезд, этаж, квартира и город, через «·», как в свёрнутом
  *  «Точном адресе» листа. ИНДЕКСА В СТРОКЕ НЕТ: он для почты, мастеру на
  *  выезде не нужен, а строка с ним обрезалась на городе. Без частей — строка
- *  адреса как есть (или ссылка на карту), уточнения нет. */
+ *  адреса как есть, уточнения нет. ОБЪЕКТ ТОЛЬКО С ТОЧКОЙ — «Точка на карте»,
+ *  а не сырая ссылка `maps.app.goo.gl/…`: её не прочесть, а маршрут и так
+ *  строится по пину. Сама ссылка — в поле листа и в копировании. */
 export function addressLines(
   loc: { address?: string | null; mapUrl?: string | null; addressParts?: AddressParts | null } | null | undefined,
 ): { main: string; detail: string } {
@@ -133,7 +135,9 @@ export function addressLines(
     const rest = composeDetails({ ...clean, street: undefined, zip: undefined });
     return { main: clean.street, detail: rest };
   }
-  return { main: objectTarget(loc), detail: "" };
+  const address = (loc?.address ?? "").trim();
+  if (address && !isLikelyUrl(address)) return { main: address, detail: "" };
+  return { main: address || (loc?.mapUrl ?? "").trim() ? "Точка на карте" : "", detail: "" };
 }
 
 /** Адрес для маршрута по тексту: у объекта с частями — геокодируемая часть,
@@ -145,43 +149,6 @@ export function routeAddress(
   return hasAddressPlace(loc.addressParts)
     ? composeAddress(loc.addressParts, { forRoute: true })
     : (loc.address ?? "").trim();
-}
-
-/** Патч объекта из частей: чистые части и собранная строка. Части без «где»
- *  хранятся, но строку не трогают; пустые части снимаются, строка остаётся
- *  прежней — человек ничего не терял, он лишь убрал уточнение. */
-export function addressPartsPatch(
-  parts: AddressParts | null | undefined,
-): { addressParts: AddressParts | undefined; address?: string } {
-  const clean = cleanAddressParts(parts);
-  if (!clean) return { addressParts: undefined };
-  return hasAddressPlace(clean)
-    ? { addressParts: clean, address: composeAddress(clean) }
-    : { addressParts: clean };
-}
-
-/** Открытие уточнения поверх набранной строки: адрес становится «Улица и дом»,
- *  ссылка — пином. Набранное не пропадает, а уже заполненные части не трогаем. */
-export function partsFromLine(
-  parts: AddressParts,
-  line: string,
-  pin: string,
-): { parts: AddressParts; pin: string } {
-  const value = line.trim();
-  if (!value) return { parts, pin };
-  if (isLikelyUrl(value)) return { parts, pin: pin || value };
-  return {
-    parts: hasAddressPlace(parts) ? parts : { ...parts, street: parts.street || value },
-    pin,
-  };
-}
-
-/** Одни и те же части после чистки — писать нечего. */
-export function sameAddressParts(
-  a: AddressParts | null | undefined,
-  b: AddressParts | null | undefined,
-): boolean {
-  return JSON.stringify(cleanAddressParts(a) ?? null) === JSON.stringify(cleanAddressParts(b) ?? null);
 }
 
 // ─── ГЛАВНАЯ СТРОКА И УТОЧНЕНИЕ ─────────────────────────────────────────────

@@ -31,7 +31,7 @@
 // table-rules + replay-clients (everything table-specific), tenant-refresh,
 // guards, options and relay. This file keeps the single-flight scheduling.
 
-import { drain } from "./replayer/drain";
+import { __resetTransientStreaksForTests, drain } from "./replayer/drain";
 import { isReadOnlyView } from "./replayer/guards";
 import type { ReplayerOptions } from "./replayer/options";
 
@@ -75,6 +75,7 @@ function scheduleTransientRetry(opts: ReplayerOptions): void {
  *  (на CI-раннере Linux это воспроизводилось стабильно: очередь не сливалась,
  *  к серверу никто не обращался). Снимаем засов перед каждым тестом. */
 export function __resetReplayerForTests(): void {
+  __resetTransientStreaksForTests();
   draining = false;
   pendingFollowup = false;
   replayerDefaults = {};

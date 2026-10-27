@@ -4,7 +4,6 @@ import {
   featureOfBookingBlock,
   isFeatureOn,
   sanitizeDisabledFeatures,
-  withFeature,
 } from "./company-features";
 
 describe("функции компании", () => {
@@ -14,12 +13,6 @@ describe("функции компании", () => {
     expect(isFeatureOn(["objects"], "objects")).toBe(false);
     expect(sanitizeDisabledFeatures(["objects", 5, "x", "objects"])).toEqual(["objects"]);
     expect(sanitizeDisabledFeatures(null)).toEqual([]);
-  });
-
-  test("переключение пишет список без повторов в порядке страницы", () => {
-    expect(withFeature(["debts"], "objects", false)).toEqual(["objects", "debts"]);
-    expect(withFeature(["objects", "debts"], "objects", true)).toEqual(["debts"]);
-    expect(withFeature(undefined, "debts", true)).toEqual([]);
   });
 
   test("функции записи отвечают за свои блоки формы", () => {

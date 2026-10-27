@@ -29,7 +29,7 @@ import type { PendingPayment } from "@/features/appointments/PaymentBlock";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import type { PendingFile } from "@/features/appointments/pending-files";
 import { useTenantId } from "@/lib/tenant";
-import { useRecordPayment, useRefundOverpayment } from "@/features/appointments/payment-mutations";
+import { useRecordPayment, useRefundOverpaymentAndSave } from "@/features/appointments/payment-mutations";
 import {
   addMinutesHM,
   formatYMD,
@@ -175,16 +175,22 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const businessNow = useBusinessNow(teamId);
   // Номер новой записи — один на всю жизнь формы (см. `booking.save`).
-  const newRecordIdRef = useRef(randomUuid());
+  const newRecordIdRef = useRef(restored?.newRecordId ?? randomUuid());
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();
   const queryClientForFiles = useQueryClient();
   const recordPayment = useRecordPayment();
-  const refundOverpayment = useRefundOverpayment(editId);
+  const refundOverpayment = useRefundOverpaymentAndSave(editId);
   // Номер попытки возврата переплаты — один на это нажатие «Сохранить» и
   // его повторы после обрыва: сервер второго возврата не запишет.
   const overpayRequestRef = useRef<string | null>(null);
+  // Оплата новой записи — один номер попытки на жизнь формы, как и номер
+  // самой записи: повтор «Создать» сервер второй проводкой не запишет.
+  const paymentRequestIdRef = useRef(randomUuid());
+  // «Уже сохраняю» — синхронно, в отличие от isPending мутаций: второй тап в
+  // том же кадре видел старый рендер и уходил вторым сохранением.
+  const savingRef = useRef(false);
   const [reminderOn, setReminderOn] = useState(restored?.reminderOn ?? false);
   const [colorOverride, setColorOverride] = useState<string | null>(restored?.colorOverride ?? null);
   // МЕТКА ЭТОЙ ЗАПИСИ. Новая запись берёт метку дня СРАЗУ (подставляется автоматически по дню, а
@@ -381,6 +387,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
     recordPayment,
     refundOverpayment,
     overpayRequestRef,
+    paymentRequestIdRef,
+    savingRef,
     reminderOn,
     colorOverride,
     setColorOverride,

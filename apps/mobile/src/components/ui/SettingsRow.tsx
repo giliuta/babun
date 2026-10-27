@@ -5,6 +5,7 @@ import { useThemeColors } from "@/theme/colors";
 import { RecordMark } from "./RecordMark";
 import { AppearanceTile, appearanceRowFill } from "./AppearanceSheet";
 import { SwitchControl } from "./SwitchControl";
+import { ICON } from "./tokens";
 
 // СТРОКА-ДВЕРЬ С ПЛИТКОЙ — ОДНА НА ВЕСЬ ПРОДУКТ.
 //
@@ -349,9 +350,10 @@ export function SettingsRow({
       })}
     >
       {body}
-      {/* Шеврон — указатель, а не участник строки: −35% массы (18/2.2 → 16/1.75)
-          при том же контрасте. Он держится альфой чернил, а не размером. */}
-      <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />
+      {/* Шеврон — указатель, а не участник строки: держится альфой чернил
+          (`t.chevron`). Размер — роль `ICON.chevron`, как у всех строк-дверей:
+          своё 16/1.75 делало шеврон Кабинета мельче, чем в записи (№53). */}
+      <ChevronRight color={t.chevron} size={ICON.chevron} />
     </Pressable>
   );
 }

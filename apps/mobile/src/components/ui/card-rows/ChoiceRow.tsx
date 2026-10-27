@@ -2,6 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import { Settings2 } from "lucide-react-native";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "../tokens";
 
 /** Строка ВЫБОРА КНОПКАМИ: капс-ярлык и готовые значения пилюлями + «+», чтобы
  *  создать своё прямо здесь (тип объекта: готовые кнопки и кнопка плюс).
@@ -70,7 +71,7 @@ export function ChoiceRow({
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
               style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
             >
-              <Settings2 color={t.ink} size={17} strokeWidth={2} />
+              <Settings2 color={t.ink} size={ICON.command} strokeWidth={2} />
             </Pressable>
           ) : null}
         </View>
@@ -114,7 +115,7 @@ export function ChoiceRow({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={17} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : null}
       </View>

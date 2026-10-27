@@ -36,7 +36,12 @@ import { useRecordMenu } from "./use-record-menu";
 import { recordComment } from "@/features/calendar/record-title";
 import { useTenantId } from "@/lib/tenant";
 import { paramsWithDraft } from "./book-draft-store";
-import { usePersistBookDraft, useRestoredBookDraft } from "./use-book-draft-memory";
+import { applyBookSnapshot } from "./apply-book-snapshot";
+import {
+  usePersistBookDraft,
+  useRestoreEditDraft,
+  useRestoredBookDraft,
+} from "./use-book-draft-memory";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -65,7 +70,7 @@ export function useBookForm() {
   const tenantId = useTenantId();
   const draftMemory = useRestoredBookDraft(
     tenantId,
-    first(params.appointmentId) != null,
+    first(params.appointmentId) ?? null,
     first(params.kind) === "event" ? "event" : "work",
   );
   const formParams = useMemo(
@@ -275,14 +280,25 @@ export function useBookForm() {
     },
     from: params.from,
     saveable: verdict.canSave && !verdict.workLocked,
+    missingHint: verdict.canSave ? undefined : verdict.missingHint,
     navigation,
     router,
     onDiscardDraft: draftMemory.forget,
+  });
+  const editOpened = useRestoreEditDraft({
+    memory: draftMemory,
+    tenantId,
+    editing: draft.editing,
+    hydrated: draft.hydrated,
+    apply: (snap) => applyBookSnapshot(draft, setTeamId, snap),
+    toast,
+    router,
   });
   usePersistBookDraft({
     memory: draftMemory,
     tenantId,
     isEdit,
+    edit: editOpened,
     dirty: guard.dirty,
     snapshot: {
       kind,
@@ -305,7 +321,9 @@ export function useBookForm() {
       recordVatMode: draft.recordVatMode,
       recordVatRate: draft.recordVatRate,
       status: draft.status,
-      comment: draft.comment,
+      // Набранное прямо сейчас, а не осевшее на blur: последние буквы заметки
+      // иначе не попадали в снимок.
+      comment: draft.commentNow.current,
       eventTitle: draft.eventTitle,
       eventColor: draft.eventColor,
       eventTypeId: draft.eventTypeId,
@@ -318,6 +336,7 @@ export function useBookForm() {
       reminderOn: draft.reminderOn,
       colorOverride: draft.colorOverride,
       city: draft.city,
+      newRecordId: draft.newRecordIdRef.current,
       cityTouched: draft.cityTouched,
     },
     toast,
@@ -340,7 +359,7 @@ export function useBookForm() {
     client,
     setReminderSheetOpen: sheets.setReminderSheetOpen,
     leaveBook: guard.leaveBook,
-    onCreated: draftMemory.forget,
+    onSaved: draftMemory.forget,
   });
   // «Сохранить» из вопроса при выходе — та же кнопка, что внизу формы.
   guard.saveRef.current = actions.save;

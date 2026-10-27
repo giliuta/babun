@@ -8,7 +8,6 @@ import {
   blockLadder,
   textOverflows,
   rowsThatFit,
-  textRows,
   TEXT_MIN_W,
 } from "./block-geometry";
 
@@ -28,27 +27,6 @@ describe("строки блока", () => {
     assert.equal(rowsThatFit(37, LINE_H), 1);
     assert.equal(rowsThatFit(38, LINE_H), 2);
     assert.equal(rowsThatFit(54, LINE_H), 3);
-  });
-
-  test("получасовая запись при обычном зуме печатает ОДНУ строку", () => {
-    // Прежняя формула floor((cardH − 9)/lineH) + 1 давала здесь две, и время
-    // рисовалось разрезанным пополам обрезкой карточки.
-    const cardH = 28; // 30 минут при 60pt на час, минус 2pt дыхания
-    assert.equal(textRows(cardH, LINE_H), 1);
-  });
-
-  test("у самого низкого блока имя всё равно пытается напечататься", () => {
-    assert.equal(textRows(10, LINE_H), 1);
-    assert.equal(textRows(0, LINE_H), 1);
-  });
-
-  test("потолок три строки держится", () => {
-    assert.equal(textRows(500, LINE_H), 3);
-  });
-
-  test("крупный системный шрифт поднимает порог вместе со строкой", () => {
-    assert.equal(textRows(38, 21), 1);
-    assert.equal(textRows(48, 21), 2);
   });
 });
 

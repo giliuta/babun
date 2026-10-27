@@ -246,19 +246,6 @@ export interface AccessChange {
   level: AccessLevel;
 }
 
-/** Одно изменение для `set_member_access`: у блока компании `team_id` пустой. */
-export function accessChange(
-  block: AccessBlock,
-  teamId: string,
-  level: AccessLevel,
-): AccessChange {
-  return {
-    block: block.key,
-    team_id: block.scope === "calendar" ? teamId : null,
-    level,
-  };
-}
-
 export type AccessRefusal =
   | "not_live"
   | "not_owner"

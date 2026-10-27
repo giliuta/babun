@@ -17,6 +17,9 @@ import { dmyShort } from "@/lib/period";
 import { changeOf } from "./profit-compare";
 import { BreakdownBarRow, BreakdownSectionHeader } from "./profit-breakdown/BreakdownRows";
 
+/** Строка материалов записей — служебная, не категория расхода. */
+const MATERIAL_ROW_ID = "appointment-material-cost";
+
 export { BreakdownBarRow, BreakdownSectionHeader } from "./profit-breakdown/BreakdownRows";
 
 // «Разбор прибыли» — port of the web ProfitPanel (bars view): «Доход»
@@ -93,9 +96,11 @@ export function ProfitBreakdown({
   const expenseRows = useMemo(() => {
     const rows = breakdownExpense(transactions, categories, people);
     if (materialCost > 0) {
+      // Своё имя, а не «Материалы»: у компании часто есть своя категория
+      // расхода «Материалы», и две одинаковые строки читались как одна.
       rows.push({
-        id: "appointment-material-cost",
-        name: "Материалы",
+        id: MATERIAL_ROW_ID,
+        name: "Материалы записей",
         amount: materialCost,
         count: materialAppointmentCount,
       });
@@ -110,22 +115,22 @@ export function ProfitBreakdown({
   const margin = income > 0 ? Math.round(((income - expense) / income) * 100) : null;
   const profit = Math.round((income - expense) * 100) / 100;
 
-  // Прошлый период по тем же корзинам — изменение у каждой строки.
+  // Прошлый период по тем же корзинам — изменение у каждой строки. Ключ —
+  // `id` строки, а не имя: категория «Материалы» и материалы записей — разные
+  // строки, и сравнение не имеет права сложить их в одну.
   const before = useMemo(() => {
     if (!compare) return null;
     const incomeBefore = new Map(
       breakdownIncome(compare.transactions, categories, services, appointments).map(
-        (r) => [r.name, r.amount] as const,
+        (r) => [r.id, r.amount] as const,
       ),
     );
     const expenseBefore = new Map(
       breakdownExpense(compare.transactions, categories, people).map(
-        (r) => [r.name, r.amount] as const,
+        (r) => [r.id, r.amount] as const,
       ),
     );
-    if (compare.materialCost > 0) {
-      expenseBefore.set("Материалы", (expenseBefore.get("Материалы") ?? 0) + compare.materialCost);
-    }
+    if (compare.materialCost > 0) expenseBefore.set(MATERIAL_ROW_ID, compare.materialCost);
     return { income: incomeBefore, expense: expenseBefore };
   }, [compare, categories, services, appointments, people]);
   const deltaFor = (now: number, was: number | undefined, goodUp: boolean) => {
@@ -153,7 +158,7 @@ export function ProfitBreakdown({
         note={kind === "income" ? materialsNote(materialsByService?.get(r.name)) : undefined}
         delta={deltaFor(
           r.amount,
-          before?.[kind].get(r.name),
+          before?.[kind].get(r.id),
           kind === "income",
         )}
         value={`${negative ? "−" : ""}${formatEUR(Math.abs(r.amount))}`}

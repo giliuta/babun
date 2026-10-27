@@ -165,7 +165,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
               )}
               {row(
                 <>
-                  {/* «Прибыль: Скрыта» — плитки нет. */}
+                  {/* Не видна одна из сторон — нет и разницы: плитки нет. */}
                   {sides.profit
                     ? tile("profit", "Прибыль", moneyText(money.profit), t.brandAccent, moneyPending || moneySign(money.profit) === 0)
                     : null}

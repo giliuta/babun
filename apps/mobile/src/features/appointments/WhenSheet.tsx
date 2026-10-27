@@ -11,6 +11,7 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { TimeRangePicker } from "@/components/ui/TimeWheel";
 import { shiftRangeStart } from "@/features/appointments/time-range";
 import { useThemeColors } from "@/theme/colors";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { WHEN_WEEKS_BACK, WHEN_WEEKS_FWD, formatDateRu } from "./when-dates";
 
 // «КОГДА» — ШТОРКА СНИЗУ, А НЕ ОКНО ПО ЦЕНТРУ: тап по времени открывает её
@@ -117,11 +118,13 @@ export function WhenSheet({
     preAllDayRef.current = effectiveAllDay ? null : { start: timeStart, end: timeEnd };
   }, [open, date, timeStart, timeEnd, allDay, allowAllDay]);
 
+  // «СЕГОДНЯ» — ПО ПОЯСУ КОМПАНИИ, как вся форма записи. Часы телефона в
+  // другом поясе около полуночи подсвечивали соседний день.
+  const businessToday = useBusinessToday();
   const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+    const [y, m, d] = businessToday.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [businessToday]);
 
   const weeks = useMemo(() => {
     const anchorMon = mondayOf(anchorKey);

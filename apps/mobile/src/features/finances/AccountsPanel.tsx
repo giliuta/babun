@@ -12,7 +12,7 @@ import {
   TILE_GAP,
   useTileWidth,
 } from "@/features/appointments/PaymentTiles";
-import type { AccountWithBalance } from "./accounts";
+import { balanceText, type AccountWithBalance } from "./accounts";
 import { accountIcon } from "./account-ui";
 import { accountOperationRows } from "./account-operations";
 import { NO_TEAM, sortAccountRows } from "./accounts-sections";
@@ -176,7 +176,7 @@ export function AccountsPanel({
             // ниже, и переключиться можно одним тапом.
             state={selected && !isSelected ? "dim" : "idle"}
             selected={isSelected}
-            amount={money(account.balance)}
+            amount={balanceText(account, money)}
             // Минус — долг; ноль тише живых денег: иначе глаз не находит, где
             // деньги.
             amountColor={sign < 0 ? t.danger : sign === 0 ? t.sub : undefined}
@@ -196,7 +196,7 @@ export function AccountsPanel({
             // плитка пока не принимает, поэтому действие остаётся в подписи.
             accessibilityLabel={[
               account.name,
-              money(account.balance),
+              balanceText(account, money),
               isSelected
                 ? "нажмите ещё раз, чтобы показать все счета"
                 : "показать операции счёта",

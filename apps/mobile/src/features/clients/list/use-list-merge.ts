@@ -72,7 +72,14 @@ export function useListMerge({
     () => uniqueById([...ownTags, ...guests.list.flatMap((guest) => guest.tags)]),
     [ownTags, guests.list],
   );
-  return { clients, guestOf, appointments, teams, tags };
+  // Источники гостевых компаний — для фильтра «Источник»; свои читает
+  // `useListFilters` хуком вкладки.
+  const guestClientSources = useMemo(
+    () => uniqueById(guests.list.flatMap((guest) => guest.sources)),
+    [guests.list],
+  );
+  const guestSourcesSettled = guests.list.every((guest) => guest.sourcesSettled);
+  return { clients, guestOf, appointments, teams, tags, guestClientSources, guestSourcesSettled };
 }
 
 /** A team of the ribbon — own or a guest company's. */

@@ -2,18 +2,17 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   addressOrLinkPatch,
-  addressPartsPatch,
   cleanAddressParts,
   composeAddress,
   hasAddressPlace,
   objectTarget,
-  partsFromLine,
   routeAddress,
-  sameAddressParts,
   composeDetails,
   objectPlacePatch,
   primaryLine,
-  withoutStreet, addressLines } from "./object-address";
+  withoutStreet,
+  addressLines,
+} from "./object-address";
 
 describe("objectTarget", () => {
   test("адрес важнее ссылки", () => {
@@ -156,29 +155,6 @@ describe("уточнение адреса", () => {
     assert.equal(routeAddress({ address: " Ул. 5 ", addressParts: { apartment: "5" } }), "Ул. 5");
     assert.equal(routeAddress(null), "");
   });
-
-  test("addressPartsPatch: строка собирается только при «где»; пустое снимает части", () => {
-    assert.deepEqual(addressPartsPatch({ street: "Makariou 12", apartment: "5" }), {
-      addressParts: { street: "Makariou 12", apartment: "5" },
-      address: "Makariou 12, кв. 5",
-    });
-    assert.deepEqual(addressPartsPatch({ apartment: "5" }), { addressParts: { apartment: "5" } });
-    assert.deepEqual(addressPartsPatch({ street: " " }), { addressParts: undefined });
-  });
-});
-
-describe("partsFromLine / sameAddressParts", () => {
-  test("строка уходит в «Улица и дом», ссылка — в пин, заполненное не трогаем", () => {
-    assert.deepEqual(partsFromLine({}, " Makariou 12 ", ""), { parts: { street: "Makariou 12" }, pin: "" });
-    assert.deepEqual(partsFromLine({}, "https://maps.app.goo.gl/x", ""), { parts: {}, pin: "https://maps.app.goo.gl/x" });
-    assert.deepEqual(partsFromLine({ city: "Пафос" }, "Makariou 12", "p"), { parts: { city: "Пафос" }, pin: "p" });
-    assert.deepEqual(partsFromLine({}, "  ", "p"), { parts: {}, pin: "p" });
-  });
-  test("sameAddressParts сравнивает после чистки", () => {
-    assert.equal(sameAddressParts({ street: " A " }, { street: "A" }), true);
-    assert.equal(sameAddressParts({ street: "A" }, { street: "B" }), false);
-    assert.equal(sameAddressParts({ street: " " }, undefined), true);
-  });
 });
 
 // Главная строка + уточнение: улица и дом либо ссылка
@@ -260,8 +236,11 @@ describe("адрес двумя строками (03.10)", () => {
       { main: "Makariou 12", detail: "подъезд 4 · Limassol" },
     );
   });
-  test("без частей — строка как есть, уточнения нет; без адреса — ссылка", () => {
+  test("без частей — строка как есть, уточнения нет; только точка — «Точка на карте»", () => {
     assert.deepEqual(addressLines({ address: "Villa 5, Limassol" }), { main: "Villa 5, Limassol", detail: "" });
-    assert.deepEqual(addressLines({ address: "", mapUrl: "https://maps.app" }), { main: "https://maps.app", detail: "" });
+    assert.deepEqual(addressLines({ address: "", mapUrl: "https://maps.app" }), { main: "Точка на карте", detail: "" });
+    // Старые объекты, у которых ссылка лежит в самом адресе.
+    assert.deepEqual(addressLines({ address: "https://maps.app.goo.gl/abc" }), { main: "Точка на карте", detail: "" });
+    assert.deepEqual(addressLines({}), { main: "", detail: "" });
   });
 });

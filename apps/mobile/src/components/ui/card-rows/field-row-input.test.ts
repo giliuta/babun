@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   cleanFieldInput,
+  fieldAutoCapitalize,
   fieldKeyboardTraits,
   initialFieldText,
   typedWithoutSeed,
@@ -38,5 +39,15 @@ describe("FieldRow input rules", () => {
     assert.equal(cleanFieldInput("ab1", "default", (v) => v.toUpperCase()), "AB1");
     assert.equal(cleanFieldInput("ab1", "phone-pad", (v) => v.toUpperCase()), "1");
     assert.equal(cleanFieldInput("ab1", undefined, undefined), "ab1");
+  });
+  test("a text row starts with a capital unless it says otherwise", () => {
+    assert.equal(fieldAutoCapitalize(undefined, undefined), "sentences");
+    assert.equal(fieldAutoCapitalize("default", undefined), "sentences");
+    assert.equal(fieldAutoCapitalize(undefined, "words"), "words");
+    assert.equal(fieldAutoCapitalize(undefined, "none"), "none");
+    assert.equal(fieldAutoCapitalize("latin", undefined), undefined);
+    assert.equal(fieldAutoCapitalize("email-address", undefined), undefined);
+    assert.equal(fieldAutoCapitalize("phone-pad", undefined), undefined);
+    assert.equal(fieldAutoCapitalize("latin", "characters"), "characters");
   });
 });

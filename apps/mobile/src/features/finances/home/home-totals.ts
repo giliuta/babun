@@ -82,13 +82,17 @@ export function homeTotals(input: HomeTotalsInput): HomeTotals {
     manualIncomingDebt,
     invoiceDebts,
   } = input;
-  let income = 0;
-  let expense = 0;
+  // В ЦЕНТАХ, как прошлый период (`profit-compare.ts`) и аналитика: сложение
+  // евро с плавающей точкой расходилось с ними на копейку («было/стало»).
+  let incomeCents = 0;
+  let expenseCents = 0;
   for (const tx of scopedTransactions) {
     if (tx.type === "income" || tx.type === "refund")
-      income += signedAmount(tx);
-    else if (tx.type === "expense") expense += tx.amount;
+      incomeCents += Math.round(signedAmount(tx) * 100);
+    else if (tx.type === "expense") expenseCents += Math.round(tx.amount * 100);
   }
+  const income = incomeCents / 100;
+  const expense = expenseCents / 100;
   // Debt via the shared getDebtAmount (prepaid + payments[]) — the web
   // payment_status/paid_amount fields are never mapped by the mobile
   // repository, so «total − paid_amount» would flag every completed
@@ -111,14 +115,14 @@ export function homeTotals(input: HomeTotalsInput): HomeTotals {
     if (invoicedAppointments.has(a.id)) continue;
     debt += getDebtAmount(a);
   }
-  const expenseWithMaterials = expense + input.materialAmount;
+  const expenseWithMaterials = (expenseCents + Math.round(input.materialAmount * 100)) / 100;
   // НДС здесь НЕ СЧИТАЕТСЯ (плашку убрали, место
   // для неё выберем отдельно). Расчёт цел и покрыт тестами — `summarizeVat`
   // в `@babun/shared/local/finance/vat`; звать его будет новая поверхность.
   return {
     income,
     expense: expenseWithMaterials,
-    profit: income - expenseWithMaterials,
+    profit: (incomeCents - Math.round(expenseWithMaterials * 100)) / 100,
     debt: debt + manualIncomingDebt + invoiceDebts.reduce((sum, r) => sum + r.amount, 0),
   };
 }

@@ -8,6 +8,9 @@ import {
   paramsWithDraft,
   readBookDraft,
   writeBookDraft,
+  clearEditDraft,
+  readEditDraft,
+  writeEditDraft,
   type BookDraftSnapshot,
 } from "./book-draft-store";
 
@@ -65,6 +68,11 @@ describe("черновик новой записи на телефоне", () =>
     assert.deepEqual(back, snap());
   });
 
+  test("номер новой записи едет в черновике — повтор после пересоздания формы не заводит дубль", () => {
+    writeBookDraft("tenant-1", snap({ newRecordId: "rec-1" }));
+    assert.equal(readBookDraft("tenant-1", "work", NOW + 60_000)?.newRecordId, "rec-1");
+  });
+
   test("черновик записи не всплывает в «Создать событие» и в другой компании", () => {
     writeBookDraft("tenant-1", snap());
     assert.equal(readBookDraft("tenant-1", "event", NOW), null);
@@ -101,10 +109,47 @@ describe("черновик новой записи на телефоне", () =>
     const src = bookFormSource();
     // Стирание — сразу за успешным созданием, а не до него: упавшее
     // сохранение черновик оставляет.
-    assert.match(src, /await booking\.save\([\s\S]{0,1500}?\}\);\s*onCreated\?\.\(\);/);
-    assert.match(src, /eventObjectNote\.discard\(\);\s*if \(!isEdit\) onDiscardDraft\?\.\(\);/);
-    assert.match(src, /onCreated: draftMemory\.forget/);
+    assert.match(src, /await booking\.save\([\s\S]{0,1500}?\}\);\s*onSaved\?\.\(\);/);
+    assert.match(src, /overpayRequestRef\.current = null;\s*onSaved\?\.\(\);/);
+    assert.match(src, /eventObjectNote\.discard\(\);\s*onDiscardDraft\?\.\(\);/);
+    assert.match(src, /onSaved: draftMemory\.forget/);
+    // Правка поднимается ПОСЛЕ снимка «как было»: хук стоит за `useLeaveGuard`.
+    assert.match(src, /const guard = useLeaveGuard\(\{[\s\S]*?const editOpened = useRestoreEditDraft\(\{/);
+    assert.match(src, /edit: editOpened,/);
     assert.match(src, /onDiscardDraft: draftMemory\.forget/);
     assert.match(src, /usePersistBookDraft\(\{/);
+  });
+});
+
+describe("снимок правки записи (I-04)", () => {
+  beforeEach(() => setStorage(new MemoryKVStorage()));
+  const { v: _v, savedAt: _s, ...body } = snap();
+  const edit = (over: Partial<{ id: string; base: string; savedAt: number }> = {}) => ({
+    v: 1 as const,
+    savedAt: NOW,
+    id: "apt-1",
+    base: "2026-10-27T10:00:00Z",
+    snap: body,
+    ...over,
+  });
+
+  test("поднимается только у той же записи в том же виде и свежим", () => {
+    writeEditDraft("t1", edit());
+    assert.equal(readEditDraft("t1", "apt-1", "2026-10-27T10:00:00Z", NOW + 1000)?.snap.comment, "Ключ у соседки");
+    // Запись поменяли с другого телефона — снимок лёг бы поверх чужого.
+    assert.equal(readEditDraft("t1", "apt-1", "2026-10-27T11:00:00Z", NOW), null);
+    assert.equal(readEditDraft("t1", "apt-2", "2026-10-27T10:00:00Z", NOW), null);
+    assert.equal(readEditDraft("t2", "apt-1", "2026-10-27T10:00:00Z", NOW), null);
+    assert.equal(readEditDraft("t1", "apt-1", "2026-10-27T10:00:00Z", NOW + BOOK_DRAFT_TTL_MS), null);
+  });
+
+  test("стирается только своей записью и не задевает черновик новой", () => {
+    writeEditDraft("t1", edit());
+    writeBookDraft("t1", snap());
+    clearEditDraft("t1", "apt-2");
+    assert.ok(readEditDraft("t1", "apt-1", "2026-10-27T10:00:00Z", NOW));
+    clearEditDraft("t1", "apt-1");
+    assert.equal(readEditDraft("t1", "apt-1", "2026-10-27T10:00:00Z", NOW), null);
+    assert.ok(readBookDraft("t1", "work", NOW));
   });
 });

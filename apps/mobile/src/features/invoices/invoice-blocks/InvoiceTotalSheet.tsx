@@ -1,6 +1,8 @@
+import { useEffect, useRef } from "react";
 import type { InvoiceVatMode } from "@babun/shared/local/finance/invoice-ledger";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import type { EditableInvoiceLine } from "@/lib/paper/format";
 import { typedNumber, type InvoiceBlockLine } from "./block-lines";
 
@@ -19,6 +21,7 @@ export function InvoiceTotalSheet({
   vatRate,
   onVatModeChange,
   onVatRateChange,
+  onLinesRestore,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -40,6 +43,8 @@ export function InvoiceTotalSheet({
   vatRate: number;
   onVatModeChange: (mode: InvoiceVatMode) => void;
   onVatRateChange: (rate: number) => void;
+  /** Вернуть строки, какими они были при открытии листа. */
+  onLinesRestore: (lines: EditableInvoiceLine[]) => void;
 }) {
   const writeNumber = (id: string, field: "qty" | "unitPrice", value: number) => {
     const line = lines.find((item) => item.id === id);
@@ -47,13 +52,56 @@ export function InvoiceTotalSheet({
     onLineChange({ ...line, [field]: typedNumber(field, value) });
   };
 
+  // ПРАВКИ — ЧЕРНОВИКОМ ДО «ПРИМЕНИТЬ», как у листа счёта. Свайп и
+  // затемнение у записи применяют, а у инвойса правка «Итого» уходила в
+  // документ молча, мимо кнопки. Снимок — на открытии; закрытие мимо кнопки
+  // при правках спрашивает и возвращает снимок, без правок — просто закрывает.
+  const snapshot = () => ({
+    lines: [...lines],
+    kind: discount.kind,
+    value: discount.value,
+    vatMode,
+    vatRate,
+  });
+  const opened = useRef<ReturnType<typeof snapshot> | null>(null);
+  useEffect(() => {
+    opened.current = visible ? snapshot() : null;
+    // Снимок — на фронте открытия; правки внутри листа его не двигают.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+  const was = opened.current;
+  const changed =
+    !!was &&
+    (was.kind !== discount.kind ||
+      was.value !== discount.value ||
+      was.vatMode !== vatMode ||
+      was.vatRate !== vatRate ||
+      JSON.stringify(was.lines) !== JSON.stringify(lines));
+  const guard = useGuardedClose({
+    dirty: changed,
+    title: "Закрыть без применения?",
+    message: "Правки «Итого» не применятся.",
+    onClose: () => {
+      if (was && changed) {
+        onLinesRestore(was.lines);
+        if (was.kind !== discount.kind) discount.onKindChange(was.kind);
+        if (was.value !== discount.value) discount.onValueChange(was.value);
+        if (was.vatMode !== vatMode) onVatModeChange(was.vatMode);
+        if (was.vatRate !== vatRate) onVatRateChange(was.vatRate);
+      }
+      onClose();
+    },
+  });
+
   // ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА: скидка (строкой счёта с
   // флагом, миграция 20260922030000) и налог.
   // Налог приходит сюда и возвращается обратно — шторка его не
   // включает сама.
   return (
     <TotalSheet
-      visible={visible}
+      visible={visible && !guard.hidden}
+      onDismiss={guard.close}
+      onExited={guard.onExited}
       // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (стёрли имя услуги — она удаляется):
       // в услугах остаются только названные.
       onClose={() => {

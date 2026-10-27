@@ -70,7 +70,7 @@ export function AccountRow({
   onDelete?: () => void;
   /** Счёт скрыт: левая кромка — «Показать». */
   hidden?: boolean;
-  /** Счёт скрыт: строка гаснет, слева «Открыть». */
+  /** Счёт закрыт (`is_active = false`): строка гаснет, слева «Открыть». */
   closed?: { onReopen: () => void } | null;
 }) {
   const t = useThemeColors();

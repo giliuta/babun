@@ -18,13 +18,13 @@
 // не тихо создаст данные в чужой компании. Сторож в тесте следит, чтобы
 // каждая вызываемая приложением функция была здесь названа.
 
-/** Функции, которые только читают: `provolatile = 's'` на 20.09.2026. */
+/** Функции, которые только читают: `provolatile = 's'` в базе. */
 export const READ_RPCS: ReadonlySet<string> = new Set([
   // Право компании (директор «Партнёры: Управляет»): `stable`.
   "access_company",
   "account_balances",
   "appointment_link_lookup",
-  // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
+  // Оплаты тарифа в Кабинете (20261004085616): `stable`.
   "cabinet_tariff_payments",
   "current_tenant_profile_safe",
   "current_user_role",
@@ -41,10 +41,16 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "list_master_clients_safe",
   "list_master_services_safe",
   "list_member_access",
+  // VOLATILE, но пишет только не-владельцу: каждая выдача списка партнёру —
+  // строка журнала `client_list_disclosures`. «Его глазами» идёт токеном
+  // владельца, ему функция ничего не пишет — для засова это чтение.
   "list_member_clients",
   // «История записей» клиента сотруднику (015): `stable`.
   "member_client_history",
-  // «Номер уже есть» партнёру из записи: `stable`.
+  // «Номер уже есть» партнёру из записи. VOLATILE: не-владельцу пишет
+  // предел перебора (`client_phone_lookups`, разных номеров в сутки — повтор
+  // того же номера предел не тратит). Владельцу, а значит и «его глазами»,
+  // не пишет ничего — для засова это чтение.
   "member_find_client_by_phone",
   "list_members",
   "list_my_calendars",
@@ -137,6 +143,9 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   // Возврат клиенту переплаты по записи (миграция 20261004024913).
   "refund_appointment_overpayment",
   "refund_invoice_payment",
+  // Возврат переплаты и новый итог записи одной транзакцией (миграция
+  // 20261027225240): `volatile`.
+  "refund_overpayment_and_save",
   "replace_day_extras",
   "reset_appointment_payment",
   "restore_deleted_operation",
@@ -145,6 +154,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "set_client_sms_opt_out",
   "set_client_team",
   "member_trash_client",
+  // «Объединить с дублем» одной транзакцией (parked 20261027234500_merge_clients).
+  "merge_clients",
   "set_default_company",
   // STORY-101: старт серии документов юрлица (миграция 20261001001000).
   "set_document_series_start",

@@ -6,6 +6,7 @@ import { TourTarget } from "@/components/tour/TourTarget";
 import type { FinancePageAccess } from "../finance-page-access";
 import type { HomeView } from "../FinanceOverview";
 import type { Period } from "@/lib/period";
+import { ICON } from "@/components/ui/tokens";
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
@@ -81,7 +82,7 @@ export function FinancesHeader({
           backgroundColor: pressed ? t.pressed : "transparent",
         })}
       >
-        <Settings color={t.sub} size={21} strokeWidth={2} />
+        <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
       </Pressable>
       </TourTarget>
 
@@ -179,7 +180,7 @@ export function FinancesHeader({
           backgroundColor: pressed ? t.pressed : "transparent",
         })}
       >
-        <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+        <BarChart3 color={t.sub} size={ICON.header} strokeWidth={2} />
       </Pressable>
       </TourTarget>
     </View>

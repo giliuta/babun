@@ -33,7 +33,9 @@ export function buildClientAppointmentIndex(
       const arr = byId.get(a.client_id);
       if (arr) arr.push(a);
       else byId.set(a.client_id, [a]);
-    } else {
+    } else if (a.kind !== "event") {
+      // Событие без клиента («Перезвонить Анне») — не визит Анны: см.
+      // `buildStatsMap`.
       const key = normName(a.comment);
       if (key) {
         const arr = orphanByName.get(key);

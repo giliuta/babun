@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  accessChange,
   levelOf,
   parseAccessBlocks,
   parseMemberAccessMap,
@@ -131,15 +130,6 @@ describe("разделы экрана и изменения", () => {
       ["calendar", "clients", "finance"],
     );
     assert.ok(!sections.some((s) => s.blocks.some((b) => b.ownerOnly)));
-  });
-
-  test("у блока компании team_id пустой, у календарного — календарь", () => {
-    assert.deepEqual(accessChange(byKey("calendar.records"), TEAM, "read"), {
-      block: "calendar.records",
-      team_id: TEAM,
-      level: "read",
-    });
-    assert.equal(accessChange(byKey("calendar.settings"), TEAM, "write").team_id, null);
   });
 
   test("отказ сервера узнаётся по hint контракта", () => {

@@ -3,8 +3,8 @@ import { useThemeColors } from "@/theme/colors";
 
 // ШАПКА ПУБЛИЧНОЙ СТРАНИЦЫ — кто прислал ссылку: логотип компании (или её
 // первая буква в плитке акцента) и имя. Одна на все страницы без входа —
-// «Ваша запись» (/r) и «Онлайн-запись» (/b): заказчик узнаёт бизнес по одной
-// и той же шапке.
+// «Ваша запись» (/r), «Онлайн-запись» (/b) и «Адрес по ссылке»: заказчик
+// узнаёт бизнес по одной и той же шапке. Радиус плитки — общий радиус карточки.
 export function PublicBusinessHeader({ name, logoUrl }: { name: string; logoUrl: string | null }) {
   const t = useThemeColors();
   return (
@@ -13,14 +13,14 @@ export function PublicBusinessHeader({ name, logoUrl }: { name: string; logoUrl:
         <Image
           source={{ uri: logoUrl }}
           accessibilityIgnoresInvertColors
-          style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: t.fill }}
+          style={{ width: 36, height: 36, borderRadius: t.radius.card, backgroundColor: t.fill }}
         />
       ) : (
         <View
           style={{
             width: 36,
             height: 36,
-            borderRadius: 9,
+            borderRadius: t.radius.card,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: `${t.accent}14`,

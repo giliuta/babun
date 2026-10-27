@@ -4,7 +4,7 @@ import { lineTotal } from "@babun/shared/local/finance/appointment-calc";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { useInvoice } from "@/features/finances/invoices-queries";
-import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
 import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import { paymentReceiptDiscount, paymentReceiptLines } from "@/features/finances/receipt-for-payment";
@@ -13,6 +13,10 @@ import {
   useReceiptAppointment,
   useReceiptTransaction,
 } from "@/features/finances/receipts-queries";
+
+/** Слова бумаги чека: язык инвойса, чек без инвойса — по-английски. */
+const paperWords = (language: string | null | undefined) =>
+  invoiceDictionary(isUiLocale(language) ? language : "en");
 
 // ОТКУДА ЧЕК БЕРЁТ СЕБЯ: с нуля; на принятую оплату
 // (`transactionId` — значок чека в записи, «Выписать чек» инвойса); правка
@@ -81,7 +85,9 @@ export function useReceiptSource(
       lines: paymentReceiptLines(
         tx,
         { invoiceLines: invoiceRow?.lines ?? null, appointment: appointment.data ?? null },
-        invoiceNumber ? `Оплата по инвойсу ${invoiceNumber}` : "Оплата",
+        // Строка чека — на языке бумаги: русское «Оплата» вшивалось в
+        // английский чек записи навсегда (чек неизменяем).
+        invoiceNumber ? `${paperWords(invoiceRow?.language).payment} · ${invoiceNumber}` : paperWords(invoiceRow?.language).payment,
       ),
       // Скидка инвойса — в «Итого» чека, а не потерянной строкой.
       ...paymentReceiptDiscount(invoiceRow?.lines ?? null),

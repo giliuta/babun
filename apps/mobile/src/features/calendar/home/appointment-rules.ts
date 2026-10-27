@@ -67,6 +67,24 @@ export function placementRefusal(
 /** У записи есть полученные деньги, которые отмена вернёт клиенту, — то же
  *  условие, по которому сервер при отмене ставит «возврат»
  *  (`protect_paid_appointment_finance`). Уже возвращённая — не в счёт. */
+/** ЗАПИСЬ С ДЕНЬГАМИ НЕ УДАЛЯЕТСЯ — то же правило, что сторож сервера
+ *  `guard_appointment_history_delete`: любой статус оплаты, кроме «не
+ *  оплачена» (и возврат тоже), суммы, платежи, способ оплаты или инвойс по
+ *  записи. Экран проверял уже: запись только с инвойсом или способом оплаты
+ *  проходила вопрос «Удалить?» и падала ошибкой сервера. Такой записи пункт
+ *  «Удалить» не предлагается вовсе. */
+export function keptForMoneyHistory(apt: Appointment, hasInvoice: boolean): boolean {
+  return (
+    (apt.payment_status ?? "unpaid") !== "unpaid" ||
+    (apt.paid_amount ?? 0) > 0 ||
+    apt.prepaid_amount > 0 ||
+    apt.payments.length > 0 ||
+    apt.payment != null ||
+    apt.payment_method != null ||
+    hasInvoice
+  );
+}
+
 export function holdsMoney(apt: Appointment): boolean {
   if (isCalendarEvent(apt) || apt.payment_status === "refunded") return false;
   return (

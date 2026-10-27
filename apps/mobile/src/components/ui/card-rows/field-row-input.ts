@@ -50,3 +50,16 @@ export function cleanFieldInput(
 ): string {
   return keyboardType === "phone-pad" ? sanitizePhoneInput(v) : sanitize ? sanitize(v) : v;
 }
+
+/** ЗАГЛАВНАЯ ПО УМОЛЧАНИЮ У ТЕКСТА. Поле строки ставит `autoCorrect={false}`
+ *  (данные, а не проза), и iOS при незаданном регистре открывала такую строку
+ *  строчными: имя клиента уходило в базу «иван петров». Своё значение поля
+ *  сильнее; у цифр, почты, ссылок и латиницы регистр не подставляется — там
+ *  он задаётся явно или не нужен. */
+export function fieldAutoCapitalize(
+  keyboardType: FieldKeyboardType | undefined,
+  autoCapitalize: "none" | "sentences" | "words" | "characters" | undefined,
+): "none" | "sentences" | "words" | "characters" | undefined {
+  if (autoCapitalize) return autoCapitalize;
+  return keyboardType === undefined || keyboardType === "default" ? "sentences" : undefined;
+}

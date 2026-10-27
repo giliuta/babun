@@ -358,24 +358,24 @@ describe("две стороны денег", () => {
   test("«Видит» расходы и «Добавляет» доходы: кнопка расхода погашена с причиной", () => {
     const access = sides({ "finance.income": "write", "finance.expense": "read" });
     assert.deepEqual(access.footer("expense"), { enabled: false, reason: VIEW_ONLY_REASON });
-    // Без права «Прибыль» плитка закрыта и при обеих сторонах.
-    assert.equal(access.profit, "locked");
-    assert.equal(access.view("profit"), "all");
+    // Обе стороны видны — видна и прибыль: своего права у неё нет.
+    assert.equal(access.profit, "read");
+    assert.equal(access.view("profit"), "profit");
   });
 
-  test("«Прибыль: Видит» (03.10) — открыта при обеих сторонах, иначе нет", () => {
-    const open = sides({ "finance.income": "read", "finance.expense": "read", "finance.profit": "read" });
+  test("«Прибыль» — без своего права: открыта при обеих сторонах, иначе нет", () => {
+    const open = sides({ "finance.income": "read", "finance.expense": "read" });
     assert.equal(open.profit, "read");
     assert.equal(open.view("profit"), "profit");
     // Правки у прибыли нет — и кнопки в футере тоже.
     assert.equal(open.footer("profit").enabled, false);
-    const oneSide = sides({ "finance.income": "read", "finance.profit": "read" });
+    const oneSide = sides({ "finance.income": "read" });
     assert.equal(oneSide.profit, "locked");
     assert.equal(oneSide.view("profit"), "all");
-    // Право другой команды на выбранную не действует.
+    // Стороны другой команды на выбранную не действуют.
     const elsewhere = sides(
+      { "finance.income": "read" },
       { "finance.income": "read", "finance.expense": "read" },
-      { "finance.profit": "read" },
     );
     assert.equal(elsewhere.profit, "locked");
   });

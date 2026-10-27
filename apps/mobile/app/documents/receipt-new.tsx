@@ -34,7 +34,8 @@ import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole, useTenant } from "@/session/tenant";
-import { useServices } from "@/features/services/queries";
+import { useAllServices } from "@/features/services/queries";
+import { invoiceDictionary } from "@/lib/paper/dictionary";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/lib/paper/format";
 import { confirmThen } from "@/lib/confirm";
@@ -82,7 +83,9 @@ export default function NewReceiptScreen() {
     forPayment ? { includeInactive: true, includeHidden: true, includeDeleted: true } : undefined,
   );
   const invoicePayments = useInvoicePayments();
-  const services = useServices();
+  // Со снятыми из прайса: услуга визита, которую уже убрали, всё равно
+  // называется своим именем, а не «Услуга» (так же берёт инвойс).
+  const services = useAllServices();
   const tenant = useTenant();
   const tenantIdForVat = useTenantId();
   const owner = useCurrentRole().data === "owner";
@@ -93,6 +96,11 @@ export default function NewReceiptScreen() {
   // выписанного чека номер уже дан — строки нет.
   const companyId =
     source.invoiceCompanyId ?? draft.companyId ?? defaultCompany(companies.data ?? [])?.id ?? null;
+  // НЕ-ВЛАДЕЛЕЦ РЕКВИЗИТЫ НЕ ВЫБИРАЕТ — их решает сервер, как у инвойса:
+  // юрлицо команды платежа, иначе основное. Присланное основное у партнёра
+  // команды со своим юрлицом сервер отклонит («Документ команды выставляется
+  // от реквизитов этой команды»).
+  const sentCompanyId = owner ? companyId : null;
   const year = Number(draft.date.slice(0, 4));
   const series = useNextInvoiceSeries(year, companyId, owner && !editing, "receipt");
   const numberTarget =
@@ -104,8 +112,10 @@ export default function NewReceiptScreen() {
   const account = (accounts.data ?? []).find((a) => a.id === draft.accountId) ?? null;
 
   const catalog = new Map((services.data ?? []).map((s) => [s.id, s]));
+  // Слова на бумаге — на языке чека, а не интерфейса.
+  const paperWords = invoiceDictionary(source.language);
   const nameFor = (line: { serviceId: string; serviceName?: string }) =>
-    line.serviceName ?? catalog.get(line.serviceId)?.name ?? "Услуга";
+    line.serviceName ?? catalog.get(line.serviceId)?.name ?? paperWords.untitled;
 
   // ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ: перед выпиской всегда показываем
   // превью. Собирается ровно той же моделью, что печатает PDF.
@@ -146,7 +156,7 @@ export default function NewReceiptScreen() {
 
   const doc = useReceiptDraftPaper({
     draft,
-    numberLabel: source.editing?.number ?? series.data?.number ?? "Черновик",
+    numberLabel: source.editing?.number ?? series.data?.number ?? paperWords.numberPending,
     currency,
     lines: receiptLinesForServer(draft, nameFor),
     discountAmount: totals.discountAmount,
@@ -173,7 +183,7 @@ export default function NewReceiptScreen() {
         ? await issueForPayment.mutateAsync({
             transactionId: paymentTx.id,
             lines,
-            companyId,
+            companyId: sentCompanyId,
             issuedOn: draft.date,
             locationId: draft.locationId,
             clientRequisitesId: draft.clientRequisitesId,
@@ -240,8 +250,8 @@ export default function NewReceiptScreen() {
     confirmThen(
       "Черновик не сохранён",
       {
-        message: "Выйти и потерять заполненное?",
-        confirmLabel: "Выйти",
+        message: "Уйти и потерять заполненное?",
+        confirmLabel: "Уйти",
         destructive: true,
       },
       () => {

@@ -96,7 +96,7 @@ export function MirrorBanner({ inModal = false }: { inModal?: boolean } = {}) {
         }}
       >
         <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.callout, color: t.onAccent }}>
-          Выйти
+          Выйти из режима
         </Text>
       </View>
     </Pressable>

@@ -141,7 +141,7 @@ We will announce material changes in the app or by email. The date at the top is
 {NAME}, {ADDRESS}, {EMAIL}`;
 
 const TERMS_RU = /* i18n-ignore */ `# Условия использования
-Обновлено 4 октября 2026
+Обновлено 27 октября 2026
 
 Эти условия — договор между вами и {NAME} ({ADDRESS}) об использовании Babun: приложения для iPhone и Android и сайта babun.app. Регистрируясь, вы с ними соглашаетесь.
 
@@ -149,7 +149,7 @@ const TERMS_RU = /* i18n-ignore */ `# Условия использования
 Babun — инструмент для работы: аккаунт заводит человек, который ведёт дела своего бизнеса или работает в нём. Вы отвечаете за пароль и за то, что делают партнёры, которым вы дали доступ. Один аккаунт — один человек; партнёры входят своими аккаунтами.
 
 ## Тарифы и оплата
-Без тарифа доступны личный календарь и события. Тарифы «Соло», «Про» и «Макс» открывают работу с клиентами, командами и партнёрами; у нового аккаунта есть пробный период 14 дней. Тариф и баланс SMS оплачиваются на сайте babun.app через Stripe: подписка продлевается каждый месяц, пока вы её не отмените. Отмена действует с конца оплаченного периода, деньги за уже начатый период не возвращаются, если закон не требует иного. Цены могут меняться — о новой цене мы предупредим заранее.
+Без оплаты доступны личный календарь и события. Работа с клиентами, записями, финансами, документами и SMS платная: подписка за каждый рабочий календарь, партнёры в командах — бесплатно и без ограничений. У нового аккаунта есть пробный период 14 дней. Подписка и баланс SMS оплачиваются на сайте babun.app через Stripe: подписка продлевается в конце каждого оплаченного периода — месяца или года, — пока вы её не отмените. Отмена действует с конца оплаченного периода, деньги за уже начатый период не возвращаются, если закон не требует иного. Цены могут меняться — о новой цене мы предупредим заранее.
 
 ## SMS
 Баланс SMS расходуется на отправленные части сообщений по цене, указанной на сайте. Вы отправляете SMS только тем, кто согласен их получать, и отвечаете за их текст. Деньги на балансе — не вклад и не возвращаются, если закон не требует иного.
@@ -176,7 +176,7 @@ Babun — инструмент для работы: аккаунт заводи�
 {NAME}, {ADDRESS}, {EMAIL}`;
 
 const TERMS_EN = `# Terms of Use
-Last updated: October 4, 2026
+Last updated: October 27, 2026
 
 These terms are an agreement between you and {NAME} ({ADDRESS}) about using Babun: the iPhone and Android apps and the babun.app website. By signing up you accept them.
 
@@ -184,7 +184,7 @@ These terms are an agreement between you and {NAME} ({ADDRESS}) about using Babu
 Babun is a work tool: an account is opened by a person who runs or works in a business. You are responsible for your password and for what the partners you invite do. One account is one person; partners sign in with their own accounts.
 
 ## Plans and payment
-Without a plan you get a personal calendar and events. The Solo, Pro and Max plans unlock clients, teams and partners; new accounts get a 14-day trial. Plans and SMS balance are paid on babun.app through Stripe: a subscription renews every month until you cancel it. Cancellation takes effect at the end of the paid period; we do not refund a period that has already started unless the law requires it. Prices may change — we will tell you about a new price in advance.
+Without a subscription you get a personal calendar and events. Working with clients, appointments, finances, documents and SMS is paid: a subscription for each working calendar, while partners in your teams are free and unlimited. New accounts get a 14-day trial. Subscriptions and SMS balance are paid on babun.app through Stripe: a subscription renews at the end of each paid period — a month or a year — until you cancel it. Cancellation takes effect at the end of the paid period; we do not refund a period that has already started unless the law requires it. Prices may change — we will tell you about a new price in advance.
 
 ## SMS
 SMS balance is spent on the message parts you send, at the price shown on the website. You send SMS only to people who agree to receive them, and you are responsible for their content. Balance is not a deposit and is not refundable unless the law requires it.
@@ -216,16 +216,16 @@ These terms are governed by the laws of the Republic of Cyprus. If you are a con
 // выше, в веб-версии; здесь — только замена этих фраз. Разошлась фраза —
 // замена молча не сработает, поэтому её сторожит `legal-texts.test.ts`.
 const TERMS_RU_APP = TERMS_RU.replace(
-  /* i18n-ignore */ "Тариф и баланс SMS оплачиваются на сайте babun.app через Stripe: подписка продлевается каждый месяц, пока вы её не отмените.",
-  /* i18n-ignore */ "Платные тарифы и баланс SMS оплачиваются отдельно; подписка продлевается каждый месяц, пока вы её не отмените.",
+  /* i18n-ignore */ "Подписка и баланс SMS оплачиваются на сайте babun.app через Stripe: подписка продлевается в конце каждого оплаченного периода — месяца или года, — пока вы её не отмените.",
+  /* i18n-ignore */ "Подписка и баланс SMS оплачиваются отдельно; подписка продлевается в конце каждого оплаченного периода, пока вы её не отмените.",
 ).replace(
   /* i18n-ignore */ "по цене, указанной на сайте.",
   /* i18n-ignore */ "по действующей цене.",
 );
 
 const TERMS_EN_APP = TERMS_EN.replace(
-  "Plans and SMS balance are paid on babun.app through Stripe: a subscription renews every month until you cancel it.",
-  "Paid plans and SMS balance are billed separately; subscriptions renew monthly until cancelled.",
+  "Subscriptions and SMS balance are paid on babun.app through Stripe: a subscription renews at the end of each paid period — a month or a year — until you cancel it.",
+  "Subscriptions and SMS balance are billed separately; a subscription renews at the end of each paid period until cancelled.",
 ).replace("at the price shown on the website.", "at the current price.");
 
 const DELETE_RU = /* i18n-ignore */ `# Удаление аккаунта Babun

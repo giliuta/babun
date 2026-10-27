@@ -143,7 +143,7 @@
 | Расширяемый словарь бизнеса (тип объекта) | `ChoiceRow` | `src/features/clients/ObjectSheet.tsx:301` |
 | Одно значение из длинного списка со своей страницей | `ValuePickerSheet` | `src/features/finances/OperationSheet.tsx:887` |
 | Выбор ВТОРЫМ ШАГОМ внутри уже открытого листа | `ValueOptionList` | `src/features/finances/TransferSheet.tsx:457` |
-| Закрытое перечисление (страна, способ оплаты) | `chooseValue` | `app/(dashboard)/cabinet/business.tsx:73` |
+| Закрытое перечисление (страна, способ оплаты) | `chooseOption` | `src/lib/choose.ts:38` |
 | Меню «что сделать» (5–6 крупных строк) | `PickerSheet` | `src/features/clients/RouteSheet.tsx:37` |
 | Спросить «точно удалить?» | `confirmThen` / `chooseOption` | `src/features/reference/screens/LabelsScreen.tsx:209` |
 | Выбрать период | `PeriodPresetModal` + `PeriodWheelsModal` | `app/(dashboard)/finances/index.tsx:1135` |

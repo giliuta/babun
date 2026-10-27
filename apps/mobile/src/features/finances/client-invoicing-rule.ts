@@ -18,6 +18,8 @@ export function clientInvoicing(
   payments: Readonly<Record<string, InvoicePaymentLedger[]>>,
   /** Срез команды: инвойс без записи считается только у своей команды. */
   teamId?: string | null,
+  /** Деньги записей, принятые мимо их инвойсов. */
+  appointmentMoney: Readonly<Record<string, number>> = {},
 ): ClientInvoicing {
   const byAppointment = new Map<string, number>();
   const unlinkedByClient = new Map<string, number>();
@@ -25,7 +27,7 @@ export function clientInvoicing(
     map.set(key, (Math.round((map.get(key) ?? 0) * 100) + Math.round(amount * 100)) / 100);
   for (const inv of invoices) {
     if (inv.kind === "credit_note" || inv.status === "void" || inv.status === "cancelled") continue;
-    const remaining = Math.max(0, calculateInvoiceSettlement(inv, payments[inv.id] ?? []).remaining);
+    const remaining = Math.max(0, calculateInvoiceSettlement(inv, payments[inv.id] ?? [], appointmentMoney[inv.id] ?? 0).remaining);
     if (inv.appointment_id) add(byAppointment, inv.appointment_id, remaining);
     else if (inv.client_id && remaining > 0 && (teamId == null || inv.brigade_id === teamId)) {
       add(unlinkedByClient, inv.client_id, remaining);

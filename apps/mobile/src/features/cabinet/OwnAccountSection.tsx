@@ -42,6 +42,10 @@ import { TariffPaymentsRow } from "./TariffPaymentsRow";
 // «Посмотреть его глазами» — раздела нет: свой аккаунт партнёра вашим
 // токеном не читается.
 
+/** СТРОКА «СКЛАД» СПРЯТАНА, ПОКА СКЛАД НЕ ГОТОВ: клиенты из магазина видели
+ *  «В разработке». Код склада оставлен намеренно — включается этим флагом. */
+const SHOW_INVENTORY = false;
+
 export function OwnAccountSection() {
   const router = useRouter();
   const mirror = useMirror();
@@ -92,9 +96,13 @@ export function OwnAccountSection() {
           <TourTarget id="cabinet.requisites">
             <CabinetRequisitesRow />
           </TourTarget>
-          <Divider inset={48} />
-          {/* СКЛАД ОБОРУДОВАНИЯ — один на аккаунт, пока в разработке. */}
-          <InventoryCabinetRow />
+          {/* СКЛАД ОБОРУДОВАНИЯ — один на аккаунт; строка ждёт готовности. */}
+          {SHOW_INVENTORY ? (
+            <>
+              <Divider inset={48} />
+              <InventoryCabinetRow />
+            </>
+          ) : null}
           <Divider inset={48} />
           {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
               календарях — он сам и каждый партнёр. */}
@@ -150,8 +158,12 @@ export function OwnAccountSection() {
         />
         <Divider inset={48} />
         <CabinetRequisitesRow tenantId={own} />
-        <Divider inset={48} />
-        <InventoryCabinetRow />
+        {SHOW_INVENTORY ? (
+          <>
+            <Divider inset={48} />
+            <InventoryCabinetRow />
+          </>
+        ) : null}
         <Divider inset={48} />
         <HistoryRow tenantId={own} />
         <Divider inset={48} />

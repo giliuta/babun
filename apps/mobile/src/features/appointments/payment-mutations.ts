@@ -3,17 +3,21 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import {
   cancelAppointmentPayment,
   recordAppointmentPayment,
-  refundAppointmentOverpayment,
+  refundOverpaymentAndSave,
   type AppointmentPaymentKind,
 } from "@babun/shared/db/repositories/appointment-payments";
+import { appointmentToUpdate } from "@babun/shared/db/repositories/appointments";
+import type { Json } from "@babun/shared/db/database.types";
 import { cacheServerAppointment } from "@babun/shared/sync/appointmentsCached";
 import { accountBalancesQueryKey } from "@/lib/company-query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/session/tenant";
 import { appointmentsQueryKey } from "@/features/calendar/queries";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
+import { memberPatch } from "./member-writes";
 import { laterPaymentQueued, paymentScope } from "./payment-queue";
 import { sendOrQueue } from "@/lib/member-queue/runtime";
 
@@ -90,6 +94,9 @@ function useSettleFreshAppointment() {
     void qc.invalidateQueries({ queryKey: ["transactions"] });
     void qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
     void qc.invalidateQueries({ queryKey: accountBalancesQueryKey(tenantId) });
+    // «VAT €x» листа счёта живёт рядом с остатками (`accountVatDueQueryKey`)
+    // и сбрасывается с ними: оплата с налогом меняет и то и другое.
+    void qc.invalidateQueries({ queryKey: ["accounts", tenantId, "vat-due"] });
     void qc.invalidateQueries({ queryKey: ["receipts"] });
   };
 }
@@ -233,14 +240,23 @@ export interface RefundOverpaymentVars {
   /** Евро с копейками. */
   amount: number;
   requestId: string;
+  /** Изменённые поля записи — то, что ушло бы в обычное сохранение. */
+  patch: Partial<Appointment>;
+  kind: Appointment["kind"] | undefined;
+  /** `updated_at` записи, по которой посчитан возврат. */
+  expectedUpdatedAt: string | null;
 }
 
-/** ВЕРНУТЬ КЛИЕНТУ ПЕРЕПЛАТУ. Итог записи опустили ниже
- *  полученного: перед сохранением разницу возвращают клиенту — в финансах
- *  «Возврат клиенту», платежи записи уменьшаются. Без мгновенного вида:
- *  ответ нужен форме, чтобы следом сохранить итог. */
-export function useRefundOverpayment(appointmentId?: string | null) {
+/** ВЕРНУТЬ КЛИЕНТУ ПЕРЕПЛАТУ И СОХРАНИТЬ ИТОГ. Итог записи опустили ниже
+ *  полученного: разницу возвращают клиенту («Возврат клиенту» в финансах)
+ *  и сохраняют запись ОДНИМ вызовом (`refund_overpayment_and_save`). Двумя
+ *  вызовами сорванное сохранение оставляло возврат без нового итога — долг
+ *  на сумму возврата. Без мгновенного вида и без очереди: деньги назад — только
+ *  при связи. */
+export function useRefundOverpaymentAndSave(appointmentId?: string | null) {
   const settle = useSettleFreshAppointment();
+  const qc = useQueryClient();
+  const role = useCurrentRole().data;
   return useMutation({
     ...NEVER_PAUSE,
     scope: paymentScope(appointmentId),
@@ -248,12 +264,31 @@ export function useRefundOverpayment(appointmentId?: string | null) {
       markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
     },
     onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
-    mutationFn: (vars: RefundOverpaymentVars) =>
-      refundAppointmentOverpayment(supabase, {
+    mutationFn: async (vars: RefundOverpaymentVars): Promise<Appointment | null> => {
+      // Тело — то же, что у обычного сохранения: мастер шлёт поля своей
+      // двери, владелец и диспетчер — колонки базы.
+      let patch: Json;
+      if (role === "master") {
+        const { body, foreign } = memberPatch(vars.patch, vars.kind);
+        if (foreign.length > 0) throw new Error("Это поле меняет только владелец");
+        patch = body as Json;
+      } else {
+        patch = appointmentToUpdate(vars.patch) as Json;
+      }
+      return refundOverpaymentAndSave(supabase, {
         appointmentId: vars.appointmentId,
         amount: vars.amount,
         requestId: vars.requestId,
-      }),
-    onSuccess: settle,
+        patch,
+        expectedUpdatedAt: vars.expectedUpdatedAt,
+      });
+    },
+    onSuccess: (fresh) => {
+      if (fresh) settle(fresh);
+      // Итог и прочие поля — как после обычного сохранения.
+      void qc.invalidateQueries({ queryKey: ["appointments"] });
+      void qc.invalidateQueries({ queryKey: clientKeys.all() });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
   });
 }

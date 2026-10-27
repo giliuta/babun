@@ -23,8 +23,13 @@ export function designColorRows({
   cancelled = null,
   paid = null,
   prepaid = null,
+  rule = "team",
 }: {
   ordinary: string;
+  /** Правило обычного цвета. У «по метке» и «по услуге» образец строки —
+   *  цвет команды, которым запись красится, лишь когда у метки или услуги
+   *  своего нет; подпись говорит правило, иначе строка врёт. */
+  rule?: "team" | "label" | "service";
   objectsOn: boolean;
   paymentOn: boolean;
   palette: Partial<Record<ColorSituation, string | null>>;
@@ -56,7 +61,18 @@ export function designColorRows({
     toggles: true,
   };
   return [
-    { id: "filled", title: "Обычный цвет", when: "Когда с записью всё в порядке", hue: ordinary, toggles: false },
+    {
+      id: "filled",
+      title: "Обычный цвет",
+      when:
+        rule === "label"
+          ? "Цвет метки"
+          : rule === "service"
+            ? "Цвет услуги"
+            : "Когда с записью всё в порядке",
+      hue: ordinary,
+      toggles: false,
+    },
     {
       id: "cancelled",
       title: "Отменена",

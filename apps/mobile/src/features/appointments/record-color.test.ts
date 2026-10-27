@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
   appointmentSituation,
   autoBaseColor,
+  colorSetByMoney,
   recordFilled,
   recordFilledFor,
   resolveRecordColor,
@@ -330,5 +331,51 @@ describe("partlyPaid", () => {
   });
   test("отмена — не предоплата", () => {
     assert.equal(partlyPaid({ ...work, status: "cancelled", prepaid_amount: 30 }), false);
+  });
+});
+
+describe("деньги — до цента", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 11.9, prepaid_amount: 4.76 };
+  test("аванс и платёж, которые во float не сходятся, — всё равно оплачено", () => {
+    const apt = { ...work, payments: [{ amount: 7.14 }] };
+    assert.equal(fullyPaid(apt), true);
+    assert.equal(partlyPaid(apt), false);
+    assert.equal(recordFilled({ ...apt, date: "2026-10-01" }, "2026-10-27").paid, true);
+  });
+});
+
+describe("предоплата — только пока визит впереди", () => {
+  test("после визита с выключенным «Долгом» часть оплаты не красится предоплатой", () => {
+    assert.equal(
+      resolveRecordColor({
+        prepaid: "#22B8CF",
+        filled: { ...FULL, paid: false },
+        base: "#34C759",
+        palette: { ...PALETTE, unpaid: null },
+        fallback: COBALT,
+      }),
+      "#34C759",
+    );
+  });
+  test("до визита внесённая часть — предоплата", () => {
+    assert.equal(
+      resolveRecordColor({ prepaid: "#22B8CF", filled: FULL, base: "#34C759", palette: PALETTE, fallback: COBALT }),
+      "#22B8CF",
+    );
+  });
+});
+
+describe("colorSetByMoney — цвет задают деньги", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 100, date: "2026-10-20", payments: [] as { amount: number }[] };
+  test("оплачена, внесена часть, долг после визита — да", () => {
+    assert.equal(colorSetByMoney({ ...work, payments: [{ amount: 100 }] }, "2026-10-27"), true);
+    assert.equal(colorSetByMoney({ ...work, date: "2026-11-02", prepaid_amount: 30 }, "2026-10-27"), true);
+    assert.equal(colorSetByMoney(work, "2026-10-27"), true);
+  });
+  test("будущая без денег, событие, отмена и скрытая оплата — нет", () => {
+    assert.equal(colorSetByMoney({ ...work, date: "2026-11-02" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney({ ...work, kind: "event" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney({ ...work, status: "cancelled" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney(work, "2026-10-27", true), false);
   });
 });

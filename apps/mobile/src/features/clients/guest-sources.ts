@@ -15,6 +15,8 @@ import { fetchTeams } from "@/features/reference/queries";
 import { useMirrorMode } from "@/session/mirror-state";
 import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appointments";
 import { listMemberClients } from "./queries";
+import { fetchClientSources } from "./acquisition-sources";
+import type { ClientSource } from "./acquisition-source";
 import { withClientHistory } from "./member-history";
 import { listMemberClientHistory, memberHistoryQueryKey } from "./use-member-history";
 import { viewKeyOf, type ClientsScope } from "@/session/clients-company";
@@ -29,6 +31,8 @@ import { viewKeyOf, type ClientsScope } from "@/session/clients-company";
 //   • клиентов — окном сервера (`list_member_clients`): ровно его набор, без
 //     денег компании и, если телефоны закрыты, без контактов;
 //   • метки — чтобы его клиенты в списке были подписаны как везде;
+//   • источники — без них фильтр «Источник» видел только свои, и все его
+//     клиенты падали в «Не указан»;
 //   • команды и его записи — чтобы работали «последний визит» и фильтр
 //     «Команда»: владелец различает своих и чужих клиентов именно им, пока
 //     разделителей нет.
@@ -40,6 +44,11 @@ export interface GuestSource {
   appointments: Appointment[];
   teams: Team[];
   tags: ClientTag[];
+  /** Источники компании (`client_sources`) — то, что разрешит сервер. */
+  sources: ClientSource[];
+  /** Чтение источников закончилось (удачно или нет): до этого фильтр не
+   *  снимает выбранный источник как «пропавший». */
+  sourcesSettled: boolean;
 }
 
 export interface GuestSources {
@@ -51,8 +60,9 @@ export interface GuestSources {
 
 const MINUTE = 60_000;
 
-/** Запросов на одну компанию: клиенты, метки, команды, записи, история. */
-const PER_SOURCE = 5;
+/** Запросов на одну компанию: клиенты, метки, команды, записи, история,
+ *  источники. */
+const PER_SOURCE = 6;
 
 export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
   // ЗЕРКАЛО ЧИТАЕТ ТОКЕНОМ ВЛАДЕЛЬЦА («права его, данные ваши»): дверь команд
@@ -103,6 +113,11 @@ export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
           queryKey: memberHistoryQueryKey(tenantId, view, false),
           queryFn: () => listMemberClientHistory(tenantBoundClient(tenantId)),
         },
+        {
+          ...common,
+          queryKey: ["client-sources", tenantId, "guest", view],
+          queryFn: () => fetchClientSources(tenantBoundClient(tenantId), tenantId),
+        },
       ];
     }),
   });
@@ -124,6 +139,8 @@ export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
           (queries[at + 3]?.data as Appointment[] | undefined) ?? [],
           (queries[at + 4]?.data as Appointment[] | undefined) ?? [],
         ),
+        sources: (queries[at + 5]?.data as ClientSource[] | undefined) ?? [],
+        sourcesSettled: queries[at + 5]?.isPending === false,
       };
     });
     return {

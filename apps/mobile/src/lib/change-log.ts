@@ -1,4 +1,5 @@
 import { money } from "@babun/shared/common/utils/money";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // «ИСТОРИЯ ИЗМЕНЕНИЙ» — КАК ЧИТАТЬ СТРОКУ ЖУРНАЛА (любое изменение записывается
 // в историю, чтобы чётко отслеживать, что делает сам человек и каждый из его партнёров).
@@ -66,18 +67,29 @@ export function changeTitle(row: Pick<ChangeLogRow, "entity" | "meta" | "action"
   return `${noun.word} ${PARTICIPLES[row.action][noun.gender]}`;
 }
 
+/** Служебные категории финансов (`finance_categories.is_system`): их имя
+ *  в базе русское, а показывается на языке интерфейса. Имена клиентов и своих
+ *  категорий не переводятся — это данные человека. Сравнение с базой, поэтому
+ *  литералы не переводятся плагином. */
+const SYSTEM_CATEGORY_LABELS = new Set([/* i18n-ignore */ "Услуги", /* i18n-ignore */ "Возврат"]);
+
 /** Вторая строка: имя предмета и подпись — «Анастасия · 4 окт, 10:00»,
  *  «Топливо · €40». */
 export function changeSubject(row: Pick<ChangeLogRow, "entity" | "label" | "meta">): string {
   const meta = row.meta ?? {};
   const parts: string[] = [];
-  if (row.label) parts.push(row.label);
+  if (row.label) {
+    const finance = row.entity === "finance_transactions" || row.entity === "finance_categories";
+    parts.push(finance && SYSTEM_CATEGORY_LABELS.has(row.label) ? tDynamic(row.label) : row.label);
+  }
   if (row.entity === "client_tag_assignments" && meta.tag) parts.push(String(meta.tag));
   if (row.entity === "client_attachments" && meta.client) parts.push(String(meta.client));
   if (row.entity === "day_cities" && meta.date) parts.push(shortDate(meta.date));
   if (row.entity === "member_access" && meta.block_title) {
     const level = LEVEL_WORDS[String(meta.level ?? "")];
-    parts.push(level ? `${String(meta.block_title)}: ${level}` : String(meta.block_title));
+    // Заголовок блока прав пишет сервер по-русски (`server-keys.json`).
+    const title = tDynamic(String(meta.block_title));
+    parts.push(level ? `${title}: ${level}` : title);
   }
   if (row.entity === "appointments" || row.entity === "appointment_photos") {
     const when = [meta.date ? shortDate(meta.date) : "", meta.time ? String(meta.time) : ""]
