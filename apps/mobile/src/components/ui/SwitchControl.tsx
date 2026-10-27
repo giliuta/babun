@@ -1,4 +1,4 @@
-import { Switch, type StyleProp, type ViewStyle } from "react-native";
+import { Platform, Switch, type StyleProp, type ViewStyle } from "react-native";
 import { useThemeColors } from "@/theme/colors";
 
 // ТУМБЛЕР — одна дверь на все платформы. На телефоне это системный UISwitch,
@@ -6,6 +6,15 @@ import { useThemeColors } from "@/theme/colors";
 // iPhone: тумблер react-native-web «материальный» — бирюзовый кружок, дорожка
 // в 70% высоты, а у выключенного дорожки нет вовсе (найдено сборкой для Claude
 // Design 21.09; веб-версия приложения показывала то же самое).
+//
+// ANDROID — ТЕ ЖЕ ЦВЕТА РУКАМИ. Кружок и выключенная дорожка там берутся из
+// темы Android, а не из нашей: кружок выходил бирюзовым на синей дорожке —
+// два акцента в одном контроле. Белый кружок и светло-серая дорожка — цвета
+// UISwitch, как у двойника веба.
+
+/** Выключенная дорожка — та же, что у `SwitchControl.web.tsx`. */
+const OFF_TRACK = "#e9e9eb";
+const ANDROID = Platform.OS === "android";
 
 export interface SwitchControlProps {
   value: boolean;
@@ -35,7 +44,8 @@ export function SwitchControl({
       onValueChange={onValueChange}
       accessibilityLabel={accessibilityLabel}
       style={style}
-      trackColor={{ true: t.accent }}
+      trackColor={ANDROID ? { true: t.accent, false: OFF_TRACK } : { true: t.accent }}
+      thumbColor={ANDROID ? "#ffffff" : undefined}
     />
   );
 }
