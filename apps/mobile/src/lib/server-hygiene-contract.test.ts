@@ -231,5 +231,8 @@ describe("server hygiene migrations", () => {
     assert.match(sql, /coalesce\(p_company_id, public\.legal_entity_of_team\(p_tx\.tenant_id, p_tx\.team_id\)\)/);
     // Через `resolve_company_id`: не-владельца пускает только к юрлицу его команды.
     assert.match(sql, /company_uuid := public\.resolve_company_id\(\\n/);
+    // Не-владелец — как у инвойса: чужое юрлицо отбивается тем же отказом.
+    assert.match(sql, /current_user_role\(\) is distinct from ''owner''/);
+    assert.match(sql, /Документ команды выставляется от реквизитов этой команды/);
   });
 });
