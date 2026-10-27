@@ -13,6 +13,7 @@ import { operationDraftKey, vatDirtyKey } from "../operation-dirty";
 import { createOperationRequestIds } from "./request-ids";
 import type { OperationDebtPayment, OperationType } from "./types";
 import { hydratedAmountText, txVatMode } from "./vat-frame";
+import { operationStartType } from "./start-type";
 
 /** The operation form's own state: every field the person fills, the
  *  «touched» flags that steer defaults, and the hydration on open. */
@@ -47,11 +48,8 @@ export function useOperationDraft({
   const [type, setType] = useState<OperationType>("expense");
   const typeWritable = (t: OperationType): boolean =>
     canWriteType ? canWriteType(t) : true;
-  // Новая операция открывается на стороне, которую человек может завести:
-  // «только расходы» не встречает доходом с погашенной кнопкой.
-  const otherType = defaultType === "income" ? "expense" : "income";
-  const startType =
-    !typeWritable(defaultType) && typeWritable(otherType) ? otherType : defaultType;
+  // Сторона новой операции (`start-type.ts`): оплата долга — всегда сторона долга.
+  const startType = operationStartType({ defaultType, debtPayment: !!debtPayment, typeWritable });
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [teamId, setTeamId] = useState<string | null>(defaultTeamId ?? null);
