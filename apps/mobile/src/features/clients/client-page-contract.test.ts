@@ -503,9 +503,22 @@ describe("«Объединить с дублем» в «⋯» карточки",
     );
   });
 
-  test("порядок: патч основной → записи дубля → удаление дубля", () => {
+  test("сливает сервер одной транзакцией; по шагам — только пока функции нет", () => {
     const src = merge();
     const body = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
+    const server = body.indexOf("await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });");
+    const fallback = body.indexOf("if (!(e instanceof MergeNotOnServer)) throw e;");
+    assert.ok(server > -1, "слияние снова идёт с телефона шагами");
+    assert.ok(fallback > server, "отказ сервера сходит за «функции нет»");
+    assert.match(body, /await mergeStepByStep\(dupRow, fresh, patch, remap\);/);
+    const rpc = read("merge-clients-rpc.ts");
+    assert.match(rpc, /const MISSING_FUNCTION = new Set\(\["PGRST202", "42883"\]\);/);
+    assert.match(rpc, /p_tag_ids: tagIds \?\? null,/);
+  });
+
+  test("порядок: патч основной → записи дубля → удаление дубля", () => {
+    const src = merge();
+    const body = src.slice(src.indexOf("const mergeStepByStep = async"), src.indexOf("const merge = async"));
     const patch = body.indexOf("await updateById.mutateAsync({ id: primary.id, patch })");
     // Визит едет к основной вместе с объектом основной.
     const appts = body.indexOf("patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },");
@@ -517,7 +530,8 @@ describe("«Объединить с дублем» в «⋯» карточки",
       /if \(res\.failed > 0 \|\| res\.archived === 0\) \{\s*throw new Error\("Карточка объединена, но дубль не удалился"\);/,
       "неудача удаления дубля снова сходит за успех",
     );
-    assert.match(body, /if \(running\.current\) return;\s*running\.current = true;/, "двойной тап снова сливает дважды");
+    const handler = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
+    assert.match(handler, /if \(running\.current\) return;\s*running\.current = true;/, "двойной тап снова сливает дважды");
   });
 });
 
