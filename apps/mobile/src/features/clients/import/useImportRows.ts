@@ -26,7 +26,7 @@ import {
   saveResumeState,
   type ImportResumeState,
 } from "./resume";
-import { importClientId, rowToClient } from "./import-client";
+import { importClientId, importIdCollision, rowToClient } from "./import-client";
 import { clientKeys } from "@/lib/client-query-keys";
 
 // Parallel round-trips per chunk. Same 10 the existing importer uses — the
@@ -102,7 +102,11 @@ async function createImportClient(
   } catch (error) {
     if (!isDuplicateImportId(error)) throw error;
     const existing = await getClientRepo(db, client.id, tenantId);
-    if (!existing) throw error;
+    const collision = importIdCollision(existing);
+    if (collision === "missing") throw error;
+    if (collision === "deleted") {
+      throw new Error("Клиент из этой строки лежит в «Удалённых клиентах» — верните его оттуда");
+    }
     await ensureImportTag(db, client.id, tagId, tenantId);
   }
 }
