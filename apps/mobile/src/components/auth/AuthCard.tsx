@@ -25,6 +25,7 @@ import { BrandMark } from "@/components/brand/BrandMark";
 import { useAuthTheme } from "@/components/auth/theme";
 import { AuthLanguageButton } from "@/components/auth/AuthLanguageButton";
 import { useReduceMotion } from "@/lib/reduce-motion";
+import { PASSWORD_KEYBOARD } from "@/lib/keyboard";
 
 // «Halo Cobalt» auth surfaces — one fixed-light styling dialect, formal «вы»,
 // §5 focus ring via useAuthTheme(). apps/mobile/docs/DESIGN-SYSTEM.md.
@@ -229,6 +230,9 @@ export const PasswordInput = forwardRef<TextInput, TextInputProps>(
         ref={ref}
         autoComplete="current-password"
         textContentType="password"
+        keyboardType={PASSWORD_KEYBOARD}
+        autoCapitalize="none"
+        autoCorrect={false}
         {...props}
         secureTextEntry={!show}
         trailing={
