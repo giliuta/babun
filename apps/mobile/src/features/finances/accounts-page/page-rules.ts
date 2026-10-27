@@ -127,21 +127,18 @@ export function presetTeamFor(
 }
 
 /**
- * Подытог группы счетов. Скрытый и закрытый счета в сумму не входят — как на
- * плитке «Счета». Хоть у одного счёта остаток неизвестен (нет права на деньги
- * команды) — подытога нет вовсе, `null`: сумма из выдуманных нулей врала бы.
+ * Подытог группы счетов — сумма всех её строк, скрытых и закрытых тоже: на
+ * странице «Счета» числа обязаны складываться (скрытые здесь видит только
+ * владелец). Плитка «Счета» в «Финансах» считает по-своему, без скрытых
+ * (`accountsTotal`). Хоть у одного счёта остаток неизвестен (нет права на
+ * деньги команды) — подытога нет вовсе, `null`: сумма из выдуманных нулей
+ * врала бы.
  */
 export function groupBalanceTotal(
-  accounts: readonly {
-    balance: number;
-    balance_known: boolean;
-    is_active: boolean;
-    is_hidden?: boolean | null;
-  }[],
+  accounts: readonly { balance: number; balance_known: boolean }[],
 ): number | null {
-  const counted = accounts.filter((account) => account.is_active && !account.is_hidden);
-  if (counted.some((account) => !account.balance_known)) return null;
-  return sumAccountBalances(counted);
+  if (accounts.some((account) => !account.balance_known)) return null;
+  return sumAccountBalances(accounts);
 }
 
 /**
