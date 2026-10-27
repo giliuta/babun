@@ -42,7 +42,9 @@ export function useDayAccounts({
   const accountOrder = useMemo(
     () =>
       (accountsQuery.data ?? [])
-        .filter((a) => a.is_active && (!teamId || a.brigade_id === teamId))
+        // Скрытый счёт виден только на странице «Счета»; пришли деньги дня на
+        // него — он всё равно встанет в хвост разбивки по строкам дня.
+        .filter((a) => a.is_active && !a.is_hidden && (!teamId || a.brigade_id === teamId))
         .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
         .map((a) => a.id),
     [accountsQuery.data, teamId],
