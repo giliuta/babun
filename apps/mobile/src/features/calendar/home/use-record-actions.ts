@@ -27,10 +27,10 @@ import type { SlotNotice } from "./use-slot-notice";
 
 type UseRecordActionsDeps =
   Pick<CalendarScope, "activeActions" | "activeTeamId">
-  & Pick<CalendarRights, "canManageBookings" | "isCrew" | "canMutateAppointment">
+  & Pick<CalendarRights, "canManageBookings" | "isCrew">
   & Pick<CalendarSources, "toast" | "roleQuery" | "appts">
   & Pick<CalendarRoute, "pushBookOnce" | "tenantId">
-  & Pick<CalendarUiState, "setCrewViewing" | "reminderFor" | "setReminderFor">
+  & Pick<CalendarUiState, "reminderFor" | "setReminderFor">
   & Pick<RecordNaming, "clientName" | "appointmentTimeZone">
   & Pick<GridModes, "setMoving" | "setEditingApt" | "placedFromRef" | "setPick"
     | "setMovingKind">
@@ -42,7 +42,7 @@ type UseRecordActionsDeps =
 export function useRecordActions(deps: UseRecordActionsDeps) {
   const {
     activeActions, canManageBookings, isCrew, toast, roleQuery, pushBookOnce,
-    activeTeamId, appts, canMutateAppointment, setCrewViewing,
+    activeTeamId, appts,
     clientName, setMoving, setEditingApt, mode, setMode, rememberView, setDay,
     placedFromRef, setPick, setNotice, setMovingKind, reminderFor, setReminderFor,
     appointmentTimeZone, tenantId,
@@ -100,12 +100,8 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
     const parentId = (apt as { virtualParentId?: string }).virtualParentId;
     const target = parentId ? appts.find((a) => a.id === parentId) ?? apt : apt;
-    // Сотрудник — на ту же страницу записи, что владелец (STORY-088): двери
-    // на ней погашены по его правам. Лист просмотра остался чужому событию.
-    if (!isCrew && !canMutateAppointment(target)) {
-      setCrewViewing(target);
-      return;
-    }
+    // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ: сотрудник и владелец на чужом событии
+    // открывают ту же /book, двери на ней гаснут по правам (`useBookRights`).
     // ПРАВКА УХОДИТ НА /book: форма записи одна и создаёт, и правит (STORY-064).
     // Две формы — отдельная для создания и для правки — делали бы любую
     // правку наполовину: снос поля («Источник заявки») из одной оставлял бы

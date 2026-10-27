@@ -1,36 +1,29 @@
 import { useEffect } from "react";
 import type { Href } from "expo-router";
 import { parseYMD } from "@/features/appointments/helpers";
-import {
-  resolveReturnTo,
-  returnToParam,
-} from "@/features/appointments/return-to";
+import { returnToParam } from "@/features/appointments/return-to";
 import { startOfDay } from "./dates";
-import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarRoute } from "./use-calendar-route";
 import type { CalendarSources } from "./use-calendar-sources";
 import type { CalendarUiState } from "./use-calendar-ui-state";
 import type { CalendarView } from "./use-calendar-view";
 
 type UseCalendarDeepLinksDeps =
-  Pick<CalendarRoute, "router" | "params" | "returnToRef">
+  Pick<CalendarRoute, "router" | "params">
   & Pick<CalendarSources, "teamsPending" | "teamsError" | "teamsLoading" | "appointmentsQuery"
     | "error" | "isLoading" | "appts" | "teams" | "toast">
   & Pick<CalendarView, "setDay" | "setMode" | "setTeamChoice">
   & Pick<CalendarUiState, "setFinModalYmd" | "setSlotDraft" | "setSheetMenu" | "setSmsOpen"
-    | "setReminderFor" | "setRecolor" | "setCityPickerYmd" | "setMiniCalOpen"
-    | "setCrewViewing">
-  & Pick<CalendarRights, "isCrew" | "canMutateAppointment">;
+    | "setReminderFor" | "setRecolor" | "setCityPickerYmd" | "setMiniCalOpen">;
 
 /** Route params that steer the calendar from outside: open a record,
  *  start a new one, or show a date. */
 export function useCalendarDeepLinks(deps: UseCalendarDeepLinksDeps) {
   const {
     router, params, teamsPending, teamsError, teamsLoading, appointmentsQuery, error,
-    isLoading, appts, setDay, setMode, teams, setTeamChoice, returnToRef,
+    isLoading, appts, setDay, setMode, teams, setTeamChoice,
     setFinModalYmd, setSlotDraft, setSheetMenu, setSmsOpen, setReminderFor, setRecolor,
-    setCityPickerYmd, setMiniCalOpen, isCrew, canMutateAppointment, setCrewViewing,
-    toast,
+    setCityPickerYmd, setMiniCalOpen, toast,
   } = deps;
   useEffect(() => {
     const clearParams = () =>
@@ -74,10 +67,6 @@ export function useCalendarDeepLinks(deps: UseCalendarDeepLinksDeps) {
         ) {
           setTeamChoice(target.team_id);
         }
-        // Запомнили дорогу назад ДО гашения параметров: сами параметры живут
-        // один кадр, а вернуться нужно, когда лист закроют. Словарь дорог —
-        // `resolveReturnTo`, один на весь продукт.
-        returnToRef.current = resolveReturnTo(params.from);
         // ЛИСТЫ КАЛЕНДАРЯ УХОДЯТ ПЕРЕД ЗАПИСЬЮ. Тап по
         // уведомлению, пока открыт, скажем, «Финансы дня», открывал страницу
         // записи ПОД листом: человек видел прежний лист и думал, что тап не
@@ -90,16 +79,13 @@ export function useCalendarDeepLinks(deps: UseCalendarDeepLinksDeps) {
         setRecolor(null);
         setCityPickerYmd(null);
         setMiniCalOpen(false);
-        // Владельцу и диспетчеру — СТРАНИЦА записи (STORY-064: форма одна);
-        // старый лист правки здесь больше не открывается. Дорогу назад отдаём
-        // ей же: `returnToRef` читает только лист бригадира, а страница —
-        // отдельное окно и про наш ref не знает.
-        // Сотрудник открывает ТУ ЖЕ страницу записи (STORY-088): блоки на ней гаснут по его правам сами.
-        if (!isCrew && !canMutateAppointment(target)) setCrewViewing(target);
-        else
-          router.push(
-            `/book?appointmentId=${target.id}${returnToParam(params.from)}` as Href,
-          );
+        // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — и владельцу, и сотруднику, и на
+        // чужом событии: двери на ней гаснут по правам сами. Дорогу назад
+        // отдаём ей же параметром — словарь дорог `resolveReturnTo` один на
+        // весь продукт.
+        router.push(
+          `/book?appointmentId=${target.id}${returnToParam(params.from)}` as Href,
+        );
       } else {
         toast("Заявка не найдена или больше недоступна");
       }
