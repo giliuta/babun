@@ -252,8 +252,9 @@
 красит — он показывается без типа (`findObjectType`).
 
 **Форма объекта** — один лист `src/features/clients/ObjectSheet.tsx`
-(`mode: "create" | "edit"`; запись — `object-sheet/use-object-create.ts` и
-`use-object-edit.ts`), тело одно:
+(`mode: "create" | "edit"`; запись —
+`src/features/clients/object-sheet/use-object-create.ts` и
+`src/features/clients/object-sheet/use-object-edit.ts`), тело одно:
 `src/features/clients/ObjectFields.tsx` — три карточки: «Тип объекта»
 (`ReferenceBlock` + `PickerSheet`, дверь в справочник — ползунками в шапке
 ШТОРКИ, как у типа события), «Адрес» (главная строка + карта `MapPicker` +
