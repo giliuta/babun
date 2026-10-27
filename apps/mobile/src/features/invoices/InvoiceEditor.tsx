@@ -12,6 +12,8 @@ import { invoiceReason } from "./invoice-editor/invoice-rules";
 import type { InvoiceEditorProps } from "./invoice-editor/types";
 import { useInvoiceDraft } from "./invoice-editor/use-invoice-draft";
 import { useInvoicePaper } from "./invoice-editor/use-invoice-paper";
+import { storedInvoiceDraftKey, useStoredInvoiceDraft } from "./invoice-editor/stored-draft";
+import { useTenantId } from "@/lib/tenant";
 
 export type {
   InvoiceEditorProps,
@@ -49,6 +51,20 @@ export function InvoiceEditor({
     accountId, previewOpen, setPreviewOpen,
   } = draft;
   const paper = useInvoicePaper({ draft, clients, existing, tenant, businessToday, onDirtyChange });
+  // Новый инвойс «с нуля» переживает выгрузку приложения (`stored-draft.ts`).
+  const tenantId = useTenantId();
+  const fromScratch =
+    !existing &&
+    !prefill?.appointmentId &&
+    !prefill?.transactionId &&
+    !prefill?.clientId &&
+    !prefill?.amount;
+  useStoredInvoiceDraft({
+    key: fromScratch && tenantId ? storedInvoiceDraftKey(tenantId, prefill?.teamId) : null,
+    snapshot: draft.snapshot,
+    dirty: paper.dirty,
+    restore: draft.restore,
+  });
   const {
     companies, owner, currency, changeClient, parsedLines, rate, discountAmount,
     withDiscount, totals, pickedCompany, issuedYear, series, paperDoc,
@@ -62,7 +78,7 @@ export function InvoiceEditor({
    *  Снимок — из самого обновления, а не из отрисовки: закрытие «Итого»
    *  убирает пустые строки пачкой, и у каждого тоста был один устаревший
    *  снимок. Пустую свою строку (без услуги, названия и цены) возвращать
-   *  нечем — она уходит без тоста (аудит 035, F-37). */
+   *  нечем — она уходит без тоста. */
   const removeLine = (line: EditableInvoiceLine) => {
     let before: EditableInvoiceLine[] | null = null;
     setLines((current) => {

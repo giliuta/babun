@@ -57,6 +57,8 @@ export const TENANT_SCOPED_KEY_PREFIXES: readonly string[] = [
   // Переход в другую компанию — нет: там его не прочитают по имени ключа, а
   // вернувшийся найдёт набранное.
   "babun:clients:new-draft",
+  // Черновик нового инвойса «с нуля» — так же, клиент и позиции компании.
+  "babun:invoices:new-draft",
   "babun:vat:last-rate",
   "babun:teamActivity.lastSeen",
   // Привычки экранов, переведённые на этот механизм.

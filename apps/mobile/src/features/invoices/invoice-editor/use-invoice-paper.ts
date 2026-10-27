@@ -234,6 +234,7 @@ export function useInvoicePaper({
   );
 
   return {
+    dirty,
     companies,
     owner,
     currency,
