@@ -186,12 +186,12 @@ export function useVisibleAppointments(deps: UseVisibleAppointmentsDeps) {
 
   // Денежный набор: «Скрывать отменённые» — визуальная настройка сетки и
   // итоги дня менять не должна. Судьбу отменённых в деньгах решает сам
-  // computeDayFinance (planned их не считает, earned — только
-  // completed/in_progress), поэтому денежные поверхности получают полный
-  // командный набор.
+  // `dayMoney` (план их не считает), поэтому денежные поверхности получают
+  // полный командный набор. «Его глазами» — только то, что сотрудник видит:
+  // иначе долг записи вне его окна стоял в плитке, которой у него нет.
   const financeAppts = useMemo(
-    () => expandedAppts.filter(inTeamCal),
-    [expandedAppts, inTeamCal],
+    () => expandedAppts.filter((a) => inTeamCal(a) && (!mirror || mirrorSees(a))),
+    [expandedAppts, inTeamCal, mirror, mirrorSees],
   );
   const financeByDate = useMemo(() => groupByDate(financeAppts), [financeAppts]);
   const financeFor = useCallback(
