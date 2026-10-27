@@ -125,7 +125,11 @@ export function useBookForm() {
   });
   const slot = useSlotWarnings({
     allAppts,
-    editId: draft.editId,
+    // НОВАЯ ЗАПИСЬ СВЕРЯЕТСЯ ПОД СВОИМ БУДУЩИМ id. Создание кладёт её в список
+    // дня сразу, ещё под спиннером «Создать», — и под чужим id черновик
+    // находил в нём самого себя: на миг вспыхивало «Пересекается с событием
+    // этой команды».
+    editId: draft.editId ?? draft.newRecordIdRef.current,
     kind,
     teamId,
     date,

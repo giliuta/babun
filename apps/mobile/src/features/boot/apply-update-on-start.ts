@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import * as Updates from "expo-updates";
+import { splashOnScreen } from "./splash-state";
 
 // СВЕЖИЙ КОД — С ПЕРВОГО ЗАПУСКА: иначе первая установка показывала бы
 // старый экран, а новый появлялся только после повторного открытия.
@@ -17,6 +18,14 @@ import * as Updates from "expo-updates";
 /** Позже этого от запуска не перезапускаемся: человек уже начал что-то делать
  *  на экране, и перезапуск выбросил бы набранное. */
 const DEADLINE_MS = 5000;
+
+/** ПЕРЕЗАПУСК — ТОЛЬКО ПОД ЗАСТАВКОЙ. Заставка уходит, как только календарь
+ *  готов, — часто раньше срока. Человек уже нажал «Финансы», а докачанное
+ *  обновление перезапускало приложение второй заставкой поверх его действия.
+ *  Ушла заставка — скачанное включится при следующем открытии. */
+export function mayReloadNow(msLeft: number, splashVisible: boolean): boolean {
+  return msLeft > 0 && splashVisible;
+}
 let started = false;
 
 function within<T>(ms: number, work: Promise<T>): Promise<T | null> {
@@ -33,7 +42,7 @@ export function applyUpdateOnStart(): void {
       const check = await within(left(), Updates.checkForUpdateAsync());
       if (!check?.isAvailable) return;
       const fetched = await within(left(), Updates.fetchUpdateAsync());
-      if (!fetched?.isNew || left() <= 0) return;
+      if (!fetched?.isNew || !mayReloadNow(left(), splashOnScreen())) return;
       await Updates.reloadAsync();
     } catch {
       // Нет сети, сервер не ответил — работаем тем, что есть.

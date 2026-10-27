@@ -17,7 +17,10 @@ export function useDraftDuplicate({
   scopeKind,
   draftClient,
   bookingTeam,
+  selfId,
 }: {
+  /** id, под которым черновик ляжет в базу: сам себе он не дубль. */
+  selfId: string;
   active: boolean;
   e164: string | null;
   tenantId: string | null;
@@ -79,14 +82,18 @@ export function useDraftDuplicate({
       return;
     }
     const timer = setTimeout(async () => {
-      const existing = await findDuplicate(e164);
+      const found = await findDuplicate(e164);
+      // ДУБЛЬ — НЕ ОН САМ. Создание кладёт клиента в базу под id черновика, и
+      // запоздалая проверка находила его же: под «Создать» на миг вспыхивало
+      // «Номер уже есть — <это же имя>».
+      const existing = found && found.id !== selfId ? found : null;
       if (sequence.current === currentSequence) {
         setDuplicate(existing);
         checkedFor.current = e164;
       }
     }, 350);
     return () => clearTimeout(timer);
-  }, [active, e164, tenantId, findDuplicate]);
+  }, [active, e164, tenantId, findDuplicate, selfId]);
 
   return { duplicate, setDuplicate, findDuplicate, checkedFor };
 }
