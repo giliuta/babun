@@ -93,9 +93,9 @@ export function useArchiveClients() {
       const { ids, trash } = input;
       assertOwnCompany(scope, "Убирать клиентов из работы");
       const tenantId = scope.tenantId;
-      if (scope.role !== "owner" && scope.role !== "dispatcher") {
-        throw new Error("Удалять клиентов может владелец или диспетчер.");
-      }
+      // Полки своей базы — только у владельца: так же решает RLS
+      // (`clients_update_owner`). Роли «диспетчер» в продукте нет.
+      if (scope.role !== "owner") throw new Error("Это может только владелец");
       // Один срок на весь заход: клиенты, удалённые одним действием, должны
       // и стереться вместе, а не расползтись по секундам.
       const purgeAt = trash ? purgeDateFromNow() : null;
@@ -166,7 +166,7 @@ function useHiddenClients(
       !!tenantId &&
       scope.ready &&
       scope.kind === "own" &&
-      (scope.role === "owner" || scope.role === "dispatcher"),
+      scope.role === "owner",
     // Привязанным клиентом — разбор над `useClients`.
     queryFn: () => read(tenantBoundClient(tenantId as string), tenantId as string),
   });
@@ -194,9 +194,7 @@ export function useRestoreClient() {
     ...NEVER_PAUSE,
     mutationFn: async (client: Client) => {
       assertOwnCompany(scope, "Возвращать клиентов в работу");
-      if (scope.role !== "owner" && scope.role !== "dispatcher") {
-        throw new Error("Восстановить клиента может владелец или диспетчер.");
-      }
+      if (scope.role !== "owner") throw new Error("Это может только владелец");
       await restoreClientCached(writeClientOf(scope), client, scope.tenantId, scope.writeOpts);
       return { ...client, deleted_at: null, purge_at: null } satisfies Client;
     },

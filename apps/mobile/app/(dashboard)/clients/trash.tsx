@@ -14,6 +14,9 @@ import { useCurrentRole } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { Screen } from "@/components/ui/Screen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // «УДАЛЁННЫЕ КЛИЕНТЫ» — как «Недавно удалённые» в Фото на iPhone.
 //
@@ -44,7 +47,19 @@ function ClientTrashScreen() {
   // «Стереть навсегда» разрешено только владельцу (гейт в самой мутации).
   // Показывать его диспетчеру значит обещать действие, которое ответит
   // отказом, — предлагать нужно только то, что человек может сделать.
-  const isOwner = useCurrentRole().data === "owner";
+  const role = useCurrentRole().data;
+  const isOwner = role === "owner";
+
+  // ПОЛКА СВОЕЙ БАЗЫ — ТОЛЬКО ВЛАДЕЛЬЦУ (так же решает RLS). Партнёр по ссылке
+  // видел «Пусто» со словами «удалённые лежат здесь» — неправду о чужой базе.
+  if (role && !isOwner) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Удалённые клиенты" />
+        <EmptyState title="Раздел доступен только владельцу" />
+      </Screen>
+    );
+  }
 
   return (
     <HiddenClientsScreen

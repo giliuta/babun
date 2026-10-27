@@ -113,7 +113,7 @@ export function useCancelLocationRequest() {
 /** PostgREST отдаёт отказ RLS английской строкой — переводим частый случай. */
 function friendlyRequestError(message: string): string {
   if (/row-level security|permission denied|42501/i.test(message)) {
-    return "Ссылку выписывает владелец или диспетчер.";
+    return "Это может только владелец";
   }
   return message;
 }
