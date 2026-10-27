@@ -17,5 +17,5 @@ test("огромная сумма — «слишком большая», а не
 });
 
 test("поле остатка не показывает полосу подсказок", () => {
-  assert.match(sheet, /keyboardType="numbers-and-punctuation"\s+autoCorrect=\{false\}\s+spellCheck=\{false\}/);
+  assert.match(sheet, /keyboardType=\{SIGNED_NUMBER_KEYBOARD\}\s+autoCorrect=\{false\}\s+spellCheck=\{false\}/);
 });

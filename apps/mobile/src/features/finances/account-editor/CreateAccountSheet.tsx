@@ -16,6 +16,7 @@ import { setTourReady, tourEvent } from "@/components/tour/tour-store";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { GUTTER } from "@/components/ui/tokens";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
+import { SIGNED_NUMBER_KEYBOARD } from "@/lib/keyboard";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -371,7 +372,7 @@ function AmountInput({
         placeholderTextColor={t.placeholder}
         // Цифры со знаком «−» (остаток бывает в минусе), поэтому не decimal-pad;
         // полоса текстовых подсказок над такой клавиатурой — лишняя.
-        keyboardType="numbers-and-punctuation"
+        keyboardType={SIGNED_NUMBER_KEYBOARD}
         autoCorrect={false}
         spellCheck={false}
         autoComplete="off"
