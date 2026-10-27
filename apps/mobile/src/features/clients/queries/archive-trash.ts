@@ -13,7 +13,7 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { cancelClientReminder } from "@/features/clients/reminders";
+import { dropClientReminder } from "@/features/clients/reminders";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { clientKeys } from "@/lib/client-query-keys";
 import type { ClientWriteTarget } from "./mutations-update";
@@ -48,7 +48,7 @@ export function useTrashClientAsPartner() {
       );
       // «Напомнить» об удалённом клиенте снимается и у партнёра, как у
       // владельца: иначе пуш приходил бы в срок и вёл на удалённую карточку.
-      void cancelClientReminder(id);
+      void dropClientReminder(id);
       void qc.invalidateQueries({ queryKey: clientKeys.all() });
       void qc.invalidateQueries({ queryKey: clientKeys.card(id) });
     },
@@ -139,7 +139,7 @@ export function useArchiveClients() {
       for (const [key, value] of context?.previous ?? []) qc.setQueryData(key, value);
     },
     onSuccess: ({ archivedIds }) => {
-      void Promise.all(archivedIds.map(cancelClientReminder));
+      void Promise.all(archivedIds.map(dropClientReminder));
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientKeys.all() });
