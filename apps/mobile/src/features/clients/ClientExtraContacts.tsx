@@ -35,10 +35,7 @@ import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { ContactFieldRows } from "@/features/clients/extra-contacts/ContactFieldRows";
 import { EXTRA_LABELS, extraLabelText, nextExtraLabel } from "@/features/clients/extra-contacts/extra-labels";
-import {
-  useExtraPhoneFinish,
-  useExtraPhoneTaken,
-} from "@/features/clients/extra-contacts/use-extra-phone-taken";
+import { useExtraPhoneFinish, useExtraPhoneTaken } from "@/features/clients/extra-contacts/use-extra-phone-taken";
 
 // ДОПОЛНИТЕЛЬНЫЕ КОНТАКТЫ КЛИЕНТА — строки блока идентичности под главным
 // номером: ещё номера (`client.phones`), мессенджеры и почта, и один плюс на
@@ -307,6 +304,7 @@ export function ClientExtraContacts({
           keyboardType="phone-pad"
           tabular
           autoFocus
+          live={draft}
           onSave={(v) => commitPending(withHomeCode(v, country))}
           onEditEnd={finishPending}
         />
@@ -352,6 +350,7 @@ export function ClientExtraContacts({
         noCopy={noCopy}
         compact={compact}
         inline={inline}
+        live={draft}
       />
 
       {/* ОДИН ПЛЮС НА ВСЁ: номер, WhatsApp, Telegram,
