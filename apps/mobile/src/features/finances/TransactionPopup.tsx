@@ -316,7 +316,7 @@ export function TransactionPopup({
   }
   if (canDelete) {
     actions.push({
-      label: tx.type === "transfer" ? "Отменить перевод" : "Удалить операцию",
+      label: tx.type === "transfer" ? "Удалить перевод" : "Удалить операцию",
       tone: "danger",
       onPress: handleDelete,
     });

@@ -61,3 +61,13 @@ describe("отмена перевода: слова о минусе", () => {
     assert.match(popup, /deleteTransferAlert\(minusAfterSpend\(/);
   });
 });
+
+describe("отмена перевода — одно слово (F-48)", () => {
+  test("кнопка, вопрос и подтверждение говорят «Удалить перевод»", () => {
+    const popup = readFileSync(path.resolve(here, "../TransactionPopup.tsx"), "utf8");
+    assert.match(popup, /tx\.type === "transfer" \? "Удалить перевод" : "Удалить операцию"/);
+    assert.doesNotMatch(popup, /"Отменить перевод"/);
+    assert.equal(deleteTransferAlert().title, "Удалить перевод?");
+    assert.equal(deleteTransferAlert().confirm, "Удалить перевод");
+  });
+});
