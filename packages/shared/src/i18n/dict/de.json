@@ -5211,5 +5211,7 @@
  "Не удалось вернуть клиента": "Kunde konnte nicht wiederhergestellt werden",
  "Удалить клиента насовсем может только владелец.": "Nur der Inhaber kann einen Kunden endgültig löschen.",
  "Главный": "Haupt-Tag",
- "Карточка": "Karte"
+ "Карточка": "Karte",
+ "{0}Карточка доступна только для чтения; история записей сохранена.": "{0}Die Karte ist schreibgeschützt; der Terminverlauf bleibt erhalten.",
+ "Контактов нет": "Keine Kontakte"
 }

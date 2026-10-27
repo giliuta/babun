@@ -5211,5 +5211,7 @@
  "Не удалось вернуть клиента": "Couldn't restore the client",
  "Удалить клиента насовсем может только владелец.": "Only the owner can delete a client permanently.",
  "Главный": "Main",
- "Карточка": "Card"
+ "Карточка": "Card",
+ "{0}Карточка доступна только для чтения; история записей сохранена.": "{0}The card is read-only; appointment history is kept.",
+ "Контактов нет": "No contacts"
 }

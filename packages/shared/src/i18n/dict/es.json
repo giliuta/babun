@@ -5211,5 +5211,7 @@
  "Не удалось вернуть клиента": "No se pudo restaurar el cliente",
  "Удалить клиента насовсем может только владелец.": "Solo el propietario puede eliminar un cliente definitivamente.",
  "Главный": "Principal",
- "Карточка": "Ficha"
+ "Карточка": "Ficha",
+ "{0}Карточка доступна только для чтения; история записей сохранена.": "{0}La ficha es de solo lectura; el historial de citas se conserva.",
+ "Контактов нет": "Sin contactos"
 }
