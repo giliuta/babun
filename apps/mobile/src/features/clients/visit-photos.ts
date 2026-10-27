@@ -3,7 +3,7 @@ import type { PhotoKind } from "@babun/shared/db/repositories/appointment-photos
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
-// ФОТО СО ВСЕХ ВЫЕЗДОВ КЛИЕНТА — «до/после», снятые командой в записях.
+// ФОТО СО ВСЕХ ВЫЕЗДОВ КЛИЕНТА — снимки команды в записях.
 //
 // Всё, что когда-либо проведено в записях клиента, автоматически попадает
 // во вкладку вложений. Фото визитов
@@ -25,12 +25,6 @@ export interface VisitPhoto {
   kind: PhotoKind;
   created_at: string;
 }
-
-export const KIND_LABEL: Record<PhotoKind, string> = {
-  before: "до работы",
-  after: "после работы",
-  other: "фото",
-};
 
 /** Фото всех записей клиента. `appointmentIds` приходят из уже загруженной
  *  истории визитов — второго запроса за записями не делаем. */
