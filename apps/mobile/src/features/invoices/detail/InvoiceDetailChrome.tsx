@@ -13,6 +13,7 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceMoney } from "@/lib/paper/format";
 import { InvoiceStatusBadge } from "../InvoiceStatusBadge";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 /** «Поделиться PDF» and «⋯» in the invoice page header. */
 export function InvoiceHeaderActions({
@@ -87,35 +88,25 @@ export function InvoiceDetailFooter({
   onIssueReceipt: () => void;
   onShare: () => void;
 }) {
-  const t = useThemeColors();
   // ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в
   // футере): пока документ ждёт денег — «Принять оплату».
   return awaitsPayment && docWrite ? (
-    <View
-      className="px-4 pb-7 pt-3"
-      style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
-    >
+    <PageFooter standalone bar>
       <Button label={paymentLabel} onPress={onPayment} />
-    </View>
+    </PageFooter>
   ) : docWrite && !awaitsPayment && canIssueReceipt ? (
     // Оплачен — главное действие экрана становится «Выписать чек»: чек
     // рождается кнопкой, а не сам.
-    <View
-      className="px-4 pb-7 pt-3"
-      style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
-    >
+    <PageFooter standalone bar>
       <Button label="Выписать чек" onPress={onIssueReceipt} />
-    </View>
+    </PageFooter>
   ) : !docWrite ? null : (
     // ШАГОВ НЕ ОСТАЛОСЬ — ДОКУМЕНТ ОТПРАВЛЯЮТ, как у чека: «Поделиться PDF» внизу
     // одинаково у чека, инвойса и кредит-ноты. Оплачен с чеком, отменён,
     // кредит-нота — внизу «Поделиться PDF».
-    <View
-      className="px-4 pb-7 pt-3"
-      style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
-    >
+    <PageFooter standalone bar>
       <Button label="Поделиться PDF" loading={pdfBusy} onPress={onShare} />
-    </View>
+    </PageFooter>
   );
 }
 

@@ -1,7 +1,8 @@
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import type { InvoiceReason } from "./invoice-rules";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 /* ИТОГ ЖИВЁТ ВНИЗУ И НЕ УЕЗЖАЕТ С ПРОКРУТКОЙ. Кнопка выпуска
    стояла последней строкой формы: чтобы увидеть, на какую сумму
@@ -22,19 +23,12 @@ export function InvoiceEditorFooter({
 }) {
   const t = useThemeColors();
   return (
-    <View
-      className="px-4 pb-7 pt-3"
-      style={{
-        backgroundColor: t.surface,
-        borderTopWidth: 1,
-        borderTopColor: t.separator,
-      }}
-    >
+    <PageFooter standalone bar>
       {error ?? reason ? (
         <Text
           accessibilityRole={error ? "alert" : undefined}
           accessibilityLiveRegion="polite"
-          className="mb-2 text-center text-sm"
+          className="text-center text-sm"
           style={{ color: error || reason?.error ? t.danger : t.sub }}
         >
           {error ?? reason?.text}
@@ -49,6 +43,6 @@ export function InvoiceEditorFooter({
         loading={submitting}
         disabled={submitting || reason !== null}
       />
-    </View>
+    </PageFooter>
   );
 }
