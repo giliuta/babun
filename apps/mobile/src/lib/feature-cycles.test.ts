@@ -19,11 +19,11 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** Feature pairs that still import each other, with the reason they could not be cut. */
 const ALLOWED: Record<string, string> = {
   "appointments<->calendar":
-    "calendar/queries.ts (the appointment data layer) is locked by another session; booking reads it while calendar views open the booking sheets",
+    "the appointment data layer still lives in calendar/queries.ts: booking reads it while calendar views open the booking sheets (cut: move it down to lib/ or appointments/)",
   "calendar<->clients":
-    "calendar/queries.ts is locked; client history reads appointments through it while calendar views read the client list",
+    "client history reads appointments through calendar/queries.ts while calendar views read the client list",
   "calendar<->finances":
-    "calendar/queries.ts is locked; finance home and analytics read appointments while the calendar day-money views use finance data",
+    "finance home and analytics read appointments through calendar/queries.ts while the calendar day-money views use finance data",
   "appointments<->clients":
     "the record's client/object blocks come from clients while the client card reuses booking helpers, prefs and record rights",
   "appointments<->finances":
