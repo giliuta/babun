@@ -64,7 +64,7 @@ export function SummaryToggle({
       // Строка 38pt + зазор 6pt между рядами: цель касания добирает до 44
       // за счёт зазора, вид не меняется (тот же приём, что у Chip).
       hitSlop={{ top: 3, bottom: 3 }}
-      className="flex-row items-center rounded-[10px] px-3.5 active:opacity-70"
+      className="flex-row items-center px-3.5 active:opacity-70"
       style={{
         // РОВНО ПОЛОВИНА РЯДА, А НЕ «СКОЛЬКО ПОПРОСИТ СОДЕРЖИМОЕ». Ширину
         // задаёт сетка, а не длина подписи: иначе «Счета | Документы» едут
@@ -78,6 +78,7 @@ export function SummaryToggle({
         flexShrink: 1,
         minWidth: 0,
         minHeight: 38,
+        borderRadius: t.radius.card,
         opacity: dimmed ? 0.4 : 1,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
         // подсветка, но не спорит со значением, набранным тем же цветом.
