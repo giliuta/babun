@@ -1,6 +1,6 @@
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
-import { queueDepth } from "@babun/shared/db/cache/sql";
+import { memberQueueDepth, queueDepth } from "@babun/shared/db/cache/sql";
 import { confirmAction } from "@/lib/confirm";
 import { queryClient } from "@/lib/query-client";
 import { unsentChangesNote } from "@/lib/unsent-changes";
@@ -59,7 +59,9 @@ let intentionalSignOutBarrier: Promise<void> | null = null;
  *  nothing would be lost (an unreadable cache has nothing to lose either). */
 export async function unsentChangesNow(): Promise<string | null> {
   try {
-    return unsentChangesNote(await queueDepth());
+    // Обе очереди: правки таблиц владельца и отложенные вызовы сотрудника —
+    // выход стирает их вместе.
+    return unsentChangesNote((await queueDepth()) + (await memberQueueDepth()));
   } catch {
     return null;
   }

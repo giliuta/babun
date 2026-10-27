@@ -36,6 +36,7 @@ import { RefreshCw, Shield } from "lucide-react-native";
 import { useQueueDepth } from "@babun/shared/sync";
 import type { QueuedOp } from "@babun/shared/db/cache/sql";
 import { isQueuedOpVisibleForTenant } from "@/lib/sync-queue-policy";
+import { useMemberQueue } from "@/lib/member-queue/use-member-queue";
 import { useTenantId } from "@/lib/tenant";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
@@ -69,9 +70,11 @@ export default function CabinetHome() {
     (op: QueuedOp) => isQueuedOpVisibleForTenant(op, tenantId),
     [tenantId],
   );
-  const syncDepth = useQueueDepth(visibleOp);
-  // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
-  const showSync = role === "owner" || role === "dispatcher";
+  // Правки сотрудника без сети — своя очередь (`lib/member-queue`), та же строка.
+  const syncDepth = useQueueDepth(visibleOp) + useMemberQueue(tenantId).length;
+  // Очередь выгрузки видят все, кто правит без сети: владелец — правки
+  // таблиц, сотрудник — отложенные вызовы дверей сервера.
+  const showSync = role === "owner" || role === "dispatcher" || role === "master";
   // Прокрутка — для обучения: строки внизу оно докручивает на вид.
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);

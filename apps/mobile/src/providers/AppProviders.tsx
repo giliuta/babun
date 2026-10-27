@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase";
 import { evictCompanyFromDevice } from "@/lib/evict-company";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { startSyncRuntime } from "@/lib/sync-runtime";
+import { startMemberQueueRuntime } from "@/lib/member-queue/runtime";
+import { memberQueueHost } from "@/features/appointments/member-queue-senders";
 import { startMemberSyncBridge, startSyncBridge } from "@/lib/sync-bridge";
 import { useMyAccess } from "@/session/access-queries";
 import { useTenantId } from "@/lib/tenant";
@@ -40,6 +42,12 @@ function SyncRuntimeMount() {
       return;
     }
     return startSyncRuntime(tenantId);
+  }, [role, tenantId]);
+  // У сотрудника своя очередь: вызовы дверей сервера, отложенные без сети
+  // (`lib/member-queue`). Только на телефоне — она живёт в SQLite.
+  useEffect(() => {
+    if (Platform.OS === "web" || !tenantId || role !== "master") return;
+    return startMemberQueueRuntime(memberQueueHost(queryClient));
   }, [role, tenantId]);
   return null;
 }

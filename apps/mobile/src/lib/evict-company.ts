@@ -1,6 +1,7 @@
 import { getStorage } from "@babun/shared/storage";
 import {
   cacheClearTenant,
+  clearMemberOpsOfTenant,
   dequeueAll,
   removeOp,
 } from "@babun/shared/db/cache/sql";
@@ -141,6 +142,7 @@ async function evict(tenantId: string): Promise<boolean> {
     for (const id of queuedOpIdsOfCompany(await dequeueAll(), tenantId)) {
       await removeOp(id);
     }
+    await clearMemberOpsOfTenant(tenantId);
   } catch {
     // Локальной базы нет (веб, до начальной загрузки) — стирать нечего.
   }

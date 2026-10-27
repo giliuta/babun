@@ -1,6 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { uploadAttachment } from "@/features/clients/card-attachments";
-import { RetryableAppointmentPhotoUploadError, uploadAppointmentAssets } from "./appointment-photos";
+import {
+  RetryableAppointmentPhotoUploadError,
+  uploadAppointmentAssets,
+  uploadOrQueueMemberPhotos,
+} from "./appointment-photos";
+import { isMemberQueueRunning } from "@/lib/member-queue/runtime";
 import type { PendingFile } from "./appointment-files";
 import { clientKeys } from "@/lib/client-query-keys";
 
@@ -24,12 +29,15 @@ export async function uploadPendingFiles(args: {
   const media = args.files.filter((f) => f.kind === "media");
   const docs = args.files.filter((f) => f.kind === "document");
   if (media.length > 0) {
+    const upload = {
+      tenantId: args.tenantId,
+      appointmentId: args.appointmentId,
+      input: { assets: media.map((f) => f.asset), kind: "other" as const, locationId: args.locationId },
+    };
     try {
-      await uploadAppointmentAssets({
-        tenantId: args.tenantId,
-        appointmentId: args.appointmentId,
-        input: { assets: media.map((f) => f.asset), kind: "other", locationId: args.locationId },
-      });
+      // У сотрудника фото без сети ждут в очереди телефона — за самой
+      // записью, если и она ещё не дошла (`lib/member-queue`).
+      await (isMemberQueueRunning() ? uploadOrQueueMemberPhotos(upload) : uploadAppointmentAssets(upload));
     } catch (error) {
       // Не уехало — только то, что повтор отдал назад: уже выгруженные
       // файлы лежат на записи, и назвать их «не загружены» значило бы
