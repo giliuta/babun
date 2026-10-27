@@ -160,6 +160,11 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               {total.label}
             </Text>
             <Text
+              // Сумма — одной строкой: «€36,000.0 / 0» на двух строках читалась
+              // как две цифры. Не влезла — шрифт ужимается, а не переносится.
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={{
                 width: COL.amount,
                 fontSize: total.grand ? 12 : 10,

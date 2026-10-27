@@ -99,7 +99,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
     .totals { margin-left: auto; margin-top: 8px; border-collapse: collapse; }
     .totals td { padding: 3px 12px; font-size: 14px; }
     .total-label { text-align: right; color: #374151; }
-    .total-value { width: 124px; text-align: right; font-weight: 600; color: #111827; }
+    .total-value { min-width: 124px; text-align: right; font-weight: 600; color: #111827; white-space: nowrap; }
     .grand td { padding: 10px 12px; font-size: 17px; font-weight: 700; color: #111827; }
     .grand .total-value { border: 1px solid #e5e7eb; }
     .section { margin-top: 26px; break-inside: avoid; }
