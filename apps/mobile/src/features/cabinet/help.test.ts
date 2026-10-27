@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { CALENDAR_PRICE, euro } from "@/session/calendar-price";
 import {
   HELP_FAQ,
   SUPPORT_CONTACTS,
@@ -120,4 +121,19 @@ test("письмо поддержки называет настоящее уст
   // С Android письмо подписывалось «Устройство: iPhone».
   assert.match(supportMailBody("1.0.3", "Android 36"), /Устройство: Android 36/);
   assert.match(supportMailBody("1.0.3"), /Устройство: iPhone/);
+});
+
+// Ответы «Помощи» не называют того, чего в продукте больше нет: лестницу
+// тарифов, компании и лимит партнёров.
+test("в ответах нет снятых тарифов, компаний и лимита партнёров", () => {
+  for (const item of HELP_FAQ) {
+    const text = `${item.question} ${item.answer}`;
+    assert.doesNotMatch(text, /Соло|Про\b|Макс|€6\.99|€29\.99|€59\.99/, item.id);
+    assert.doesNotMatch(text, /компани/i, item.id);
+    assert.doesNotMatch(text, /до \d+ партн|лимит партн/i, item.id);
+  }
+  const tariff = HELP_FAQ.find((item) => item.id === "tariff");
+  // Цена в ответе — та же, что на странице «Тариф» и в Stripe.
+  assert.ok(tariff?.answer.includes(`${euro(CALENDAR_PRICE.monthly)} в месяц за каждый рабочий календарь`));
+  assert.ok(tariff?.answer.includes(`${euro(CALENDAR_PRICE.yearlyMonthly)} в месяц при оплате за год`));
 });
