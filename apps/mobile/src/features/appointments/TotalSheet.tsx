@@ -203,7 +203,9 @@ export function TotalSheet({
               )
             ))}
             {/* СУММА РАБОТ И СКИДКА — последняя строка перечня. Справа — цена работ после скидки. */}
-            {discount ? (
+            {/* У «своей суммы» скидка не действует — её строки нет (иначе
+                она печатала «−20» как разницу услуг и вписанного числа). */}
+            {discount && !customTotal ? (
               <ServicesRow
                 discountValue={discount.value}
                 onDiscountValueChange={discount.onValueChange}

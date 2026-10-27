@@ -180,8 +180,10 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
     color_override: colorOverride,
     // Метка записи: null — «как у дня», строка — своя.
     city,
-    global_discount: globalDiscount,
-    discount_amount: discountAmount,
+    // У «своей суммы» скидка ничего не снимает (итог — вписанное число), и
+    // хранить её значит врать: в базе итог ≠ услуги − скидка. Обнуляем.
+    global_discount: customTotal ? null : globalDiscount,
+    discount_amount: customTotal ? 0 : discountAmount,
     // Налог пишется только у рабочей записи с расчётной суммой: у старой
     // «своей суммы» его не выбирали, и тихо навешивать нельзя.
     ...(kind === "work" && !customTotal

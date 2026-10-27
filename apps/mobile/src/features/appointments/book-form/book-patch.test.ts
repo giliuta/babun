@@ -114,6 +114,16 @@ describe("buildBookPatch — work", () => {
     assert.equal("vat_mode" in custom, false);
   });
 
+  test("a custom total drops the discount: it takes nothing off a typed sum", () => {
+    const discount = { type: "fixed" as const, value: 10 };
+    const custom = buildBookPatch(input({ customTotal: true, globalDiscount: discount, discountAmount: 10 }));
+    assert.equal(custom.global_discount, null);
+    assert.equal(custom.discount_amount, 0);
+    const computed = buildBookPatch(input({ globalDiscount: discount, discountAmount: 10 }));
+    assert.deepEqual(computed.global_discount, discount);
+    assert.equal(computed.discount_amount, 10);
+  });
+
   test("the SMS reminder needs a phone, or a hidden-contacts client", () => {
     const on = (client: BookPatchInput["client"]) =>
       buildBookPatch(input({ reminderOn: true, client })).reminder_enabled;
