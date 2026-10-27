@@ -96,6 +96,11 @@ export default function NewReceiptScreen() {
   // выписанного чека номер уже дан — строки нет.
   const companyId =
     source.invoiceCompanyId ?? draft.companyId ?? defaultCompany(companies.data ?? [])?.id ?? null;
+  // НЕ-ВЛАДЕЛЕЦ РЕКВИЗИТЫ НЕ ВЫБИРАЕТ — их решает сервер, как у инвойса:
+  // юрлицо команды платежа, иначе основное. Присланное основное у партнёра
+  // команды со своим юрлицом сервер отклонит («Документ команды выставляется
+  // от реквизитов этой команды»).
+  const sentCompanyId = owner ? companyId : null;
   const year = Number(draft.date.slice(0, 4));
   const series = useNextInvoiceSeries(year, companyId, owner && !editing, "receipt");
   const numberTarget =
@@ -178,7 +183,7 @@ export default function NewReceiptScreen() {
         ? await issueForPayment.mutateAsync({
             transactionId: paymentTx.id,
             lines,
-            companyId,
+            companyId: sentCompanyId,
             issuedOn: draft.date,
             locationId: draft.locationId,
             clientRequisitesId: draft.clientRequisitesId,
