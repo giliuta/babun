@@ -42,7 +42,7 @@ export function useServicesList(teamId: string | undefined) {
   const pageTable = useServicesPageTable(isMaster);
   const ownerLive = useServices();
   const servicesQuery = isMaster ? pageTable : ownerLive;
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const allServices = useMemo(
     () =>
       isMaster

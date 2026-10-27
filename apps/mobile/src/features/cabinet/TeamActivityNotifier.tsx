@@ -51,7 +51,7 @@ export function TeamActivityNotifier() {
   const role = useDataRole().data;
   const { session } = useSession();
   const me = session?.user?.id ?? null;
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const teamsRef = useRef(teams);
   teamsRef.current = teams;
 

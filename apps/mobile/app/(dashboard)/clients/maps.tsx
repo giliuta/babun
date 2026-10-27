@@ -30,7 +30,7 @@ function ClientMapsScreen() {
   // без команды — набор компании.
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamId = team || null;
-  const { data: ownTeams = [] } = useTeams();
+  const { data: ownTeams = [] } = useTeams({ display: true });
   const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
   // «Только видит»: галки и порядок как есть, без правки.
   const readOnly = useClientSettingLevel("maps", teamId) !== "write";

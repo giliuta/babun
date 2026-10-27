@@ -88,7 +88,7 @@ export function BulkSmsSheet({
   const toast = useToast();
   const role = useCurrentRole().data;
   const account = useSmsAccount().data;
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const bulk = useSendSmsBulk();
   const senders = account?.senders ?? {};
   const senderTeams = Object.keys(senders);

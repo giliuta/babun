@@ -43,7 +43,7 @@ function ClientSmsScreen() {
   const { data: client } = useClient(id);
   const access = useCardAccess(client, false);
   const country = useDefaultCountry(client?.team_id ?? null);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   // Компания карточки: клиент работодателя читается под её заголовком.
   const cardTenantId = useClientsScopeOrNull()?.tenantId ?? null;
   const log = useClientSms(id, HISTORY_LIMIT, cardTenantId);

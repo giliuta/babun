@@ -12,6 +12,7 @@ import { firstCalendarFromRpc } from "@/features/reference/first-calendar";
 import { teamsQueryKey } from "@/lib/company-query-keys";
 import { useDataRole, type UserRole } from "@/session/tenant";
 import { useMirror } from "@/session/mirror-state";
+import { useTeamName } from "@/session/team-name";
 import { operationalTeamJsonToTeam } from "@/features/settings/master-reference";
 import { pickLiveTeams } from "../reference-select";
 import { referenceKeys } from "../query-keys";
@@ -48,9 +49,17 @@ export async function fetchTeams(
   return data;
 }
 
-export function useTeams(opts?: { includeInactive?: boolean }) {
+export function useTeams(opts?: {
+  includeInactive?: boolean;
+  /** ИМЯ ДЛЯ ПОКАЗА (`session/team-name.ts`): команда, названная адресом
+   *  почты, подписана именем человека или «Личный», как в чипе календаря.
+   *  Только экранам, которые имя показывают; правка имени берёт сырое. */
+  display?: boolean;
+}) {
   const { tenantId, role: companyRole, ready, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
+  const display = !!opts?.display;
+  const teamName = useTeamName();
   // ЗЕРКАЛО ПОКАЗЫВАЕТ ТОЛЬКО ЕГО КАЛЕНДАРИ. Список приходит по токену
   // ВЛАДЕЛЬЦА, то есть полный: в предпросмотре лента показывала команды, к
   // которым человек не прикреплён вовсе, — а
@@ -63,12 +72,13 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
   const select = useCallback(
     (rows: Team[]) => {
       const live = includeInactive ? rows : pickLiveTeams(rows);
-      return attached ? live.filter((team) => attached.has(team.id)) : live;
+      const shown = attached ? live.filter((team) => attached.has(team.id)) : live;
+      return display ? shown.map((team) => ({ ...team, name: teamName(team.name) })) : shown;
     },
     // Набор прикреплений меняется вместе с режимом; строка — чтобы новый
     // Set каждого рендера не пересобирал `select` впустую.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [includeInactive, attached ? [...attached].sort().join(",") : null],
+    [includeInactive, display, teamName, attached ? [...attached].sort().join(",") : null],
   );
   // ДАННЫЕ ЗЕРКАЛА ЧИТАЕТ ВЛАДЕЛЕЦ («права его, данные ваши»). Дверь команд
   // сотрудника (`list_operational_teams_safe`) по токену владельца отдаёт

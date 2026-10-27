@@ -70,7 +70,7 @@ export default function MastersScreen() {
     ],
     [allMasters],
   );
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
 
   const [search, setSearch] = useState("");

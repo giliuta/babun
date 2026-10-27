@@ -74,7 +74,7 @@ export function SmsSendSheet({
   const toast = useToast();
   const send = useSendSmsViaService();
   const service = useSmsServiceFor(context);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const role = useCurrentRole().data;
 
   // ОТ КАКОЙ КОМАНДЫ: у записи — её команда; без записи —

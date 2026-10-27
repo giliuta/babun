@@ -79,7 +79,7 @@ export function SmsClientBlock({
     [messages],
   );
   const more = moreLabel(messages.length, recent.length);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
   const openAll = () => {
     haptics.tap();
