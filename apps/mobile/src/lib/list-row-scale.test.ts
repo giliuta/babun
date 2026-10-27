@@ -6,8 +6,7 @@ import { LIST_ROW } from "@/components/ui/tokens";
 
 // СТРОКА СПИСКА — ОДНА РОЛЬ (владелец выбрал 15 / 13 / 52). Эталон —
 // шторка выбора `SelectRow`; остальные списки берут `LIST_ROW`, а не числа.
-// Список растёт: строка клиентов и строка события агенды встают сюда, когда
-// их переведут (`ClientRow`, `EventRow`).
+// Новый список встаёт сюда, как только переведён на `LIST_ROW`.
 
 const src = (path: string) => readFileSync(join(__dirname, "..", "..", path), "utf8");
 
@@ -17,6 +16,7 @@ const ROW_FILES = [
   "src/features/access/PeopleRows.tsx",
   "app/(dashboard)/cabinet/people/index.tsx",
   "src/features/services/price-list/ServicePriceRow.tsx",
+  "src/features/clients/ClientRow.tsx",
 ];
 
 describe("строка списка", () => {
