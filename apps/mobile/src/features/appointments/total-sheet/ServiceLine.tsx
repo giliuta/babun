@@ -4,7 +4,7 @@ import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { COL_GAP, COL_PRICE, COL_QTY, COL_SUM } from "./columns";
-import { unitFromRowTotal } from "./line-math";
+import { moneyCellText, unitFromRowTotal } from "./line-math";
 import { QtyStepper } from "./QtyStepper";
 
 /** ШАПКА КОЛОНОК — ВМЕСТО ПОДПИСЕЙ В КАЖДОЙ СТРОКЕ (название, количество, цена за единицу и
@@ -63,8 +63,8 @@ export function ServiceLine({
   // в запись на каждый символ, а показывает поле набранное.
   const [unitDraft, setUnitDraft] = useState<string | null>(null);
   const [totalDraft, setTotalDraft] = useState<string | null>(null);
-  const unitShown = unitDraft ?? String(Number(line.pricePerUnit.toFixed(2)));
-  const totalShown = totalDraft ?? String(Number(line.total.toFixed(2)));
+  const unitShown = unitDraft ?? moneyCellText(line.pricePerUnit);
+  const totalShown = totalDraft ?? moneyCellText(line.total);
 
   // ОДНА СТРОКА НА УСЛУГУ, ЧЕТЫРЕ КОЛОНКИ. Цветная точка услуги и её длительность второй
   // строкой здесь лишние. Длительность живёт в строке

@@ -21,3 +21,11 @@ export function clampedDiscountText(
   if (!(value > cap)) return null;
   return Number.isInteger(cap) ? String(cap) : cap.toFixed(2);
 }
+
+/** Число денежной ячейки «Итого» — до цента и с обоими знаками: «12.5» в
+ *  ячейке рядом с «€12,50» строкой ниже читалось как другая сумма. Целое
+ *  остаётся целым — поле не обрастает «,00» на каждой круглой цене. */
+export function moneyCellText(value: number): string {
+  const cents = Math.round(value * 100) / 100;
+  return Number.isInteger(cents) ? String(cents) : cents.toFixed(2);
+}
