@@ -80,7 +80,8 @@ function friendly(message: string): string {
   if (/row-level security|permission denied/i.test(message)) {
     return NO_RIGHT;
   }
-  return message;
+  // Прочее — словами, а не текстом сервера («client_sources: TypeError…»).
+  return "Не удалось сохранить";
 }
 
 function useInvalidate() {
