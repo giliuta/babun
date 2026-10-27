@@ -3,7 +3,6 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { X } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { useReduceMotion } from "@/lib/reduce-motion";
-import { chooseOption } from "@/lib/choose";
 import { BUBBLE_SIDE, type BubbleSide } from "./tour-geometry";
 import { finishTour, nextStep, tourReady, type TourChapter, type TourStep } from "./tour-store";
 import { SPOT_MOVE_MS } from "./TourSpotlight";
@@ -44,6 +43,10 @@ export function TourBubble({
   const canNext = tourReady(step.needs);
 
   const close = async () => {
+    // ЛЕНИВО, А НЕ ИМПОРТОМ СВЕРХУ: `choose` тянет лист выбора, лист —
+    // `BottomSheet`, а тот — окно обучения с этим пузырём. Статический импорт
+    // замыкал круг загрузки модулей, и порядок мог отдать здесь `undefined`.
+    const { chooseOption } = await import("@/lib/choose");
     const picked = await chooseOption("Завершить обучение?", [
       { label: `Завершить обучение ${chapter.about}` },
       { label: "Завершить всё обучение" },
