@@ -1,14 +1,16 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { House, Tag } from "lucide-react-native";
 import type { Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { GUTTER } from "@/components/ui/tokens";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   SELECT_SHEET_RATIO,
   SelectList,
   SelectRow,
+  SelectSearch,
 } from "@/components/ui/select-rows";
 import { iconPreset } from "@/components/ui/icon-set";
 import { addressLines } from "@/features/clients/object-address";
@@ -19,9 +21,10 @@ import { useLocationLabels } from "@/features/settings/local-settings";
 // открывает замену объекта, а внизу — «Добавить объект».
 //
 // Диалект — `ClientPickerSheet`: строка 52pt на подложке, кружок 28pt слева,
-// галка у выбранного, тап выбирает и закрывает. Поиска нет: объектов у
-// клиента два-три, и список виден целиком. Основной — первым, как на
-// карточке: порядок и есть признак основного.
+// галка у выбранного, тап выбирает и закрывает. У клиента объектов два-три,
+// и поиска нет; событие без клиента получает объекты ВСЕЙ компании — там их
+// сотни, и поиск появляется, как только строк больше десятка (канон 5.2).
+// Основной — первым, как на карточке: порядок и есть признак основного.
 //
 // «ДОБАВИТЬ ОБЪЕКТ» — ЕДИНСТВЕННАЯ КНОПКА ЛИСТА, в `footer`: то самое
 // действие, ради которого сюда идут, когда нужного объекта нет. Открывает
@@ -70,6 +73,19 @@ export function ObjectPickerSheet({
       ),
     [locations],
   );
+  const [q, setQ] = useState("");
+  const searchable = ordered.length > 10;
+  const needle = q.trim().toLowerCase();
+  const shown = useMemo(
+    () =>
+      !searchable || !needle
+        ? ordered
+        : ordered.filter((loc) =>
+            [loc.address, loc.label, loc.note, ownerNameFor?.(loc)]
+              .some((v) => (v ?? "").toLowerCase().includes(needle)),
+          ),
+    [ordered, searchable, needle, ownerNameFor],
+  );
   return (
     <BottomSheet
       padded={false}
@@ -98,8 +114,18 @@ export function ObjectPickerSheet({
         ) : undefined
       }
     >
+      {searchable ? (
+        <SelectSearch
+          value={q}
+          onChange={setQ}
+          placeholder="Поиск"
+          accessibilityLabel="Поиск"
+          onClear={() => setQ("")}
+        />
+      ) : null}
+      {shown.length === 0 ? <EmptyState title="Ничего не найдено" /> : null}
       <SelectList>
-        {ordered.map((loc) => {
+        {shown.map((loc) => {
           // КАК СТРОКА ОБЪЕКТА: в заголовке адрес, под ним тип словом
           // и точный адрес; плитка — вид типа, без типа — домик. Тип — только
           // заведённый в справочнике: метка удалённого типа объект не красит.
