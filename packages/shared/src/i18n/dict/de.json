@@ -4103,6 +4103,7 @@
  "Турецкая лира": "Türkische Lira",
  "Туркменский манат": "Turkmenistan-Manat",
  "Тяните запись · тап по пустому месту — готово": "Termin ziehen · auf freie Stelle tippen — fertig",
+ "У владельца изменения без связи сохраняются на телефоне и отправляются, когда связь вернётся; очередь — в Кабинет → Синхронизация. У сотрудника правка записи без связи пока не сохраняется: дождитесь сети и повторите. Пока связь есть, календарь обновляется сам — перенос от диспетчера видно сразу.": "Beim Inhaber werden Änderungen ohne Verbindung auf dem Telefon gespeichert und gesendet, sobald die Verbindung zurück ist; die Warteschlange liegt unter Büro → Synchronisierung. Bei Mitarbeitern wird eine Änderung am Termin ohne Verbindung noch nicht gespeichert: Warten Sie auf das Netz und versuchen Sie es erneut. Solange eine Verbindung besteht, aktualisiert sich der Kalender selbst — eine Verschiebung durch den Disponenten ist sofort sichtbar.",
  "У дубля {0} — клиента у них не сменить, пока оплата не возвращена. Объединить пока нельзя": "Das Duplikat hat {0} — deren Kunde lässt sich erst nach Erstattung der Zahlung ändern. Zusammenführen noch nicht möglich",
  "У дубля есть свои люди — уберите их там свайпом «Убрать» и привяжите здесь": "Das Duplikat hat eigene Personen — entfernen Sie sie dort per Wischen „Entfernen“ und verknüpfen Sie sie hier",
  "У записи был возврат оплаты — она остаётся в истории расчётов, удалить её нельзя.": "Für den Termin gab es eine Erstattung — er bleibt im Zahlungsverlauf und kann nicht gelöscht werden.",

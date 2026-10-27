@@ -4103,6 +4103,7 @@
  "Турецкая лира": "Turkish lira",
  "Туркменский манат": "Turkmenistani manat",
  "Тяните запись · тап по пустому месту — готово": "Drag the appointment · tap an empty spot to finish",
+ "У владельца изменения без связи сохраняются на телефоне и отправляются, когда связь вернётся; очередь — в Кабинет → Синхронизация. У сотрудника правка записи без связи пока не сохраняется: дождитесь сети и повторите. Пока связь есть, календарь обновляется сам — перенос от диспетчера видно сразу.": "For the owner, changes made offline are kept on the phone and sent when the connection returns; the queue is in Office → Sync. For an employee, an offline edit to a record is not saved yet: wait for the network and try again. While you are online, the calendar updates by itself — a reschedule by the dispatcher shows up at once.",
  "У дубля {0} — клиента у них не сменить, пока оплата не возвращена. Объединить пока нельзя": "The duplicate has {0} – their client can't be changed until the payment is refunded. Can't merge yet",
  "У дубля есть свои люди — уберите их там свайпом «Убрать» и привяжите здесь": "The duplicate has its own people – remove them there by swiping “Remove” and link them here",
  "У записи был возврат оплаты — она остаётся в истории расчётов, удалить её нельзя.": "This appointment had a refund – it stays in the payment history and can't be deleted.",
