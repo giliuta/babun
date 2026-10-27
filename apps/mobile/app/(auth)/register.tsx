@@ -24,13 +24,14 @@ import { getPendingInvitationToken } from "@/features/settings/pending-invitatio
 import { legalLang } from "@/features/legal/legal-texts";
 
 // «Создать аккаунт» — name/email/password inline (chained return key).
-// Non-functional OAuth placeholders are not shown. Terms is a one-line legal note.
+// Кнопок Apple и Google здесь нет: они стоят на экране входа и сами заводят
+// аккаунт. Terms is a one-line legal note.
 // После отправки — «Введите код» из письма Babun (EmailCodeCard); верный код
 // сразу открывает календарь. Мастера «название бизнеса / род занятий» больше
 // нет: имя аккаунта — первое поле этой формы.
-// НА iPhone — ТОЛЬКО ПО ПРИГЛАШЕНИЮ (App Review, `CAN_SIGN_UP_HERE`).
-// Ссылка с экрана входа убрана, а прямой переход сюда без приглашения
-// возвращает на вход: аккаунт компании заводится на babun.app.
+// ГДЕ МОЖНО ЗАВЕСТИ АККАУНТ, РЕШАЕТ `CAN_SIGN_UP_HERE`: где флаг выключен,
+// регистрация открывается только по приглашению, а прямой переход сюда без
+// него возвращает на вход.
 export default function RegisterRoute() {
   const [allowed, setAllowed] = useState<boolean | null>(
     CAN_SIGN_UP_HERE ? true : null,
