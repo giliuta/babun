@@ -142,17 +142,32 @@ export function useSetSituationColor(teamId: string | null | undefined) {
     ...save,
     // Патч цвета ОДНОЙ ситуации переписывает палитру целиком — основа то, что
     // на экране (с заводскими), иначе первая правка стёрла бы соседние.
-    mutate: (input: { situation: PaletteKey; color: string | null }) => {
+    /** `remember` — цвет, который случай держал до выключения: пишется в
+     *  `<ключ>_was` и вернётся при включении. */
+    mutate: (input: { situation: PaletteKey; color: string | null; remember?: string | null }) => {
       const stored = base.palette;
+      const remembered = Object.fromEntries(
+        Object.entries(stored ?? {}).filter(([key]) => key.endsWith("_was")),
+      ) as RecordColorPalette;
       patch({
         palette: {
+          ...remembered,
           ...paletteWithDefaults(stored ?? undefined),
           [RECORD_CANCELLED_KEY]: storedOr(stored, RECORD_CANCELLED_KEY, CANCELLED_DEFAULT),
           [RECORD_PAID_KEY]: storedOr(stored, RECORD_PAID_KEY, PAID_DEFAULT),
           [RECORD_PREPAID_KEY]: storedOr(stored, RECORD_PREPAID_KEY, PREPAID_DEFAULT),
           [input.situation]: input.color,
+          ...(input.remember !== undefined ? { [`${input.situation}_was` as const]: input.remember } : {}),
         },
       });
     },
   };
+}
+
+/** Цвет, который выключенный случай держал до выключения; `null` — не было. */
+export function useRememberedColor(
+  teamId: string | null | undefined,
+): (situation: PaletteKey) => string | null {
+  const palette = useDesignBase(teamId).palette;
+  return (situation) => palette?.[`${situation}_was` as const] ?? null;
 }
