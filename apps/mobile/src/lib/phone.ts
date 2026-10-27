@@ -70,7 +70,21 @@ export function dialPrefix(code: CountryCode): string {
 export function isDialOnly(value: string, code: CountryCode): boolean {
   const digits = (value ?? "").replace(/\D/g, "");
   if (!digits) return true;
-  return digits === countryDialCode(code).replace(/\D/g, "");
+  if (digits === countryDialCode(code).replace(/\D/g, "")) return true;
+  return isBareDialCode(value);
+}
+
+/** Коды всех стран — без номера. */
+const ALL_DIAL_CODES = new Set(getCountries().map((c) => getCountryCallingCode(c)));
+
+/** В поле только «+N», где N — код какой-либо страны: человек стёр номер до
+ *  кода чужой страны («+30»). Это не номер, а то же пустое поле, что «+357» у
+ *  кипрской команды. */
+export function isBareDialCode(value: string): boolean {
+  const v = (value ?? "").trim();
+  if (!v.startsWith("+")) return false;
+  const digits = v.replace(/\D/g, "");
+  return digits.length > 0 && ALL_DIAL_CODES.has(digits);
 }
 
 /**
