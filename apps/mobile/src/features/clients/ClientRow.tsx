@@ -1,9 +1,6 @@
-import { memo, useRef } from "react";
+import { memo } from "react";
 import type React from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from "react-native-gesture-handler/ReanimatedSwipeable";
 import {
   Ban,
   Bell,
@@ -15,7 +12,7 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { haptics } from "@/lib/haptics";
-import { ICON } from "@/components/ui/tokens";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useThemeColors } from "@/theme/colors";
 import { formatShortDateRu } from "@/features/clients/format";
 import { formatPhoneForDisplay } from "@/lib/phone";
@@ -49,7 +46,6 @@ function ClientRowView({
   onLongPress,
   onRemind,
   onDelete,
-  onSwipeOpen,
   trailing,
   source,
 }: {
@@ -71,8 +67,6 @@ function ClientRowView({
   onRemind?: () => void;
   /** Свайп влево: «Удалить» (спрашивает подтверждение сам). */
   onDelete?: () => void;
-  /** Открылся свайп этой строки — список закрывает предыдущий. */
-  onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
   trailing?: React.ReactNode;
   /** Компания клиента, если она не компания экрана (строка работодателя в
@@ -85,7 +79,6 @@ function ClientRowView({
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry(client.team_id ?? null);
-  const swipeRef = useRef<SwipeableMethods | null>(null);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
   // Instagram — тоже способ связи: кнопка есть и без номера.
   const hasInstagram = !!client.instagram_username?.trim();
@@ -265,81 +258,38 @@ function ClientRowView({
   // телефона: ни один из глаголов номера не требует.
   // Без глаголов свайпа (корзина, нет прав) строка остаётся просто строкой.
   if (selectionMode || (!onRemind && !onDelete)) return row;
-  const closeSwipe = () => swipeRef.current?.close();
+  // Кромки — общий `SwipeRow`: тот же жест, ширина и подпись, что у всех
+  // строк продукта, и «открыт один ряд на экран» держит он сам.
   return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      friction={2}
-      rightThreshold={44}
-      leftThreshold={44}
-      overshootRight={false}
-      overshootLeft={false}
-      // Мёртвая зона у левого края: на всех остальных экранах эта же моторика
-      // означает системное «назад».
-      dragOffsetFromLeftEdge={30}
-      // Открытым может быть только ОДИН свайп: иначе на экране две-три
-      // раскрытые строки, и следующий тап попадает не туда, куда целились.
-      onSwipeableWillOpen={() => {
-        haptics.tap();
-        onSwipeOpen?.(swipeRef.current);
-      }}
-      renderLeftActions={
-        onRemind
-          ? () => (
-              <Pressable
-                onPress={() => {
-                  closeSwipe();
-                  haptics.tap();
-                  onRemind();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
-                className="w-[88px] items-center justify-center gap-1"
-                style={{ backgroundColor: t.warning }}
-              >
-                <Bell color="#fff" size={ICON.sm} />
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className="text-[11px] font-semibold"
-                  style={{ color: "#fff" }}
-                >
-                  Напомнить
-                </Text>
-              </Pressable>
-            )
+    <SwipeRow
+      label={onDelete ? "Удалить" : undefined}
+      color={t.danger}
+      icon={Trash2}
+      accessibilityLabel={`Удалить — ${client.full_name || client.phone}`}
+      // Удаление спрашивает подтверждение само — поэтому оно допустимо
+      // у пальца, а полного свайпа здесь нет вовсе.
+      onAction={
+        onDelete
+          ? () => {
+              haptics.warning();
+              onDelete();
+            }
           : undefined
       }
-      renderRightActions={
-        onDelete
-          ? () => (
-              // Удаление спрашивает подтверждение само — поэтому оно допустимо
-              // у пальца, а полного свайпа здесь нет вовсе.
-              <Pressable
-                onPress={() => {
-                  closeSwipe();
-                  haptics.warning();
-                  onDelete();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Удалить — ${client.full_name || client.phone}`}
-                className="w-[88px] items-center justify-center gap-1"
-                style={{ backgroundColor: t.danger }}
-              >
-                <Trash2 color="#fff" size={ICON.sm} />
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className="text-[11px] font-semibold"
-                  style={{ color: "#fff" }}
-                >
-                  Удалить
-                </Text>
-              </Pressable>
-            )
+      leading={
+        onRemind
+          ? {
+              label: "Напомнить",
+              color: t.warning,
+              icon: Bell,
+              accessibilityLabel: `Напомнить — ${client.full_name || client.phone}`,
+              onAction: onRemind,
+            }
           : undefined
       }
     >
       {row}
-    </ReanimatedSwipeable>
+    </SwipeRow>
   );
 }
 

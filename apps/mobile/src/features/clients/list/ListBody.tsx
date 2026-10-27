@@ -32,7 +32,6 @@ export function ListBody({ list }: { list: ClientsList }) {
     cardFieldsFor,
     selectedIds,
     toggleId,
-    openSwipe,
     setRemindClient,
     confirmDeleteOne,
     setMenuClient,
@@ -108,12 +107,6 @@ export function ListBody({ list }: { list: ClientsList }) {
                       ? router.push(clientCardHref(item.id, guest.tenantId))
                       : router.push(ownClientCardHref(item.id, scope))
                 }
-                onSwipeOpen={(row) => {
-                  if (openSwipe.current && openSwipe.current !== row) {
-                    openSwipe.current.close();
-                  }
-                  openSwipe.current = row;
-                }}
                 // Свайп: вправо — «Напомнить», влево —
                 // «Удалить»; «Записать» — в меню долгого нажатия.
                 onRemind={actions.remind ? () => setRemindClient(item) : undefined}
