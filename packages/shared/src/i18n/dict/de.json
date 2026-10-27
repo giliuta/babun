@@ -5212,5 +5212,9 @@
  "Главный": "Haupt-Tag",
  "Карточка": "Karte",
  "{0}Карточка доступна только для чтения; история записей сохранена.": "{0}Die Karte ist schreibgeschützt; der Terminverlauf bleibt erhalten.",
- "Контактов нет": "Keine Kontakte"
+ "Контактов нет": "Keine Kontakte",
+ "Сворачивает выбор": "Klappt die Auswahl ein",
+ "Раскрывает выбор": "Klappt die Auswahl auf",
+ "Убрать всё в «{0}»": "Alles in „{0}“ entfernen",
+ "Типов объектов пока нет": "Noch keine Objekttypen"
 }

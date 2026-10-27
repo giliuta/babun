@@ -5212,5 +5212,9 @@
  "Главный": "Principal",
  "Карточка": "Ficha",
  "{0}Карточка доступна только для чтения; история записей сохранена.": "{0}La ficha es de solo lectura; el historial de citas se conserva.",
- "Контактов нет": "Sin contactos"
+ "Контактов нет": "Sin contactos",
+ "Сворачивает выбор": "Contrae las opciones",
+ "Раскрывает выбор": "Despliega las opciones",
+ "Убрать всё в «{0}»": "Quitar todo en «{0}»",
+ "Типов объектов пока нет": "Aún no hay tipos de propiedad"
 }
