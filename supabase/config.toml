@@ -16,6 +16,11 @@ verify_jwt = false
 [functions.send_push]
 verify_jwt = false
 
+# Push to the team's phones: called by pg_net from the change_log trigger with
+# x-dispatch-secret (edge_cron_secrets «push_activity»).
+[functions.push_activity]
+verify_jwt = false
+
 # The mobile client invokes this function with its signed-in user JWT.
 [functions.account-delete]
 verify_jwt = true
