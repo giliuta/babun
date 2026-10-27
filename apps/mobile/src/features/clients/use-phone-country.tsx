@@ -1,9 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { CountryCode } from "libphonenumber-js";
-import { uiLocale } from "@babun/shared/i18n/locale";
 import {
   countryDialCode,
-  countryNameIn,
   dialPrefix,
   formatPhoneAsYouType,
   formatPhoneForDisplay,
@@ -15,11 +13,6 @@ import {
 // и вписали свой («+375 29 …»), страна определяется по нему. Шторки выбора
 // страны у номера больше нет — ни у нового клиента, ни на карточке, ни в
 // профиле. В данные уходит полный номер, как набран.
-
-/** Название страны на языке приложения (все страны мира). */
-export function countryName(code: CountryCode): string {
-  return countryNameIn(code, uiLocale());
-}
 
 /** Номер, набранный без «+», получает код страны команды; со своим «+» —
  *  как есть. Пусто — пусто. */
