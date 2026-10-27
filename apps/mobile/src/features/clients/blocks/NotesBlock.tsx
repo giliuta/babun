@@ -14,7 +14,7 @@
 // и есть «последняя», при первой правке переезжает в журнал одним патчем
 // (два патча подряд в офлайн-кэше затирали друг друга).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
@@ -36,6 +36,10 @@ interface NotesBlockProps {
   /** Сотрудник без «Клиенты: Меняет»: заметку читает, но не пишет и не
    *  снимает — сервер правку карточки отказал бы (STORY-088, волна 4). */
   readOnly?: boolean;
+  /** Черновик клиента: заметка пишется в черновик по мере набора. По уходу
+   *  с поля было поздно — «Назад» с открытой клавиатурой видел черновик
+   *  пустым, не спрашивал и терял набранное. */
+  live?: boolean;
 }
 
 /** Стабильная пустая ссылка: `client.notes ?? []` давал новый массив на
@@ -45,7 +49,7 @@ const EMPTY_NOTES: ClientNote[] = [];
 /** Тот же предел, что у поля на странице записи. */
 const MAX_LEN = 500;
 
-export default function NotesBlock({ client, update, readOnly = false }: NotesBlockProps) {
+export default function NotesBlock({ client, update, readOnly = false, live = false }: NotesBlockProps) {
   const t = useThemeColors();
   const toast = useToast();
   // Без выноса: у сотрудника чужой компании меню «Скопировать» нет.
@@ -89,6 +93,10 @@ export default function NotesBlock({ client, update, readOnly = false }: NotesBl
     write,
     client.id,
   );
+  const commitNote = note.commit;
+  useEffect(() => {
+    if (live) commitNote();
+  }, [live, note.draft, commitNote]);
 
   // КРЕСТИК УБИРАЕТ СРАЗУ — И С «ОТМЕНИТЬ», как у реквизитов и связей рядом:
   // без «Отменить» запись журнала уходила бы одним тапом без следа, а крестик стоит в самой строке и задевается на ходу. Вернуть — та же

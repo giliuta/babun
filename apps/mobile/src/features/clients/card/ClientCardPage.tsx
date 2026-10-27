@@ -201,7 +201,7 @@ export function ClientCardPage({
           // блоком, под «Клиентом».
           note={
             noteOn ? (
-              <NotesBlock client={c} update={update} readOnly={!access.note.edit} />
+              <NotesBlock client={c} update={update} readOnly={!access.note.edit} live={isDraft} />
             ) : null
           }
           people={
