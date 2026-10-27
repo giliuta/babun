@@ -2,7 +2,6 @@ import { Text, View } from "react-native";
 import { money } from "@babun/shared/common/utils/money";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { StepBack } from "@/components/ui/StepBack";
 import { GUTTER } from "@/components/ui/tokens";
 import { ValueOptionList } from "@/components/ui/ValuePickerSheet";
 import { accountIcon } from "../account-ui";
@@ -19,14 +18,17 @@ export function renderTransferAccountStep(v: TransferView) {
     <BottomSheet
     padded={false}
       visible={visible && !guard.hidden}
-      onClose={guard.close}
+      // ШАГ ВЫБОРА ЗАКРЫВАЕТСЯ НАЗАД, К ФОРМЕ, а не весь перевод: свайп и тап
+      // мимо — те же жесты, что у любой шторки выбора (AGENTS 5.2), лист
+      // пружиной встаёт обратно уже формой. «‹ Назад» в теле был своей
+      // вёрсткой шапки.
+      onClose={() => setStep("form")}
       onExited={guard.onExited}
       title={title}
       scroll
       maxHeightRatio={0.8}
     >
       <View style={{ paddingHorizontal: GUTTER, paddingBottom: 28 }}>
-        <StepBack onPress={() => setStep("form")} />
         {/* 0–1 счетов: выбирать нечего, и голый «Назад» без единого слова
             читался бы как поломка. Кнопки «завести счёт» тут нет нарочно:
             создание живёт листом на экране счетов, а второй лист поверх
