@@ -1,4 +1,5 @@
 import { ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Trash2 } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -13,6 +14,24 @@ import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
 import { humanDay } from "@/features/appointments/helpers";
 import { useTeams } from "@/features/reference/queries";
 import { newestFirst, serviceNamesOf } from "./card-history";
+import { formatPhoneForDisplay } from "@/lib/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { addressLines } from "@/features/clients/object-address";
+import { extraLabelText } from "@/features/clients/extra-contacts/extra-labels";
+
+/** Строка «подпись — значение» карточки только для чтения. */
+function ReadRow({ label, value, first }: { label: string; value: string; first?: boolean }) {
+  const t = useThemeColors();
+  return (
+    <View>
+      {first ? null : <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />}
+      <View className="px-4 py-3">
+        <Text className="text-xs" style={{ color: t.sub }}>{label}</Text>
+        <Text className="mt-1 text-base" style={{ color: t.ink }}>{value}</Text>
+      </View>
+    </View>
+  );
+}
 
 /** Карточка удалённого клиента: только чтение и «Вернуть». */
 export function ArchivedClientView({
@@ -33,6 +52,8 @@ export function ArchivedClientView({
   onRestore?: () => Promise<void>;
 }) {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const country = useDefaultCountry(client.team_id ?? null);
   // УДАЛЁННЫЙ КЛИЕНТ (архива нет). Срок есть — страница говорит,
   // когда его сотрут; нет (у клиента история) — только когда удалён.
   const daysToPurge = client.purge_at ? daysLeft(client.purge_at) : null;
@@ -50,6 +71,28 @@ export function ArchivedClientView({
   // Заявка архивного календаря называет свою команду (`archived-visit.ts`).
   const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const teamsById = new Map(allTeams.map((team) => [team.id, team]));
+  const contactRows: { label: string; value: string }[] = [
+    client.phone?.trim()
+      ? { label: "Телефон", value: formatPhoneForDisplay(client.phone, country) }
+      : null,
+    ...(client.phones ?? [])
+      .filter((entry) => entry.number?.trim())
+      .map((entry) => ({ label: extraLabelText(entry.label), value: formatPhoneForDisplay(entry.number, country) })),
+    client.email?.trim() ? { label: "Почта", value: client.email.trim() } : null,
+    client.telegram_username?.trim() ? { label: "Telegram", value: `@${client.telegram_username.trim().replace(/^@/, "")}` } : null,
+    client.instagram_username?.trim() ? { label: "Instagram", value: `@${client.instagram_username.trim().replace(/^@/, "")}` } : null,
+  ].filter((row): row is { label: string; value: string } => row !== null);
+  const places = (client.locations ?? []).map((loc) => {
+    const lines = addressLines(loc);
+    return {
+      id: loc.id,
+      label: loc.label?.trim() || "Объект",
+      value: [lines.main, lines.detail].filter(Boolean).join(" · ") || "Адрес не указан",
+    };
+  });
+  const note = [...(client.notes ?? [])]
+    .filter((n) => n.text?.trim())
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
 
   return (
     <Screen edges={["top"]}>
@@ -79,18 +122,38 @@ export function ArchivedClientView({
                   ? "Будет стёрт сегодня. "
                   : `Будет стёрт через ${daysToPurge} ${daysWordRu(daysToPurge)}. `
             }`}
-            Карточка доступна только для чтения; история записей и инвойсов сохранена.
+            Карточка доступна только для чтения; история записей сохранена.
           </Text>
         </View>
 
+        {/* КАРТОЧКА ПОЛНАЯ, ТОЛЬКО ДЛЯ ЧТЕНИЯ: всё, что было у клиента, — в
+            том же виде, что на живой карточке (номера — общим видом, доп.
+            номера — с подписью), чтобы решить, возвращать ли его. */}
         <SectionCard title="Контакт">
-          <View className="px-4 py-3">
-            <Text className="text-xs" style={{ color: t.sub }}>Телефон</Text>
-            <Text className="mt-1 text-base" style={{ color: t.ink }}>
-              {client.phone || "Не указан"}
+          {contactRows.length === 0 ? (
+            <Text className="px-4 py-4 text-sm" style={{ color: t.sub }}>
+              Контактов нет
             </Text>
-          </View>
+          ) : (
+            contactRows.map((row, index) => (
+              <ReadRow key={`${row.label}-${index}`} label={row.label} value={row.value} first={index === 0} />
+            ))
+          )}
         </SectionCard>
+
+        {places.length > 0 ? (
+          <SectionCard title="Объекты">
+            {places.map((place, index) => (
+              <ReadRow key={place.id} label={place.label} value={place.value} first={index === 0} />
+            ))}
+          </SectionCard>
+        ) : null}
+
+        {note ? (
+          <SectionCard title="Заметка">
+            <ReadRow label={humanDay(note.created_at.slice(0, 10))} value={note.text} first />
+          </SectionCard>
+        ) : null}
 
         <SectionCard title={`История записей · ${history.length}`}>
           {history.length === 0 ? (
@@ -98,7 +161,7 @@ export function ArchivedClientView({
               Записей нет
             </Text>
           ) : (
-            history.slice(0, 20).map((appointment, index) => {
+            history.map((appointment, index) => {
               const names = serviceNamesOf(appointment, serviceById);
               return (
                 <View key={appointment.id}>
@@ -124,19 +187,27 @@ export function ArchivedClientView({
           )}
         </SectionCard>
 
-        {onRestore ? (
-          <View className="px-4 pt-5">
-            {/* КНОПКА ОДНА НА ПРОДУКТ: была своя, 48pt со значком внутри.
-                Значка у канонической кнопки нет — слово и так называет
-                действие, а спиннер ожидания она умеет сама. */}
-            <Button
-              label="Вернуть клиента"
-              loading={restoring}
-              onPress={() => void onRestore()}
-            />
-          </View>
-        ) : null}
       </ScrollView>
+      {/* «ВЕРНУТЬ» — В ФУТЕРЕ СТРАНИЦЫ, как главное действие любой страницы, а
+          не посреди прокрутки после истории. Нет права — футера нет. */}
+      {onRestore ? (
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: Math.max(insets.bottom, 12),
+            borderTopWidth: 1,
+            borderTopColor: t.separator,
+            backgroundColor: t.surface,
+          }}
+        >
+          <Button
+            label="Вернуть клиента"
+            loading={restoring}
+            onPress={() => void onRestore()}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }
