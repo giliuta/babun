@@ -90,7 +90,7 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
 ];
 
 /** Права «Кабинета» — строкой блока аккаунта в Кабинете партнёра.
- *  «Реквизиты» — здесь же: их строка живёт в Кабинете с 03.10. */
+ *  «Реквизиты» — здесь же: их строка живёт в Кабинете. */
 export const CABINET_PREVIEW_KEYS: readonly string[] = [
   "cabinet.tariff",
   "cabinet.tariff_payments",

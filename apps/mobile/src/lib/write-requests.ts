@@ -18,13 +18,13 @@
 // не тихо создаст данные в чужой компании. Сторож в тесте следит, чтобы
 // каждая вызываемая приложением функция была здесь названа.
 
-/** Функции, которые только читают: `provolatile = 's'` на 20.09.2026. */
+/** Функции, которые только читают: `provolatile = 's'` в базе. */
 export const READ_RPCS: ReadonlySet<string> = new Set([
   // Право компании (директор «Партнёры: Управляет»): `stable`.
   "access_company",
   "account_balances",
   "appointment_link_lookup",
-  // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
+  // Оплаты тарифа в Кабинете (20261004085616): `stable`.
   "cabinet_tariff_payments",
   "current_tenant_profile_safe",
   "current_user_role",

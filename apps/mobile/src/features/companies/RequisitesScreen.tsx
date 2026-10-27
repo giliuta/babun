@@ -303,7 +303,7 @@ export function RequisitesScreen() {
                           прайсе услуг: нумерация живёт за реквизитами. У
                           скрытого набора номера нет — им не выставляют. Номер
                           серии читается в аккаунте, открытом на телефоне, —
-                          у чужого аккаунта (04.10) он был бы не его. */}
+                          у чужого аккаунта он был бы не его. */}
                       {company.archived_at || scope.foreign ? null : <NextNumber companyId={company.id} />}
                     </Pressable>
                     {readOnly ? null : handle}

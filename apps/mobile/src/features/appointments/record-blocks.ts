@@ -162,7 +162,7 @@ export function recordBlocks(input: Input): RecordBlocks {
     amount,
     payment: level("record.payment"),
     files: level("record.files"),
-    // «Заметка» — своё право с 30.09; неживое — прежнее правило.
+    // «Заметка» — своё право; в реестре без него заметку только читают.
     note: read("record.note") === undefined ? "read" : level("record.note"),
     color: writeOrRead("record.color"),
     // «SMS» записи: сервер отдаёт историю только вместе с «Клиентом»
