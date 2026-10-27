@@ -27,10 +27,7 @@ import {
   isWayOffered,
   useEnabledWays,
 } from "@/features/clients/contact-ways";
-import {
-  mapServicesSummary,
-  useEnabledMapServices,
-} from "@/features/clients/map-services";
+import { mapServicesSummary, useTeamMapServices } from "@/features/clients/map-services";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
 import { useClientSources } from "@/features/clients/acquisition-sources";
@@ -150,7 +147,7 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
 
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд.
-  const mapServices = useEnabledMapServices(teamId);
+  const mapServices = useTeamMapServices(teamId);
   // Чем связываются с клиентом. Звонок в настройке не стоит (идёт как стандарт) — и в подписи его нет.
   const enabledWays = useEnabledWays(teamId);
   const waysSub = enabledWays

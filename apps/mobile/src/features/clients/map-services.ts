@@ -54,6 +54,11 @@ export function useEnabledMapServices(teamId: string | null = null): MapService[
   const here = enabled.filter(OFFERED_HERE);
   return here.length > 0 || enabled.length === 0 ? here : ["google"];
 }
+/** Набор команды как есть — для настроек «Карт для маршрута» и их подписи.
+ *  Галки там правят общий набор: на Android Apple стоит выключенной только
+ *  если её правда сняли, иначе тап по ней снимал бы её у людей с iPhone. */
+export const useTeamMapServices = (teamId: string | null = null): MapService[] =>
+  teamSet.use(teamId);
 export const useMapServicesOrder = teamSet.useOrder;
 export const useToggleMapService = teamSet.useToggle;
 export const useReorderMapServices = teamSet.useReorder;

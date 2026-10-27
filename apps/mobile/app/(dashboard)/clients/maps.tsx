@@ -7,9 +7,9 @@ import type { MapService } from "@babun/shared/common/utils/map-links";
 import {
   canDisableMapService,
   mapServiceDef,
-  useEnabledMapServices,
   useMapServicesOrder,
   useReorderMapServices,
+  useTeamMapServices,
   useToggleMapService,
 } from "@/features/clients/map-services";
 
@@ -35,7 +35,7 @@ function ClientMapsScreen() {
   // «Только видит»: галки и порядок как есть, без правки.
   const readOnly = useClientSettingLevel("maps", teamId) !== "write";
   const order = useMapServicesOrder(teamId);
-  const enabled = useEnabledMapServices(teamId);
+  const enabled = useTeamMapServices(teamId);
   const toggle = useToggleMapService(teamId);
   const reorder = useReorderMapServices(teamId);
 
