@@ -13,6 +13,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER } from "@/components/ui/tokens";
 import { confirmThen } from "@/lib/confirm";
+import { useCurrentRole } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { DaysLeft, DeletedOn } from "@/features/clients/HiddenClientsScreen";
 import { deleteAccountAlert } from "@/features/finances/account-alerts";
@@ -41,6 +42,9 @@ export default function AccountsTrashRoute() {
   const restore = useRestoreAccount();
   const erase = useDeleteAccount();
   const rows = (deleted.data ?? []).filter((account) => !team || account.brigade_id === team);
+  // КОРЗИНА СЧЕТОВ — ВЛАДЕЛЬЦУ. Дверь сюда есть только у него («Счета»), а
+  // по прямой ссылке партнёр видел бы список и «Вернуть» под своими правами.
+  const role = useCurrentRole().data;
   const [menu, setMenu] = useState<Account | null>(null);
 
   const giveBack = (account: Account) =>
@@ -78,7 +82,9 @@ export default function AccountsTrashRoute() {
         title="Удалённые счета"
         fallbackHref={(team ? `/accounts/settings?team=${encodeURIComponent(team)}` : "/accounts/settings") as Href}
       />
-      {deleted.data === undefined ? (
+      {role !== undefined && role !== "owner" ? (
+        <EmptyState fill title="Удалённые счета видит владелец" />
+      ) : deleted.data === undefined ? (
         deleted.error ? (
           <EmptyState
             state="error"
