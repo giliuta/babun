@@ -163,9 +163,13 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
     custom_total: customTotal,
     // A job without a catalog service still has the duration selected in
     // the time picker. Persist the actual slot instead of a misleading 0.
+    // Длительность — НЕ ДЛИННЕЕ СЛОТА. Конец записи упирается в 23:59 (запись
+    // не переходит через полночь), и услуги на 120 мин с 22:30 давали слот
+    // 89 мин, а в базу уходило 120 — отчёты и загрузка считали час, которого
+    // в календаре нет.
     total_duration:
       computedDuration > 0
-        ? computedDuration
+        ? Math.min(computedDuration, minutesBetweenHM(timeStart, timeEnd) || computedDuration)
         : minutesBetweenHM(timeStart, timeEnd),
     comment: comment.trim(),
     status,

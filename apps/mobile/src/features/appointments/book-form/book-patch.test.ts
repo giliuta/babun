@@ -85,6 +85,11 @@ describe("buildBookPatch — work", () => {
   test("no catalog duration → the slot length is stored", () => {
     assert.equal(buildBookPatch(input()).total_duration, 90);
     assert.equal(buildBookPatch(input({ computedDuration: 45 })).total_duration, 45);
+    // Конец упёрся в 23:59 — длительность не длиннее слота.
+    assert.equal(
+      buildBookPatch(input({ computedDuration: 120, timeStart: "22:30", timeEnd: "23:59" })).total_duration,
+      89,
+    );
   });
 
   test("the note and the address are trimmed", () => {
