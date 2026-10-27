@@ -17,6 +17,7 @@ import { MESSAGING_ENABLED, can } from "@/session/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { TeamActivityNotifier } from "@/features/cabinet/TeamActivityNotifier";
+import { CallerIdSync } from "@/features/clients/caller-id/CallerIdSync";
 import { TourWindow } from "@/components/tour/TourWindow";
 import { OnboardingRunner } from "@/features/onboarding/OnboardingRunner";
 import { useTabLocks } from "@/features/onboarding/tab-locks";
@@ -67,6 +68,8 @@ export default function DashboardLayout() {
       {/* Уведомления о делах команды из истории изменений — пока
           приложение открыто; без интерфейса. */}
       <TeamActivityNotifier />
+      {/* База определителя номера на iPhone идёт за списком клиентов. */}
+      <CallerIdSync />
       <OnboardingRunner />
       {/* ОКНО ОБУЧЕНИЯ — НАД ТАБ-БАРОМ: пока идёт шаг, нажать можно только
           подсвеченное, и вкладки тоже закрыты. */}
