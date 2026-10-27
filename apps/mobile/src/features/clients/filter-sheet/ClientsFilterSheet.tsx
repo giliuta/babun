@@ -1,5 +1,5 @@
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useWindowDimensions, View } from "react-native";
+import { AccessibilityInfo, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { pluralPhraseRu } from "@babun/shared/common/utils/plural-ru";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
@@ -7,6 +7,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors } from "@/theme/colors";
 import {
   filterActiveCount,
+  SORT_LABELS_LONG,
   type ClientsFilter,
   type SortKey,
 } from "../filter";
@@ -200,11 +201,34 @@ export function ClientsFilterSheet({
           hasSourceData={hasSourceData}
           hasPropertyData={hasPropertyData}
           objectsOn={objectsOn}
-          onOpenSort={() => sheet.setSortOpen(true)}
+          onOpenSort={() => {
+            sheet.setOpenFacet(null);
+            sheet.setSortOpen(!sheet.sortOpen);
+          }}
           onOpenPresets={() => sheet.setPresetsOpen(true)}
           onOpenWheels={() => sheet.setWheelsOpen(true)}
-          onOpenFacet={sheet.setOpenFacet}
+          // Раскрыта одна строка: тап по раскрытой сворачивает её, по другой —
+          // переносит раскрытие туда.
+          onOpenFacet={(facet) => {
+            sheet.setSortOpen(false);
+            sheet.setOpenFacet(sheet.openFacet === facet ? null : facet);
+          }}
           onAnalytics={onAnalytics}
+          expanded={sheet.sortOpen ? "sort" : sheet.openFacet}
+          facetConfig={facetConfig}
+          sortBlocks={sortBlocks}
+          reduced={reduced}
+          onSortChange={(next) => {
+            onSortChange(next);
+            sheet.setSortOpen(false);
+            setTimeout(
+              () =>
+                AccessibilityInfo.announceForAccessibility(
+                  `Отсортировано: ${SORT_LABELS_LONG[next]}`,
+                ),
+              350,
+            );
+          }}
         />
 
         <FooterCta
@@ -223,17 +247,6 @@ export function ClientsFilterSheet({
       </View>
 
       <FilterSheetPopups
-        facetConfig={facetConfig}
-        openFacet={sheet.openFacet}
-        setOpenFacet={sheet.setOpenFacet}
-        shownCount={shownCount}
-        zeroHint={zeroHint}
-        reduced={reduced}
-        sortOpen={sheet.sortOpen}
-        setSortOpen={sheet.setSortOpen}
-        sortBlocks={sortBlocks}
-        sort={sort}
-        onSortChange={onSortChange}
         presetsOpen={sheet.presetsOpen}
         setPresetsOpen={sheet.setPresetsOpen}
         wheelsOpen={sheet.wheelsOpen}

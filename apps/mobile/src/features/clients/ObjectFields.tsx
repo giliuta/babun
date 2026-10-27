@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type Ref } from "react";
-import { TextInput, View } from "react-native";
-import { MapPinned, Send, Tag } from "lucide-react-native";
+import { Text, TextInput, View } from "react-native";
+import { MapPinned, Send, Settings2, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { useClientsCapabilities } from "@/session/company-scope";
 import { FieldRow } from "@/components/ui/card-rows";
 import { iconPreset } from "@/components/ui/icon-set";
-import { PickerSheet } from "@/components/ui/PickerSheet";
+import { SelectRow } from "@/components/ui/select-rows";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { SectionCard } from "@/components/ui/SectionCard";
 import {
@@ -167,7 +167,10 @@ export function ObjectFields({
           шторка». Лента ещё и растёт: типы заводит сам бизнес, и с десятком
           их приходилось бы листать вбок, не видя, что за краем.
 
-          ПОЛЗУНКИ — В ШАПКЕ ШТОРКИ, там же, где они у типа события. */}
+          СПИСОК РАСКРЫВАЕТСЯ ПОД БЛОКОМ, А НЕ ШТОРКОЙ ПОВЕРХ ЛИСТА ОБЪЕКТА:
+          два модальных окна в одном кадре — лист под ними тускнел, и «назад»
+          уводило не туда (канон AGENTS 5.1, из листа — раскрывашкой). Дверь
+          в «Типы объектов» — последней строкой того же списка. */}
       <ReferenceBlock
         // ФОРМА В ШТОРКЕ — плотно, чтобы тип объекта не выпадал из размера.
         // Вид выбранного — тот же, что у категории; тише только воздух.
@@ -189,9 +192,48 @@ export function ObjectFields({
         }
         onPress={() => {
           haptics.tap();
-          setTypeSheetOpen(true);
+          setTypeSheetOpen((open) => !open);
         }}
       />
+      {typeSheetOpen ? (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 4, gap: 8 }}>
+          {typeOptions.length === 0 ? (
+            <Text style={{ paddingHorizontal: 4, fontSize: 13, color: t.sub }}>
+              Типов объектов пока нет
+            </Text>
+          ) : (
+            typeOptions.map((name) => (
+              <SelectRow
+                key={name}
+                title={name}
+                icon={iconPreset(presetByKey.get(objectTypeKey(name))?.icon) ?? Tag}
+                color={presetByKey.get(objectTypeKey(name))?.color ?? t.accent}
+                selected={name === typePreset?.name}
+                accessibilityRole="radio"
+                // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП: объект можно создать без типа —
+                // тот же жест, что у типа события.
+                onPress={() => {
+                  onChange({
+                    type: name === typePreset?.name ? "" : snapObjectType(name, typeOptions),
+                  });
+                  onCommit?.();
+                  setTypeSheetOpen(false);
+                }}
+              />
+            ))
+          )}
+          {onTypeSettings ? (
+            <SelectRow
+              title="Типы объектов"
+              icon={Settings2}
+              onPress={() => {
+                setTypeSheetOpen(false);
+                onTypeSettings();
+              }}
+            />
+          ) : null}
+        </View>
+      ) : null}
 
       <SectionCard
         dense
@@ -316,35 +358,6 @@ export function ObjectFields({
         </View>
       </SectionCard>
 
-      {/* СПИСОК ТИПОВ — КАНОНИЧЕСКАЯ ШТОРКА, ПОДНЯТАЯ ИЗ ЛИСТА ОБЪЕКТА. Лист
-          в листе здесь законен и в продукте уже есть: так из листа операции
-          открывается категория. Строки — значок словаря и свой цвет, как у
-          категории: и то и другое лежит в самой записи справочника. */}
-      <PickerSheet
-        visible={typeSheetOpen}
-        title="Тип объекта"
-        selectedId={typePreset?.name ?? null}
-        // Справочник пуст — так и говорим; завести тип — значком справа.
-        emptyText="Типов объектов пока нет — добавьте свой значком справа"
-        items={typeOptions.map((name) => ({
-          id: name,
-          label: name,
-          icon: iconPreset(presetByKey.get(objectTypeKey(name))?.icon) ?? Tag,
-          color: presetByKey.get(objectTypeKey(name))?.color ?? t.accent,
-          // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП: объект можно создать без типа. Тот же жест, что у типа события, и
-          // тот случай, ради которого канон его и держит: снимаем там, где
-          // значение можно не иметь.
-          onPress: () => {
-            onChange({
-              type: name === typePreset?.name ? "" : snapObjectType(name, typeOptions),
-            });
-            onCommit?.();
-          },
-        }))}
-        onSettings={onTypeSettings}
-        settingsLabel="Типы объектов"
-        onClose={() => setTypeSheetOpen(false)}
-      />
     </>
   );
 }

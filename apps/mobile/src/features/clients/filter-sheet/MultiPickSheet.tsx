@@ -99,7 +99,7 @@ export function MultiPickSheet({
               onClear();
             }}
             accessibilityRole="button"
-            accessibilityLabel={`Снять всё в «${title}»`}
+            accessibilityLabel={`Убрать всё в «${title}»`}
             hitSlop={10}
             style={{ minHeight: 32, justifyContent: "center" }}
           >
@@ -107,7 +107,7 @@ export function MultiPickSheet({
               maxFontSizeMultiplier={1.2}
               style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
             >
-              Снять всё
+              Убрать
             </Text>
           </Pressable>
         ) : null}
