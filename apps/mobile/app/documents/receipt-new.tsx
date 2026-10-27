@@ -240,8 +240,8 @@ export default function NewReceiptScreen() {
     confirmThen(
       "Черновик не сохранён",
       {
-        message: "Выйти и потерять заполненное?",
-        confirmLabel: "Выйти",
+        message: "Уйти и потерять заполненное?",
+        confirmLabel: "Уйти",
         destructive: true,
       },
       () => {
