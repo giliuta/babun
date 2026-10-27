@@ -5,6 +5,7 @@ import { sourceFilterOptions, type ClientSource } from "@/features/clients/acqui
 import type { ClientsFilter } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
+import { useFeatureOn } from "@/features/settings/company-features";
 import type { ListTeam } from "./use-list-merge";
 import { filterTagsFor, pruneFilter } from "./list-derive";
 
@@ -102,6 +103,15 @@ export function useListFilters({
     );
     // `setFilter` is the list's state setter: stable, listed only for the linter.
   }, [teamOptions, cityOptions, tagOptions, sourceOptions, sourcesReady, tagsReady, citiesReady, data, setFilter]);
+
+  // ОБЪЕКТЫ ВЫКЛЮЧЕНЫ — «ТИП ОБЪЕКТА» НЕ ФИЛЬТРУЕТ. Строки в «Фильтрах» тогда
+  // нет, а сохранённый в наборе дня «Дом» продолжал прятать клиентов, и снять
+  // его можно было только общим «Сбросить».
+  const objectsOn = useFeatureOn("objects");
+  useEffect(() => {
+    if (objectsOn) return;
+    setFilter((f) => (f.propertyTypes.length === 0 ? f : { ...f, propertyTypes: [] }));
+  }, [objectsOn, setFilter]);
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
