@@ -263,7 +263,7 @@
 
 **Дополнительные страницы:** типы объектов —
 `src/features/clients/ObjectTypesScreen.tsx`, двери
-`clients/object-types.tsx`, `cabinet/object-types.tsx`, `(shared)/object-types.tsx`.
+`clients/object-types.tsx`, `(shared)/object-types.tsx`.
 
 **Не делать:** второй формы объекта (была, свели 2026-09-10 — сторожит
 `src/features/clients/client-persistence-contract.test.ts`); `AddRow` вместо `ChooseRow`; строки

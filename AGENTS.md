@@ -451,7 +451,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` (тело — `src/features/services/price-list/ServicesList.tsx`) | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
-| Типы объектов | `src/features/clients/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `cabinet/`, `clients/`, `(shared)/` |
+| Типы объектов | `src/features/clients/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `clients/`, `(shared)/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
 | Запись и событие (форма) | `app/book/index.tsx` (тело — `src/features/appointments/book-form/`, проводка — `use-book-form.ts`) | — |
 | Вид и состав записи и события («Записи») | `src/features/calendar/design/DesignScreen.tsx` | `app/(dashboard)/(home)/calendar/design.tsx` |
