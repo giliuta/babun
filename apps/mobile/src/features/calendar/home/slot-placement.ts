@@ -11,8 +11,7 @@ import {
 } from "@/features/calendar/reminders";
 import { isCalendarEvent } from "@/features/calendar/event-access";
 import { serverReason } from "@/features/calendar/server-reason";
-import { SERVICES_HOLD_TEAM, SETTLED_STAYS, isPersonalEvent, settledVisit } from "./appointment-rules";
-import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
+import { placementRefusal, placementTeam } from "./appointment-rules";
 import { isPastSlotAt } from "./dates";
 import { settleGate } from "./settle-gate";
 import type { CalendarClock } from "./use-calendar-clock";
@@ -53,11 +52,16 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     editingApt, setEditingApt, moving, placedFromRef, movingKind, workBandFor,
     setNotice, setSlotDraft, tenantId, servicesQuery,
   } = deps;
-  // Копия или перенос в другую команду с услугами прайса своей команды.
-  const servicesHoldTeam = (apt: Appointment, toTeam: string | null) =>
-    toTeam !== apt.team_id &&
-    !isCalendarEvent(apt) &&
-    servicesBlockTeamMove(apt.service_ids ?? [], servicesQuery.data ?? [], toTeam);
+  // Тот же отказ, что гасит зелень (`placementRefusal`): тап по кубику
+  // проверяет его на случай, если кубик нарисован до свежих данных.
+  const refusal = (apt: Appointment, kind: "move" | "copy", dateYmd: string) =>
+    placementRefusal(
+      apt,
+      kind,
+      dateYmd,
+      placementTeam(apt, activeTeamId, isCrew),
+      servicesQuery.data ?? [],
+    );
   /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ: в прошлом сверху
    *  выезжает плашка с кнопкой. Глухой запрет мешал бы ровно там, где выезд
    *  состоялся, а завести его забыли. Поэтому у правила есть дверь, и человек
@@ -132,9 +136,9 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       );
       return true;
     }
-    const copyTeam = isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
-    if (servicesHoldTeam(apt, copyTeam)) {
-      toast(SERVICES_HOLD_TEAM, "info");
+    const refused = refusal(apt, "copy", dateYmd);
+    if (refused) {
+      toast(refused, "info");
       return false;
     }
     const copy = {
@@ -143,7 +147,7 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       date: dateYmd,
       time_start: timeStart,
       time_end: addMinutesHM(timeStart, moveWindowMin),
-      team_id: isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id),
+      team_id: placementTeam(apt, activeTeamId, false),
     };
     // КОПИЯ ОТМЕНЯЕТСЯ, КАК ПЕРЕНОС: лишнюю копию (не тот кубик) иначе
     // приходилось искать и удалять руками. Отмена ждёт, пока копия встанет.
@@ -177,16 +181,13 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
   const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
     // Сотрудник переносит только внутри команды записи.
-    const toTeam = isCrew || isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
+    const toTeam = placementTeam(apt, activeTeamId, isCrew);
     const teamChanges = toTeam !== apt.team_id;
     // Оплаченная — только в её дне; режим остаётся: кубик её дня ещё можно
     // выбрать.
-    if ((teamChanges || dateYmd !== apt.date) && settledVisit(apt)) {
-      toast(SETTLED_STAYS, "info");
-      return false;
-    }
-    if (servicesHoldTeam(apt, toTeam)) {
-      toast(SERVICES_HOLD_TEAM, "info");
+    const refused = refusal(apt, "move", dateYmd);
+    if (refused) {
+      toast(refused, "info");
       return false;
     }
     setMoving(null);

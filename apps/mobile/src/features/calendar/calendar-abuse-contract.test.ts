@@ -88,8 +88,9 @@ describe("календарь под нагрузкой", () => {
 describe("повторный аудит календаря 03.10", () => {
   test("личное событие остаётся личным при переносе и копии", () => {
     const src = screen();
-    assert.match(src, /const toTeam = isCrew \|\| isPersonalEvent\(apt\) \? apt\.team_id :/);
-    assert.match(src, /team_id: isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\),/);
+    assert.match(src, /return isCrew \|\| isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\);/);
+    assert.match(src, /const toTeam = placementTeam\(apt, activeTeamId, isCrew\);/);
+    assert.match(src, /team_id: placementTeam\(apt, activeTeamId, false\),/);
   });
 
   test("отмена визита — одним тапом, без причины; с деньгами — вопрос и без «Отменить» в тосте", () => {
@@ -135,7 +136,10 @@ describe("повторный аудит календаря 03.10", () => {
   test("оплаченная — только в своём дне: и пальцем, и кубиком", () => {
     const src = screen();
     assert.match(src, /if \(\(dateMoves \|\| teamMoves\) && settledVisit\(apt\)\) \{/);
-    assert.match(src, /if \(\(teamChanges \|\| dateYmd !== apt\.date\) && settledVisit\(apt\)\) \{\s*toast\(SETTLED_STAYS, "info"\);\s*return false;/);
+    assert.match(src, /if \(kind === "move" && \(teamChanges \|\| dateYmd !== apt\.date\) && settledVisit\(apt\)\) \{\s*return SETTLED_STAYS;/);
+    assert.match(src, /const refused = refusal\(apt, "move", dateYmd\);\s*if \(refused\) \{\s*toast\(refused, "info"\);\s*return false;/);
+    // Кубик, по которому тап откажет, не горит вовсе.
+    assert.match(src, /if \(moving && placementRefusal\(moving, movingKind, dateYmd, moveTeam, services\)\) \{\s*return \[\];/);
   });
 
   test("один тап по кубику — одна копия", () => {

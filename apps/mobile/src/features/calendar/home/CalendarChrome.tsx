@@ -16,7 +16,7 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
     headerTitle, mode, now, isOnToday, changeMode, pushBookOnce, activeTeamId,
     setMiniCalOpen, goToday, notice, setNotice, pickClientId, pickClientName,
     activeTeam, setPick, editingApt, clientName, setEditingApt, moving, movingKind,
-    teams, isCrew, moveWindowMin, setMoving, chipItems, pendingChipId, chipTeamId,
+    teams, isCrew, moveWindowMin, moveLimit, setMoving, chipItems, pendingChipId, chipTeamId,
     pickCalendar, isRefetching, pull, silentRevalidating,
   } = c;
   return (
@@ -78,9 +78,10 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
         <ModePlaque
           title={`${movingKind === "copy" ? "Копировать" : "Перенести"}: ${clientName(moving) || recordComment(moving) || "Запись"}`}
           subtitle={
-            teams.length > 1 && !isCrew
+            moveLimit ??
+            (teams.length > 1 && !isCrew
               ? `Зелёное время · ${moveWindowMin} мин · команда — ниже`
-              : `Выберите зелёное время · ${moveWindowMin} мин`
+              : `Выберите зелёное время · ${moveWindowMin} мин`)
           }
           exitLabel={movingKind === "copy" ? "Отменить копирование" : "Отменить перенос"}
           onExit={() => setMoving(null)}
