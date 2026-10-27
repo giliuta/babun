@@ -36,6 +36,7 @@ import {
   awaitedParentId,
   GUARDED_CONFLICT_MESSAGE,
   parentInsertId,
+  serverNewerMessage,
 } from "./table-rules";
 
 // ОБРЫВ С ОТВЕТОМ СЕРВЕРА НЕ ДЕРЖИТ ПРАВКУ ВЕЧНО.
@@ -293,6 +294,8 @@ export async function drain(
       );
       if (conflict === "server-won") {
         opts.onConflict?.(GUARDED_CONFLICT_MESSAGE);
+      } else if (conflict === "server-newer") {
+        opts.onConflict?.(serverNewerMessage(op.table));
       } else if (conflict) {
         opts.onConflict?.(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",

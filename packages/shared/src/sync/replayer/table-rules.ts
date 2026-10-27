@@ -57,6 +57,24 @@ export function touchesGuardedAppointmentFields(
 export const GUARDED_CONFLICT_MESSAGE =
   "Запись изменилась на другом устройстве, и ваша правка статуса или оплаты не применена. Откройте запись и сделайте это ещё раз.";
 
+/** ЗАПИСЬ И КЛИЕНТ: ПРАВКА ИЗ ОЧЕРЕДИ УСТУПАЕТ БОЛЕЕ СВЕЖЕЙ СТРОКЕ.
+ *  Правка могла пролежать в очереди часы. Если строку за это время изменили
+ *  на другом телефоне (её `updated_at` ушёл от того, на который правка
+ *  рассчитана), «последний побеждает» молча вернул бы чужой перенос назад
+ *  или стёр бы чужой объект клиента: массивы клиента пишутся целиком.
+ *  Поэтому такая правка снимается, кэш берёт строку сервера, а человек
+ *  узнаёт об этом словами. Теги держатся прежнего правила. */
+export function serverNewerWins(table: QueuedOp["table"]): boolean {
+  return table === "appointments" || table === "clients";
+}
+
+/** Сообщение, когда правка уступила более свежей строке сервера. */
+export function serverNewerMessage(table: QueuedOp["table"]): string {
+  return table === "clients"
+    ? "Карточку клиента изменили на другом устройстве — показываю свежую версию"
+    : "Запись изменили на другом устройстве — показываю свежую версию";
+}
+
 /** Insert payload after table rules; a client may replay as an aggregate. */
 export function prepareInsert(op: QueuedOp): PreparedInsert {
   if (op.table === "clients") return prepareClientInsert(op);

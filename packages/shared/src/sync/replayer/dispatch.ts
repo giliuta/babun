@@ -13,6 +13,8 @@ import { tableForOp } from "./table-rules";
  *  retried without expected_updated_at and that one succeeded).
  *  `"server-won"` — правка статуса или денег записи при конфликте уступила
  *  серверу (`APPOINTMENT_GUARDED_FIELDS`): о ней надо сказать словами.
+ *  `"server-newer"` — правка записи или клиента уступила строке, которую
+ *  изменили на сервере позже (`serverNewerWins`).
  *  Throws on unrecoverable errors so the caller bumps attempts. */
 export async function dispatch(
   supabase: DbSupabase,
@@ -25,7 +27,7 @@ export async function dispatch(
   onApplied?: AppliedFn,
   /** Компания устройства всё ещё та, под которой начат слив. */
   tenantStill?: () => boolean,
-): Promise<boolean | "server-won"> {
+): Promise<boolean | "server-won" | "server-newer"> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
   // talk directly to PostgREST here (not through the typed repo
