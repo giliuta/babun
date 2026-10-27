@@ -6,6 +6,7 @@ import {
 import { EMPTY_FILTER, type ClientsFilter } from "@/features/clients/filter";
 import { loadDayFilter, saveDayFilter } from "@/features/clients/filter-pref";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useBusinessToday } from "@/features/settings/business-today";
 
 /** Search, the day's filter set, which sheet is open and the bulk pick. */
 export function useListUiState(params: { openImport?: string; openContacts?: string }) {
@@ -14,14 +15,17 @@ export function useListUiState(params: { openImport?: string; openContacts?: str
   // собирать шесть условий заново каждый круг обзвона — потеря времени.
   // Пресетный период набора — по часам компании, как у «Финансов».
   const timezone = useCalendarSettings().data?.timezone;
+  const today = useBusinessToday();
   const [filter, setFilter] = useState<ClientsFilter>(
     () =>
-      loadDayFilter(timezone ? getCurrentTimeInZone(timezone) : getCurrentCyprusTime()) ??
-      EMPTY_FILTER,
+      loadDayFilter(
+        timezone ? getCurrentTimeInZone(timezone) : getCurrentCyprusTime(),
+        today,
+      ) ?? EMPTY_FILTER,
   );
   useEffect(() => {
-    saveDayFilter(filter);
-  }, [filter]);
+    saveDayFilter(filter, today);
+  }, [filter, today]);
   const [sheetOpen, setSheetOpen] = useState(false);
   // С какого измерения открыть лист (тап по телу токена в баре).
   const [initialFacet, setInitialFacet] = useState<

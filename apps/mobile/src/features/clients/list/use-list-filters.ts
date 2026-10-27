@@ -6,6 +6,7 @@ import type { ClientsFilter } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
 import { useFeatureOn } from "@/features/settings/company-features";
+import { useBusinessToday } from "@/features/settings/business-today";
 import type { ListTeam } from "./use-list-merge";
 import { filterTagsFor, pruneFilter, uniqueById } from "./list-derive";
 
@@ -77,6 +78,7 @@ export function useListFilters({
   // поле, а пересчёт сотен клиентов и перерисовка строк идут следом и не
   // держат клавиатуру.
   const searched = useDeferredValue(query);
+  const today = useBusinessToday();
   const result = useClientFilters(
     teamClients,
     teamAppointments,
@@ -90,6 +92,7 @@ export function useListFilters({
     sheetOpen, // счётчики попапов считаем только при открытом листе
     ownSources,
     teamChoice === ALL_TEAMS ? null : teamChoice,
+    today,
   );
 
   // Прунинг «призрачных» фильтров — `pruneFilter`. Теги и источники

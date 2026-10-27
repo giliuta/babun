@@ -9,11 +9,11 @@ import {
   clientPropertyTypes,
   matchesSegment,
   sortClients,
-  todayYMD,
   type ActiveToken,
   type ClientsFilter,
   type FacetOption,
   type SortKey,
+  todayYMD,
 } from "./filter";
 import {
   sourceBucket,
@@ -90,6 +90,9 @@ export function useClientFilters(
   customSources: ClientSource[] = NO_SOURCES,
   /** Команда чипа: варианты фасета — только её источники. */
   sourceTeamId: string | null = null,
+  /** «Сегодня» компании (`useBusinessToday` у вызывающего; модуль без
+   *  React Native — его читают тесты). Без него — часы телефона. */
+  today: string = todayYMD(),
 ): ClientFilterResult {
   const {
     segments,
@@ -164,10 +167,10 @@ export function useClientFilters(
     return (c: Client) => (q ? matchesClient(c, search, linkWords(c)) : true);
   }, [search, groupsById, tags]);
 
-  // Одна дата на весь проход фильтра. Пересчитывается вместе с набором
-  // статусов и картой статистики — этого достаточно: экран живёт минуты,
-  // а не сутки, и рассинхрон со счётчиками попапа закрыт.
-  const todayForSegments = todayYMD();
+  // Одна дата на весь проход фильтра — «сегодня» КОМПАНИИ, как у статистики
+  // (`buildStatsMap`) и календаря: по часам телефона владелец в другом поясе
+  // после своей полуночи видел «Должников» и «Записан» по завтрашнему дню.
+  const todayForSegments = today;
   const passesSegment = useMemo(() => {
     // OR по выбранным статусам («список на обзвон»: любой из выбранных) —
     // единая семантика с Метка/Теги/Команда. AND давал ловушку: второй
@@ -319,6 +322,7 @@ export function useClientFilters(
         passesProperty,
         customSources,
         propertyValueByKey,
+        today: todayForSegments,
       }),
     [
       withFacetCounts,
@@ -336,6 +340,7 @@ export function useClientFilters(
       passesProperty,
       customSources,
       propertyValueByKey,
+      todayForSegments,
     ],
   );
 

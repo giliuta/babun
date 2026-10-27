@@ -28,6 +28,9 @@ export function useClientsSort() {
   return useQuery({
     queryKey: ["clients-sort"],
     queryFn: () => getClientsSort(),
+    // Чтение локальное (MMKV): без этого на холодном старте без сети
+    // TanStack держит запрос в офлайн-паузе, и список не знает сортировки.
+    networkMode: "always",
     staleTime: Infinity,
   });
 }
