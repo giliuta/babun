@@ -36,6 +36,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { keyFromEnv, serviceClient } from "../_shared/service-client.ts";
 import { json as jsonResponse } from "../_shared/http.ts";
+import {
+  checkoutIdempotencyKey,
+  liveSubscriptionOf,
+  openTariffSessions,
+  type CheckoutSessionLite,
+  type SubscriptionLite,
+} from "../_shared/tariff-duplicates.ts";
 
 type Period = "month" | "year";
 
@@ -88,6 +95,7 @@ async function stripe(
   method: "GET" | "POST",
   path: string,
   params?: Record<string, string>,
+  idempotencyKey?: string,
 ): Promise<Record<string, unknown>> {
   const body = params ? new URLSearchParams(params).toString() : undefined;
   const url = method === "GET" && body ? `https://api.stripe.com/v1/${path}?${body}` : `https://api.stripe.com/v1/${path}`;
@@ -96,6 +104,7 @@ async function stripe(
     headers: {
       Authorization: `Bearer ${key}`,
       ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: method === "POST" ? body : undefined,
   });
@@ -281,9 +290,36 @@ Deno.serve(async (request: Request) => {
 
     // Клиент Stripe аккаунта: свой, иначе тот, что завёлся для SMS, иначе новый.
     let customer = tenant.stripe_customer_id as string | null;
+    const superseded: string[] = [];
     if (!customer) {
       const { data: smsCustomer } = await service.rpc("sms_autotopup_customer", { p_tenant: tenantId });
       if (typeof smsCustomer === "string" && smsCustomer) customer = smsCustomer;
+    }
+    if (customer) {
+      // ВТОРОЙ ПОДПИСКИ НЕ БЫВАЕТ. «Подписки нет» здесь — слово аккаунта, а
+      // его пишет вебхук: между оплатой и событием Stripe проходят секунды, и
+      // второе «Оплатить» в это окно оформило бы вторую подписку. Правда — в
+      // Stripe: живая подписка уже есть — оплата прошла, тариф вот-вот
+      // придёт (ответ тот же, что у смены тарифа: приложение перечитает
+      // аккаунт). Подписок у клиента единицы — хватает одной страницы.
+      const subs = await stripe(stripeKey, "GET", "subscriptions", { customer, status: "all", limit: "20" });
+      if (liveSubscriptionOf((subs.data as SubscriptionLite[] | undefined) ?? [])) {
+        return json(200, { changed: true });
+      }
+      // Старая открытая страница оплаты, оплаченная после новой, тоже завела
+      // бы вторую подписку — гасим её до того, как открыть новую.
+      const open = await stripe(stripeKey, "GET", "checkout/sessions", { customer, status: "open", limit: "20" });
+      for (const id of openTariffSessions((open.data as CheckoutSessionLite[] | undefined) ?? [])) {
+        superseded.push(id);
+        try {
+          await stripe(stripeKey, "POST", `checkout/sessions/${id}/expire`);
+        } catch (e) {
+          // Страница уже закрылась сама (оплачена или истекла) — не повод
+          // отказывать: оплаченную поймает проверка выше при следующем
+          // нажатии, а вторую подписку снимет вебхук.
+          console.warn("tariff-checkout: expire", id, e instanceof Error ? e.message : String(e));
+        }
+      }
     }
     if (!customer) {
       // Почта клиента Stripe — владельца: партнёр платит, но аккаунт не его.
@@ -321,7 +357,18 @@ Deno.serve(async (request: Request) => {
     if (tenant.trial_tier && Number.isFinite(trialEnd) && trialEnd - Date.now() > 49 * 3600 * 1000) {
       form["subscription_data[trial_end]"] = String(Math.floor(trialEnd / 1000));
     }
-    const session = await stripe(stripeKey, "POST", "checkout/sessions", form);
+    // Два нажатия одновременно (две вкладки, владелец и партнёр) проходят
+    // проверки выше вместе — ключ идемпотентности отдаёт им одну страницу.
+    const idempotencyKey = checkoutIdempotencyKey({
+      tenantId,
+      priceId,
+      quantity,
+      trialEnd: form["subscription_data[trial_end]"] ? Number(form["subscription_data[trial_end]"]) : null,
+      returnUrl: back,
+      superseded,
+      nowMs: Date.now(),
+    });
+    const session = await stripe(stripeKey, "POST", "checkout/sessions", form, idempotencyKey);
     if (!session.url) return json(502, { error: "stripe_failed" });
     return json(200, { url: session.url });
   } catch (e) {

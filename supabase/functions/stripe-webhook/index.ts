@@ -42,6 +42,7 @@
 
 import { serviceClient } from "../_shared/service-client.ts";
 import { json } from "../_shared/http.ts";
+import { duplicateVerdict, LIVE_TARIFF_STATUSES } from "../_shared/tariff-duplicates.ts";
 // `npm:`, а не `esm.sh`: сборка esm.sh тянула node-совместимость Deno std, и
 // она на каждое событие писала в логи «event loop error:
 // Deno.core.runMicrotasks() is not supported» — настоящий сбой вебхука в
@@ -135,7 +136,7 @@ function fieldsOfSubscription(sub: Stripe.Subscription): ReconcileFields {
   return update;
 }
 
-const LIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
+const LIVE_STATUSES = LIVE_TARIFF_STATUSES;
 
 /** ПРАВДА О ПОДПИСКЕ — ИЗ STRIPE, А НЕ ИЗ СОБЫТИЯ (аудит 03.10).
  *
@@ -179,10 +180,71 @@ async function subscriptionTruth(
   } catch {
     currentSub = null; // текущей в Stripe нет — переходим на живую
   }
-  if (currentSub && LIVE_STATUSES.has(currentSub.status) && currentSub.created >= fresh.created) {
-    return null; // текущая живая и не старше — остаётся
+  const verdict = duplicateVerdict({ tenantId, current: currentSub, fresh });
+  switch (verdict.kind) {
+    case "adopt":
+      return fieldsOfSubscription(fresh);
+    case "ignore":
+      return null;
+    case "cancel":
+      // Тариф остаётся на записанной подписке, вторую снимаем.
+      await refundAndCancelDuplicate(stripe, verdict.subscriptionId, tenantId, current);
+      return null;
+    case "alarm":
+      console.error("stripe webhook: two live subscriptions, second without tenant tag", {
+        tenant: tenantId,
+        current,
+        other: fresh.id,
+      });
+      return verdict.adopt ? fieldsOfSubscription(fresh) : null;
   }
-  return fieldsOfSubscription(fresh);
+}
+
+/** ВТОРАЯ ПОДПИСКА ТОГО ЖЕ АККАУНТА — ДВОЙНАЯ ОПЛАТА: возвращаем её первый
+ *  платёж и отменяем её сразу, без пересчёта. Человек нажал «Оплатить»
+ *  дважды, а не купил два тарифа: подписка одна на аккаунт, и
+ *  `tariff-checkout` меняет живую, а не заводит вторую.
+ *
+ *  ПОРЯДОК — СНАЧАЛА ВОЗВРАТ, ПОТОМ ОТМЕНА. Сбой любого шага — исключение,
+ *  500 и повтор события от Stripe. Отменённая подписка уже не «живая», и
+ *  повтор её не тронул бы — значит, возврат, не сделанный до отмены, не
+ *  случился бы никогда. Ключи идемпотентности не дают повтору вернуть деньги
+ *  дважды. */
+async function refundAndCancelDuplicate(
+  stripe: Stripe,
+  subscriptionId: string,
+  tenantId: string,
+  keep: string,
+): Promise<void> {
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["latest_invoice"] });
+  const invoice = typeof sub.latest_invoice === "object" ? sub.latest_invoice : null;
+  const paid = invoice && invoice.status === "paid" && (invoice.amount_paid ?? 0) > 0;
+  if (paid) {
+    const ref = invoice as unknown as { payment_intent?: unknown; charge?: unknown };
+    const paymentIntent = idOf(ref.payment_intent);
+    const charge = idOf(ref.charge);
+    if (!paymentIntent && !charge) throw new Error(`duplicate ${subscriptionId}: paid invoice without payment`);
+    await stripe.refunds.create(
+      {
+        ...(paymentIntent ? { payment_intent: paymentIntent } : { charge: charge as string }),
+        reason: "duplicate",
+        metadata: { tenant_id: tenantId, subscription: subscriptionId, kept: keep },
+      },
+      { idempotencyKey: `babun-duplicate-refund-${subscriptionId}` },
+    );
+  }
+  await stripe.subscriptions.cancel(
+    subscriptionId,
+    { prorate: false, invoice_now: false },
+    { idempotencyKey: `babun-duplicate-cancel-${subscriptionId}` },
+  );
+  // Не сбой, а след для разбора: в журнале видно, что и почему снято.
+  console.warn("stripe webhook: duplicate subscription refunded and cancelled", {
+    tenant: tenantId,
+    cancelled: subscriptionId,
+    kept: keep,
+    refunded: paid ? invoice?.amount_paid : 0,
+  });
 }
 
 function computeUpdate(event: Stripe.Event): ReconcileFields | null {
