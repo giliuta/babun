@@ -76,7 +76,9 @@ export default function PhoneChannelButton({
 
 /** Открыть мессенджер или звонилку. Приложения нет (Viber, Instagram) —
  *  `openURL` отказывает, и тап молча ничего бы не делал. */
-function openChannel(url: string, label: string): void {
+/** Открыть мессенджер словами при неудаче: нет приложения — тап не может
+ *  «ничего не делать». */
+export function openChannel(url: string, label: string): void {
   Linking.openURL(url).catch(() =>
     notify("Не удалось открыть", `${label}: приложение не установлено или ссылка не открывается.`),
   );

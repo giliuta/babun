@@ -1,4 +1,4 @@
-import { Linking } from "react-native";
+import { openChannel } from "@/features/clients/PhoneChannelButton";
 import type { CountryCode } from "libphonenumber-js";
 import { withHomeCode } from "@/features/clients/use-phone-country";
 import { dialPrefix, formatPhoneForDisplay } from "@/lib/phone";
@@ -88,7 +88,7 @@ export function ContactFieldRows({
                     label={`${f.label} · открыть`}
                     onPress={() => {
                       haptics.tap();
-                      void Linking.openURL(url);
+                      openChannel(url, f.label);
                     }}
                   />
                 ) : null
@@ -125,7 +125,7 @@ export function ContactFieldRows({
                   label={`${f.label} · открыть`}
                   onPress={() => {
                     haptics.tap();
-                    void Linking.openURL(url);
+                    openChannel(url, f.label);
                   }}
                 />
               ) : null
