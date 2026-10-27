@@ -120,5 +120,3 @@ export function useCalendarHeaderNav(deps: UseCalendarHeaderNavDeps) {
     openWeekFromMonth, pickDay,
   };
 }
-
-export type CalendarHeaderNav = ReturnType<typeof useCalendarHeaderNav>;

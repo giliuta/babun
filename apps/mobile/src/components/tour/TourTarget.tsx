@@ -36,10 +36,6 @@ export function TourScrollProvider({
   return <TourScrollContext.Provider value={value}>{children}</TourScrollContext.Provider>;
 }
 
-export function useTourHost(): string {
-  return useContext(TourHostContext);
-}
-
 export function TourTarget({
   id,
   children,
