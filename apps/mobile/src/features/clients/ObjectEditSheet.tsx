@@ -22,6 +22,8 @@ import { useReferenceHref } from "@/lib/reference-href";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmAction } from "@/lib/confirm";
+import { useClientAppointments } from "@/features/clients/appointments";
+import { objectDeleteTitle, visitsOnObject } from "@/features/clients/object-delete";
 import { useThemeColors } from "@/theme/colors";
 
 // ПРАВКА ОБЪЕКТА — ЛИСТ, А НЕ СТРАНИЦА: отдельной страницы объекта нет, тап
@@ -90,6 +92,8 @@ export function ObjectEditSheet({
   );
 
   const typeOptions = useObjectTypeOptions(client.team_id ?? null);
+  // Визиты клиента — для числа в вопросе «Удалить» (`object-delete.ts`).
+  const clientVisits = useClientAppointments(client.id);
 
   // Черновик главной строки и заметки. Заполняем ТОЛЬКО на открытии листа (по
   // locationId, а не по самому объекту): `loc` — новая ссылка после каждого
@@ -149,7 +153,7 @@ export function ObjectEditSheet({
   const confirmDelete = () => {
     const victim = loc;
     const ask = () =>
-      confirmAction("Удалить объект?", {
+      confirmAction(objectDeleteTitle(visitsOnObject(clientVisits.data, victim.id)), {
         message: objectTarget(victim) || victim.label || "Объект",
         confirmLabel: "Удалить",
         destructive: true,
