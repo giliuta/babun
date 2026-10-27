@@ -30,7 +30,7 @@
 // Новую настройку раздела сюда не добавлять — её место за шестерёнкой.
 
 import { useCallback, useRef } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { RefreshCw, Shield } from "lucide-react-native";
 import { useQueueDepth } from "@babun/shared/sync";
@@ -41,10 +41,10 @@ import { useTenantId } from "@/lib/tenant";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { TYPE } from "@/components/ui/tokens";
 import { TourScrollProvider, TourTarget } from "@/components/tour/TourTarget";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
@@ -84,9 +84,7 @@ export default function CabinetHome() {
     // над таб-баром висела пустая полоса навигации (на Android с кнопками —
     // 48 dp), и последний пункт списка обрезался над ней.
     <Screen edges={["top"]}>
-      <View className="px-4 pb-1 pt-4">
-        <Text style={{ ...TYPE.display, color: t.ink }}>Кабинет</Text>
-      </View>
+      <ScreenHeader large title="Кабинет" />
 
       <TourScrollProvider scrollRef={scrollRef} scrollY={scrollY}>
       <ScrollView
