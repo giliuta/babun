@@ -217,4 +217,19 @@ describe("server hygiene migrations", () => {
       assert.ok(sql.includes(`11365a87-bef9-4f6c-a030-b15083fe646b/${file}`), `${file} в списке «не трогать»`);
     }
   });
+
+  test("profit is no longer a separate right — registry row and grants go together", () => {
+    const sql = code(migration("20261027235600_finance_profit_right_removed.sql"));
+    const grants = sql.indexOf("delete from public.member_access where block = 'finance.profit'");
+    const block = sql.indexOf("delete from public.access_blocks where key = 'finance.profit'");
+    assert.ok(grants >= 0 && block > grants, "выдачи снимаются раньше блока реестра");
+  });
+
+  test("receipt without chosen details goes out from the payment team's legal entity, like an invoice", () => {
+    const sql = code(migration("20261027235610_receipt_from_team_legal_entity.sql"));
+    assert.match(sql, /company_uuid := public\.resolve_company_id\(p_tx\.tenant_id, p_company_id\);/);
+    assert.match(sql, /coalesce\(p_company_id, public\.legal_entity_of_team\(p_tx\.tenant_id, p_tx\.team_id\)\)/);
+    // Через `resolve_company_id`: не-владельца пускает только к юрлицу его команды.
+    assert.match(sql, /company_uuid := public\.resolve_company_id\(\\n/);
+  });
 });
