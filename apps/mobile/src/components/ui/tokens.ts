@@ -59,3 +59,14 @@ export const TYPE = {
    *  свой кегль. Моноширинные цифры обязательны — только `fontVariant`. */
   money: { fontSize: 28, lineHeight: 36, fontWeight: "700" },
 } as const;
+
+/** СТРОКА СПИСКА — ОДНА РОЛЬ НА ПРОДУКТ: имя 15/600, подпись 13, строка 52 —
+ *  так набраны шторка выбора (`SelectRow`) и лента «Финансов». Клиенты,
+ *  агенда, люди и прайс держали пять разных кеглей имени (14–16), и один и
+ *  тот же клиент в соседних списках читался разным размером. Новый список
+ *  берёт эти значения, а не числа; сторож — `lib/list-row-scale.test.ts`. */
+export const LIST_ROW = {
+  minHeight: 52,
+  name: { fontSize: TYPE.callout.fontSize, fontWeight: TYPE.callout.fontWeight },
+  sub: { fontSize: TYPE.subhead.fontSize },
+} as const;
