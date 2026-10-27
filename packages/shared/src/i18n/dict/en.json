@@ -5209,5 +5209,7 @@
  "Удалить клиента {0} насовсем": "Delete client {0} permanently",
  "Вернуть клиента": "Restore client",
  "Не удалось вернуть клиента": "Couldn't restore the client",
- "Удалить клиента насовсем может только владелец.": "Only the owner can delete a client permanently."
+ "Удалить клиента насовсем может только владелец.": "Only the owner can delete a client permanently.",
+ "Главный": "Main",
+ "Карточка": "Card"
 }

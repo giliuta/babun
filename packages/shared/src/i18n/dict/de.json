@@ -5209,5 +5209,7 @@
  "Удалить клиента {0} насовсем": "Kunden {0} endgültig löschen",
  "Вернуть клиента": "Kunden wiederherstellen",
  "Не удалось вернуть клиента": "Kunde konnte nicht wiederhergestellt werden",
- "Удалить клиента насовсем может только владелец.": "Nur der Inhaber kann einen Kunden endgültig löschen."
+ "Удалить клиента насовсем может только владелец.": "Nur der Inhaber kann einen Kunden endgültig löschen.",
+ "Главный": "Haupt-Tag",
+ "Карточка": "Karte"
 }
