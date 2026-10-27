@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useMirror } from "@/session/mirror-state";
+import { useSession } from "@/providers/SessionProvider";
 
 import {
   parseAccessBlocks,
@@ -103,8 +104,12 @@ function parseMembers(value: unknown): CalendarMember[] {
 
 /** Реестр блоков — общий для всех компаний, меняют его только миграции. */
 export function useAccessBlocks({ fresh = false }: { fresh?: boolean } = {}) {
+  // Реестр читает только вошедший: хук живёт и над экраном входа, и без
+  // этого возврат в приложение на экране входа перечитывал бы его анонимом.
+  const signedIn = !!useSession().session;
   return useQuery({
     queryKey: accessBlocksQueryKey(),
+    enabled: signedIn,
     staleTime: 5 * 60_000,
     // СТРАНИЦЫ ПРАВ ЧИТАЮТ РЕЕСТР ПРИ КАЖДОМ ОТКРЫТИИ: иначе после наката новой
     // строки на сервере на экране ещё пять минут стояла бы старая «Новые записи».

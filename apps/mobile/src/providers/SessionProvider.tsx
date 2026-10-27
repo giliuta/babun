@@ -2,14 +2,16 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { setShownSessionUserId } from "@/lib/active-tenant";
 import { handleAuthEvent } from "@/lib/auth-clear";
+import { queryClient } from "@/lib/query-client";
 import { supabase } from "@/lib/supabase";
-import { shouldPublishSession } from "./session-publish";
+import { shouldPublishSession, signedOutNow } from "./session-publish";
 
 type SessionState = { session: Session | null; loading: boolean };
 
@@ -80,8 +82,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // эффекты той же отрисовки ещё видят прежнего и отбиваются, а не уходят
   // анонимом.
   const shownUserId = session?.user?.id ?? null;
+  const shownBefore = useRef<string | null>(null);
   useEffect(() => {
     setShownSessionUserId(shownUserId);
+    // Повторы запросов вышедшего ушли бы анонимом (`signedOutNow`).
+    if (signedOutNow(shownBefore.current, shownUserId)) {
+      void queryClient.cancelQueries();
+    }
+    shownBefore.current = shownUserId;
   }, [shownUserId]);
 
   return (
