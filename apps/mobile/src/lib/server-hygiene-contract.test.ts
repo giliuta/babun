@@ -235,4 +235,20 @@ describe("server hygiene migrations", () => {
     assert.match(sql, /current_user_role\(\) is distinct from ''owner''/);
     assert.match(sql, /Документ команды выставляется от реквизитов этой команды/);
   });
+
+  test("invoice of a record counts the money the record already took", () => {
+    const sql = code(migration("20261027235620_invoice_counts_appointment_money.sql"));
+    // Деньги записи — доходы без инвойса минус их возвраты; только последнему живому инвойсу.
+    assert.match(sql, /income\.invoice_id is null\s+and income\.type = 'income'/);
+    assert.match(sql, /order by latest\.created_at desc, latest\.id desc\s+limit 1/);
+    // Остаток оплаты — за вычетом денег записи, в RPC и в триггере вставки.
+    assert.match(sql, /'public\.validate_invoice_payment_insert\(\)'/);
+    assert.match(sql, /paid_total := paid_total \+ appointment_credit;/);
+    // Отказ «оплата вне инвойса» — только там, где деньги записи не засчитаны.
+    assert.match(sql, /if appointment_credit = 0\\n {9}and other_money > 0/);
+    // Сторож статуса и кредит-ноты считают «оплачен» так же.
+    assert.match(sql, /net_paid \+ appointment_credit < new\.total - new\.credited_amount/);
+    assert.match(sql, /public\.delete_credit_note\(uuid\)/);
+    assert.match(sql, /after insert or update of status, credited_amount on public\.invoices/);
+  });
 });
