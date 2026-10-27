@@ -105,9 +105,11 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
-  // Платят за каждый живой календарь — столько и в кнопке; счёт — по
-  // аккаунту страницы, а не по открытому в календаре.
-  const calendars = Math.max(1, liveCount ?? (scope.foreign ? 0 : live.length));
+  // Платят за каждый живой календарь с работой — столько и в кнопке; счёт —
+  // по аккаунту страницы, а не по открытому в календаре. Пока число не
+  // пришло — минимум подписки, а не все живые: календари только с событиями
+  // бесплатны.
+  const calendars = Math.max(1, liveCount ?? 0);
   const full = owner
     ? tariffAction(state, selected, calendars, period)
     : gate === "write"
@@ -328,7 +330,7 @@ function TierTile({
         <View style={{ gap: 2 }}>
           {forever ? null : (
             <Text style={{ ...TYPE.subhead, color: t.ink }}>
-              {`Ваших календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
+              {`Рабочих календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
             </Text>
           )}
           <Text style={{ ...TYPE.subhead, color: t.faint }}>

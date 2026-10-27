@@ -518,6 +518,7 @@
  "Ваше имя": "Your name",
  "Ваши контакты": "Your contacts",
  "Ваших календарей: {0} — {1} в месяц": "Your calendars: {0} — {1} per month",
+ "Рабочих календарей: {0} — {1} в месяц": "Working calendars: {0} — {1} per month",
  "Введите email — пришлём код": "Enter your email — we'll send a code",
  "Введите {0} для подтверждения. Все данные будут потеряны.": "Type {0} to confirm. All data will be lost.",
  "Введите другое название.": "Enter a different name.",

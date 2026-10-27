@@ -18,6 +18,55 @@ export function calendarsMonthly(calendars: number): string {
   return euro(CALENDAR_PRICE.monthly * Math.max(1, calendars));
 }
 
+/** ЗА КАКОЙ КАЛЕНДАРЬ ПЛАТЯТ: живой, в котором есть РАБОТА — запись
+ *  (`appointments.kind = 'work'`), операция финансов или SMS. Календарь только
+ *  с событиями бесплатен, как бы он ни назывался («Личный», пустой скрытый).
+ *
+ *  Сервер считает функцией базы `paid_calendar_count` (её зовут
+ *  `tariff-checkout` и `stripe-webhook`), приложение — этим же списком своими
+ *  запросами (`features/tariffs/use-live-calendars.ts`), поэтому страница
+ *  «Тариф» работает и до наката функции. Список и SQL сверяет
+ *  `paid-calendars-parity.test.ts`: разойдутся — человек увидит одну сумму, а
+ *  Stripe спишет другую. */
+export const CALENDAR_WORK_SOURCES = [
+  { table: "appointments", kind: "work" },
+  { table: "finance_transactions" },
+  { table: "sms_messages" },
+] as const;
+
+/** Сколько живых календарей платят: те, где нашлась работа. Минимум в
+ *  подписке (один) ставит тот, кто показывает цену. */
+export function paidCalendarCount(liveTeamIds: readonly string[], withWork: ReadonlySet<string>): number {
+  return liveTeamIds.filter((id) => withWork.has(id)).length;
+}
+
+/** Ровно то, что нужно от клиента базы, чтобы спросить «есть ли строка»:
+ *  клиент Supabase этому удовлетворяет, тест — подставляет свой. */
+export interface WorkQuery {
+  select(columns: string): WorkQuery;
+  eq(column: string, value: string): WorkQuery;
+  limit(count: number): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+}
+export interface WorkClient {
+  from(table: (typeof CALENDAR_WORK_SOURCES)[number]["table"]): WorkQuery;
+}
+
+/** Есть ли в календаре работа — по `CALENDAR_WORK_SOURCES` по порядку:
+ *  нашлась запись — операции и SMS уже не спрашиваем. Каждая проверка —
+ *  «есть хоть одна строка» (`limit(1)`), а не выборка всего календаря.
+ *  Ошибка чтения — исключение, а не «работы нет»: молчаливый ноль показал бы
+ *  бесплатным календарь, за который спишут. */
+export async function calendarHasWork(client: WorkClient, tenantId: string, teamId: string): Promise<boolean> {
+  for (const source of CALENDAR_WORK_SOURCES) {
+    let query = client.from(source.table).select("team_id").eq("tenant_id", tenantId).eq("team_id", teamId);
+    if ("kind" in source) query = query.eq("kind", source.kind);
+    const { data, error } = await query.limit(1);
+    if (error) throw new Error(error.message);
+    if ((data ?? []).length > 0) return true;
+  }
+  return false;
+}
+
 /** Период оплаты: помесячно или на год вперёд. */
 export type BillingPeriod = "month" | "year";
 
