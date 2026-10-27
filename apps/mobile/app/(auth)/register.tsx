@@ -21,6 +21,7 @@ import { passwordAccepted, passwordHint } from "@/components/auth/password-rule"
 import { CAN_PAY_HERE, CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { invitationSignupErrorMessage } from "@/features/settings/invitation-flow";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
+import { legalLang } from "@/features/legal/legal-texts";
 
 // «Создать аккаунт» — name/email/password inline (chained return key).
 // Non-functional OAuth placeholders are not shown. Terms is a one-line legal note.
@@ -126,7 +127,9 @@ function RegisterScreen() {
       router.push(href);
       return;
     }
-    Linking.openURL(`https://babun.app${href}`).catch(() => {
+    // Язык документа — язык интерфейса: сайт иначе берёт язык браузера, и
+    // при английском приложении договор открывался по-русски.
+    Linking.openURL(`https://babun.app${href}?lang=${legalLang(null, uiLocale())}`).catch(() => {
       notify(
         "Не удалось открыть ссылку",
         "Проверьте интернет и повторите.",
