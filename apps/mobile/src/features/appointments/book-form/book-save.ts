@@ -56,6 +56,8 @@ export interface BookSaveInput {
   tenantIdForFiles: BookDraft["tenantIdForFiles"];
   queryClientForFiles: BookDraft["queryClientForFiles"];
   leaveBook: () => void;
+  /** Новая запись создана — черновик на телефоне больше не нужен. */
+  onCreated?: () => void;
 }
 
 /** «Сохранить» / «Создать» and the self-reminder bell (no hooks inside). */
@@ -95,6 +97,7 @@ export function bookSaveActions({
   tenantIdForFiles,
   queryClientForFiles,
   leaveBook,
+  onCreated,
 }: BookSaveInput) {
   const reminderToast = (
     res: Awaited<ReturnType<typeof setSelfReminder>>,
@@ -188,6 +191,7 @@ export function bookSaveActions({
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
+        onCreated?.();
         if (selfReminder && tenantIdForFiles) {
           void setSelfReminder(
             created,

@@ -34,6 +34,9 @@ import { bookSaveActions } from "./book-save";
 import { bookChrome, bookTitle } from "./book-chrome";
 import { useRecordMenu } from "./use-record-menu";
 import { recordComment } from "@/features/calendar/record-title";
+import { useTenantId } from "@/lib/tenant";
+import { paramsWithDraft } from "./book-draft-store";
+import { usePersistBookDraft, useRestoredBookDraft } from "./use-book-draft-memory";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -56,13 +59,32 @@ export function useBookForm() {
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<BookParams>();
+  // ЧЕРНОВИК НОВОЙ ЗАПИСИ — С ТЕЛЕФОНА (`book-draft-store.ts`). Поднятый
+  // проходит через умолчания формы своими командой, клиентом, днём и часом;
+  // «что ввёл человек» по-прежнему сверяется с настоящими параметрами.
+  const tenantId = useTenantId();
+  const draftMemory = useRestoredBookDraft(
+    tenantId,
+    first(params.appointmentId) != null,
+    first(params.kind) === "event" ? "event" : "work",
+  );
+  const formParams = useMemo(
+    () => paramsWithDraft(params, draftMemory.restored),
+    [params, draftMemory.restored],
+  );
   const [teamId, setTeamId] = useState<string | null>(
-    first(params.teamId) ?? null,
+    first(formParams.teamId) ?? null,
   );
   const look = useBookBlocks(teamId);
   const refs = useBookReferences(teamId);
   const { teams, masters, services, clients, allAppts, calendarSettings } = refs;
-  const draft = useBookDraft({ params, teamId, setTeamId, allAppts });
+  const draft = useBookDraft({
+    params: formParams,
+    teamId,
+    setTeamId,
+    allAppts,
+    restored: draftMemory.restored,
+  });
   const { isEdit, editing, kind, clientId, date, timeStart, timeEnd, serviceIds } = draft;
   const sheets = useBookSheets();
 
@@ -100,7 +122,7 @@ export function useBookForm() {
   useBookPrefill({
     ...refs,
     ...draft,
-    params,
+    params: formParams,
     team,
     teamId,
     setTeamId,
@@ -199,7 +221,9 @@ export function useBookForm() {
   useBookingChain({
     chainStep: picks.chainStep,
     setChainStep: picks.setChainStep,
-    isEdit,
+    // Поднятый черновик — запись на середине: цепочка «клиент → услуги» не
+    // начинается заново, и её лист не накрывает плашку «Удалить черновик».
+    isEdit: isEdit || draftMemory.restored != null,
     kind,
     referencesPending,
     clientId,
@@ -253,6 +277,51 @@ export function useBookForm() {
     saveable: verdict.canSave && !verdict.workLocked,
     navigation,
     router,
+    onDiscardDraft: draftMemory.forget,
+  });
+  usePersistBookDraft({
+    memory: draftMemory,
+    tenantId,
+    isEdit,
+    dirty: guard.dirty,
+    snapshot: {
+      kind,
+      teamId,
+      clientId,
+      locationId: draft.locationId,
+      address: draft.address,
+      date,
+      timeStart,
+      timeEnd,
+      durationTouched: draft.durationTouched,
+      durationByHand: draft.durationByHand,
+      serviceIds,
+      overrides: draft.overrides,
+      masterId: draft.masterId,
+      customTotal: draft.customTotal,
+      totalDraft: draft.totalDraft,
+      discountType: draft.discountType,
+      discountValue: draft.discountValue,
+      recordVatMode: draft.recordVatMode,
+      recordVatRate: draft.recordVatRate,
+      status: draft.status,
+      comment: draft.comment,
+      eventTitle: draft.eventTitle,
+      eventColor: draft.eventColor,
+      eventTypeId: draft.eventTypeId,
+      eventNotes: draft.eventNotes,
+      eventAddress: draft.eventAddress,
+      eventUrl: draft.eventUrl,
+      eventReminderOffset: draft.eventReminderOffset,
+      repeat: draft.repeat,
+      allDay: draft.allDay,
+      reminderOn: draft.reminderOn,
+      colorOverride: draft.colorOverride,
+      city: draft.city,
+      cityTouched: draft.cityTouched,
+    },
+    toast,
+    router,
   });
   const actions = bookSaveActions({
     ...draft,
@@ -271,6 +340,7 @@ export function useBookForm() {
     client,
     setReminderSheetOpen: sheets.setReminderSheetOpen,
     leaveBook: guard.leaveBook,
+    onCreated: draftMemory.forget,
   });
   // «Сохранить» из вопроса при выходе — та же кнопка, что внизу формы.
   guard.saveRef.current = actions.save;
