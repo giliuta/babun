@@ -62,6 +62,11 @@ export function hideDecisionAfterTransfer<A extends ClosableAccount>(
  * СЧЕТА». Сервер принимает только пустой счёт
  * (`account_trash_rules`), поэтому деньги сначала уводятся переводом — ровно
  * как у «Скрыть»; ноль — вопрос «Удалить счёт?».
+ *
+ * СЧЁТ БЕЗ ОПЕРАЦИЙ — СРАЗУ ВОПРОС, при любом стартовом остатке: стартовый
+ * остаток — настройка счёта, а не деньги, и правки его в листе нет. Иначе
+ * нетронутый счёт с ненулевым стартом не удалялся вовсе — обнулить его можно
+ * было только выдуманной операцией.
  */
 export type TrashDecision = Exclude<HideDecision, { kind: "close" }> | { kind: "trash" };
 
@@ -69,6 +74,7 @@ export function trashDecision<A extends ClosableAccount>(
   account: A,
   accounts: readonly A[],
 ): TrashDecision {
+  if (!account.has_history) return { kind: "trash" };
   const decision = hideDecision(account, accounts);
   return decision.kind === "close" ? { kind: "trash" } : decision;
 }

@@ -121,6 +121,16 @@ describe("«Удалить» на странице «Счета» (владел�
     assert.deepEqual(trashDecision(used, [typo, used]), { kind: "trash" });
   });
 
+  test("счёт без операций — вопрос об удалении при любом стартовом остатке", () => {
+    // Review: «Test QA» — старт −€50,25, ни одной операции.
+    const untouched = account({ id: "test", balance: -50.25, has_history: false });
+    assert.deepEqual(trashDecision(untouched, [untouched, account({ id: "cash", balance: 260 })]), {
+      kind: "trash",
+    });
+    const started = account({ id: "start", balance: 100, has_history: false });
+    assert.deepEqual(trashDecision(started, [started]), { kind: "trash" });
+  });
+
   test("закрытый счёт удаляется сразу — у него всегда ноль", () => {
     const closed = account({ id: "closed", is_active: false });
     assert.deepEqual(trashDecision(closed, [account({ id: "cash" })]), { kind: "trash" });
