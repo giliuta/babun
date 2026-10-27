@@ -1,6 +1,7 @@
 // deno-lint-ignore no-import-prefix -- Supabase Edge Functions resolve this URL import at deploy time.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { cancelSoleOwnedSubscriptions } from "../_shared/subscriptions.ts";
+import { ownedTenants, purgeGoneTenantsStorage } from "../_shared/tenant-storage.ts";
 
 type CleanupStatus =
   | "requested"
@@ -263,6 +264,8 @@ async function processClaim(
     }
     status = "soft_deleted";
 
+    // Компании владельца — до каскада: после него членства уже нет.
+    const ownedTenantIds = await ownedTenants(service, claim.userId);
     const { data, error } = await service.rpc(
       "delete_sole_owned_tenants_for_account",
       { p_user_id: claim.userId },
@@ -284,6 +287,9 @@ async function processClaim(
       return "lease_lost";
     }
     status = "tenant_data_deleted";
+    // Файлы ушедших компаний (фото, чеки, файлы клиентов, публичные
+    // логотипы). Сбой не держит удаление: остаток подберёт `storage-janitor`.
+    await purgeGoneTenantsStorage(service, ownedTenantIds);
   }
 
   const { error: hardDeleteError } = await service.auth.admin.deleteUser(
