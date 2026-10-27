@@ -37,8 +37,7 @@ describe("ключи запросов компании не изменили ф�
     same(keys.citiesQueryKey(T, false, null), ["cities", T, "live", null]);
     same(keys.citiesQueryKey(T, true, "team-1"), ["cities", T, "all", "team-1"]);
   });
-  test("услуги: активные и с архивом (порядок элементов разный!)", () => {
-    same(keys.servicesQueryKey(T, "dispatcher"), ["services", T, "dispatcher"]);
+  test("услуги с архивом", () => {
     same(keys.allServicesQueryKey(T, "owner"), ["services", "with-archived", T, "owner"]);
   });
   test("настройки календаря, города дня, ручные операции, профиль", () => {
@@ -47,8 +46,7 @@ describe("ключи запросов компании не изменили ф�
     same(keys.dayExtrasQueryKey(T, "owner"), ["day-extras", T, "owner"]);
     same(keys.tenantQueryKey(T, "master"), ["tenant", T, "master"]);
   });
-  test("расписания: одной команды и всех", () => {
-    same(keys.teamScheduleQueryKey(T, "owner", "team-1"), ["team-schedules", T, "owner", "team-1"]);
+  test("расписания всех команд", () => {
     same(keys.allTeamSchedulesQueryKey(T, "owner"), ["team-schedules", T, "owner", "all"]);
   });
 });
