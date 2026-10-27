@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { useRef, useState, type Ref } from "react";
+import { Text, TextInput, View, type TextInput as TextInputType } from "react-native";
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
@@ -65,7 +65,8 @@ export function ServiceLine({
   const [totalDraft, setTotalDraft] = useState<string | null>(null);
   const unitShown = unitDraft ?? moneyCellText(line.pricePerUnit);
   const totalShown = totalDraft ?? moneyCellText(line.total);
-
+  // Return в названии своей строки ведёт к цене, а не прячет клавиатуру.
+  const priceRef = useRef<TextInputType>(null);
   // ОДНА СТРОКА НА УСЛУГУ, ЧЕТЫРЕ КОЛОНКИ. Цветная точка услуги и её длительность второй
   // строкой здесь лишние. Длительность живёт в строке
   // услуги на самой странице записи и от правки цены не меняется, цвет тут
@@ -73,49 +74,42 @@ export function ServiceLine({
   //
   // Имя переносится на вторую строку, а не обрезается: «Заправка фреоном» в
   // 130pt не влезает, а услуга без имени — не услуга.
-  return (
-    <View
+  const nameNode = nameEditable ? (
+    <TextInput
+      keyboardAppearance="light"
+      value={line.editableName}
+      onChangeText={(next) => onNameChange?.(line.id, next)}
+      placeholder="Название"
+      placeholderTextColor={t.placeholder}
+      selectionColor={t.accent}
+      // Новая строка — курсор сразу в имени.
+      autoFocus={!line.editableName}
+      returnKeyType="next"
+      submitBehavior="submit"
+      onSubmitEditing={() => priceRef.current?.focus()}
+      accessibilityLabel="Название своей услуги"
+      maxFontSizeMultiplier={1.2}
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: COL_GAP,
-        minHeight: 46,
-        paddingHorizontal: 14,
-        paddingVertical: 4,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
+        height: 34,
+        paddingHorizontal: 8,
+        ...ANDROID_INPUT,
+        borderRadius: t.radius.input,
+        backgroundColor: t.fill,
+        fontSize: 15,
+        fontWeight: "600",
+        color: t.ink,
       }}
+    />
+  ) : (
+    <Text
+      numberOfLines={2}
+      style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
     >
-      {nameEditable ? (
-        <TextInput
-          keyboardAppearance="light"
-          value={line.editableName}
-          onChangeText={(next) => onNameChange?.(line.id, next)}
-          placeholder="Название"
-          placeholderTextColor={t.placeholder}
-          // Новая строка — курсор сразу в имени.
-          autoFocus={!line.editableName}
-          accessibilityLabel="Название своей услуги"
-          maxFontSizeMultiplier={1.2}
-          style={{
-            flex: 1,
-            height: 34,
-            paddingHorizontal: 8,
-            borderRadius: t.radius.input,
-            backgroundColor: t.fill,
-            fontSize: 15,
-            fontWeight: "600",
-            color: t.ink,
-          }}
-        />
-      ) : (
-        <Text
-          numberOfLines={2}
-          style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-        >
-          {name}
-        </Text>
-      )}
+      {name}
+    </Text>
+  );
+  const numbers = (
+    <>
       <QtyStepper
         name={name}
         qty={line.qty}
@@ -127,6 +121,7 @@ export function ServiceLine({
       <MoneyCell
         width={COL_PRICE}
         value={unitShown}
+        inputRef={priceRef}
         accessibilityLabel={`Цена за одну: ${name}`}
         onChange={(next) => {
           setUnitDraft(next);
@@ -147,9 +142,47 @@ export function ServiceLine({
         }}
         onBlur={() => setTotalDraft(null)}
       />
+    </>
+  );
+  const frame = {
+    gap: COL_GAP,
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderTopWidth: separated ? 1 : 0,
+    borderTopColor: t.separator,
+  } as const;
+
+  // СВОЯ СТРОКА — НАЗВАНИЕ НАД ЧИСЛАМИ, во всю ширину: в колонке рядом с
+  // числами на узком экране оставалось ~80 pt, и «Замена компрессора» не
+  // читалась. Строки прайса остаются одной строкой — их имя не правят.
+  if (nameEditable) {
+    return (
+      <View style={{ ...frame, paddingVertical: 8 }}>
+        {nameNode}
+        <View
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: COL_GAP }}
+        >
+          {numbers}
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View style={{ ...frame, flexDirection: "row", alignItems: "center" }}>
+      {nameNode}
+      {numbers}
     </View>
   );
 }
+
+/** Android добавляет полю шрифтовые поля сверху: в высоте 34 цифры
+ *  срезались по верху. На iOS эти свойства ничего не меняют. */
+const ANDROID_INPUT = {
+  paddingVertical: 0,
+  includeFontPadding: false,
+  textAlignVertical: "center",
+} as const;
 
 /** Денежное поле колонки. Знака валюты в ячейке нет — он сказан в шапке
  *  колонки один раз; подложка говорит, что число правится. */
@@ -157,12 +190,14 @@ function MoneyCell({
   value,
   width,
   strong,
+  inputRef,
   accessibilityLabel,
   onChange,
   onBlur,
 }: {
   value: string;
   width: number;
+  inputRef?: Ref<TextInputType>;
   /** Сумма работы: крупнее и чернилами — её читают, остальное крутят. */
   strong?: boolean;
   accessibilityLabel: string;
@@ -172,7 +207,9 @@ function MoneyCell({
   const t = useThemeColors();
   return (
     <TextInput
+      ref={inputRef}
       keyboardAppearance="light"
+      selectionColor={t.accent}
       value={value}
       onChangeText={onChange}
       onBlur={onBlur}
@@ -186,6 +223,7 @@ function MoneyCell({
         width,
         height: 34,
         paddingHorizontal: 8,
+        ...ANDROID_INPUT,
         borderRadius: t.radius.input,
         backgroundColor: t.fill,
         textAlign: "right",
