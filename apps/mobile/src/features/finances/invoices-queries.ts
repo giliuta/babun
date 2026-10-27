@@ -4,6 +4,7 @@ import { persistInvoiceLanguage } from "@/features/finances/persist-invoice-lang
 import {
   deleteInvoice,
   getInvoice,
+  InvoiceAlreadyIssuedError,
   issueInvoice,
   updateInvoice,
   listInvoices,
@@ -248,7 +249,22 @@ export function useIssueInvoice() {
       ...draft
     }: IssueInvoiceDraft & { language?: InvoiceLanguage; repeat?: boolean }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
-      const invoice = await issueInvoice(supabase, tenantId, draft, { repeat });
+      let invoice;
+      try {
+        invoice = await issueInvoice(supabase, tenantId, draft, { repeat });
+      } catch (error) {
+        // ПРОШЛАЯ ПОПЫТКА ВЫСТАВИЛА ДОКУМЕНТ, А ЯЗЫК ЗАПИСАТЬ НЕ УСПЕЛА (он —
+        // вторым шагом). Без этого шага повтор уводил на выставленный инвойс,
+        // и бумага оставалась русской — на английском черновике.
+        if (
+          error instanceof InvoiceAlreadyIssuedError &&
+          language &&
+          error.invoice.language !== language
+        ) {
+          await persistInvoiceLanguage(() => setInvoiceLanguage(supabase, error.invoice.id, language));
+        }
+        throw error;
+      }
       if (language && language !== "ru") {
         const saved = await persistInvoiceLanguage(() =>
           setInvoiceLanguage(supabase, invoice.id, language),

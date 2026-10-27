@@ -28,4 +28,15 @@ describe("повтор выставления", () => {
     assert.match(src, /already\?\.kind === "credit_note" && already\.credit_note_of_id === row\.id/);
     assert.match(src, /issued\.current = already\.id;/);
   });
+
+  test("повтор, наткнувшийся на выставленный инвойс, дописывает его язык (F-31)", () => {
+    const queries = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../finances/invoices-queries.ts"),
+      "utf8",
+    );
+    assert.match(
+      queries,
+      /error instanceof InvoiceAlreadyIssuedError &&\s*language &&\s*error\.invoice\.language !== language[\s\S]*?persistInvoiceLanguage\(\(\) => setInvoiceLanguage\(supabase, error\.invoice\.id, language\)\)/,
+    );
+  });
 });
