@@ -390,6 +390,12 @@ describe("labels", () => {
     assert.equal(paidAtLabel(new Date(2026, 8, 5, 12, 0).toISOString(), todayYmd), "5 сен, 12:00");
     assert.equal(paidAtLabel("nope", todayYmd), "");
   });
+  test("paidAtLabel: time and day in the team's zone, not the phone's (CAL-24)", () => {
+    // 21:30 UTC 5 Oct = 00:30 6 Oct in Nicosia (UTC+3): today there.
+    assert.equal(paidAtLabel("2026-10-05T21:30:00Z", "2026-10-06", "Europe/Nicosia"), "00:30");
+    // 22:10 UTC = 23:10 London (UTC+1) — still the day before there.
+    assert.equal(paidAtLabel("2026-10-05T22:10:00Z", "2026-10-06", "Europe/London"), "5 окт, 23:10");
+  });
   test("recordedToast: plus wording once the account already holds money", () => {
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 0, accountName: "Наличные" }), "Оплачено €50 · Наличные");
     assert.equal(recordedToast({ kind: "prepayment", amount: 50, already: 0, accountName: "Карта" }), "Предоплата €50 · Карта");

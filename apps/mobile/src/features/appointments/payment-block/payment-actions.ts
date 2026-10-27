@@ -235,7 +235,7 @@ export function paymentActions(
     const index = await chooseOption(
       `${account.name}: деньги не поступили?`,
       cancellable.map((row) => ({
-        label: `Снять ${formatEURExact(row.amount)}${row.kind === "prepayment" ? " · предоплата" : ""}${row.paidAt ? ` · ${paidAtLabel(row.paidAt, businessNow().ymd)}` : ""}`,
+        label: `Снять ${formatEURExact(row.amount)}${row.kind === "prepayment" ? " · предоплата" : ""}${row.paidAt ? ` · ${paidAtLabel(row.paidAt, businessNow().ymd, businessNow().zone)}` : ""}`,
         destructive: true,
       })),
       { message: "Платёж уйдёт из записи, в финансах будет сторно. Это не возврат клиенту." },

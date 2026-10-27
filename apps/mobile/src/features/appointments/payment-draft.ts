@@ -23,6 +23,8 @@ export interface BusinessNow {
   ymd: string;
   /** HH:MM */
   hm: string;
+  /** Пояс, в чьих часах это «сейчас» (IANA). Нет — часы телефона. */
+  zone?: string;
 }
 
 /**
@@ -293,11 +295,36 @@ export function pendingPaymentToSend(
   return { amount: amountCents / 100, kind, closeVisit: closesVisit(form, kind, now) };
 }
 
+/** Стенные часы мгновения `at` в поясе `zone` — как Date «по местному». */
+function wallClockIn(at: Date, zone: string | undefined): Date {
+  if (!zone) return at;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(at);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    return new Date(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+  } catch {
+    return at;
+  }
+}
+
 /** «14:20» сегодня, «5 сен, 12:00» раньше: два платежа одного счёта в листе
- *  снятия должны различаться и днём, не только минутой. */
-export function paidAtLabel(iso: string, todayYmd: string): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return "";
+ *  снятия должны различаться и днём, не только минутой.
+ *
+ *  ЧАСЫ КОМАНДЫ, А НЕ ТЕЛЕФОНА (CAL-24). «Сегодня» приходит в поясе команды,
+ *  а время платежа читалось по телефону: в другом поясе около полуночи
+ *  вчерашний платёж назывался сегодняшним, и минуты расходились с формой. */
+export function paidAtLabel(iso: string, todayYmd: string, zone?: string): string {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return "";
+  const at = wallClockIn(instant, zone);
   const ymd = formatYMD(at);
   return ymd === todayYmd ? formatHM(at) : `${formatShortDateRu(ymd)}, ${formatHM(at)}`;
 }
