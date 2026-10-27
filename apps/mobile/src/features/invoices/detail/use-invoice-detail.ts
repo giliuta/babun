@@ -47,9 +47,9 @@ export function useInvoiceDetail() {
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
   const tenantQuery = useTenant();
   const tenant = tenantQuery.data;
-  // ПАРТНЁР С «ДОКУМЕНТАМИ»: «Видит» — бумага, платежи, чек; с
-  // «Выставляет» — ещё язык бумаги и «Выписать чек». Принять оплату, вернуть
-  // деньги и отменить инвойс — только владельцу (сервер так и держит).
+  // ПАРТНЁР С «ДОКУМЕНТАМИ»: «Видит» — бумага, платежи, чек; «Видит и
+  // меняет» в команде инвойса — весь блок, как у владельца: оплата, чек,
+  // возврат, отмена и меню (`docWrite` в `InvoiceDetailScreen`).
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
   const calendarSettingsQuery = useCalendarSettings();
