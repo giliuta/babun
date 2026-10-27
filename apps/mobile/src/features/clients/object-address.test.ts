@@ -260,8 +260,11 @@ describe("адрес двумя строками (03.10)", () => {
       { main: "Makariou 12", detail: "подъезд 4 · Limassol" },
     );
   });
-  test("без частей — строка как есть, уточнения нет; без адреса — ссылка", () => {
+  test("без частей — строка как есть, уточнения нет; только точка — «Точка на карте»", () => {
     assert.deepEqual(addressLines({ address: "Villa 5, Limassol" }), { main: "Villa 5, Limassol", detail: "" });
-    assert.deepEqual(addressLines({ address: "", mapUrl: "https://maps.app" }), { main: "https://maps.app", detail: "" });
+    assert.deepEqual(addressLines({ address: "", mapUrl: "https://maps.app" }), { main: "Точка на карте", detail: "" });
+    // Старые объекты, у которых ссылка лежит в самом адресе.
+    assert.deepEqual(addressLines({ address: "https://maps.app.goo.gl/abc" }), { main: "Точка на карте", detail: "" });
+    assert.deepEqual(addressLines({}), { main: "", detail: "" });
   });
 });
