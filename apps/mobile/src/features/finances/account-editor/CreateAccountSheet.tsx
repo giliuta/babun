@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Banknote, Users, Wallet } from "lucide-react-native";
-import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { moneyInputProblem, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -155,7 +155,13 @@ export function CreateAccountSheet({
       return;
     }
     if (openingCents == null) {
-      notify("Проверьте сумму", "Сумма на счёте — число, максимум два знака после запятой. Например: 1250,50");
+      // Причина — та, что на самом деле: «два знака» на огромной целой сумме
+      // не говорили, что исправить.
+      notify(
+        "Проверьте сумму",
+        moneyInputProblem(opening, { allowNegative: true, allowZero: true })
+          ?? "Сумма на счёте — число, максимум два знака после запятой. Например: 1250,50",
+      );
       return;
     }
     if (duplicate) {
@@ -363,7 +369,13 @@ function AmountInput({
         onChangeText={onChange}
         placeholder="0"
         placeholderTextColor={t.placeholder}
+        // Цифры со знаком «−» (остаток бывает в минусе), поэтому не decimal-pad;
+        // полоса текстовых подсказок над такой клавиатурой — лишняя.
         keyboardType="numbers-and-punctuation"
+        autoCorrect={false}
+        spellCheck={false}
+        autoComplete="off"
+        textContentType="none"
         returnKeyType="done"
         selectionColor={t.accent}
         accessibilityLabel="Сколько сейчас на счёте"
