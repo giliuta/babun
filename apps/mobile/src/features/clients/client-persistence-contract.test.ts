@@ -56,7 +56,8 @@ describe("client native persistence contract", () => {
     assert.doesNotMatch(notes, /TextInput/);
     // Лист правки объекта пишет ТЕМ ЖЕ писателем и удаляет с подтверждением.
     assert.match(objectSheet, /writer: LocationWriter/);
-    assert.match(objectSheet, /Удалить объект/);
+    // Заголовок вопроса (с числом визитов) — в `object-delete.ts`.
+    assert.match(objectSheet, /confirmAction\(objectDeleteTitle\(visitsOnObject\(/);
     // Создание объекта — лист снизу. Форма пустеет ТОЛЬКО после подтверждённой
     // записи, иначе набранный адрес исчезал бы вместе с неудавшимся PATCH-ем.
     const sheet = read("ObjectSheet.tsx");
