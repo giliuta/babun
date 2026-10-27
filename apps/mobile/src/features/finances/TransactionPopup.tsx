@@ -5,7 +5,7 @@ import {
   TX_TYPE_LABEL,
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
-import type { Account } from "@babun/shared/local/finance/account";
+import type { AccountWithBalance } from "./accounts";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ActionRow, RowGroup } from "@/components/ui/card-rows";
@@ -17,7 +17,7 @@ import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useTenant } from "@/session/tenant";
 import { useFeatureOn } from "@/features/settings/company-features";
 import type { Team } from "@/features/reference/queries";
-import { deleteOperationAlert, deleteTransferAlert } from "./account-alerts";
+import { deleteOperationAlert, deleteTransferAlert, transferUndoMinus } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 import { randomUuid } from "@babun/shared/sync";
 import { createRefundRequestIds } from "./operation-sheet/request-ids";
@@ -59,7 +59,7 @@ export function TransactionPopup({
 }: {
   visible: boolean;
   transaction: FinanceTransaction | null;
-  accounts: Account[];
+  accounts: AccountWithBalance[];
   teams: Team[];
   categories: FinanceCategory[];
   /** Сотрудники — строка «Кому» у выплаты зарплаты. */
@@ -222,7 +222,7 @@ export function TransactionPopup({
     // а не одна строка ленты.
     const text =
       tx.type === "transfer"
-        ? deleteTransferAlert()
+        ? deleteTransferAlert(transferUndoMinus(accounts.find((a) => a.id === transferLegs?.to.id), tx.amount))
         : // Один текст на свайп ленты, лист дня и эту витрину.
           deleteOperationAlert();
     // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (правило дизайн-системы) — вопрос

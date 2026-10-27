@@ -7,7 +7,7 @@ import { confirmThen } from "@/lib/confirm";
 import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import { deleteOperationAlert, deleteTransferAlert } from "../account-alerts";
+import { deleteOperationAlert, deleteTransferAlert, transferUndoMinus } from "../account-alerts";
 import { useDeleteTransfer } from "../accounts";
 import type { FinanceDocument } from "../documents";
 import type { FinancePageAccess } from "../finance-page-access";
@@ -126,6 +126,13 @@ export function useRowActions(input: RowActionsInput) {
       debt: debts.find((d) => d.id === tx.debt_id) ?? null,
     });
   };
+  // Нога-получатель перевода: своя, если деньги пришли сюда, иначе парная.
+  const undoMinus = (tx: FinanceTransaction) => {
+    const legs = [...scopedTransactions, ...(input.allTimeFound ?? [])];
+    const incoming =
+      tx.amount > 0 ? tx : legs.find((x) => x.transfer_group_id === tx.transfer_group_id && x.amount > 0);
+    return transferUndoMinus(allAccounts.find((a) => a.id === incoming?.account_id), tx.amount);
+  };
   const deleteRow = (row: RecordRow) => {
     const tx = rowTx(row);
     if (!tx) return;
@@ -135,7 +142,7 @@ export function useRowActions(input: RowActionsInput) {
       notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
       return;
     }
-    const text = tx.type === "transfer" ? deleteTransferAlert() : deleteOperationAlert();
+    const text = tx.type === "transfer" ? deleteTransferAlert(undoMinus(tx)) : deleteOperationAlert();
     confirmThen(
       text.title,
       { message: text.message, confirmLabel: text.confirm, destructive: true },

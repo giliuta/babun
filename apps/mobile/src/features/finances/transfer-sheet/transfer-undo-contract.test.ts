@@ -3,13 +3,16 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
+import { deleteTransferAlert, minusWarning, transferUndoMinus } from "../account-alerts";
 
-// Отмена перевода на счёт, бывший в минусе. Сервер (`delete_account_transfer`)
-// раньше требовал «на счёте назначения не меньше суммы перевода» — счёт с
-// минусом до перевода не проходил никогда. Порог теперь — ниже нуля И ниже
-// остатка до перевода: потраченные деньги перевода по-прежнему держат отмену.
-describe("transfer undo migration contract", () => {
-  const here = path.dirname(fileURLToPath(import.meta.url));
+// ОТМЕНА ПЕРЕВОДА НЕ ЗАПРЕЩАЕТСЯ. Минус на счёте разрешён всем: расход уводит
+// в минус без отказа, а отмена перевода для получателя — тот же расход. Сервер
+// (`delete_account_transfer`) раньше отказывал, если на получателе меньше суммы
+// перевода, — счёт, бывший в минусе, не проходил никогда. Теперь отказа нет,
+// а уход в минус приложение называет до подтверждения.
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+describe("отмена перевода: миграция", () => {
   // До наката файл лежит в `supabase/parked/`, после — в `migrations/`.
   const file = "20261027231700_transfer_undo_negative_destination.sql";
   const repo = path.resolve(here, "../../../../../..");
@@ -17,20 +20,44 @@ describe("transfer undo migration contract", () => {
     .map((dir) => path.join(repo, dir, file))
     .find((p) => existsSync(p));
 
-  test("threshold is min(0, balance before the transfer), not the transfer amount", () => {
+  test("снимает отказ по остатку получателя по якорю в живом теле", () => {
     assert.ok(found, `нет ${file}`);
     const sql = readFileSync(found, "utf8");
-    assert.match(sql, /if destination_balance - request_row\.amount < least\(0, \(/);
-    assert.match(sql, /filter \(where tx\.created_at < request_row\.created_at\)/);
+    assert.match(sql, /execute replace\(definition, old_check, ''\);/);
+    assert.match(sql, /якорь проверки остатка не найден/);
+    // Сторож внутри миграции: после правки отказа в теле быть не должно.
+    assert.match(sql, /отказ по остатку остался/);
+    assert.match(sql, /has_function_privilege\('anon', 'public\.delete_account_transfer\(uuid\)', 'execute'\)/);
+  });
+});
+
+describe("отмена перевода: слова о минусе", () => {
+  test("получатель уйдёт в минус — вопрос называет счёт и остаток после", () => {
+    const minus = transferUndoMinus({ name: "Test QA", balance: 209.75, balance_known: true }, 260);
+    assert.deepEqual(minus, { name: "Test QA", after: -50.25 });
+    const alert = deleteTransferAlert(minus);
+    assert.ok(alert.message.endsWith(minusWarning({ name: "Test QA", after: -50.25 })));
+    assert.equal(alert.confirm, "Удалить перевод");
   });
 
-  test("edits the live body by anchor and keeps the translated refusal text", () => {
-    assert.ok(found, `нет ${file}`);
-    const sql = readFileSync(found, "utf8");
-    assert.match(sql, /якорь проверки остатка не найден/);
-    // Текст отказа — ключ словаря языков (`server-keys.json`): менять нельзя.
-    const refusals = sql.match(/'На счёте назначения уже недостаточно средств для отмены перевода'/g) ?? [];
-    assert.equal(refusals.length, 2);
-    assert.match(sql, /has_function_privilege\('anon', 'public\.delete_account_transfer\(uuid\)', 'execute'\)/);
+  test("сумма ноги со знаком минус — та же сумма отмены", () => {
+    assert.deepEqual(
+      transferUndoMinus({ name: "Карта", balance: 10, balance_known: true }, -30),
+      { name: "Карта", after: -20 },
+    );
+  });
+
+  test("минуса нет или остаток неизвестен — вопрос прежний, без догадок", () => {
+    assert.equal(transferUndoMinus({ name: "Cash", balance: 260, balance_known: true }, 260), null);
+    assert.equal(transferUndoMinus({ name: "Cash", balance: 0, balance_known: false }, 260), null);
+    assert.equal(transferUndoMinus(undefined, 260), null);
+    assert.equal(deleteTransferAlert(null).message, deleteTransferAlert().message);
+  });
+
+  test("обе двери отмены — свайп ленты и витрина операции — считают минус", () => {
+    const rows = readFileSync(path.resolve(here, "../home/use-row-actions.ts"), "utf8");
+    assert.match(rows, /deleteTransferAlert\(undoMinus\(tx\)\)/);
+    const popup = readFileSync(path.resolve(here, "../TransactionPopup.tsx"), "utf8");
+    assert.match(popup, /deleteTransferAlert\(transferUndoMinus\(/);
   });
 });

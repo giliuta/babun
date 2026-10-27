@@ -136,14 +136,39 @@ export function deleteOperationAlert(): Required<AlertText> {
   };
 }
 
-export function deleteTransferAlert(): Required<AlertText> {
+export function deleteTransferAlert(minus?: AccountMinus | null): Required<AlertText> {
+  const base =
+    "Перевод состоит из двух операций и меняется только целиком. Обе "
+    + "исчезнут, остатки обоих счетов вернутся к прежним.";
   return {
     title: "Удалить перевод?",
-    message:
-      "Перевод состоит из двух операций и меняется только целиком. Обе "
-      + "исчезнут, остатки обоих счетов вернутся к прежним.",
+    message: minus ? `${base} ${minusWarning(minus)}` : base,
     confirm: "Удалить перевод",
   };
+}
+
+/** Счёт после действия окажется в минусе: имя и остаток после. */
+export interface AccountMinus {
+  name: string;
+  after: number;
+}
+
+// МИНУС НА СЧЁТЕ РАЗРЕШЁН ВСЕМ — и расходом, и отменой перевода (для
+// получателя это тот же расход). Не запрет, а слова до подтверждения: одна
+// фраза на все действия, которые уводят счёт ниже нуля.
+export function minusWarning({ name, after }: AccountMinus): string {
+  return `Счёт «${name}» уйдёт в минус: ${money(after)}.`;
+}
+
+/** Отмена перевода снимает сумму с получателя. Увела бы в минус — кто и сколько.
+ *  Остаток получателя неизвестен — молчим: обещать минус наугад нельзя. */
+export function transferUndoMinus(
+  destination: { name: string; balance: number; balance_known?: boolean } | null | undefined,
+  amount: number,
+): AccountMinus | null {
+  if (!destination || destination.balance_known === false) return null;
+  const after = Math.round((destination.balance - Math.abs(amount)) * 100) / 100;
+  return after < 0 ? { name: destination.name, after } : null;
 }
 
 /** Счёта нет — настройки говорят об этом прямо: править нечего. */
