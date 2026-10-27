@@ -61,7 +61,7 @@ export default function FinancesLayout() {
   const pathname = usePathname();
   const gate = financesGate(role, accessQuery.data);
   const levelsOf = useFinanceSettingLevelsOf();
-  const teams = useTeams().data ?? [];
+  const teams = useTeams({ display: true }).data ?? [];
   const anySetting =
     anyFinanceSetting(levelsOf(null)) || teams.some((team) => anyFinanceSetting(levelsOf(team.id)));
   // Бюджеты категорий: пока раздел открыт, владелец узнаёт о перевале лимита

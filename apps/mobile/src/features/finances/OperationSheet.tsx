@@ -64,7 +64,7 @@ export function OperationSheet({
   const th = useThemeColors();
   const online = useIsOnline();
   const { data: categories = [] } = useFinanceCategories();
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   // ВЛАДЕЛЬЧЕСКИЕ ДВЕРИ ЭТОЙ ФОРМЫ. Сотрудник пишет только доход и расход на
   // счёт своего календаря (уровни финансов): бакет чеков,
   // справочник категорий, настройки счёта, инвойс и возврат сервер отдаёт

@@ -71,7 +71,7 @@ export default function AccountsScreen() {
   const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   // ВСЕ команды, включая архивные: по ним называются группы осиротевших
   // счетов и строится подпись команды в листе перевода.
-  const teamsQuery = useTeams({ includeInactive: true });
+  const teamsQuery = useTeams({ includeInactive: true, display: true });
   const unassigned = useUnassignedMoney();
   const reorder = useReorderAccounts();
   const [dragging, setDragging] = useState(false);

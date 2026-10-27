@@ -38,7 +38,7 @@ const NO_ROWS: RecordRow[] = [];
 export function LockedFinances() {
   const t = useThemeColors();
   const router = useRouter();
-  const teams = useTeams().data ?? [];
+  const teams = useTeams({ display: true }).data ?? [];
   const [scope, setScope] = useState<string | null>(null);
   // Выбор выводится, а не хранится: пока человек не тапнул, подсвечена первая
   // команда, а пропавшая из списка не оставляет ленту без подсветки.

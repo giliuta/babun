@@ -63,7 +63,7 @@ export function DeletedOperationsScreen() {
   const t = useThemeColors();
   const toast = useToast();
   const { team } = useLocalSearchParams<{ team?: string }>();
-  const teamName = (useTeams().data ?? []).find((item) => item.id === team)?.name;
+  const teamName = (useTeams({ display: true }).data ?? []).find((item) => item.id === team)?.name;
   // ПРАВО СТРОКИ «Удалённые операции»: «Только видит» — список без
   // кромок и меню; «Возвращает» — вернуть и стереть СВОЁ (что удалил сам и
   // что сам заводил — сервер вставку чужой операции не пустит). Владелец —

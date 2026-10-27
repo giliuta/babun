@@ -87,7 +87,7 @@ export function CategoryEditorSheet({
   const th = useThemeColors();
   const insert = useInsertCategory();
   const update = useUpdateCategory();
-  const allTeamsList = useTeams().data ?? [];
+  const allTeamsList = useTeams({ display: true }).data ?? [];
   const currency = useCurrency();
   const fmt = (n: number) => money(n, currency);
 

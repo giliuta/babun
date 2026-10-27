@@ -68,7 +68,7 @@ export function EditAccountSheet({
   );
   // ВСЕ команды, включая архивные: счёт живёт дольше своей команды, и её имя
   // нужно листу перевода.
-  const teamsQuery = useTeams({ includeInactive: true });
+  const teamsQuery = useTeams({ includeInactive: true, display: true });
   const teamById = useMemo(
     () => new Map((teamsQuery.data ?? []).map((team) => [team.id, team])),
     [teamsQuery.data],

@@ -69,7 +69,7 @@ export function CreateAccountSheet({
   const online = useIsOnline();
   const insert = useInsertAccount();
   // Активные команды — из них выбирается владелец счёта.
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const teamsLoaded = teamsQuery.data !== undefined;
   // Дубль имени — и среди скрытых: имя в команде одно на всех.

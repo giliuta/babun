@@ -100,7 +100,7 @@ export function useDebtDraft({
     [clients, clientId],
   );
   const categoriesQuery = useFinanceCategories();
-  const teams = useTeams().data ?? [];
+  const teams = useTeams({ display: true }).data ?? [];
   // Одна команда — вопроса нет, она и есть команда долга.
   const debtTeamId = pickedTeamId ?? (teams.length === 1 ? teams[0].id : null);
   const insert = useInsertDebt();
