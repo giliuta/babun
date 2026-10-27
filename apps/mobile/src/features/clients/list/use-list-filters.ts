@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import { useClientSources } from "@/features/clients/acquisition-sources";
-import type { ClientSource } from "@/features/clients/acquisition-source";
+import { sourceFilterOptions, type ClientSource } from "@/features/clients/acquisition-source";
 import type { ClientsFilter } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
@@ -79,8 +79,14 @@ export function useListFilters({
     teamChoice === ALL_TEAMS ? null : teamChoice,
   );
 
-  // Прунинг «призрачных» фильтров — `pruneFilter`.
-  const { teamOptions, cityOptions, tagOptions, sourceOptions } = result;
+  // Прунинг «призрачных» фильтров — `pruneFilter`. Теги и источники
+  // сверяются со ВСЕМ справочником, а не с вариантами под чипом: тап по
+  // чипу сужает варианты до его команды, и прунинг по ним навсегда
+  // выкидывал из «набора дня» выбранное в другой команде. Убирается только
+  // то, чего больше нет нигде.
+  const { teamOptions, cityOptions } = result;
+  const tagOptions = useMemo(() => tags.map((tag) => ({ value: tag.id })), [tags]);
+  const sourceOptions = useMemo(() => sourceFilterOptions(ownSources, null), [ownSources]);
   const sourcesReady = sourcesQuery.isSuccess;
   useEffect(() => {
     setFilter((f) =>
