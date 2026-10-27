@@ -36,8 +36,8 @@ const ALLOWED: Record<string, string> = {
 const LAYER_EXCEPTIONS: Record<string, string> = {
   "components/ui/DateWheelSheet.tsx":
     "uses appointments/helpers date helpers, which import services/economics and cannot move to lib yet",
-  "lib/tenant-prefetch.ts":
-    "locked by another session; it warms feature query caches (reference, services, calendar, clients)",
+  "lib/tenant-prefetch/read-target.ts":
+    "a warm read goes through the very fetcher the screen's hook uses (reference, services, calendar, clients), so the warmed answer lands under the same key",
 };
 
 const NEUTRAL_LAYERS = ["session", "lib", "components"];
