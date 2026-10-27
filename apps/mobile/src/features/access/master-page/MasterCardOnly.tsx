@@ -22,7 +22,7 @@ import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
-import { waitSheetExit } from "../InviteMemberSheet";
+import { waitSheetExit } from "../invitation-share";
 import { cardTeamIds } from "../masters-list";
 import { openMasterDraftFromCard } from "./draft-store";
 import { invitationSegment } from "./master-draft";
