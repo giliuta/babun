@@ -233,3 +233,29 @@ describe("номер в местном формате с ведущим 0", () =
     assert.equal(matchesClient(ua, "+380671234567"), true);
   });
 });
+
+describe("греческое, русское и латинское написание одного имени", () => {
+  const pairs: [string, string][] = [
+    ["Παπαδοπούλου", "Papadopoulou"],
+    ["Λουκάς", "Loukas"],
+    ["Μιχάλης", "Michalis"],
+    ["Χρίστος", "Christos"],
+    ["Κωνσταντίνου", "Constantinou"],
+    ["Φώτης", "Photis"],
+    ["Андрей", "Andrey"],
+    ["Сергей", "Sergey"],
+    ["Михаил", "Mikhail"],
+    ["Алексей", "Alexey"],
+    ["Чехов", "Chekhov"],
+  ];
+  for (const [a, b] of pairs) {
+    test(`${a} ↔ ${b}`, () => {
+      assert.equal(matchesClient(client(`x-${a}`, { full_name: a }), b), true, `${b} → ${a}`);
+      assert.equal(matchesClient(client(`y-${b}`, { full_name: b }), a), true, `${a} → ${b}`);
+    });
+  }
+  test("разные имена не склеиваются", () => {
+    assert.equal(matchesClient(client("m", { full_name: "Мария" }), "Николай"), false);
+    assert.equal(matchesClient(client("e", { full_name: "Elena" }), "Andreas"), false);
+  });
+});

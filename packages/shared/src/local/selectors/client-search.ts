@@ -61,13 +61,30 @@ function normalizeDigits(input: string): string {
   return input.replace(/\D/g, "");
 }
 
+/** ГРУБЫЙ КЛЮЧ ЗВУЧАНИЯ — одинаковый для запроса и для клиента. Побуквенная
+ *  транслитерация даёт «Λουκάς» → «loykas», а человек набирает «Loukas»;
+ *  «Андрей» → «andrei», а в паспорте «Andrey»; «Χρίστος» → «hristos», а
+ *  «Christos» — «christos». Сводим обе стороны к одному ключу: лишнее
+ *  совпадение в поиске дешевле, чем ненайденный клиент. */
+function foldSound(latin: string): string {
+  return latin
+    .replace(/ph/g, "f")
+    .replace(/[kc]h/g, "h")
+    .replace(/t[sz]/g, "c")
+    .replace(/x/g, "ks")
+    .replace(/c/g, "k")
+    .replace(/o[uy]/g, "u")
+    .replace(/[yj]/g, "i")
+    .replace(/([a-z])\1+/g, "$1");
+}
+
 function normalizeSearchable(input: string): string {
   // Lower-case + strip everything that isn't a letter or digit; also
   // transliterate Cyrillic/Greek so "Ivan" and "Иван" hit the same
   // normalised form.
   const lower = stripMarks(input.toLowerCase());
   const translit = transliterate(lower);
-  return translit.replace(/[^a-z0-9]/g, "");
+  return foldSound(translit.replace(/[^a-z0-9]/g, ""));
 }
 
 function clientHaystacks(client: Client): {
