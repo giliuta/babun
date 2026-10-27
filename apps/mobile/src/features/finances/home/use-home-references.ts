@@ -5,7 +5,11 @@ import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { useInvoicePayments, useInvoices } from "@/features/finances/invoices-queries";
+import {
+  useInvoiceAppointmentMoney,
+  useInvoicePayments,
+  useInvoices,
+} from "@/features/finances/invoices-queries";
 import { useAccountsWithBalances } from "../accounts";
 import { useFinanceCategories } from "../queries";
 
@@ -24,6 +28,7 @@ export function useHomeReferences() {
   const clientsQuery = useClients();
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
+  const appointmentMoneyQuery = useInvoiceAppointmentMoney();
   const accountsQuery = useAccountsWithBalances();
   // Лист перевода — со СКРЫТЫМИ счетами (в конце месяца
   // переводят на накопительный); плитки и панель «Счета» их не знают.
@@ -68,6 +73,10 @@ export function useHomeReferences() {
   const invoices = useMemo(
     () => invoicesQuery.data ?? [],
     [invoicesQuery.data],
+  );
+  const invoiceAppointmentMoney = useMemo(
+    () => appointmentMoneyQuery.data ?? {},
+    [appointmentMoneyQuery.data],
   );
   const invoicePayments = useMemo(
     () => invoicePaymentsQuery.data ?? {},
@@ -131,6 +140,7 @@ export function useHomeReferences() {
     clients,
     invoices,
     invoicePayments,
+    invoiceAppointmentMoney,
     accounts,
     allAccounts,
     orphanAccounts,

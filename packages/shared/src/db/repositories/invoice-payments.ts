@@ -156,6 +156,58 @@ export async function listInvoicePayments(
   return result;
 }
 
+/**
+ * ДЕНЬГИ ЗАПИСИ, ПРИНЯТЫЕ МИМО ЕЁ ИНВОЙСА, — по id инвойса. Предоплата
+ * записи наличными до выставления — строка журнала с `appointment_id` и без
+ * `invoice_id`; оплата самого инвойса двигает запись, но второй строки не
+ * пишет (`settle_appointment_from_invoice_payment`), так что двойного счёта
+ * нет. У записи с несколькими живыми инвойсами деньги идут последнему
+ * выставленному: одна работа — одна сумма.
+ */
+export async function listInvoiceAppointmentMoney(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<Record<string, number>> {
+  const { data: invoices, error } = await supabase
+    .from("invoices")
+    .select("id, appointment_id, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("kind", "invoice")
+    .in("status", ["issued", "paid"])
+    .not("appointment_id", "is", null);
+  if (error) throw new Error(`listInvoiceAppointmentMoney: ${error.message}`);
+  const invoiceOf = new Map<string, { id: string; created_at: string }>();
+  for (const row of invoices ?? []) {
+    if (!row.appointment_id) continue;
+    const was = invoiceOf.get(row.appointment_id);
+    if (!was || row.created_at > was.created_at) invoiceOf.set(row.appointment_id, row);
+  }
+  const appointmentIds = [...invoiceOf.keys()];
+  const cents = new Map<string, number>();
+  for (let i = 0; i < appointmentIds.length; i += 100) {
+    const { data, error: txError } = await supabase
+      .from("finance_transactions")
+      .select("appointment_id, type, amount")
+      .eq("tenant_id", tenantId)
+      .is("invoice_id", null)
+      .in("type", ["income", "refund"])
+      .in("appointment_id", appointmentIds.slice(i, i + 100));
+    if (txError) throw new Error(`listInvoiceAppointmentMoney: ${txError.message}`);
+    for (const row of data ?? []) {
+      if (!row.appointment_id) continue;
+      const amount = Math.round(Number(row.amount) * 100);
+      const signed = row.type === "refund" ? -Math.abs(amount) : Math.max(0, amount);
+      cents.set(row.appointment_id, (cents.get(row.appointment_id) ?? 0) + signed);
+    }
+  }
+  const result: Record<string, number> = {};
+  for (const [appointmentId, sum] of cents) {
+    const invoice = invoiceOf.get(appointmentId);
+    if (invoice && sum > 0) result[invoice.id] = sum / 100;
+  }
+  return result;
+}
+
 export async function recordInvoicePayment(
   supabase: DbSupabase,
   invoiceId: string,

@@ -8,7 +8,11 @@ import {
 } from "@babun/shared/local/finance/invoice-ledger";
 import { randomUuid } from "@babun/shared/sync";
 
-import { useInvoicePayments, useRecordInvoicePayment } from "@/features/finances/invoices-queries";
+import {
+  useInvoiceAppointmentMoney,
+  useInvoicePayments,
+  useRecordInvoicePayment,
+} from "@/features/finances/invoices-queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { finishPayAttempt, payAttempt, payAttemptKey, type PayAttempt } from "./invoice-pay-request";
@@ -34,12 +38,20 @@ export function useAppointmentInvoicePay(
   const tenantId = useTenantId();
   const qc = useQueryClient();
   const paymentsQuery = useInvoicePayments();
+  // Остаток бумаги — за вычетом денег, которые запись приняла мимо инвойса.
+  const appointmentMoney = useInvoiceAppointmentMoney().data;
   const record = useRecordInvoicePayment(invoice?.id ?? "");
   // Потерянный ответ не должен стать вторым платежом: id держится до успеха.
   const attempt = useRef<PayAttempt | null>(null);
   const open = !!invoice && (invoice.kind ?? "invoice") === "invoice" && invoice.status === "issued";
   const settlement =
-    open && invoice ? calculateInvoiceSettlement(invoice, paymentsQuery.data?.[invoice.id] ?? []) : null;
+    open && invoice
+      ? calculateInvoiceSettlement(
+          invoice,
+          paymentsQuery.data?.[invoice.id] ?? [],
+          appointmentMoney?.[invoice.id] ?? 0,
+        )
+      : null;
   const remainingCents = settlement ? Math.round(settlement.remaining * 100) : 0;
 
   const pay = async (input: {

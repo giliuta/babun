@@ -59,6 +59,8 @@ export interface DocumentSources {
   invoices: readonly InvoiceLedger[];
   /** Проводки по инвойсам, ключ — invoice_id (`useInvoicePayments`). */
   payments: Readonly<Record<string, InvoicePaymentLedger[]>>;
+  /** Деньги записей, принятые мимо их инвойсов (`listInvoiceAppointmentMoney`). */
+  appointmentMoney?: Readonly<Record<string, number>>;
   receipts: readonly Receipt[];
   /** Живое имя клиента — фолбэк, когда в документе нет снимка. */
   clientName: (clientId: string | null) => string | null;
@@ -116,6 +118,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
     const settlement = calculateInvoiceSettlement(
       invoice,
       sources.payments[invoice.id] ?? [],
+      sources.appointmentMoney?.[invoice.id] ?? 0,
     );
     const overdue =
       !settlement.isPaid &&

@@ -37,6 +37,7 @@ import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
 import type { Period } from "@/lib/period";
 import { usePeriodDocuments } from "./use-period-documents";
+import { useInvoiceAppointmentMoney } from "./invoices-queries";
 import {
   filterDocuments,
   type DocumentFilter,
@@ -113,6 +114,7 @@ export function DocumentsPanel({
   const invoiceMenu = useInvoiceMenu();
   const receiptMenu = useReceiptMenu();
   const canWrite = useDocumentWriter();
+  const appointmentMoney = useInvoiceAppointmentMoney().data;
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
@@ -237,7 +239,8 @@ export function DocumentsPanel({
       const path = `/invoices/${invoice.id}`;
       const write = canWrite(invoice.brigade_id);
       const own = payments[invoice.id] ?? [];
-      const settlement = calculateInvoiceSettlement(invoice, own);
+      // «Принять оплату» — по остатку за вычетом денег записи, как на странице.
+      const settlement = calculateInvoiceSettlement(invoice, own, appointmentMoney?.[invoice.id] ?? 0);
       const isInvoice = (invoice.kind ?? "invoice") === "invoice";
       const awaits = isInvoice && invoice.status === "issued" && settlement.remaining > 0;
       const withReceipt = new Set(

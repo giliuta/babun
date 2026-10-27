@@ -23,6 +23,7 @@ import { useInvoiceMenu } from "@/features/finances/invoice-menu";
 import {
   useCreditNoteLinks,
   useInvoice,
+  useInvoiceAppointmentMoney,
   useInvoicePayments,
   useInvoices,
   useRecordInvoicePayment,
@@ -111,9 +112,12 @@ export function useInvoiceDetail() {
     [payments],
   );
   const receiptsQuery = useReceipts({ invoiceId: id, transactionIds: incomeIds, enabled: !!id });
+  // Деньги записи, принятые мимо инвойса, — в «Получено» бумаги и в остаток
+  // («Получено €260 · К оплате €40»): работа одна, клиент за неё уже платил.
+  const appointmentMoney = useInvoiceAppointmentMoney().data?.[id] ?? 0;
   const settlement = useMemo(
-    () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments) : null,
-    [invoice.data, payments],
+    () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments, appointmentMoney) : null,
+    [invoice.data, payments, appointmentMoney],
   );
   // ДОКУМЕНТ БЕЗ КЛИЕНТА МОЖНО ПРИВЯЗАТЬ: сверху сказано, что он ни к чему не
   // присвоен, и предложено выбрать клиента, чтобы не потерялся. Идёт тем же путём, что правка

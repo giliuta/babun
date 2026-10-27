@@ -13,6 +13,7 @@ import {
 } from "@babun/shared/db/repositories/invoices";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import {
+  listInvoiceAppointmentMoney,
   listInvoicePayments,
   recordInvoicePayment,
   type RecordInvoicePaymentDraft,
@@ -206,6 +207,18 @@ export function useInvoicePayments() {
     queryKey: invoicePaymentsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listInvoicePayments(supabase, tenantId as string),
+  });
+}
+
+/** Деньги записей, принятые мимо их инвойсов (`listInvoiceAppointmentMoney`):
+ *  остаток инвойса по записи — за вычетом уже полученного записью. Ключ — под
+ *  «transactions»: его сбрасывает и оплата записи, и оплата инвойса. */
+export function useInvoiceAppointmentMoney() {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["transactions", tenantId, "invoice-appointment-money"],
+    enabled: !!tenantId,
+    queryFn: () => listInvoiceAppointmentMoney(supabase, tenantId as string),
   });
 }
 
