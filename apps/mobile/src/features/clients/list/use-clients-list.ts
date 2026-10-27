@@ -58,6 +58,8 @@ export function useClientsList() {
     tagsReady: sources.tagsReady,
     citiesReady: sources.citiesReady,
     data: sources.data,
+    guestClientSources: merged.guestClientSources,
+    guestSourcesSettled: merged.guestSourcesSettled,
   });
   const rows = useListRowActions({
     scope: sources.scope,
