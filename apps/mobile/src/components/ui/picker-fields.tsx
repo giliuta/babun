@@ -54,7 +54,7 @@ export function AppearanceField({
       >
         <AppearanceTile color={color} icon={icon} icons={icons} />
         <View style={{ flex: 1 }} />
-        <ChevronRight color={t.chevron} size={ICON.sm} />
+        <ChevronRight color={t.chevron} size={ICON.chevron} />
       </Pressable>
       <AppearanceSheet
         visible={open}

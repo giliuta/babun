@@ -2,7 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import { Settings, SlidersHorizontal } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { SelectSearch } from "@/components/ui/select-rows";
-import { TYPE } from "@/components/ui/tokens";
+import { TYPE, ICON } from "@/components/ui/tokens";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { clientsSettingsHref } from "@/session/clients-company";
 import { ALL_TEAMS, toggleTeamChoice } from "@/features/clients/team-scope";
@@ -125,7 +125,7 @@ export function ListTopBar({ list }: { list: ClientsList }) {
               backgroundColor: pressed ? t.pressed : "transparent",
             })}
           >
-            <Settings color={t.sub} size={21} strokeWidth={2} />
+            <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
           </Pressable>
           </TourTarget>
 
@@ -177,7 +177,7 @@ export function ListTopBar({ list }: { list: ClientsList }) {
           >
             <SlidersHorizontal
               color={result.activeCount > 0 ? t.accent : t.sub}
-              size={21}
+              size={ICON.header}
               strokeWidth={2}
             />
             {result.activeCount > 0 ? (

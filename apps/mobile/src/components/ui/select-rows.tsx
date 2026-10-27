@@ -334,7 +334,7 @@ export function SelectRow({
         </Text>
       ) : null}
       {trailing ??
-        (selected ? <Check color={t.accent} size={18} strokeWidth={2.4} /> : null)}
+        (selected ? <Check color={t.accent} size={ICON.check} strokeWidth={2.4} /> : null)}
     </Pressable>
   );
 }

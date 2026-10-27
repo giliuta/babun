@@ -45,9 +45,9 @@ export function InvoiceHeaderActions({
         {/* Сборка PDF занимает секунды: немая иконка под пальцем
             читается как поломка — на время работы крутится спиннер. */}
         {pdfBusy ? (
-          <Spinner size={18} label="Готовим PDF" />
+          <Spinner size={ICON.header} label="Готовим PDF" />
         ) : (
-          <Share2 color={t.body} size={ICON.sm} />
+          <Share2 color={t.body} size={ICON.header} />
         )}
       </Pressable>
       ) : null}
@@ -59,7 +59,7 @@ export function InvoiceHeaderActions({
           accessibilityLabel="Ещё действия"
           className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
         >
-          <MoreHorizontal color={t.body} size={ICON.sm} />
+          <MoreHorizontal color={t.body} size={ICON.header} />
         </Pressable>
       ) : null}
     </View>

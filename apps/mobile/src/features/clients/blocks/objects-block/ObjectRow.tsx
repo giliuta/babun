@@ -278,7 +278,7 @@ export function ObjectRow({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <MoreHorizontal color={t.body} size={ICON.sm} />
+          <MoreHorizontal color={t.body} size={ICON.command} />
         </Pressable>
       ) : null}
     </View>

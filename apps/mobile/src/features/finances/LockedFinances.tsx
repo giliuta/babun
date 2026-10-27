@@ -16,6 +16,7 @@ import { FinanceOverview } from "./FinanceOverview";
 import { RecordRowsPanel } from "./RecordRowsPanel";
 import { defaultPeriod } from "@/lib/period";
 import type { RecordRow } from "./record-rows";
+import { ICON } from "@/components/ui/tokens";
 
 // «ФИНАНСЫ» БЕЗ ДОСТУПА — ТА ЖЕ СТРАНИЦА, ТОЛЬКО СЕРАЯ: не «раздел недоступен».
 // В финансах можно выбирать команды; на команде, которая недоступна, доход,
@@ -87,7 +88,7 @@ export function LockedFinances() {
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >
-          <Settings color={t.sub} size={21} strokeWidth={2} />
+          <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
         </Pressable>
         <View
           accessibilityElementsHidden
@@ -122,7 +123,7 @@ export function LockedFinances() {
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >
-          <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+          <BarChart3 color={t.sub} size={ICON.header} strokeWidth={2} />
         </Pressable>
       </View>
 

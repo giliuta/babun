@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "./tokens";
 
 // ЛИСТ ВЫБОРА ДЕЙСТВИЯ — «Добавить» на карточке, «Как связаться» у номера.
 // Строка = цветной значок слева + подпись; тап выбирает и закрывает лист.
@@ -134,7 +135,7 @@ export function PickerSheet({
             {/* ТОТ ЖЕ ЗНАЧОК, ЧТО В ШАПКАХ ПАНЕЛЕЙ: две палочки с кружочками,
                 а не шестерёнка. Шестерёнка в продукте нигде не значит
                 «настроить список». */}
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }

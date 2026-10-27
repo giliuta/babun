@@ -3,7 +3,7 @@ import { Keyboard, Pressable, Text, View } from "react-native";
 import { CopyPlus, X } from "lucide-react-native";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { FieldLabel } from "@/components/ui/Field";
-import { GUTTER } from "@/components/ui/tokens";
+import { GUTTER, ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -59,9 +59,9 @@ export function TemplatesHeaderButton({
       })}
     >
       {picking ? (
-        <X color={t.sub} size={22} strokeWidth={2} />
+        <X color={t.sub} size={ICON.command} strokeWidth={2} />
       ) : (
-        <CopyPlus color={t.accent} size={22} strokeWidth={2} />
+        <CopyPlus color={t.accent} size={ICON.command} strokeWidth={2} />
       )}
     </Pressable>
   );

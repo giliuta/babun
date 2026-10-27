@@ -9,7 +9,7 @@ import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { iconPreset } from "@/components/ui/icon-set";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { GUTTER, ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/session/tenant";
@@ -227,7 +227,7 @@ export function SmsSendSheet({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }

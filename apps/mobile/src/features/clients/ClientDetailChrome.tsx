@@ -5,6 +5,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useThemeColors } from "@/theme/colors";
 
 import { clientMenuItems } from "./client-menu-items";
+import { ICON } from "@/components/ui/tokens";
 
 // ХРОМ КАРТОЧКИ КЛИЕНТА — «НАЗАД», ЗАГОЛОВОК И «⋯».
 //
@@ -118,7 +119,7 @@ export function ClientDetailChrome({
               accessibilityLabel="Действия с клиентом"
               accessibilityState={{ expanded: menuOpen, disabled: saving, busy: saving }}
             >
-              <MoreHorizontal color={t.body} size={22} />
+              <MoreHorizontal color={t.body} size={ICON.header} />
             </Pressable>
           )
         }

@@ -4,6 +4,7 @@ import { Calendar, ChevronDown, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ViewModeDropdown, type CalMode } from "@/features/calendar/ViewModeDropdown";
 import { TourTarget } from "@/components/tour/TourTarget";
+import { ICON } from "@/components/ui/tokens";
 
 // Web-parity calendar top bar: gear · «{Month} {Year} ⌄» · today · view dropdown.
 // Title tap opens the MiniCalendar date jumper (web Header.tsx), the
@@ -61,7 +62,7 @@ export function CalendarHeader({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >
-          <Settings color={t.sub} size={21} strokeWidth={2} />
+          <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
       </Pressable>
       </TourTarget>
 

@@ -68,7 +68,7 @@ export function HeaderMenuButton({ label, onPress }: { label: string; onPress: (
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      <MoreHorizontal color={t.body} size={ICON.md} />
+      <MoreHorizontal color={t.body} size={ICON.header} />
     </Pressable>
   );
 }

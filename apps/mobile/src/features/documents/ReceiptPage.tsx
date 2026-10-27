@@ -157,7 +157,7 @@ export function ReceiptPage({ id }: { id: string }) {
                 accessibilityLabel="Поделиться PDF"
                 className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
               >
-                {busy ? <Spinner size={18} label="Готовим PDF" /> : <Share2 color={t.body} size={ICON.sm} />}
+                {busy ? <Spinner size={ICON.header} label="Готовим PDF" /> : <Share2 color={t.body} size={ICON.header} />}
               </Pressable>
             )}
             {hasMenu ? (
@@ -168,7 +168,7 @@ export function ReceiptPage({ id }: { id: string }) {
                 accessibilityLabel="Ещё действия"
                 className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
               >
-                <MoreHorizontal color={t.body} size={ICON.sm} />
+                <MoreHorizontal color={t.body} size={ICON.header} />
               </Pressable>
             ) : null}
           </View>

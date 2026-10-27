@@ -21,6 +21,7 @@ import { notify } from "@/lib/notify";
 import { InvoiceNumberRow, type InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
 import { DocMetaRow } from "@/components/blocks/DocMetaRow";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "@/components/ui/tokens";
 
 // БЛОК «РЕКВИЗИТЫ» ИНВОЙСА — ЧЕМ ПОДПИСАН ДОКУМЕНТ.
 //
@@ -127,7 +128,7 @@ export function InvoiceRequisitesBlock({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         }
         padded={false}

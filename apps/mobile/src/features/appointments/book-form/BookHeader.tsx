@@ -55,7 +55,7 @@ export function BookHeader({ form }: { form: BookModel }) {
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <ChevronLeft color={t.body} size={ICON.md} />
+          <ChevronLeft color={t.body} size={ICON.header} />
         </Pressable>
         <Text
           className="flex-1 text-center"
@@ -155,7 +155,7 @@ export function BookHeader({ form }: { form: BookModel }) {
               accessibilityRole="button"
               accessibilityLabel={kind === "event" ? "Действия с событием" : "Действия с записью"}
             >
-              <MoreHorizontal size={22} strokeWidth={2} color={t.body} />
+              <MoreHorizontal size={ICON.header} strokeWidth={2} color={t.body} />
             </Pressable>
           ) : null}
         </View>

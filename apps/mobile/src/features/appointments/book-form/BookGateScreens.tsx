@@ -22,7 +22,7 @@ export function BookMissingScreen({ t, onBack }: { t: Theme; onBack: () => void 
           accessibilityLabel="Назад"
           style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
         >
-          <ChevronLeft color={t.body} size={ICON.md} />
+          <ChevronLeft color={t.body} size={ICON.header} />
         </Pressable>
         <Text
           className="flex-1 text-center"
@@ -67,7 +67,7 @@ export function BookLoadingScreen({
           accessibilityLabel="Назад"
           style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
         >
-          <ChevronLeft color={t.body} size={ICON.md} />
+          <ChevronLeft color={t.body} size={ICON.header} />
         </Pressable>
         <Text
           className="flex-1 text-center"
