@@ -41,10 +41,16 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "list_master_clients_safe",
   "list_master_services_safe",
   "list_member_access",
+  // VOLATILE, но пишет только не-владельцу: каждая выдача списка партнёру —
+  // строка журнала `client_list_disclosures`. «Его глазами» идёт токеном
+  // владельца, ему функция ничего не пишет — для засова это чтение.
   "list_member_clients",
   // «История записей» клиента сотруднику (015): `stable`.
   "member_client_history",
-  // «Номер уже есть» партнёру из записи: `stable`.
+  // «Номер уже есть» партнёру из записи. VOLATILE: не-владельцу пишет
+  // предел перебора (`client_phone_lookups`, разных номеров в сутки — повтор
+  // того же номера предел не тратит). Владельцу, а значит и «его глазами»,
+  // не пишет ничего — для засова это чтение.
   "member_find_client_by_phone",
   "list_members",
   "list_my_calendars",
