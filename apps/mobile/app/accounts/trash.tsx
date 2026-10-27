@@ -14,6 +14,8 @@ import { useToast } from "@/components/ui/Toast";
 import { GUTTER } from "@/components/ui/tokens";
 import { confirmThen } from "@/lib/confirm";
 import { useCurrentRole } from "@/session/tenant";
+import { useTeams } from "@/features/reference/queries";
+import { archivedCalendarIds } from "@/features/finances/archived-calendar-accounts";
 import { useThemeColors } from "@/theme/colors";
 import { DaysLeft, DeletedOn } from "@/features/clients/HiddenClientsScreen";
 import { deleteAccountAlert } from "@/features/finances/account-alerts";
@@ -47,8 +49,13 @@ export default function AccountsTrashRoute() {
   const role = useCurrentRole().data;
   const [menu, setMenu] = useState<Account | null>(null);
 
+  // Календарь счёта в архиве — вернувшийся счёт не встал бы нигде: живые
+  // финансы счетов архивных календарей не показывают. Сначала календарь.
+  const archived = archivedCalendarIds(useTeams({ includeInactive: true }).data ?? []);
   const giveBack = (account: Account) =>
-    restore.mutate(account.id, {
+    account.brigade_id && archived.has(account.brigade_id)
+      ? toast("Календарь этого счёта в архиве — сначала верните календарь", "info")
+      : restore.mutate(account.id, {
       onSuccess: () => toast(`Счёт «${account.name}» возвращён`),
       onError: (e) =>
         toast(

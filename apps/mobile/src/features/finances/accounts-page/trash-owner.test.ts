@@ -12,3 +12,8 @@ const route = readFileSync(resolve(here, "../../../../app/accounts/trash.tsx"), 
 test("не владельцу — пустой экран со словами, без строк и «Вернуть»", () => {
   assert.match(route, /role !== undefined && role !== "owner" \? \(\s*<EmptyState fill title="Удалённые счета видит владелец" \/>/);
 });
+
+test("счёт архивного календаря не возвращается «невидимкой» (F-18)", () => {
+  assert.match(route, /account\.brigade_id && archived\.has\(account\.brigade_id\)\s*\? toast\("Календарь этого счёта в архиве — сначала верните календарь", "info"\)/);
+  assert.match(route, /archivedCalendarIds\(useTeams\(\{ includeInactive: true \}\)\.data \?\? \[\]\)/);
+});
