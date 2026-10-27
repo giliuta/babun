@@ -3,6 +3,13 @@ import { describe, test } from "node:test";
 import { designColorRows, eventTypesSubtitle } from "./design-rows";
 
 describe("designColorRows", () => {
+  test("ordinary row names the colour rule when it is not the team's", () => {
+    const base = { ordinary: "#123456", objectsOn: true, paymentOn: true, palette: {} };
+    assert.equal(designColorRows(base)[0]?.when, "Когда с записью всё в порядке");
+    assert.equal(designColorRows({ ...base, rule: "label" })[0]?.when, "Цвет метки");
+    assert.equal(designColorRows({ ...base, rule: "service" })[0]?.when, "Цвет услуги");
+  });
+
   test("ordinary colour first, then cancel, debt, paid — only of enabled blocks", () => {
     const rows = designColorRows({
       ordinary: "#123456",

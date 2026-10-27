@@ -132,6 +132,7 @@ export function useDesignScreen() {
     cancelled: cancelledColor,
     paid: paidColor,
     prepaid: prepaidColor,
+    rule,
   });
 
   const colorSheetTitle =
