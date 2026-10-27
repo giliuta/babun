@@ -101,7 +101,20 @@ export function DevicesSection() {
       </View>
       <Divider inset={56} />
       <Pressable
-        onPress={() => void signOutOthers()}
+        // С ВОПРОСОМ, как «Выйти со всех устройств»: случайный тап при
+        // прокрутке гасил вход на всех остальных телефонах аккаунта — у
+        // владельца и у тех, кто работает под тем же входом.
+        onPress={() =>
+          confirmThen(
+            "Выйти на других устройствах",
+            {
+              message: "Это устройство останется в системе",
+              confirmLabel: "Выйти",
+              destructive: true,
+            },
+            () => void signOutOthers(),
+          )
+        }
         disabled={busy}
         accessibilityRole="button"
         accessibilityLabel="Выйти на других устройствах"
