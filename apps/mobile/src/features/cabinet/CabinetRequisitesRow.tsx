@@ -5,6 +5,7 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useCompanies } from "@/features/companies/queries";
 import { requisitesDoorLine } from "@/features/finances/team-settings-lines";
 import { useNextInvoiceNumber } from "@/features/finances/invoices-queries";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useCurrentRole } from "@/session/tenant";
 import { useAccountScope } from "@/session/account-scope";
 import { accountHref } from "@/session/CabinetAccountRoute";
@@ -23,7 +24,9 @@ export function CabinetRequisitesRow({ tenantId }: { tenantId?: string } = {}) {
   // выставляет инвойсы; партнёр «Реквизитов» видит наборы без номера.
   // Выключенный запрос всё равно отдаёт номер из кэша владельца — в «его
   // глазами» партнёр видел бы чужое: номер — только владельцу.
-  const ownNumber = useNextInvoiceNumber(new Date().getFullYear(), undefined, owner).data;
+  // Год — компании, а не телефона (сервер нумерует по `tenant_business_date`).
+  const businessYear = Number(useBusinessToday().slice(0, 4));
+  const ownNumber = useNextInvoiceNumber(businessYear, undefined, owner).data;
   const nextInvoice = owner ? ownNumber : null;
   const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
   return (
