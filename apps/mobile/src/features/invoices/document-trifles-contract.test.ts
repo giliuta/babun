@@ -30,3 +30,10 @@ describe("убранная позиция инвойса", () => {
     assert.match(editor, /const empty = !line\.serviceId && !line\.title\.trim\(\) && !\(parseDecimal\(line\.unitPrice\) \?\? 0\);\s*if \(empty\) return;/);
   });
 });
+
+describe("меню инвойса", () => {
+  test("«Удалить инвойс» не показан, когда номер не последний в серии (F-55)", () => {
+    const menu = read("finances/invoice-menu.ts");
+    assert.match(menu, /untouched && invoiceDeleteBlock\(invoice, ctx\.all, false\) !== "not-last"\s*\? \[\{ key: "delete" as const/);
+  });
+});

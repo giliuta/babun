@@ -146,7 +146,10 @@ export function useInvoiceMenu() {
       // «Кредит-нота», а не «Отменить инвойс»: рядом с «Отмена» шторки два
       // «отменить» путались.
       { key: "cancel" as const, label: "Кредит-нота", icon: Undo2, color: SETTINGS_TILE.orange, run: cancel },
-      ...(untouched
+      // Не последний в серии — удалить нельзя, и это известно заранее: пункт
+      // не показываем, как и свайп «Документов» (аудит 035, F-55). Отказ
+      // внутри `confirmDelete` остаётся на случай устаревшего списка.
+      ...(untouched && invoiceDeleteBlock(invoice, ctx.all, false) !== "not-last"
         ? [{ key: "delete" as const, label: "Удалить инвойс", destructive: true, run: del }]
         : []),
       ...undo,
