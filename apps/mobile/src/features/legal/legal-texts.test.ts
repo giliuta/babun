@@ -52,8 +52,13 @@ describe("тексты", () => {
       assert.notEqual(app, LEGAL_TEXTS.terms[lang], `${lang}: замена не сработала`);
       assert.match(LEGAL_TEXTS.terms[lang], /Stripe/, `${lang}: на сайте условия полные`);
     }
-    assert.match(LEGAL_TEXTS_APP.terms.ru, /Платные тарифы и баланс SMS оплачиваются отдельно; подписка продлевается каждый месяц/);
-    assert.match(LEGAL_TEXTS_APP.terms.en, /Paid plans and SMS balance are billed separately; subscriptions renew monthly until cancelled\./);
+    assert.match(LEGAL_TEXTS_APP.terms.ru, /Подписка и баланс SMS оплачиваются отдельно; подписка продлевается в конце каждого оплаченного периода/);
+    assert.match(LEGAL_TEXTS_APP.terms.en, /Subscriptions and SMS balance are billed separately; a subscription renews at the end of each paid period until cancelled\./);
+    // Снятых тарифов в договоре нет: цена — за рабочий календарь.
+    for (const texts of [LEGAL_TEXTS, LEGAL_TEXTS_APP]) {
+      assert.doesNotMatch(texts.terms.ru, /Соло|«Про»|«Макс»/);
+      assert.doesNotMatch(texts.terms.en, /Solo|\bPro\b|\bMax\b/);
+    }
     for (const doc of ["privacy", "delete-account"] as const) {
       assert.equal(LEGAL_TEXTS_APP[doc], LEGAL_TEXTS[doc], `${doc}: в приложении тот же текст`);
     }
