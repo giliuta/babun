@@ -11,7 +11,7 @@ import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "@/session/tiers";
 //
 // Страница показывает цены из `tiers.ts`, а заводит цену в Stripe и
 // списывает деньги функция `tariff-checkout` — своим списком в центах. Два
-// списка разойдутся молча: человек увидит €29.99, а заплатит другое. Этот
+// списка разойдутся молча: человек увидит €29,99, а заплатит другое. Этот
 // сторож читает функцию и сверяет обе стороны, а заодно лимит партнёров
 // (отказ «сначала уберите лишних» при понижении тарифа).
 
@@ -19,7 +19,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const FN = readFileSync(path.join(ROOT, "supabase/functions/tariff-checkout/index.ts"), "utf8");
 const WEBHOOK = readFileSync(path.join(ROOT, "supabase/functions/stripe-webhook/index.ts"), "utf8");
 
-const cents = (euro: string) => Math.round(Number(euro.replace("€", "")) * 100);
+// Цена — в формате денег продукта: «€9,99» (запятая, неразрывный пробел в
+// тысячах).
+const cents = (euro: string) => Math.round(Number(euro.replace("€", "").replace(/\s/g, "").replace(",", ".")) * 100);
 
 function fnPrice(period: "month" | "year"): number {
   const row = /const CALENDAR_PRICE: Record<Period, number> = \{ month: ([0-9* ]+), year: ([0-9* ]+) \}/.exec(FN);
@@ -32,8 +34,8 @@ describe("цена за календарь: страница и Stripe", () => {
   test("одна карточка — «Календарь», цена как у функции, в месяц и за год", () => {
     assert.equal(TIER_CARDS.length, 1);
     const card = TIER_CARDS[0]!;
-    assert.equal(card.monthly, "€9.99");
-    assert.equal(card.yearlyMonthly, "€7.99");
+    assert.equal(card.monthly, "€9,99");
+    assert.equal(card.yearlyMonthly, "€7,99");
     assert.equal(fnPrice("month"), cents(card.monthly));
     assert.equal(fnPrice("year"), cents(card.yearlyMonthly) * 12);
     assert.equal(cents(card.monthly), Math.round(CALENDAR_PRICE.monthly * 100));

@@ -122,19 +122,19 @@ describe("действие страницы «Тариф»", () => {
 
   test("идёт пробный или он кончился — оплата за все живые календари", () => {
     const trial = { ...fresh, tier: "max" as const, trial: { tier: "max" as const, days: 3 }, trialUsed: true };
-    assert.deepEqual(tariffAction(trial, "max", 3), { kind: "pay", label: "Оплатить €29.97 в месяц" });
+    assert.deepEqual(tariffAction(trial, "max", 3), { kind: "pay", label: "Оплатить €29,97 в месяц" });
     assert.equal(tariffStatus(trial), "Пробный · ещё 3 дня");
     const over = { ...fresh, trialUsed: true };
-    assert.equal(tariffAction(over, "max")?.label, "Оплатить €9.99 в месяц");
+    assert.equal(tariffAction(over, "max")?.label, "Оплатить €9,99 в месяц");
     assert.equal(tariffStatus(over), "Пробный закончился");
   });
 
   test("за год — цена года на все календари, и кнопка это говорит", () => {
     const over = { ...fresh, trialUsed: true };
-    assert.deepEqual(tariffAction(over, "max", 3, "year"), { kind: "pay", label: "Оплатить €287.64 за год" });
-    assert.equal(tariffAction(over, "max", 1, "year")?.label, "Оплатить €95.88 за год");
-    assert.equal(tariffAction(over, "max", 1, "month")?.label, "Оплатить €9.99 в месяц");
-    assert.equal(partnerTariffAction(fresh, "max", "Giliuta", 2, "year")?.label, "Оплатить €191.76 за год за Giliuta");
+    assert.deepEqual(tariffAction(over, "max", 3, "year"), { kind: "pay", label: "Оплатить €287,64 за год" });
+    assert.equal(tariffAction(over, "max", 1, "year")?.label, "Оплатить €95,88 за год");
+    assert.equal(tariffAction(over, "max", 1, "month")?.label, "Оплатить €9,99 в месяц");
+    assert.equal(partnerTariffAction(fresh, "max", "Giliuta", 2, "year")?.label, "Оплатить €191,76 за год за Giliuta");
   });
 
   test("свой оплаченный и выданный навсегда — без кнопки", () => {
@@ -161,11 +161,11 @@ describe("оплата тарифа партнёром", () => {
   test("подписки нет — «Оплатить … за <аккаунт>», без пробного", () => {
     assert.deepEqual(partnerTariffAction(fresh, "max", "Giliuta", 2), {
       kind: "pay",
-      label: "Оплатить €19.98 в месяц за Giliuta",
+      label: "Оплатить €19,98 в месяц за Giliuta",
     });
     const trial = { ...fresh, tier: "max" as const, trial: { tier: "max" as const, days: 3 }, trialUsed: true };
-    assert.equal(partnerTariffAction(trial, "max", "Giliuta")?.label, "Оплатить €9.99 в месяц за Giliuta");
-    assert.equal(partnerTariffAction(fresh, "max", null)?.label, "Оплатить €9.99 в месяц");
+    assert.equal(partnerTariffAction(trial, "max", "Giliuta")?.label, "Оплатить €9,99 в месяц за Giliuta");
+    assert.equal(partnerTariffAction(fresh, "max", null)?.label, "Оплатить €9,99 в месяц");
   });
 
   test("подписка есть или тариф навсегда — кнопки нет: смена тарифа — у владельца", () => {
