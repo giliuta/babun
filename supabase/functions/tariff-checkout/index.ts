@@ -249,10 +249,11 @@ Deno.serve(async (request: Request) => {
       return json(200, { synced: true, quantity });
     }
 
-    const period: Period = body.period === "year" ? "year" : "month";
+    // Период называет страница «Тариф» (месяц или год). Без него — у живой
+    // подписки её же период: «Новый календарь» не знает, как платят, и без
+    // этого перевёл бы годовую подписку на помесячную цену.
+    const chosen: Period | null = body.period === "year" ? "year" : body.period === "month" ? "month" : null;
     if (tenant.plan_override) return json(409, { error: "forever" });
-
-    const priceId = await priceFor(stripeKey, period);
 
     // ПОДПИСКА УЖЕ ЕСТЬ — ПЕРЕВОДИМ ЕЁ НА ЦЕНУ ЗА КАЛЕНДАРЬ И ЧИСЛО
     // КАЛЕНДАРЕЙ, А НЕ ЗАВОДИМ ВТОРУЮ (старые подписки Соло · Про · Макс).
@@ -260,8 +261,12 @@ Deno.serve(async (request: Request) => {
       // Смена в живой подписке меняет списания с карты владельца.
       if (!owner) return json(409, { error: "owner_only_change" });
       const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
-      const item = (sub.items as { data?: { id: string; quantity?: number; price?: { id?: string } }[] } | undefined)?.data?.[0];
+      const item = (sub.items as {
+        data?: { id: string; quantity?: number; price?: { id?: string; recurring?: { interval?: string } | null } }[];
+      } | undefined)?.data?.[0];
       if (!item) return json(409, { error: "subscription_without_items" });
+      const period: Period = chosen ?? (item.price?.recurring?.interval === "year" ? "year" : "month");
+      const priceId = await priceFor(stripeKey, period);
       if (item.price?.id === priceId && item.quantity === quantity) return json(200, { changed: false });
       await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
         "items[0][id]": item.id,
@@ -271,6 +276,8 @@ Deno.serve(async (request: Request) => {
       });
       return json(200, { changed: true });
     }
+
+    const priceId = await priceFor(stripeKey, chosen ?? "month");
 
     // Клиент Stripe аккаунта: свой, иначе тот, что завёлся для SMS, иначе новый.
     let customer = tenant.stripe_customer_id as string | null;

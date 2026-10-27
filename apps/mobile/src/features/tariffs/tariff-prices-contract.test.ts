@@ -80,3 +80,18 @@ describe("подсчёт календарей для подписки", () => {
     }
   });
 });
+
+describe("период оплаты доходит до Stripe", () => {
+  const CLIENT = readFileSync(path.join(ROOT, "apps/mobile/src/features/tariffs/use-tariff.ts"), "utf8");
+
+  test("приложение шлёт выбранный период, а не всегда «месяц»", () => {
+    assert.doesNotMatch(CLIENT, /period: "month"/);
+    assert.match(CLIENT, /\.\.\.\(period \? \{ period \} : null\)/);
+  });
+
+  test("без периода живая подписка остаётся на своём — год не превращается в месяц", () => {
+    const live = FN.slice(FN.indexOf("if (live && tenant.stripe_subscription_id)"), FN.indexOf("// Клиент Stripe аккаунта"));
+    assert.match(live, /chosen \?\? \(item\.price\?\.recurring\?\.interval === "year" \? "year" : "month"\)/);
+    assert.match(FN, /body\.period === "year" \? "year" : body\.period === "month" \? "month" : null/);
+  });
+});

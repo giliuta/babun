@@ -129,6 +129,14 @@ describe("действие страницы «Тариф»", () => {
     assert.equal(tariffStatus(over), "Пробный закончился");
   });
 
+  test("за год — цена года на все календари, и кнопка это говорит", () => {
+    const over = { ...fresh, trialUsed: true };
+    assert.deepEqual(tariffAction(over, "max", 3, "year"), { kind: "pay", label: "Оплатить €287.64 за год" });
+    assert.equal(tariffAction(over, "max", 1, "year")?.label, "Оплатить €95.88 за год");
+    assert.equal(tariffAction(over, "max", 1, "month")?.label, "Оплатить €9.99 в месяц");
+    assert.equal(partnerTariffAction(fresh, "max", "Giliuta", 2, "year")?.label, "Оплатить €191.76 за год за Giliuta");
+  });
+
   test("свой оплаченный и выданный навсегда — без кнопки", () => {
     const paid = { ...fresh, tier: "pro" as const, paid: true, trialUsed: true };
     assert.equal(tariffAction(paid, "pro"), null);
