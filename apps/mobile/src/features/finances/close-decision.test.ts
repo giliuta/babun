@@ -124,3 +124,20 @@ describe("последний открытый счёт команды (30.09)", 
     assert.match(deleteAccountAlert("Карта", 0, true).message, /последний открытый счёт команды/);
   });
 });
+
+describe("счёт в минусе: пополнить не больше, чем есть у донора (F-19)", () => {
+  test("минус −300, самый полный счёт 100 — перевод 100, а не 300", () => {
+    const debt = acc({ id: "minus", balance: -300, has_history: true });
+    const decision = closeDecision(debt, [
+      debt,
+      acc({ id: "a", balance: 100 }),
+      acc({ id: "b", balance: 250 }),
+    ]);
+    assert.deepEqual(decision, { kind: "transfer", direction: "in", amount: 250 });
+  });
+
+  test("плюсов всех счетов не хватает на минус — объяснение, а не круг", () => {
+    const debt = acc({ id: "minus", balance: -300, has_history: true });
+    assert.deepEqual(closeDecision(debt, [debt, acc({ id: "a", balance: 100 })]), { kind: "explain" });
+  });
+});

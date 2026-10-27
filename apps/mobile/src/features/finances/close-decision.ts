@@ -52,15 +52,26 @@ export function closeDecision<A extends ClosableAccount>(
     // запрет «между командами только через общий счёт» ушёл
     // вместе с общим счётом. Минус лечится только счётом, где деньги есть.
     const others = accounts.filter((a) => a.is_active && a.id !== account.id);
-    const canTransfer =
-      sign < 0 ? others.some((a) => moneySign(a.balance) > 0) : others.length > 0;
-    return canTransfer
-      ? {
-          kind: "transfer",
-          direction: sign < 0 ? "in" : "out",
-          amount: Math.abs(account.balance),
-        }
-      : { kind: "explain" };
+    if (sign > 0) {
+      return others.length > 0
+        ? { kind: "transfer", direction: "out", amount: account.balance }
+        : { kind: "explain" };
+    }
+    // МИНУС ЗАКРЫВАЕТСЯ ДЕНЬГАМИ ДРУГИХ СЧЕТОВ — и их должно хватить. Лист
+    // перевода берёт самый полный счёт и не переводит больше, чем на нём есть:
+    // сумма — не больше его остатка (иначе серая кнопка «недостаточно
+    // средств»), и вариант — только если плюсов всех счетов хватает на весь
+    // минус (иначе после перевода тот же вопрос по кругу).
+    const donors = others.map((a) => a.balance).filter((b) => moneySign(b) > 0);
+    const needed = Math.abs(account.balance);
+    const cents = (euros: number) => Math.round(euros * 100);
+    const available = donors.reduce((sum, b) => sum + cents(b), 0);
+    if (available < cents(needed)) return { kind: "explain" };
+    return {
+      kind: "transfer",
+      direction: "in",
+      amount: Math.min(needed, Math.max(...donors)),
+    };
   }
   // «Основного» счёта нет —
   // передавать при закрытии нечего: первым в оплате становится следующий
