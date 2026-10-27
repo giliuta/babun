@@ -5,7 +5,10 @@ import {
   View,
 } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
+import { confirmThen } from "@/lib/confirm";
 import {
   calculateInvoiceSettlement,
   type InvoiceLedgerWithLines,
@@ -238,6 +241,33 @@ export default function ReceiptRefundScreen() {
     client,
   ]);
 
+  // ЗАПОЛНЕННАЯ ФОРМА НЕ ИСЧЕЗАЕТ МОЛЧА: сумму и причину свайп от края и
+  // «‹» стирали без вопроса (аудит 035, I-06). Спрашивает сама навигация,
+  // теми же словами, что черновик инвойса (`app/invoices/new.tsx`);
+  // выписанный документ уходит без вопроса.
+  const dirty = amount !== null || reason.trim() !== "";
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  useBeforeUnloadWhileDirty(dirty);
+  usePreventRemove(dirty, ({ data }) => {
+    if (leavingRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    confirmThen(
+      "Черновик не сохранён",
+      {
+        message: "Уйти и потерять заполненное?",
+        confirmLabel: "Уйти",
+        destructive: true,
+      },
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
+    );
+  });
+
   if (!receipt || (receipt.transaction_id && !tx && txQuery.isLoading)) {
     return (
       <Screen edges={["top"]}>
@@ -449,8 +479,9 @@ export default function ReceiptRefundScreen() {
         onIssue={() => void issue()}
         onClose={() => setPreviewOpen(false)}
         onExited={() => {
-          if (issued.current)
-            router.replace(`/invoices/${issued.current}` as Href);
+          if (!issued.current) return;
+          leavingRef.current = true;
+          router.replace(`/invoices/${issued.current}` as Href);
         }}
       />
     </Screen>
