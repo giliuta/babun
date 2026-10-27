@@ -1,4 +1,5 @@
 import { ScrollView } from "react-native";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { UserPlus } from "lucide-react-native";
 import { Stack } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
@@ -152,7 +153,9 @@ export function ClientCardPage({
             openLabel={handBack ? "Выбрать" : "Открыть"}
             onOpenDuplicate={(duplicateId) => {
               if (handBack) {
-                deliverCreatedClient(duplicateId);
+                // Со строкой: у партнёра клиента другой команды в списке
+                // записи нет, пока запись не сохранена.
+                deliverCreatedClient(duplicateId, duplicate);
                 // Выбрали существующего — черновик и не нужен.
                 leavingRef.current = true;
                 router.back();
@@ -319,14 +322,16 @@ export function ClientCardPage({
           действия, «Записать» понижена самим владельцем до обычной строки, а
           «Готово», которое ничего не пишет, дублировало бы стрелку «назад». */}
       {isDraft ? (
-        <ClientScreenFooter
-          label="Создать клиента"
-          reason={draftReason}
-          disabled={!canSave}
-          onPress={() => void saveDraft()}
-          // `/client` открыт поверх записи, вне вкладок — там таб-бара нет.
-          overTabBar={pathname !== "/client"}
-        />
+        <TourTarget id="client.create-submit" shape="control">
+          <ClientScreenFooter
+            label="Создать клиента"
+            reason={draftReason}
+            disabled={!canSave}
+            onPress={() => void saveDraft()}
+            // `/client` открыт поверх записи, вне вкладок — там таб-бара нет.
+            overTabBar={pathname !== "/client"}
+          />
+        </TourTarget>
       ) : null}
       </KeyboardLift>
 

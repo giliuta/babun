@@ -30,7 +30,6 @@ export type BlockLayout = {
   timeText: string;
   showTime: boolean;
   showService: boolean;
-  showStatus: boolean;
   /** Строки (0 имя, 1 время, 2 услуга), чей край тает: не влезают. */
   fadeRows: number[];
   lastRow: ReturnType<typeof blockLadder>["lastRow"];
@@ -150,16 +149,12 @@ export function blockLayout({
   // Единица снизу остаётся: у самого низкого блока имя пытается напечататься
   // всегда, как было.
   // ЛЕСТНИЦА — ЧИСТОЙ ФУНКЦИЕЙ ПОД ТЕСТОМ (`blockLadder`): имя, время,
-  // услуга — сколько влезает, и строка значков внизу. Адреса на блоке нет:
-  // имени, времени и услуги хватает, чтобы узнать визит, а адрес съедал
-  // строку у значков.
+  // услуга — сколько влезает. Адреса на блоке нет: имени, времени и услуги
+  // хватает, чтобы узнать визит. Деньги записи остаются для озвучки — глазу
+  // их говорит цвет блока.
   const money = blockMoney(apt);
-  const ladder = blockLadder({
-    rowsFit,
-    hasService: !!service,
-    hasStatus: !cancelled && (money !== null || completed),
-  });
-  const { showService, showStatus, lastRow } = ladder;
+  const ladder = blockLadder({ rowsFit, hasService: !!service });
+  const { showService, lastRow } = ladder;
   // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
   // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
   // адрес, и на карточке, где последней осталась услуга (или время), её хвост
@@ -213,7 +208,6 @@ export function blockLayout({
     timeText,
     showTime: ladder.showTime,
     showService,
-    showStatus,
     fadeRows,
     lastRow,
     deckBadgeLow,

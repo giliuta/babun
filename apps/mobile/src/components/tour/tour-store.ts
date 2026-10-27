@@ -29,6 +29,17 @@ export interface TourStep {
   /** Элемента может не быть на экране (другой вид календаря, нет права):
    *  тогда шаг пропускается сам. */
   optional?: boolean;
+  /** «Дальше» гаснет, пока экран не сообщит, что готово (`setTourReady`):
+   *  без имени календаря идти к цвету и кнопке «Создать» незачем. */
+  needs?: string;
+  /** Цель, которую пузырь не должен закрывать: на шаге «нажмите
+   *  „Создать“» человек должен видеть строку с именем и цветом, которые он
+   *  только что выбрал. */
+  keepVisible?: string;
+  /** Куда вернуться, если экран шага закрыли: смахнули шторку создания,
+   *  вышли из настроек. Тот шаг снова показывает, откуда экран открывается
+   *  («Создать календарь», шестерёнка), — человек не остаётся без подсказки. */
+  fallback?: string;
 }
 
 export interface TourChapter {
@@ -36,19 +47,39 @@ export interface TourChapter {
   /** «по календарю» — для вопроса «Завершить обучение по календарю?». */
   about: string;
   steps: readonly TourStep[];
+  /** ВСТУПЛЕНИЕ К ГЛАВЕ: «открылся раздел — нажмите на него». Само по себе
+   *  ничего не проходит: дойти до конца вступления — значит открыть раздел,
+   *  а не пройти главу. Крестик на нём закрывает главу `intro`. */
+  intro?: string;
 }
 
-export type TourFinish = "chapter" | "all";
+/** Как закончилась глава: дошли до конца, закрыли её крестиком или закрыли
+ *  крестиком всё обучение. */
+export type TourFinish = "end" | "chapter" | "all";
 
 type TourScroll = { ref: { current: ScrollView | null }; y: { current: number } };
-type TargetEntry = { node: View; host: string; scroll: TourScroll | null };
+/** Как подсвечивать цель — по её форме, чтобы вырез лёг ровно по элементу:
+ *   • card    — строка в карточке: вырез по краю карточки, её скругление;
+ *   • control — кнопка, плитка, значок: ровный отступ вокруг и скругление;
+ *   • strip   — полоса во всю ширину (лента, сетка): без скругления. */
+export type TourShape = "card" | "control" | "strip";
+
+type TargetEntry = { node: View; host: string; scroll: TourScroll | null; shape: TourShape };
 
 let chapter: TourChapter | null = null;
 let index = 0;
+/** С какого шага глава началась: «Шаг 1» — это первый показанный шаг, а не
+ *  первый в списке (глава со страницы раздела пропускает создание). */
+let startIndex = 0;
 let version = 0;
-let onFinish: ((chapterId: string, how: TourFinish) => void) | null = null;
+let onFinish: ((chapter: TourChapter, how: TourFinish) => void) | null = null;
+const ready = new Map<string, boolean>();
 const targets = new Map<string, TargetEntry>();
 const listeners = new Set<() => void>();
+/** Отдельно от шага: чтобы запустить главу, когда её первая цель появилась
+ *  на экране, не будя слой подсказки на каждую строку, вставшую в реестр. */
+let targetsVersion = 0;
+const targetListeners = new Set<() => void>();
 
 function emit(): void {
   version++;
@@ -68,29 +99,51 @@ export function startTour(next: TourChapter, fromStepId?: string): void {
   const at = fromStepId ? next.steps.findIndex((s) => s.id === fromStepId) : 0;
   chapter = next;
   index = Math.max(0, at);
+  startIndex = index;
   emit();
 }
 
 /** Глава закончена: последний шаг пройден или человек нажал крестик. */
-export function finishTour(how: TourFinish = "chapter"): void {
+export function finishTour(how: TourFinish): void {
   const done = chapter;
   chapter = null;
   index = 0;
   emit();
-  if (done) onFinish?.(done.id, how);
+  if (done) onFinish?.(done, how);
 }
 
 export function nextStep(): void {
   if (!chapter) return;
-  if (index + 1 >= chapter.steps.length) finishTour();
+  if (index + 1 >= chapter.steps.length) finishTour("end");
   else {
     index++;
     emit();
   }
 }
 
+/** Экран сообщает, готово ли то, чего ждёт шаг (`TourStep.needs`). */
+export function setTourReady(key: string, value: boolean): void {
+  if (ready.get(key) === value) return;
+  ready.set(key, value);
+  if (activeStep()?.needs === key) emit();
+}
+
+export function tourReady(key: string | undefined): boolean {
+  return key ? ready.get(key) === true : true;
+}
+
 export function activeStep(): TourStep | null {
   return chapter ? (chapter.steps[index] ?? null) : null;
+}
+
+/** Перейти к шагу главы по имени (возврат по `fallback`). */
+export function goToStep(id: string): void {
+  if (!chapter) return;
+  const at = chapter.steps.findIndex((s) => s.id === id);
+  if (at < 0 || at === index) return;
+  index = at;
+  startIndex = Math.min(startIndex, at);
+  emit();
 }
 
 /** Событие приложения: шаг, который его ждёт, идёт дальше. */
@@ -108,21 +161,60 @@ export function tourTargetTapped(id: string): void {
   }, 0);
 }
 
-export function registerTourTarget(id: string, entry: TargetEntry | null): void {
+export function registerTourTarget(id: string, entry: TargetEntry): void {
   const had = targets.get(id);
-  if (entry) {
-    if (had?.node === entry.node && had.host === entry.host) return;
-    targets.set(id, entry);
-  } else {
-    if (!had) return;
-    targets.delete(id);
+  if (
+    had?.node === entry.node &&
+    had.host === entry.host &&
+    had.scroll === entry.scroll &&
+    had.shape === entry.shape
+  ) {
+    return;
   }
-  // Подписчикам нужно знать только о цели активного шага.
+  targets.set(id, entry);
+  targetsChanged(id);
+}
+
+/** Цель ушла с экрана. Снимается только сама: при замене экрана (`replace`)
+ *  обёртка нового встаёт раньше, чем уходит старая с тем же именем, и стирать
+ *  новую нельзя — шаг потерял бы цель и встал бы навсегда. */
+export function unregisterTourTarget(id: string, node: View): void {
+  if (targets.get(id)?.node !== node) return;
+  targets.delete(id);
+  targetsChanged(id);
+}
+
+function targetsChanged(id: string): void {
+  targetsVersion++;
+  for (const listener of targetListeners) listener();
+  // Слою подсказки нужно знать только о цели активного шага.
   if (activeStep()?.target === id) emit();
 }
 
 export function tourTarget(id: string): TargetEntry | undefined {
   return targets.get(id);
+}
+
+/** Открыт ли экран цели: есть ли на экране хоть одна цель того же экрана
+ *  (`settings.hours` → любая `settings.*`). Необязательный шаг пропускается
+ *  сам, только когда экран открыт, а строки на нём нет (закрыта правом или
+ *  тарифом). Ушёл человек с экрана — шаг ждёт, а не проскакивает. */
+export function tourScreenShown(id: string): boolean {
+  const screen = id.split(".")[0] + ".";
+  for (const key of targets.keys()) if (key.startsWith(screen)) return true;
+  return false;
+}
+
+function subscribeTargets(listener: () => void): () => void {
+  targetListeners.add(listener);
+  return () => targetListeners.delete(listener);
+}
+
+const readTargetsVersion = () => targetsVersion;
+
+/** Меняется, когда цель встала на экран или ушла с него. */
+export function useTourTargetsVersion(): number {
+  return useSyncExternalStore(subscribeTargets, readTargetsVersion, readTargetsVersion);
 }
 
 export type TourSnapshot = {
@@ -140,12 +232,17 @@ function read(): TourSnapshot {
     snapshot = {
       chapter,
       step: activeStep(),
-      index,
-      total: chapter?.steps.length ?? 0,
+      index: index - startIndex,
+      total: (chapter?.steps.length ?? 0) - startIndex,
       version,
     };
   }
   return snapshot;
+}
+
+/** Снимок без подписки — для проверок и кода вне React. */
+export function tourSnapshot(): TourSnapshot {
+  return read();
 }
 
 export function useTour(): TourSnapshot {

@@ -43,7 +43,9 @@ export interface ContactFieldDef {
   placeholder: string;
   icon: LucideIcon;
   color: string;
-  keyboardType?: "email-address" | "phone-pad";
+  /** `latin` — @username: ник пишется только латиницей, клавиатура сама
+   *  встаёт на английскую. */
+  keyboardType?: "email-address" | "phone-pad" | "latin";
   /** @username и почта — без автозаглавных: «@Artem_test» вместо
    *  «@artem_test» это уже другой логин на вид. */
   autoCapitalize?: "none";
@@ -82,6 +84,7 @@ export const CONTACT_FIELDS: ContactFieldDef[] = [
     label: "Telegram",
     placeholder: "@username",
     prefix: "@",
+    keyboardType: "latin",
     autoCapitalize: "none",
     icon: Send,
     color: MOBILE_CHANNEL_COLORS.telegram,
@@ -96,6 +99,7 @@ export const CONTACT_FIELDS: ContactFieldDef[] = [
     label: "Instagram",
     placeholder: "@username",
     prefix: "@",
+    keyboardType: "latin",
     autoCapitalize: "none",
     icon: Instagram,
     color: MOBILE_CHANNEL_COLORS.instagram,

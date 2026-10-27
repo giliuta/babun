@@ -11,6 +11,7 @@ import {
   appointmentPayableInvoice,
   liveAppointmentInvoices,
 } from "@/features/finances/appointment-invoices";
+import { isPastRecord } from "@/features/finances/day-ledger";
 import { usePlanAllows, useTenant } from "@/session/tenant";
 import { useBusinessNow } from "../business-now";
 import { useTeamPaymentAccounts } from "../payment-accounts";
@@ -164,10 +165,14 @@ export function usePaymentBlock({
   const moneyRight = invoicePay.open ? docWrite : canTakeMoney;
   const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && moneyRight && bookingInPlan;
 
+  // ВИЗИТ СОСТОЯЛСЯ — ПО ЧАСАМ, КАК В КАЛЕНДАРЕ И ФИНАНСАХ (`isPastRecord`).
+  // Статуса «выполнена» в интерфейсе больше нет, и прошедшая неоплаченная
+  // запись горела в календаре долгом, а здесь писала «К оплате».
+  const now = businessNow();
   const caption = blockCaption({
     hasTeam: Boolean(teamId),
     hasAppointment: Boolean(appointment),
-    visitCompleted: appointment?.status === "completed",
+    visitCompleted: appointment !== null && isPastRecord(appointment, now.ymd, now.hm),
     outstanding,
     rowsCount: rows.length,
     amountMode,

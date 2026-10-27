@@ -5,7 +5,15 @@ import {
   type Appointment,
   type Payment,
 } from "@babun/shared/local/appointments";
-import { holdsMoney, isPersonalEvent, settledVisit } from "./appointment-rules";
+import {
+  SERVICES_HOLD_TEAM,
+  SETTLED_STAYS,
+  holdsMoney,
+  isPersonalEvent,
+  placementRefusal,
+  placementTeam,
+  settledVisit,
+} from "./appointment-rules";
 
 const work = (extra: Partial<Appointment> = {}) =>
   createBlankAppointment({ kind: "work", team_id: "t1", ...extra });
@@ -51,5 +59,37 @@ describe("holdsMoney", () => {
   test("events and already refunded records hold nothing", () => {
     assert.equal(holdsMoney(event({ prepaid_amount: 10 })), false);
     assert.equal(holdsMoney(work({ prepaid_amount: 10, payment_status: "refunded" })), false);
+  });
+});
+
+describe("placementTeam", () => {
+  test("the chip decides, except for crew and personal events", () => {
+    assert.equal(placementTeam(work(), "t2", false), "t2");
+    assert.equal(placementTeam(work(), null, false), "t1");
+    assert.equal(placementTeam(work(), "t2", true), "t1");
+    assert.equal(placementTeam(event({ team_id: null }), "t2", false), null);
+  });
+});
+
+describe("placementRefusal", () => {
+  const services = [{ id: "s1", team_id: "t1" }];
+  const paid = work({ date: "2026-10-30", paid_amount: 20 });
+
+  test("a paid visit moves only inside its own day and team", () => {
+    assert.equal(placementRefusal(paid, "move", "2026-10-30", "t1", services), null);
+    assert.equal(placementRefusal(paid, "move", "2026-10-31", "t1", services), SETTLED_STAYS);
+    assert.equal(placementRefusal(paid, "move", "2026-10-30", "t2", services), SETTLED_STAYS);
+  });
+
+  test("a copy of a paid visit goes anywhere", () => {
+    assert.equal(placementRefusal(paid, "copy", "2026-10-31", "t2", services), null);
+  });
+
+  test("services of its own price list keep the record in its team", () => {
+    const withService = work({ service_ids: ["s1"] });
+    assert.equal(placementRefusal(withService, "move", "2026-10-31", "t2", services), SERVICES_HOLD_TEAM);
+    assert.equal(placementRefusal(withService, "copy", "2026-10-31", "t2", services), SERVICES_HOLD_TEAM);
+    assert.equal(placementRefusal(withService, "move", "2026-10-31", "t1", services), null);
+    assert.equal(placementRefusal(work(), "move", "2026-10-31", "t2", services), null);
   });
 });

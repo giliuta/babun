@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
 import { Keyboard, Platform } from "react-native";
+import type { KeyboardTypeOptions } from "react-native";
+
+/** КЛАВИАТУРА ТОЛЬКО С ЛАТИНИЦЕЙ — для того, что пишется только латиницей:
+ *  @username в Instagram и Telegram, IBAN, VAT, серийный номер, имя
+ *  отправителя SMS. С русской раскладкой человек сперва набирал кириллицу,
+ *  стирал и искал глобус. Своё значение у каждой платформы: iOS прячет
+ *  остальные языки при `ascii-capable`, Android даёт латиницу без подсказок
+ *  при `visible-password` (символы при этом видны — это не поле пароля). */
+export const LATIN_KEYBOARD: KeyboardTypeOptions =
+  Platform.OS === "ios" ? "ascii-capable" : Platform.OS === "android" ? "visible-password" : "default";
 
 /** Показана ли клавиатура.
  *

@@ -92,6 +92,12 @@ export type BlockColors = {
   pressed: string;
   /** Контур блока: тот же тон на полтона глубже (`BLOCK_CONTOUR_STEP`). */
   contour: string;
+  /** ОТМЕНЁННАЯ В СВОЁМ ЦВЕТЕ. Отмена — ситуация настройки «Цвет записи»:
+   *  включена — блок плотный, её цветом (заводской — красный), имя
+   *  зачёркнуто; выключена — прежняя серая отмена с разомкнутым кантом.
+   *  Признак едет в цветах, а не отдельным пропом: цвета блока и так
+   *  считаются в одном месте (`useBlockColors`) из полного правила записи. */
+  cancelPaint?: boolean;
 };
 
 const cache = new Map<string, BlockColors>();
@@ -99,8 +105,9 @@ const cache = new Map<string, BlockColors>();
 /** Цвета блока для одного цвета записи. Чистая, поэтому её видит тест: гейт
  *  «фон для затемнения непрозрачен» обязан меряться о то же самое значение,
  *  которым красит календарь. */
-export function blockColorsFor(hue: string): BlockColors {
-  const hit = cache.get(hue);
+export function blockColorsFor(hue: string, cancelPaint = false): BlockColors {
+  const key = cancelPaint ? `${hue}|cancel` : hue;
+  const hit = cache.get(key);
   if (hit) return hit;
   // ОДИН И ТОТ ЖЕ ОБЪЕКТ НА ОДИН ЦВЕТ: свежий литерал на каждый рендер ломал
   // бы `React.memo` у полутора сотен блоков смонтированной недели.
@@ -111,8 +118,9 @@ export function blockColorsFor(hue: string): BlockColors {
     solid: blockSolid(hue),
     pressed: blockPressed(hue),
     contour: blockContour(hue),
+    ...(cancelPaint ? { cancelPaint } : null),
   };
-  cache.set(hue, out);
+  cache.set(key, out);
   return out;
 }
 
@@ -124,9 +132,16 @@ export function useBlockColors(
   const t = useThemeColors();
   return useCallback(
     (apt: Appointment): BlockColors => {
+      // Правило записи (`teamColorFor`) уже знает и цвет, выбранный руками, и
+      // когда факт — отмена, долг, оплата — сильнее руки. Своя ступень
+      // «сперва `color_override`» здесь перебивала бы это правило.
+      const ruled = teamColorFor ? teamColorFor(apt) : null;
+      if (apt.status === "cancelled" && parseHexOk(ruled ?? "")) {
+        return blockColorsFor(ruled as string, true);
+      }
       const raw =
+        ruled ||
         (apt.color_override as string | null | undefined) ||
-        (teamColorFor ? teamColorFor(apt) : null) ||
         t.accent;
       // ГЕЙТ «ЦВЕТ ВСЕГДА HEX». Раньше запасным значением служил цвет
       // СТАТУСА, а он у отменённой брался из токена `t.faint`, то есть
@@ -146,7 +161,7 @@ export function useBlockColors(
  *  У просрочки нет почти чёрного канта (он некрасив): незакрытая запись говорит
  *  жирным временем, а кант у неё — контур своего тона, как у всех. */
 export function blockEdge(colors: BlockColors, status: Appointment["status"]): string {
-  if (status === "cancelled") return CANCELLED_EDGE;
+  if (status === "cancelled" && !colors.cancelPaint) return CANCELLED_EDGE;
   // Кант плотного блока — контур его же тона, темнее заливки.
   return colors.contour;
 }

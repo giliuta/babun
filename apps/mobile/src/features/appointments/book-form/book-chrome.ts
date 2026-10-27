@@ -2,6 +2,8 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { tintOver } from "@/components/ui/color-contrast";
 import {
   autoBaseColor,
+  fullyPaid,
+  partlyPaid,
   recordFilled,
   resolveRecordColor,
   serviceBaseColor,
@@ -41,8 +43,14 @@ export interface BookChromeInput {
   customTotal: boolean;
   effectiveTotal: number;
   todayYmd: string;
+  /** Минуты «сейчас» в поясе команды: сегодняшняя запись после конца — долг. */
+  nowMinutes?: number | null;
   situationPalette: RecordColorInput["palette"];
   activeSituations: ColorSituation[];
+  /** Цвета отмены и оплаты из «Цвета записи»; `null` — случай не красит. */
+  cancelledColor?: string | null;
+  paidColor?: string | null;
+  prepaidColor?: string | null;
   fallbackColor: string;
   accent: string;
   canvas: string;
@@ -76,25 +84,35 @@ export function bookChrome(input: BookChromeInput) {
       (id) => input.serviceColorById.get(id),
     ),
   });
+  // Деньги — у сохранённой записи (леджер, аванс, статус оплаты).
+  const live = {
+    ...(editing ?? {}),
+    kind: "work",
+    date: input.date,
+    client_id: input.clientId,
+    location_id: input.locationId,
+    address: input.address,
+    service_ids: input.serviceIds,
+    custom_total: input.customTotal,
+    total_amount: input.effectiveTotal,
+  };
+  const cancelledHue = editing?.status === "cancelled" ? input.cancelledColor ?? null : null;
   const identityFor = (override: string | null) =>
-    kind === "work"
+    cancelledHue
+      ? cancelledHue
+      : kind === "work"
       ? resolveRecordColor({
           override,
-          filled: recordFilled(
-            {
-              // Деньги — у сохранённой записи (леджер, аванс, статус оплаты).
-              ...(editing ?? {}),
-              kind: "work",
-              date: input.date,
-              client_id: input.clientId,
-              location_id: input.locationId,
-              address: input.address,
-              service_ids: input.serviceIds,
-              custom_total: input.customTotal,
-              total_amount: input.effectiveTotal,
-            },
-            todayYmd,
-          ),
+          // «Долг» в активных — значит блок «Оплата» включён, как и у сетки.
+          paid:
+            input.paidColor && input.activeSituations.includes("unpaid") && fullyPaid(live)
+              ? input.paidColor
+              : null,
+          prepaid:
+            input.prepaidColor && input.activeSituations.includes("unpaid") && partlyPaid(live)
+              ? input.prepaidColor
+              : null,
+          filled: recordFilled(live, todayYmd, input.nowMinutes),
           base: autoBase,
           palette: input.situationPalette,
           active: input.activeSituations,

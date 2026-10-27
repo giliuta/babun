@@ -10,6 +10,7 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { AppearanceField } from "@/components/ui/picker-fields";
+import { LATIN_KEYBOARD } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 
 /** The add / edit form of a stock item. */
@@ -101,6 +102,8 @@ export function InventoryEditorSheet({
                 label="Серийный №"
                 value={serial}
                 onChangeText={setSerial}
+                keyboardType={LATIN_KEYBOARD}
+                autoCorrect={false}
                 placeholder="—"
               />
             </View>

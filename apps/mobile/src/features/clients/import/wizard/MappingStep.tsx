@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import type { CountryCode } from "libphonenumber-js";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { useThemeColors } from "@/theme/colors";
@@ -52,7 +53,8 @@ export function MappingStep({
   return (
     <View className="gap-4">
       <Text className="text-xs" style={{ color: t.sub }}>
-        {parsed.rows.length} строк · {parsed.headers.length} колонок
+        {formatCountRu(parsed.rows.length, ["строка", "строки", "строк"])} ·{" "}
+        {formatCountRu(parsed.headers.length, ["колонка", "колонки", "колонок"])}
       </Text>
 
       {resume ? (

@@ -2,6 +2,7 @@ import { FlatList, RefreshControl, View } from "react-native";
 import { Users } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { Spinner } from "@/components/ui/Spinner";
 import ClientRow from "@/features/clients/ClientRow";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
@@ -67,7 +68,7 @@ export function ListBody({ list }: { list: ClientsList }) {
           contentContainerStyle={{
             paddingBottom: selecting ? 108 : 24,
           }}
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const stats = statsMap.get(item.id);
             // ГОСТЬ — клиент компании, где человек работает. Его карточка
             // открывается в ЕГО компании, и массовый выбор к нему не
@@ -75,7 +76,7 @@ export function ListBody({ list }: { list: ClientsList }) {
             // настоящего партнёра они не гаснут целиком).
             const guest = guestOf.get(item.id);
             const actions = rowActionsOf(item, selecting);
-            return (
+            const row = (
               <ClientRow
                 memoKey={selecting ? "selecting" : "browsing"}
                 client={item}
@@ -114,6 +115,8 @@ export function ListBody({ list }: { list: ClientsList }) {
                 }}
               />
             );
+            // Обучение показывает строку на первом клиенте списка.
+            return index === 0 ? <TourTarget id="clients.row" shape="strip">{row}</TourTarget> : row;
           }}
           ItemSeparatorComponent={ClientSeparator}
           // Плотнее окно отрисовки: строка клиента

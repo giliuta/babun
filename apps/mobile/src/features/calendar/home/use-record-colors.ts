@@ -3,7 +3,10 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useCancelledColor,
   useFallbackColor,
+  usePaidColor,
+  usePrepaidColor,
   useSituationPalette,
   type SituationPalette,
 } from "@/features/appointments/booking-prefs";
@@ -11,6 +14,8 @@ import {
   COLOR_SITUATIONS,
   appointmentSituation,
   autoBaseColor,
+  fullyPaid,
+  partlyPaid,
   recordFilledFor,
   resolveRecordColor,
   serviceBaseColor,
@@ -80,6 +85,13 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
       ),
     [bookingBlocks],
   );
+  // ОТМЕНА И ОПЛАТА (настройка «Цвет записи»). Оплата красит, пока у команды
+  // включён блок «Оплата»: выключили — её цвет уходит вместе с ним, как
+  // «долг».
+  const cancelledColor = useCancelledColor(activeTeamId);
+  const paymentOn = bookingBlocks.includes("payment");
+  const paidColor = usePaidColor(activeTeamId);
+  const prepaidColor = usePrepaidColor(activeTeamId);
   const citiesQuery = useCities({ teamId: activeTeamId });
   const dayCitiesQuery = useDayCities();
   const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
@@ -130,13 +142,19 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
           : null,
         service: serviceBaseColor(a, (id) => serviceColorById.get(id)),
       });
+      // ОТМЕНЁННАЯ — ЦВЕТОМ ОТМЕНЫ. Отмена выключена — `null`: блок рисует
+      // прежнюю серую отмену (`useBlockColors` отличает их по этому).
+      if (a.status === "cancelled") return cancelledColor;
       // СОБЫТИЕ НЕ ИМЕЕТ НИ КЛИЕНТА, НИ ОБЪЕКТА, НИ УСЛУГ ПО ОПРЕДЕЛЕНИЮ:
       // палитра «чего не хватает» к нему не применяется — иначе обед в
       // календаре горел бы «нет клиента».
-      if (a.kind !== "work") return base;
+      if (a.kind !== "work") return a.color_override || base;
+      const hidden = paymentHiddenFor(a);
       return resolveRecordColor({
         override: a.color_override,
-        filled: recordFilledFor(a, todayYmd, paymentHiddenFor(a), colorMinutes),
+        paid: paymentOn && !hidden && fullyPaid(a) ? paidColor : null,
+        prepaid: paymentOn && !hidden && partlyPaid(a) ? prepaidColor : null,
+        filled: recordFilledFor(a, todayYmd, hidden, colorMinutes),
         base,
         palette: situationPalette,
         active: activeSituations,
@@ -155,6 +173,10 @@ export function useRecordColors(deps: UseRecordColorsDeps) {
       todayYmd,
       colorMinutes,
       paymentHiddenFor,
+      cancelledColor,
+      paymentOn,
+      paidColor,
+      prepaidColor,
     ],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (подсветка окантовкой другого цвета, когда метка другая). Правило и его

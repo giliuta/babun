@@ -3,6 +3,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { statsByBlocks } from "@/features/clients/card-access";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import {
@@ -102,13 +103,17 @@ export function useListTeamScope({
   // инвойса; инвойс без записи под чипом команды — только своей.
   const invoicing = useClientInvoicing();
   const teamInvoicing = useClientInvoicing(teamChoice === ALL_TEAMS ? null : teamChoice);
+  const today = useBusinessToday();
   const allStatsMap = useMemo(
-    () => buildStatsMap(clients, appointments, invoicing),
-    [clients, appointments, invoicing],
+    () => buildStatsMap(clients, appointments, invoicing, today),
+    [clients, appointments, invoicing, today],
   );
   const teamStatsMap = useMemo(
-    () => (teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments, teamInvoicing)),
-    [teamChoice, teamClients, teamAppointments, teamInvoicing],
+    () =>
+      teamChoice === ALL_TEAMS
+        ? null
+        : buildStatsMap(teamClients, teamAppointments, teamInvoicing, today),
+    [teamChoice, teamClients, teamAppointments, teamInvoicing, today],
   );
   // Деньги и визиты строки — по правам этого клиента: у сотрудника
   // сводка из видимых записей не должна показывать то, что закрыто в

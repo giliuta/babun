@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from "react-native";
 import type { AppointmentService } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
@@ -117,9 +118,10 @@ export function ReceiptComposer({
   // строку — та же карта, что строит список выбора.
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsById = useMemo(
-    () => buildStatsMap(clients.data ?? [], appointments.data ?? [], invoicing),
-    [appointments.data, clients.data, invoicing],
+    () => buildStatsMap(clients.data ?? [], appointments.data ?? [], invoicing, today),
+    [appointments.data, clients.data, invoicing, today],
   );
   const catalog = useMemo(
     () => new Map((services.data ?? []).map((s) => [s.id, s])),

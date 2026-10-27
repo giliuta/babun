@@ -41,7 +41,7 @@ export interface ColorSituationDef {
  *  ЦВЕТА — то, чего не видно на бледном образце, — а сама ситуация названа
  *  заголовком и объяснять себя другими словами не нуждается. */
 const SITUATION_LABELS: Record<ColorSituation, string> = {
-  unpaid: "Не оплачено",
+  unpaid: "Долг",
   noObject: "Нет объекта",
 };
 
@@ -131,14 +131,39 @@ function owesAfterVisit(
   }
   const total = Number(apt.total_amount ?? 0);
   if (!(total > 0)) return false;
+  return receivedOf(apt) < total;
+}
+
+/** Сколько получено по записи — аванс плюс платежи (леджер или зеркало веба). */
+function receivedOf(apt: Parameters<typeof recordFilled>[0]): number {
   const ledger = (apt.payments ?? []).reduce((sum, p) => sum + p.amount, 0);
   const mirror = apt.payment
     ? apt.payment.cashAmount + apt.payment.cardAmount
     : (apt.payment_status ?? "unpaid") !== "unpaid"
       ? apt.paid_amount ?? 0
       : 0;
-  const paid = (apt.prepaid_amount ?? 0) + Math.max(ledger, mirror);
-  return paid < total;
+  return (apt.prepaid_amount ?? 0) + Math.max(ledger, mirror);
+}
+
+/** ОПЛАЧЕНА ПОЛНОСТЬЮ — запись в цвете «Оплачено». Способ (карта, наличные,
+ *  счёт) цвет не различает: его видно в самой записи. Оплачено не всё — это
+ *  долг, а не оплата. Отмена, возврат и событие — не оплата. */
+export function fullyPaid(apt: Parameters<typeof recordFilled>[0]): boolean {
+  if (apt.kind !== "work" || apt.status === "cancelled") return false;
+  if (apt.payment_status === "refunded") return false;
+  const total = Number(apt.total_amount ?? 0);
+  return total > 0 && receivedOf(apt) >= total;
+}
+
+/** ВНЕСЕНА ЧАСТЬ СУММЫ — аванс или частичная оплата, но не всё. До визита
+ *  это «Предоплата»; после визита то же самое — уже долг, и его цвет сильнее
+ *  (`resolveRecordColor` проверяет долг первым). */
+export function partlyPaid(apt: Parameters<typeof recordFilled>[0]): boolean {
+  if (apt.kind !== "work" || apt.status === "cancelled") return false;
+  if (apt.payment_status === "refunded") return false;
+  const total = Number(apt.total_amount ?? 0);
+  const got = receivedOf(apt);
+  return total > 0 && got > 0 && got < total;
 }
 
 /** То же, что `recordFilled`, но для того, кто не видит оплату записи: тогда
@@ -210,8 +235,15 @@ export function autoBaseColor(
 }
 
 export interface RecordColorInput {
-  /** Цвет, выбранный руками у этой записи. Сильнее любого правила. */
+  /** Цвет, выбранный руками у этой записи. Сильнее «нет объекта» и обычного
+   *  цвета, но слабее фактов: долг и оплата на счёт видны всегда. */
   override?: string | null;
+  /** Цвет «Оплачено», когда запись оплачена полностью (`fullyPaid`); `null` —
+   *  не оплачена или оплата не красит. */
+  paid?: string | null;
+  /** Цвет «Предоплата», когда внесена часть суммы (`partlyPaid`); после
+   *  визита его перебивает долг. */
+  prepaid?: string | null;
   /** Что в записи заполнено. */
   filled: { client: boolean; object: boolean; services: boolean; paid: boolean };
   /** Цвет «обычной» записи: команды или метки — по настройке. */
@@ -231,15 +263,17 @@ export interface RecordColorInput {
 export function resolveRecordSituation(
   input: Pick<RecordColorInput, "override" | "filled" | "palette" | "active">,
 ): ColorSituation | null {
-  if ((input.override ?? "").trim()) return null;
   const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
   const missing: Record<ColorSituation, boolean> = {
     unpaid: !input.filled.paid,
     noObject: !input.filled.object,
   };
+  const handPicked = !!(input.override ?? "").trim();
   for (const def of COLOR_SITUATIONS) {
     if (!active.includes(def.id)) continue;
     if (!missing[def.id]) continue;
+    // Рука перекрывает только «дыру» заполнения — долг она не прячет.
+    if (handPicked && def.id !== "unpaid") continue;
     if ((input.palette[def.id] ?? "").trim()) return def.id;
   }
   return null;
@@ -305,22 +339,25 @@ export function worstSituation(
   return best < 0 ? null : COLOR_SITUATIONS[best].id;
 }
 
+/** ПОРЯДОК: долг → оплата → предоплата → цвет, выбранный рукой → «нет
+ *  объекта» → обычный цвет. Факты о деньгах сильнее руки: иначе запись,
+ *  которую когда-то перекрасили, навсегда молчала бы о долге. */
 export function resolveRecordColor(input: RecordColorInput): string {
+  const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
+  if (active.includes("unpaid") && !input.filled.paid) {
+    const debt = (input.palette.unpaid ?? "").trim();
+    if (debt) return debt;
+  }
+  const paid = (input.paid ?? "").trim();
+  if (paid) return paid;
+  const prepaid = (input.prepaid ?? "").trim();
+  if (prepaid) return prepaid;
   const own = (input.override ?? "").trim();
   if (own) return own;
-
-  const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
-  const missing: Record<ColorSituation, boolean> = {
-    unpaid: !input.filled.paid,
-    noObject: !input.filled.object,
-  };
-  for (const def of COLOR_SITUATIONS) {
-    if (!active.includes(def.id)) continue;
-    if (!missing[def.id]) continue;
-    const color = (input.palette[def.id] ?? "").trim();
-    if (color) return color;
+  if (active.includes("noObject") && !input.filled.object) {
+    const hole = (input.palette.noObject ?? "").trim();
+    if (hole) return hole;
   }
-
   const base = (input.base ?? "").trim();
   return base || input.fallback;
 }

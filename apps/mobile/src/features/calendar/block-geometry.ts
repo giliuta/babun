@@ -30,8 +30,9 @@ export function textRows(cardH: number, lineH: number): number {
 }
 
 /** ЛЕСТНИЦА СОДЕРЖИМОГО БЛОКА: имя → время → услуга, столько, сколько
- *  влезает по высоте, и строка значков внизу (оплата, выполнено), если под
- *  ней осталось место.
+ *  влезает по высоте. Значков внизу нет: оплату, долг и отмену говорит цвет
+ *  всего блока (`record-color`) — он виден и у самой короткой записи, а
+ *  строка значков у неё пропадала первой.
  *
  *  Имени, времени и услуги хватает, чтобы узнать визит, — адреса на блоке
  *  нет. Имя — ВСЕГДА ОДНОЙ СТРОКОЙ и одним кеглем. Прежде в узком блоке имя из двух слов
@@ -44,21 +45,16 @@ export function textRows(cardH: number, lineH: number): number {
 export function blockLadder(input: {
   rowsFit: number;
   hasService: boolean;
-  /** Есть что сказать значками (оплата, выполнено). */
-  hasStatus: boolean;
 }): {
   showTime: boolean;
   showService: boolean;
-  showStatus: boolean;
   lastRow: "name" | "time" | "service";
 } {
   const left = Math.max(1, input.rowsFit) - 1;
   const showTime = left >= 1;
   const showService = input.hasService && left >= 2;
-  // Значки — своей строкой у нижнего края, только когда она свободна целиком.
-  const showStatus = input.hasStatus && left >= (showService ? 3 : 2);
   const lastRow = showService ? "service" : showTime ? "time" : "name";
-  return { showTime, showService, showStatus, lastRow };
+  return { showTime, showService, lastRow };
 }
 
 // ── ЧИПЫ «ВЕСЬ ДЕНЬ» ──

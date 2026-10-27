@@ -64,6 +64,10 @@ describe("purgeMessage", () => {
   test("unused, counted and unknown", () => {
     assert.match(purgeMessage("A", 0), /ещё не стоит ни в одной записи/);
     assert.match(purgeMessage("A", 47), /стоит в 47 записях/);
+    // «1 записи» — своя фраза: слово «записи» в словаре — множественное.
+    assert.match(purgeMessage("A", 1), /стоит в 1 записи\./);
+    assert.match(purgeMessage("A", 21), /стоит в 21 записи\./);
+    assert.match(purgeMessage("A", 2), /стоит в 2 записях/);
     assert.match(purgeMessage("A", -1), /может стоять в уже сделанных записях/);
   });
 });

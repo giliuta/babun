@@ -42,6 +42,9 @@ export function BlockText({
     timeText,
   } = layout;
   const cut = cancelled ? "tail" : "clip";
+  // ОТМЕНЁННАЯ ЗАЧЁРКНУТА ЦЕЛИКОМ — имя, время и услуга: блок читается
+  // «перечёркнутым», а не записью с одним зачёркнутым словом.
+  const strike = cancelled ? "line-through" : "none";
   return (
     <>
       {textW >= 24 && nameLineW >= 24 ? (
@@ -55,7 +58,7 @@ export function BlockText({
               deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
               lastRow === "name" ? dotReserve : 0,
             ),
-            textDecorationLine: cancelled ? "line-through" : "none",
+            textDecorationLine: strike,
           }}
           numberOfLines={1}
           ellipsizeMode={cut}
@@ -73,6 +76,7 @@ export function BlockText({
             fontWeight: overdue ? "700" : "500",
             marginRight: lastRow === "time" ? dotReserve : 0,
             fontVariant: ["tabular-nums"],
+            textDecorationLine: strike,
           }}
           numberOfLines={1}
           // Жирное время просрочки в узкой колонке не влезало и рубилось
@@ -90,6 +94,7 @@ export function BlockText({
             fontSize: 13,
             lineHeight: lineH,
             marginRight: lastRow === "service" ? dotReserve : 0,
+            textDecorationLine: strike,
           }}
           numberOfLines={1}
           ellipsizeMode={cut}

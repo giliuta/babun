@@ -5,6 +5,7 @@ import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { LATIN_KEYBOARD } from "@/lib/keyboard";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { senderProblem, smsErrorText, useSaveTeamSender } from "./sms-account";
@@ -82,6 +83,8 @@ export function SmsSenderSheet({
         value={name}
         onChangeText={setName}
         maxLength={11}
+        // Оператор примет только латиницу (`senderProblem`).
+        keyboardType={LATIN_KEYBOARD}
         autoCapitalize="none"
         autoCorrect={false}
         autoFocus

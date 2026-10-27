@@ -162,12 +162,14 @@ export async function updateClient(
     .single();
   if (error) throw new Error(`updateClient: ${error.message}`);
 
-  // Tags untouched — re-read for completeness.
+  // Tags untouched — re-read for completeness, in set order (first = main).
   const { data: assigns } = await supabase
     .from("client_tag_assignments")
     .select("tag_id")
     .eq("client_id", id)
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .order("position", { ascending: true })
+    .order("tag_id", { ascending: true });
   return {
     ...rowToClient(row),
     tag_ids: (assigns ?? []).map((a) => a.tag_id),

@@ -14,6 +14,7 @@ import { serverReason } from "@/features/calendar/server-reason";
 import { SERVICES_HOLD_TEAM, SETTLED_STAYS, settledVisit } from "./appointment-rules";
 import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
 import { startOfDay } from "./dates";
+import { settleGate } from "./settle-gate";
 import { scheduleWarning } from "./work-band";
 import type { CalendarGrid } from "./use-calendar-grid";
 import type { CalendarRights } from "./use-calendar-rights";
@@ -145,6 +146,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       setDay(startOfDay(parseYMD(date)));
     }
     if (editingApt?.id === apt.id) setEditingApt(moved);
+    const gate = settleGate();
     updateAppt.mutate(
       { id: apt.id, patch },
       {
@@ -152,6 +154,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
           // Физический «удар» на успешное приземление drag-переноса —
           // блок лёг на слот, рука это чувствует.
           haptics.impact();
+          gate.settle(true);
           if (isCalendarEvent(apt)) {
             if (visibilityTenantId) {
               void syncEventAppointmentReminders(moved, appointmentTimeZone(apt), visibilityTenantId);
@@ -159,39 +162,44 @@ export function createReschedule(deps: CreateRescheduleDeps) {
           } else {
             void cancelAppointmentReminders(apt.id);
           }
-          // Растяжка (начало на месте) называет новое время целиком, перенос —
-          // куда встала запись. «Отменить» возвращает прежние границы: жест
-          // легко сделать случайно, а искать старое время по памяти нельзя.
-          const teamName = teamMoves
-            ? teams.find((tm) => tm.id === teamId)?.name
-            : null;
-          const what =
-            dateMoves || teamMoves
-              ? `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(date)}, ${newStart}`
-              : apt.time_start === newStart
-                ? `Время: ${newStart}–${newEnd}`
-                : `Перенесено на ${newStart}`;
-          const prev = {
-            time_start: apt.time_start,
-            time_end: apt.time_end,
-            ...(dateMoves ? { date: apt.date } : {}),
-            ...(teamMoves ? { team_id: apt.team_id } : {}),
-          };
-          toast(warn ? `${what}. ${warn}` : what, "success", {
-            label: "Отменить",
-            onPress: () =>
-              updateAppt.mutate(
-                { id: apt.id, patch: prev },
-                {
-                  onError: (e) =>
-                    toast(serverReason(e) ?? "Не удалось вернуть время", "error"),
-                },
-              ),
-          });
         },
-        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести"),
+        onError: (e) => {
+          gate.settle(false);
+          toast(serverReason(e) ?? "Не удалось перенести", "error");
+        },
       },
     );
+    // Растяжка (начало на месте) называет новое время целиком, перенос —
+    // куда встала запись. «Отменить» возвращает прежние границы: жест
+    // легко сделать случайно, а искать старое время по памяти нельзя.
+    const teamName = teamMoves ? teams.find((tm) => tm.id === teamId)?.name : null;
+    const what =
+      dateMoves || teamMoves
+        ? `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(date)}, ${newStart}`
+        : apt.time_start === newStart
+          ? `Время: ${newStart}–${newEnd}`
+          : `Перенесено на ${newStart}`;
+    const prev = {
+      time_start: apt.time_start,
+      time_end: apt.time_end,
+      ...(dateMoves ? { date: apt.date } : {}),
+      ...(teamMoves ? { team_id: apt.team_id } : {}),
+    };
+    toast(warn ? `${what}. ${warn}` : what, "success", {
+      label: "Отменить",
+      onPress: () =>
+        void gate.settled.then((ok) => {
+          if (!ok) return;
+          if (editingApt?.id === apt.id) setEditingApt({ ...apt });
+          updateAppt.mutate(
+            { id: apt.id, patch: prev },
+            {
+              onError: (e) =>
+                toast(serverReason(e) ?? "Не удалось вернуть время", "error"),
+            },
+          );
+        }),
+    });
   };
 
   return reschedule;

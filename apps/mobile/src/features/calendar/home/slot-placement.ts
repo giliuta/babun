@@ -1,4 +1,3 @@
-import type { Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { duplicateAppointment } from "@babun/shared/local/appointments";
 import { randomUuid } from "@babun/shared/sync";
@@ -12,9 +11,9 @@ import {
 } from "@/features/calendar/reminders";
 import { isCalendarEvent } from "@/features/calendar/event-access";
 import { serverReason } from "@/features/calendar/server-reason";
-import { SERVICES_HOLD_TEAM, SETTLED_STAYS, isPersonalEvent, settledVisit } from "./appointment-rules";
-import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
+import { placementRefusal, placementTeam } from "./appointment-rules";
 import { isPastSlotAt } from "./dates";
+import { settleGate } from "./settle-gate";
 import type { CalendarClock } from "./use-calendar-clock";
 import type { CalendarGrid } from "./use-calendar-grid";
 import type { CalendarRights } from "./use-calendar-rights";
@@ -35,9 +34,9 @@ type CreateSlotPlacementDeps =
   & Pick<GridModes, "pickClientId" | "pick" | "setMoving" | "editingApt" | "setEditingApt"
     | "moving" | "placedFromRef" | "movingKind">
   & Pick<CalendarScope, "activeTeamId">
-  & Pick<CalendarRoute, "pushBookOnce" | "router" | "tenantId">
+  & Pick<CalendarRoute, "pushBookOnce" | "tenantId">
   & Pick<CalendarRights, "isCrew">
-  & Pick<RecordActions, "memberCopy" | "createAppt">
+  & Pick<RecordActions, "memberCopy" | "createAppt" | "deleteAppt">
   & Pick<QuickEvents, "attemptId" | "settleAttempt">
   & Pick<RecordNaming, "appointmentTimeZone">
   & Pick<SlotNotice, "setNotice">
@@ -49,15 +48,20 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
   const {
     todayYmd, nowMinutes, freeSlotsFor, toast, pickClientId, pick, activeTeamId,
     pushBookOnce, setMoving, isCrew, memberCopy, moveWindowMin, attemptId,
-    settleAttempt, createAppt, router, teams, updateAppt, appointmentTimeZone,
+    settleAttempt, createAppt, deleteAppt, teams, updateAppt, appointmentTimeZone,
     editingApt, setEditingApt, moving, placedFromRef, movingKind, workBandFor,
     setNotice, setSlotDraft, tenantId, servicesQuery,
   } = deps;
-  // Копия или перенос в другую команду с услугами прайса своей команды.
-  const servicesHoldTeam = (apt: Appointment, toTeam: string | null) =>
-    toTeam !== apt.team_id &&
-    !isCalendarEvent(apt) &&
-    servicesBlockTeamMove(apt.service_ids ?? [], servicesQuery.data ?? [], toTeam);
+  // Тот же отказ, что гасит зелень (`placementRefusal`): тап по кубику
+  // проверяет его на случай, если кубик нарисован до свежих данных.
+  const refusal = (apt: Appointment, kind: "move" | "copy", dateYmd: string) =>
+    placementRefusal(
+      apt,
+      kind,
+      dateYmd,
+      placementTeam(apt, activeTeamId, isCrew),
+      servicesQuery.data ?? [],
+    );
   /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ: в прошлом сверху
    *  выезжает плашка с кнопкой. Глухой запрет мешал бы ровно там, где выезд
    *  состоялся, а завести его забыли. Поэтому у правила есть дверь, и человек
@@ -104,8 +108,8 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
   };
 
   /** Тап по кубику в режиме копии: копия встаёт в выбранное время выбранной
-   *  команды, оригинал остаётся на месте. «Открыть» в тосте — сразу на
-   *  правку копии, «Отменить» — копия удаляется. */
+   *  команды, оригинал остаётся на месте. «Отменить» в плашке — копия
+   *  удаляется; открыть её — тапом по ней же в сетке. */
   const copyToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
     setMoving(null);
@@ -132,9 +136,9 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       );
       return true;
     }
-    const copyTeam = isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
-    if (servicesHoldTeam(apt, copyTeam)) {
-      toast(SERVICES_HOLD_TEAM, "info");
+    const refused = refusal(apt, "copy", dateYmd);
+    if (refused) {
+      toast(refused, "info");
       return false;
     }
     const copy = {
@@ -143,17 +147,30 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       date: dateYmd,
       time_start: timeStart,
       time_end: addMinutesHM(timeStart, moveWindowMin),
-      team_id: isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id),
+      team_id: placementTeam(apt, activeTeamId, false),
     };
+    // КОПИЯ ОТМЕНЯЕТСЯ, КАК ПЕРЕНОС: лишнюю копию (не тот кубик) иначе
+    // приходилось искать и удалять руками. Отмена ждёт, пока копия встанет.
+    const gate = settleGate();
     createAppt.mutate(copy, {
       onSuccess: () => {
         haptics.success();
-        toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
-          label: "Открыть",
-          onPress: () => router.push(`/book?appointmentId=${copy.id}` as Href),
-        });
+        gate.settle(true);
       },
-      onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
+      onError: (e) => {
+        gate.settle(false);
+        toast(serverReason(e) ?? "Не удалось скопировать", "error");
+      },
+    });
+    toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
+      label: "Отменить",
+      onPress: () =>
+        void gate.settled.then((ok) => {
+          if (!ok) return;
+          deleteAppt.mutate(copy.id, {
+            onError: (e) => toast(serverReason(e) ?? "Не удалось убрать копию", "error"),
+          });
+        }),
     });
     return true;
   };
@@ -164,16 +181,13 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
   const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
     // Сотрудник переносит только внутри команды записи.
-    const toTeam = isCrew || isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
+    const toTeam = placementTeam(apt, activeTeamId, isCrew);
     const teamChanges = toTeam !== apt.team_id;
     // Оплаченная — только в её дне; режим остаётся: кубик её дня ещё можно
     // выбрать.
-    if ((teamChanges || dateYmd !== apt.date) && settledVisit(apt)) {
-      toast(SETTLED_STAYS, "info");
-      return false;
-    }
-    if (servicesHoldTeam(apt, toTeam)) {
-      toast(SERVICES_HOLD_TEAM, "info");
+    const refused = refusal(apt, "move", dateYmd);
+    if (refused) {
+      toast(refused, "info");
       return false;
     }
     setMoving(null);
@@ -196,33 +210,39 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       if (!isCalendarEvent(placed)) void cancelAppointmentReminders(placed.id);
       else if (tenantId) void syncEventAppointmentReminders(placed, tz, tenantId);
     };
+    const gate = settleGate();
     updateAppt.mutate(
       { id: apt.id, patch: next },
       {
         onSuccess: () => {
           haptics.success();
+          gate.settle(true);
           syncReminders({ ...apt, ...next });
-          const teamName = teamChanges
-            ? teams.find((tm) => tm.id === toTeam)?.name
-            : null;
-          toast(
-            `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(dateYmd)}, ${timeStart}`,
-            "success",
-            {
-            label: "Отменить",
-            onPress: () =>
-              updateAppt.mutate(
-                { id: apt.id, patch: prev },
-                {
-                  onSuccess: () => syncReminders(apt),
-                  onError: (e) =>
-                    toast(serverReason(e) ?? "Не удалось вернуть запись", "error"),
-                },
-              ),
-            },
-          );
         },
-        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести", "error"),
+        onError: (e) => {
+          gate.settle(false);
+          toast(serverReason(e) ?? "Не удалось перенести", "error");
+        },
+      },
+    );
+    const teamName = teamChanges ? teams.find((tm) => tm.id === toTeam)?.name : null;
+    toast(
+      `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(dateYmd)}, ${timeStart}`,
+      "success",
+      {
+        label: "Отменить",
+        onPress: () =>
+          void gate.settled.then((ok) => {
+            if (!ok) return;
+            updateAppt.mutate(
+              { id: apt.id, patch: prev },
+              {
+                onSuccess: () => syncReminders(apt),
+                onError: (e) =>
+                  toast(serverReason(e) ?? "Не удалось вернуть запись", "error"),
+              },
+            );
+          }),
       },
     );
     return true;

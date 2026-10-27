@@ -3,6 +3,8 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import {
   COLOR_SITUATIONS,
   autoBaseColor,
+  fullyPaid,
+  partlyPaid,
   recordFilled,
   resolveRecordColor,
   serviceBaseColor,
@@ -11,7 +13,10 @@ import {
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useCancelledColor,
   useFallbackColor,
+  usePaidColor,
+  usePrepaidColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import { useCities } from "@/features/reference/queries";
@@ -34,6 +39,9 @@ export function useRecordColor(
   const palette = useSituationPalette(teamId);
   const fallback = useFallbackColor(teamId);
   const blocks = useBookingBlocks(teamId);
+  const cancelled = useCancelledColor(teamId);
+  const paidColor = usePaidColor(teamId);
+  const prepaidColor = usePrepaidColor(teamId);
   const { data: cities = [] } = useCities({ teamId });
   const { data: services = [] } = useAllServices();
   const serviceColorById = useMemo(
@@ -54,9 +62,12 @@ export function useRecordColor(
     label: labelName ? cities.find((c) => c.name === labelName)?.color : null,
     service: serviceBaseColor(a, (id) => serviceColorById.get(id)),
   });
+  if (a.status === "cancelled" && cancelled) return cancelled;
   if (a.kind && a.kind !== "work") return a.color_override ?? base ?? null;
   return resolveRecordColor({
     override: a.color_override,
+    paid: blocks.includes("payment") && fullyPaid(a) ? paidColor : null,
+    prepaid: blocks.includes("payment") && partlyPaid(a) ? prepaidColor : null,
     filled: recordFilled(a, today),
     base,
     palette,

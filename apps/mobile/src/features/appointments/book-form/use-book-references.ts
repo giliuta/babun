@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
@@ -34,7 +36,15 @@ export function useBookReferences(teamId: string | null) {
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const masters = useMemo(() => mastersQuery.data ?? [], [mastersQuery.data]);
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data]);
-  const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
+  // КЛИЕНТ, ВЫБРАННЫЙ ПО «НОМЕР УЖЕ ЕСТЬ». Партнёру сервер отдаёт клиента
+  // другой команды по номеру, но в его списке этого клиента нет, пока запись
+  // не сохранена: форма держит строку сама. Как только список его знает,
+  // главнее строка списка.
+  const [adopted, adoptClient] = useState<Client | null>(null);
+  const clients = useMemo(() => {
+    const list = clientsQuery.data ?? [];
+    return adopted && !list.some((c) => c.id === adopted.id) ? [...list, adopted] : list;
+  }, [clientsQuery.data, adopted]);
   const allAppts = useMemo(
     () => appointmentsQuery.data ?? [],
     [appointmentsQuery.data],
@@ -43,9 +53,10 @@ export function useBookReferences(teamId: string | null) {
   // строку превратил бы выбор клиента в квадрат по числу записей.
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsById = useMemo(
-    () => buildStatsMap(clientsQuery.data ?? [], allAppts, invoicing),
-    [clientsQuery.data, allAppts, invoicing],
+    () => buildStatsMap(clientsQuery.data ?? [], allAppts, invoicing, today),
+    [clientsQuery.data, allAppts, invoicing, today],
   );
   const calendarSettings = calendarSettingsQuery.data;
   // Создание заявки и весь его хвост (синхронизация push события, тосты,
@@ -113,6 +124,7 @@ export function useBookReferences(teamId: string | null) {
     masters,
     services,
     clients,
+    adoptClient,
     allAppts,
     statsById,
     calendarSettings,

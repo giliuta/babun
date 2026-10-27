@@ -1,3 +1,5 @@
+import type { Client } from "@babun/shared/local/clients";
+
 // КЛИЕНТ, СОЗДАННЫЙ РАДИ ЗАПИСИ, — ВОЗВРАЩАЕТСЯ В ЗАПИСЬ.
 //
 // После «Готово» на карточке нового клиента человек должен оказаться в самой
@@ -21,6 +23,10 @@
 
 interface DeliveredClient {
   clientId: string;
+  /** Строка клиента, если форма может её не знать: партнёр выбрал по «Номер
+   *  уже есть» клиента другой команды — в его списке такого клиента нет,
+   *  пока запись не сохранена. */
+  row: Client | null;
   at: number;
 }
 
@@ -31,14 +37,19 @@ const DELIVERY_TTL_MS = 60_000;
 let delivered: DeliveredClient | null = null;
 
 /** Карточка нового клиента: «клиент создан, вот его id — заберите». */
-export function deliverCreatedClient(clientId: string): void {
-  delivered = { clientId, at: Date.now() };
+export function deliverCreatedClient(clientId: string, row: Client | null = null): void {
+  delivered = { clientId, row, at: Date.now() };
+}
+
+/** Забрать доставленного клиента вместе со строкой и опустошить ящик. */
+export function takeDeliveredClient(): { clientId: string; row: Client | null } | null {
+  const value = delivered;
+  delivered = null;
+  if (!value || Date.now() - value.at > DELIVERY_TTL_MS) return null;
+  return { clientId: value.clientId, row: value.row };
 }
 
 /** Форма записи: забрать доставленного клиента и опустошить ящик. */
 export function takeCreatedClient(): string | null {
-  const value = delivered;
-  delivered = null;
-  if (!value || Date.now() - value.at > DELIVERY_TTL_MS) return null;
-  return value.clientId;
+  return takeDeliveredClient()?.clientId ?? null;
 }

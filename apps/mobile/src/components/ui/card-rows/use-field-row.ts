@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TextInput } from "react-native";
+import { LATIN_KEYBOARD } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 import {
   cleanFieldInput,
@@ -93,6 +94,9 @@ export function useFieldRow({
     editingNow,
     text,
     selectOnFocus,
+    // `latin` — имя смысла, а не платформы: на iOS и Android латиницу
+    // включают разные значения.
+    nativeKeyboard: keyboardType === "latin" ? LATIN_KEYBOARD : keyboardType,
     valueSize,
     valueWeight,
     setInput,

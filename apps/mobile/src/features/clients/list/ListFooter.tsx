@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { BulkActionBar } from "@/features/clients/BulkActionBar";
 import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
 import { withNewClientTeam } from "@/features/clients/team-scope";
@@ -53,6 +54,7 @@ export function ListFooter({ list }: { list: ClientsList }) {
               серым): тап поднимает плашку «Нужно изменить
               тариф». Партнёр без своего тарифа видит общий список, но своего
               клиента не заведёт — сервер отбил бы его на сохранении. */}
+          <TourTarget id="clients.create" shape="control">
           <TariffLocked locked={!clientsInPlan}>
             <GradientButton
               label="Создать клиента"
@@ -69,6 +71,7 @@ export function ListFooter({ list }: { list: ClientsList }) {
               disabled={!createHere}
             />
           </TariffLocked>
+          </TourTarget>
         </View>
       )}
     </>

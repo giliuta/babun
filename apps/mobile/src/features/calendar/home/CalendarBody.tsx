@@ -70,7 +70,13 @@ export function CalendarBody({ c }: { c: CalendarController }) {
           // (`useBlockColors` спрашивает `color_override` первым). Без этого
           // событие с выбранным цветом красилось в сетке выбранным, а в ленте
           // цветом команды: один предмет двух цветов.
-          hueFor={(a) => a.color_override || teamColorFor(a) || t.accent}
+          // То же правило, что у сетки (`useBlockColors`): факт сильнее руки.
+          // Отмена без своего цвета — пустая строка: строка списка серая.
+          hueFor={(a) =>
+            a.status === "cancelled"
+              ? teamColorFor(a) ?? ""
+              : teamColorFor(a) || a.color_override || t.accent
+          }
           situationFor={situationFor}
           overdueFor={overdueFor}
           showAmounts={isCrew ? amountVisible : true}

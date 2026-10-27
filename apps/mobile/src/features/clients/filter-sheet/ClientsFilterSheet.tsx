@@ -1,6 +1,7 @@
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { pluralPhraseRu } from "@babun/shared/common/utils/plural-ru";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors } from "@/theme/colors";
@@ -124,8 +125,13 @@ export function ClientsFilterSheet({
 
   const countPart = `${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`;
   // Винительный падеж: «Показать 1 клиентА» (у «Готово · 1 клиент» —
-  // именительный, там число просто называется).
-  const countAcc = `${shownCount} ${countWordRu(shownCount, "клиента", "клиента", "клиентов")}`;
+  // именительный, там число просто называется). «1 клиента» — своя фраза:
+  // то же слово после 2 в других языках читается множественным.
+  const countAcc = pluralPhraseRu(
+    shownCount,
+    `${shownCount} клиента`,
+    `${shownCount} ${countWordRu(shownCount, "клиента", "клиента", "клиентов")}`,
+  );
 
   const zeroHint = zeroHintFor(shownCount, facetCounts.withoutOne, filter, trimmedSearch);
 

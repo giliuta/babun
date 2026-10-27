@@ -20,7 +20,7 @@ test("вход в неподтверждённый аккаунт не врёт,
 
 test("«Почти готово» держит тот же минимум пароля, что регистрация", () => {
   const finish = screen("finish-signup.tsx");
-  assert.match(finish, /password\.length >= PASSWORD_MIN/);
-  assert.match(finish, /passwordTooShort\(password\)/);
+  assert.match(finish, /passwordAccepted\(password\)/);
+  assert.match(finish, /passwordHint\(password\)/);
   assert.doesNotMatch(finish, /password\.length > 0\)/);
 });

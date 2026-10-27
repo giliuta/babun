@@ -16,6 +16,7 @@ import {
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -121,9 +122,10 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
   const { data: appointmentsForStats = [] } = useAppointments();
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsMap = useMemo(
-    () => buildStatsMap(clients, appointmentsForStats, invoicing),
-    [clients, appointmentsForStats, invoicing],
+    () => buildStatsMap(clients, appointmentsForStats, invoicing, today),
+    [clients, appointmentsForStats, invoicing, today],
   );
   const tags = useMemo(() => tagsQuery.data ?? [], [tagsQuery.data]);
   // Теги — у команды: счётчик строки — теги выбранной команды.

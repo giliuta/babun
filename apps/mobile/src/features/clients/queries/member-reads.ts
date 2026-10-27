@@ -57,6 +57,24 @@ export async function memberClientContacts(
   return parseMemberContacts(data);
 }
 
+/** «НОМЕР УЖЕ ЕСТЬ» ДЛЯ ПАРТНЁРА. Номер уникален во всей компании, а
+ *  партнёр видит лишь часть базы: без этой двери новый клиент с занятым
+ *  номером упирался в отказ базы без выхода. Сервер отвечает только тому, у
+ *  кого в команде записи есть «Новые записи», и только на полный номер;
+ *  строка — та же, что у клиента записи (номер — по его правам). */
+export async function findMemberClientByPhone(
+  client: typeof supabase,
+  e164: string,
+  teamId: string,
+): Promise<Client | null> {
+  const { data, error } = await client.rpc("member_find_client_by_phone", {
+    p_phone_e164: e164,
+    p_team: teamId,
+  });
+  if (error) throw new Error(`findMemberClientByPhone: ${error.message}`);
+  return data ? masterClientJsonToClient(data) : null;
+}
+
 /** Окно сотрудника плюс клиенты его записей, без дублей: строка окна
  *  главнее (у неё блоки и контакты по правам). Отказ второй двери не роняет
  *  первую. */

@@ -12,6 +12,7 @@ import {
   readableTextOnColor,
 } from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
+import { useSituationPalette } from "@/features/appointments/booking-prefs";
 import { dayMonthLabel } from "./day-month-label";
 import { groupByDate, monthCells, ymd } from "./month-view/month-grid";
 import { useMonthMoney } from "./month-view/use-month-money";
@@ -94,6 +95,10 @@ export const MonthView = memo(function MonthView({
   });
 
   const t = useThemeColors();
+  // ДОЛГ МЕСЯЦА — ЦВЕТОМ «ДОЛГА» ИЗ НАСТРОЙКИ, как блоки недели; затемнён до
+  // читаемого мелким кеглем. Долг выключен — прежний янтарь.
+  const debtHue = useSituationPalette(teamId).unpaid;
+  const debtColor = debtHue ? edgeColor(debtHue) : t.warning;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.surface }}>
@@ -275,7 +280,7 @@ export const MonthView = memo(function MonthView({
                       {/* Серым — ещё ожидается, янтарём — долг прошедших
                           записей: план в прошлом стал долгом, а не пропал. */}
                       <MoneyRow v={totals.planned} color={t.sub} skipZero />
-                      <MoneyRow v={totals.debt} color={t.warning} skipZero />
+                      <MoneyRow v={totals.debt} color={debtColor} skipZero />
                       <MoneyRow v={totals.income} color={t.success} skipZero />
                       <MoneyRow v={totals.expense} color={t.danger} skipZero />
                       {/* Прибыль — только когда в дне были деньги: у дня с

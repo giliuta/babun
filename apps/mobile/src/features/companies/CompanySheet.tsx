@@ -187,7 +187,7 @@ export function CompanySheet({
     options: {
       separated?: boolean;
       multiline?: boolean;
-      keyboardType?: "phone-pad" | "email-address";
+      keyboardType?: "phone-pad" | "email-address" | "latin";
       // Номера набирают как угодно — заглавными их делает `normalizeCompanyDraft`.
       autoCapitalize?: "none" | "words";
     } = {},
@@ -219,6 +219,7 @@ export function CompanySheet({
       live
       separated={separated}
       autoCapitalize="characters"
+      keyboardType="latin"
       sanitize={cleanSeriesPrefix}
       onSave={(v) => set({ [key]: v })}
     />
@@ -286,10 +287,12 @@ export function CompanySheet({
           {field("legal_name", "Юридическое имя", { autoCapitalize: "words" })}
           {field("vat_number", "VAT номер", {
             separated: true,
+            keyboardType: "latin",
             autoCapitalize: "none",
           })}
           {field("reg_number", "Регистрационный номер", {
             separated: true,
+            keyboardType: "latin",
             autoCapitalize: "none",
           })}
         </SectionCard>
@@ -309,7 +312,7 @@ export function CompanySheet({
         <RowCaption text="Адрес печатается так, как набран: перенос строки здесь — перенос на бумаге." />
 
         <SectionCard dense title="Оплата">
-          {field("iban", "IBAN", { autoCapitalize: "none" })}
+          {field("iban", "IBAN", { keyboardType: "latin", autoCapitalize: "none" })}
           {field("bank_name", "Банк", {
             separated: true,
             autoCapitalize: "words",
