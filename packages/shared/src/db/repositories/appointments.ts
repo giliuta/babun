@@ -225,7 +225,9 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
   };
 }
 
-function appointmentToUpdate(patch: Partial<Appointment>): Update {
+/** Правка записи — колонками базы. Её же ждёт `refund_overpayment_and_save`
+ *  от владельца и диспетчера (`appointment-payments.ts`). */
+export function appointmentToUpdate(patch: Partial<Appointment>): Update {
   const out: Update = {};
   // Scalars.
   if (patch.client_id !== undefined) out.client_id = patch.client_id;

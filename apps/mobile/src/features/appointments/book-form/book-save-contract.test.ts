@@ -30,3 +30,30 @@ test("колокольчик правки загорается по ответу
   assert.match(save, /\.then\(\(res\) => \{\s*setSelfReminderRule\(getSelfReminder\(editing\.id\)\);/);
   assert.match(save, /void Linking\.openSettings\(\);/);
 });
+
+// ВОЗВРАТ ПЕРЕПЛАТЫ И ИТОГ — ОДНОЙ ТРАНЗАКЦИЕЙ (№6, dat/M-03): два вызова
+// оставляли возврат без нового итога, когда срывалось сохранение.
+const repo = readFileSync(
+  resolve(here, "../../../../../../packages/shared/src/db/repositories/appointment-payments.ts"),
+  "utf8",
+);
+const mutations = readFileSync(resolve(here, "../payment-mutations.ts"), "utf8");
+
+test("итог ниже полученного — один вызов возврата с сохранением, не два (№6)", () => {
+  assert.match(
+    save,
+    /await refundOverpayment\.mutateAsync\(\{[\s\S]*?requestId: overpayRequestRef\.current,\s*patch,[\s\S]*?expectedUpdatedAt,\s*\}\);\s*\} else if \(Object\.keys\(patch\)\.length > 0\) \{\s*await updateMut\.mutateAsync/,
+  );
+  assert.match(repo, /supabase\.rpc\("refund_overpayment_and_save", \{[\s\S]*?p_patch: input\.patch,[\s\S]*?p_expected_updated_at/);
+  assert.doesNotMatch(repo + mutations + save, /refund_appointment_overpayment"|refundAppointmentOverpayment\(/);
+  // Тело — то же, что у обычного сохранения: мастер — своя дверь, остальные — колонки.
+  assert.match(mutations, /memberPatch\(vars\.patch, vars\.kind\)[\s\S]*?appointmentToUpdate\(vars\.patch\)/);
+});
+
+test("оплата записи шлёт часы телефона в момент отправки (dat/M-07)", () => {
+  // В самом вызове, а не в аргументах тапа: очередь мастера отправляет позже.
+  assert.match(
+    repo,
+    /rpc\("record_appointment_payment", \{[\s\S]*?p_sent_at: new Date\(\)\.toISOString\(\),\s*\}\);/,
+  );
+});

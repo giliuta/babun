@@ -29,7 +29,7 @@ import type { PendingPayment } from "@/features/appointments/PaymentBlock";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import type { PendingFile } from "@/features/appointments/pending-files";
 import { useTenantId } from "@/lib/tenant";
-import { useRecordPayment, useRefundOverpayment } from "@/features/appointments/payment-mutations";
+import { useRecordPayment, useRefundOverpaymentAndSave } from "@/features/appointments/payment-mutations";
 import {
   addMinutesHM,
   formatYMD,
@@ -181,7 +181,7 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
   const tenantIdForFiles = useTenantId();
   const queryClientForFiles = useQueryClient();
   const recordPayment = useRecordPayment();
-  const refundOverpayment = useRefundOverpayment(editId);
+  const refundOverpayment = useRefundOverpaymentAndSave(editId);
   // Номер попытки возврата переплаты — один на это нажатие «Сохранить» и
   // его повторы после обрыва: сервер второго возврата не запишет.
   const overpayRequestRef = useRef<string | null>(null);

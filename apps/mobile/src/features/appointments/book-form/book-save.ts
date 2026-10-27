@@ -185,8 +185,16 @@ export function bookSaveActions({
         // сумма больше итога заявки»), и форма упиралась в отказ без выхода:
         // «Снять» — это «деньги не поступили», а вернуть часть было нечем.
         // Поэтому «Сохранить» спрашивает и возвращает разницу возвратом
-        // клиенту (`refund_appointment_overpayment`), а потом сохраняет итог.
+        // клиенту.
+        //
+        // ВОЗВРАТ И ИТОГ — ОДНИМ ВЫЗОВОМ (`refund_overpayment_and_save`). Было
+        // два: возврат, потом сохранение. Сорвалось второе (сеть, «запись
+        // изменилась», права) — деньги клиенту уже вернули, а итог прежний,
+        // и у записи вырастал долг на сумму возврата. Теперь отказ
+        // сохранения откатывает и возврат. Сверка `updated_at` — по записи,
+        // из которой посчитана сумма в вопросе: изменилась — отказ до денег.
         const refund = overpaymentToRefund(editing ?? null, effectiveTotal);
+        const expectedUpdatedAt = editing?.updated_at ?? null;
         if (refund && "total_amount" in patch) {
           const ok = await confirmAction(`Вернуть клиенту ${formatEURExact(refund.amountCents / 100)}?`, {
             message: `Итог ${formatEURExact(effectiveTotal)}, а получено ${formatEURExact(refund.receivedCents / 100)}. Разница вернётся клиенту с последних платежей — в финансах будет возврат.`,
@@ -198,9 +206,11 @@ export function bookSaveActions({
             appointmentId: editId,
             amount: refund.amountCents / 100,
             requestId: overpayRequestRef.current,
+            patch,
+            kind: editing?.kind,
+            expectedUpdatedAt,
           });
-        }
-        if (Object.keys(patch).length > 0) {
+        } else if (Object.keys(patch).length > 0) {
           await updateMut.mutateAsync({ id: editId, patch });
         }
         overpayRequestRef.current = null;
