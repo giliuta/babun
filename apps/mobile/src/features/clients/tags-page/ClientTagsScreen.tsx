@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/AppearanceSheet";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -118,6 +119,13 @@ export function ClientTagsScreen() {
   );
   const busy =
     createTag.isPending || updateTag.isPending || deleteTag.isPending;
+  // НОВЫЙ ТЕГ — ПОСЛЕДНИМ И СВОИМ ЦВЕТОМ: первый цвет палитры, которого нет у
+  // тегов команды (как у нового календаря), место — после последнего.
+  const newTagColor = useMemo(() => {
+    const used = new Set(tags.map((tag) => tag.color).filter(Boolean));
+    return (PRESET_COLOR_CYCLE.find((c) => !used.has(c.value)) ?? PRESET_COLOR_CYCLE[2]).value;
+  }, [tags]);
+  const newTagPosition = tags.reduce((max, tag) => Math.max(max, tag.position ?? 0), -1) + 1;
 
   const submit = async (draft: {
     name: string;
@@ -140,6 +148,7 @@ export function ClientTagsScreen() {
           color: draft.color,
           icon: draft.icon,
           teamId,
+          position: newTagPosition,
         });
         toast("Тег создан", "success");
       }
@@ -338,6 +347,7 @@ export function ClientTagsScreen() {
         onClose={() => setEditing(null)}
         onSubmit={submit}
         templates={tagTemplates}
+        newColor={newTagColor}
       />
     </Screen>
   );
