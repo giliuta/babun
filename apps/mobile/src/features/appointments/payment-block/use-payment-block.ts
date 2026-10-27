@@ -15,6 +15,8 @@ import { isPastRecord } from "@/features/finances/day-ledger";
 import { usePlanAllows, useTenant } from "@/session/tenant";
 import { useBusinessNow } from "../business-now";
 import { useTeamPaymentAccounts } from "../payment-accounts";
+import { useAccountsWithBalances } from "@/features/finances/accounts";
+import { noAccountsReason, strayPaymentAccounts } from "./stray-accounts";
 import {
   amountCentsFromInput,
   amountProblem,
@@ -137,6 +139,14 @@ export function usePaymentBlock({
     return map;
   }, [rows]);
   const unattributed = rows.filter((row) => !row.accountId);
+  // Все счета компании, со скрытыми и удалёнными: имя плитки, на которую уже
+  // легли деньги, и причина пустого блока (`stray-accounts.ts`).
+  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
+  const strayAccounts = useMemo(
+    () => strayPaymentAccounts(accounts, rowsByAccount, allAccountsQuery.data ?? []),
+    [accounts, rowsByAccount, allAccountsQuery.data],
+  );
+  const emptyReason = noAccountsReason({ canTakeMoney, teamId, all: allAccountsQuery.data ?? [] });
   const busy = record.isPending || cancel.isPending;
   // Замок плитки — ref, а не `busy` из рендера (`tile-lock.ts`).
   const tileLock = useRef(false);
@@ -262,6 +272,8 @@ export function usePaymentBlock({
     billUnsaved,
     rowsByAccount,
     unattributed,
+    strayAccounts,
+    emptyReason,
     busy,
     tileLock,
     amountMode,
