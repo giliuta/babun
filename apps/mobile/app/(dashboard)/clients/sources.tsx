@@ -318,7 +318,7 @@ function SourceSheet({
       avoidKeyboard
       footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
           <Button
-            label={isEdit ? "Сохранить" : "Добавить источник"}
+            label={isEdit ? "Сохранить" : "Создать источник"}
             disabled={!name.trim() || busy}
             loading={busy}
             onPress={() => onSubmit(name)}

@@ -61,7 +61,7 @@ import { SmsCounter, SmsTextBlock } from "./SmsTextField";
 //   • ТЕКСТ — поле и дверь «Вставить поле» (своя шторка). Блока «Клиент
 //     увидит» и подсказок нет;
 //   • футер листа — счёт знаков и SMS (`SmsCounter`: виден, пока набирают) и
-//     одна кнопка «Создать» / «Сохранить».
+//     одна кнопка «Создать шаблон» / «Сохранить».
 
 // Строки — только имя, значок и цвет: подсказок под именем нет.
 const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string }> = {
@@ -258,7 +258,7 @@ export function SmsTemplateSheet({
         >
           <SmsCounter value={draft.body} />
           <GradientButton
-            label={template ? "Сохранить" : "Создать"}
+            label={template ? "Сохранить" : "Создать шаблон"}
             onPress={submit}
             disabled={!!problem || save.isPending}
             loading={save.isPending}

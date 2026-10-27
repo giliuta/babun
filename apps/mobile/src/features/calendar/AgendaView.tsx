@@ -89,7 +89,7 @@ export function AgendaView({
         fill
         title="Записей нет"
         action={
-          onCreate ? { label: "Новая запись", onPress: onCreate } : undefined
+          onCreate ? { label: "Создать запись", onPress: onCreate } : undefined
         }
       />
     );

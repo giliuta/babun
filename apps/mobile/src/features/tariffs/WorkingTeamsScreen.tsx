@@ -81,7 +81,7 @@ export function WorkingTeamsScreen() {
       </ScrollView>
       <PageFooter>
         <GradientButton
-          label="Сохранить"
+          label="Применить"
           disabled={!changed || chosen.length === 0}
           loading={choose.isPending}
           onDisabledPress={() =>
