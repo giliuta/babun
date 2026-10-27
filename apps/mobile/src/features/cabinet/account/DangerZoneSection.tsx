@@ -124,6 +124,7 @@ export function DangerZoneSection({ email }: { email: string }) {
               value={typed}
               onChangeText={setTyped}
               placeholder={targetPhrase}
+              keyboardType={email ? "email-address" : "default"}
               autoCapitalize="none"
               autoCorrect={false}
               editable={!busy}

@@ -21,6 +21,7 @@ import {
 } from "@/lib/phone";
 import { countryName } from "@/features/clients/use-phone-country";
 import { chooseValue } from "@/lib/choose";
+import { LATIN_KEYBOARD } from "@/lib/keyboard";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -239,8 +240,13 @@ export default function BusinessScreen() {
               onChangeText={set("business_address")}
               placeholder="Адрес для инвойсов"
             />
-            <Field label="VAT / рег. номер" value={form.vat_number} onChangeText={set("vat_number")} />
-            <Field label="IBAN" value={form.iban} onChangeText={set("iban")} />
+            <Field
+              label="VAT / рег. номер"
+              value={form.vat_number}
+              onChangeText={set("vat_number")}
+              keyboardType={LATIN_KEYBOARD}
+            />
+            <Field label="IBAN" value={form.iban} onChangeText={set("iban")} keyboardType={LATIN_KEYBOARD} />
             <Field label="Банк" value={form.bank_name} onChangeText={set("bank_name")} />
             {/* Нумерация переехала на свою страницу (Финансы → Настройки →
                 Нумерация счетов): там кроме префикса живут ширина номера,

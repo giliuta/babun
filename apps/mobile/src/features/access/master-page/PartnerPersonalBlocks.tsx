@@ -205,6 +205,7 @@ function TextFieldsSheet({
               multiline={SHEET_FIELD[key].multiline}
               separated={i > 0}
               autoCapitalize={SHEET_FIELD[key].caps}
+              keyboardType={key === "iban" || key === "tax_number" ? "latin" : undefined}
               autoFocus={open?.focus === key}
               onSave={(v) => setForm((prev) => ({ ...prev, [key]: v }))}
             />

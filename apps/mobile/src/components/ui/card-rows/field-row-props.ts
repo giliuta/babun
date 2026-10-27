@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from "react";
 import type { TextInput } from "react-native";
 
 export type FieldKeyboardType =
+  | "latin"
   | "phone-pad"
   | "email-address"
   | "url"
@@ -21,7 +22,9 @@ export interface FieldRowProps {
   column?: number;
   /** `decimal-pad` — деньги; `numbers-and-punctuation` — деньги, которые
    *  бывают отрицательными (остаток счёта в долге): минуса на цифровой
-   *  клавиатуре нет ни в одной раскладке. */
+   *  клавиатуре нет ни в одной раскладке. `latin` — то, что пишется только
+   *  латиницей (@username, IBAN, VAT): клавиатура сама встаёт на английскую,
+   *  и переключать раскладку с русской не нужно. */
   keyboardType?: FieldKeyboardType;
   /** «none» для @username и почты: клавиатура иначе пишет «@Artem_test» с
    *  заглавной, и в данных остаётся искажённый логин. «characters» — для
