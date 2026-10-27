@@ -86,6 +86,7 @@ describe("push_activity: сборка пушей", () => {
       ],
     );
     // Та же форма, что разбирает `parseAppointmentNotificationTarget` в приложении.
+    assert.equal(batch[0].categoryId, "babun-appointment");
     assert.deepEqual(batch[0].data, {
       type: "calendar-appointment",
       appointmentId: APPT,
@@ -119,7 +120,9 @@ describe("push_activity: сборка пушей", () => {
     await handlePushActivity({ log_id: 7, targets: [target(MASTER, "cancel")] }, deps);
     const message = sent[0].find((m) => m.to === "ExponentPushToken[master-b]");
     assert.equal(message?.body, "14:00, Иван из журнала");
-    assert.deepEqual(message?.data, { type: "team-activity", tenantId: TENANT });
+    // Записи нет — открывается её день, и кнопка у отмены «Открыть день».
+    assert.deepEqual(message?.data, { type: "calendar-day", date: "2026-10-27", teamId: "team-1", tenantId: TENANT });
+    assert.equal(message?.categoryId, "babun-cancel");
   });
 
   test("доход: сумма и клиент записи, тап — в запись", async () => {
@@ -140,12 +143,16 @@ describe("push_activity: сборка пушей", () => {
     assert.equal(sent[0][0].title, "Оплачено 120 €");
     assert.equal(sent[0][0].body, "Мария · Y&D");
     assert.equal(sent[0][0].data.type, "calendar-appointment");
+    // У дохода кнопок записи нет.
+    assert.equal(sent[0][0].categoryId, undefined);
   });
 
   test("работу забрали в чужой календарь — тап не ведёт в запись", async () => {
     const { deps, sent } = fake();
     await handlePushActivity({ log_id: 7, targets: [target(MASTER, "moved", false)] }, deps);
-    assert.equal(sent[0][0].data.type, "team-activity");
+    assert.equal(sent[0][0].data.type, "calendar-day");
+    assert.equal(sent[0][0].data.appointmentId, undefined);
+    assert.equal(sent[0][0].categoryId, undefined);
   });
 
   test("DeviceNotRegistered — токен забывается, остальные считаются", async () => {

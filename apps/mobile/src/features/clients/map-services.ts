@@ -3,6 +3,8 @@ import type { LucideIcon } from "lucide-react-native";
 import type { MapService } from "@babun/shared/common/utils/map-links";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
 import { teamOrderedSet } from "@/features/clients/team-ordered-set";
+import { queryClient } from "@/lib/query-client";
+import { teamDesignQueryKey, type TeamDesign } from "@/features/appointments/team-design";
 
 // КАРТЫ ДЛЯ МАРШРУТА — какие сервисы вообще предлагать: тому, кто пользуется
 // только Google Картами, незачем каждый раз выбирать Яндекс; это настройка
@@ -59,4 +61,14 @@ export function mapServicesSummary(enabled: MapService[]): string {
     .map((id) => mapServiceDef(id)?.label)
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Карты команды ВНЕ экрана — для кнопки «Маршрут» в уведомлении, где
+ *  хуков нет: набор команды с сервера (кэш «Дизайна»), иначе телефона. */
+export function readMapServicesNow(tenantId: string | null, teamId: string | null): MapService[] {
+  const designs = queryClient.getQueryData<Record<string, TeamDesign>>(teamDesignQueryKey(tenantId));
+  const server = teamId && designs?.[teamId] ? prefs.fromServer(designs[teamId].mapServices) : null;
+  if (server) return server.enabled;
+  const enabled = prefs.read(tenantId, teamId);
+  return prefs.readOrder(tenantId, teamId).filter((id) => enabled.includes(id));
 }

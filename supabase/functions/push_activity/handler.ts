@@ -44,7 +44,15 @@ export interface ExpoMessage {
   sound: "default";
   priority: "high";
   data: Record<string, string>;
+  /** Кнопки уведомления; приложение заводит категории при входе
+   *  (`apps/mobile/src/features/calendar/push-action-ids.ts`). */
+  categoryId?: string;
 }
+
+/** «Открыть · Позвонить клиенту · Маршрут» — у новой и перенесённой работы. */
+export const APPOINTMENT_CATEGORY = "babun-appointment";
+/** «Открыть день» — у отмены. */
+export const CANCEL_CATEGORY = "babun-cancel";
 
 export type ExpoTicket =
   | { status: "ok"; id?: string }
@@ -147,17 +155,34 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
   const messages: ExpoMessage[] = [];
   for (const target of input.targets) {
     // Тап открывает запись. Удалённую или ушедшую в чужой календарь открыть
-    // нельзя — такой пуш просто открывает приложение.
+    // нельзя — такой пуш открывает её день, а без даты — просто приложение.
+    const day = appointment?.date ?? str(log.meta?.date);
+    const opensRecord = Boolean(appointment && appointment.date && target.kind !== "moved");
     const data: Record<string, string> =
-      appointment && appointment.date && target.kind !== "moved"
+      opensRecord && appointment
         ? {
             type: "calendar-appointment",
             appointmentId: appointment.id,
-            date: appointment.date,
+            date: appointment.date as string,
             ...(appointment.team_id ? { teamId: appointment.team_id } : {}),
             tenantId: log.tenant_id,
           }
-        : { type: "team-activity", tenantId: log.tenant_id };
+        : day && log.entity === "appointments"
+          ? {
+              type: "calendar-day",
+              date: day,
+              ...(target.team_id ? { teamId: target.team_id } : {}),
+              tenantId: log.tenant_id,
+            }
+          : { type: "team-activity", tenantId: log.tenant_id };
+    const categoryId =
+      target.kind === "cancel" || target.kind === "cancel_link"
+        ? data.type === "team-activity"
+          ? undefined
+          : CANCEL_CATEGORY
+        : opensRecord && (target.kind === "new" || target.kind === "change")
+          ? APPOINTMENT_CATEGORY
+          : undefined;
     for (const device of devices) {
       if (device.user_id !== target.user_id) continue;
       const { title, body } = renderActivity(
@@ -175,7 +200,15 @@ export async function handlePushActivity(raw: unknown, deps: PushDeps): Promise<
         },
         device.locale,
       );
-      messages.push({ to: device.token, title, body, sound: "default", priority: "high", data });
+      messages.push({
+        to: device.token,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data,
+        ...(categoryId ? { categoryId } : {}),
+      });
     }
   }
 
