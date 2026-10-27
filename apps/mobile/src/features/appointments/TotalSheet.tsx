@@ -51,9 +51,15 @@ export function TotalSheet({
   customTotal = false,
   onResetTotal,
   vat: vatControl,
+  onDismiss,
+  onExited,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Закрытие мимо «Применить» (свайп, затемнение). Нет — оно применяет, как
+   *  у записи; есть — решает вызывающий (инвойс спрашивает и откатывает). */
+  onDismiss?: () => void;
+  onExited?: () => void;
   /** СТРОКА — ТА ЖЕ, ЧТО У БЛОКА «УСЛУГИ» (`ServicesBlockLine`). Лист считал
    *  деньги ТОЛЬКО записи (`AppointmentService`), и позиция инвойса, у которой
    *  нет ни `serviceId`, ни длительности, в него не помещалась. Перевод
@@ -128,7 +134,8 @@ export function TotalSheet({
   return (
     <BottomSheet
       visible={visible}
-      onClose={apply}
+      onClose={onDismiss ?? apply}
+      onExited={onExited}
       title="Итого"
       headerAction={
         onAddLine ? (

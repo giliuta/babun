@@ -239,6 +239,7 @@ export function InvoiceEditor({
               setLines((current) => [...current, newLine("", "1", "")])
             }
             onRemoveLine={removeLine}
+            onLinesRestore={setLines}
             vatMode={vatMode}
             vatRate={Math.max(0, rate)}
             onVatModeChange={(next) => {

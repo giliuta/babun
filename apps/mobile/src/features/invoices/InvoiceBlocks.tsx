@@ -71,6 +71,7 @@ export function InvoiceBlocks({
   onAddLine,
   onAddCustomLine,
   onRemoveLine,
+  onLinesRestore,
   vatMode,
   vatRate,
   onVatModeChange,
@@ -120,6 +121,8 @@ export function InvoiceBlocks({
   /** Своя услуга — пустая строка, её заводит «＋ Добавить» в «Итого». */
   onAddCustomLine: () => void;
   onRemoveLine: (line: EditableInvoiceLine) => void;
+  /** «Итого» закрыли мимо «Применить» — строки, какими были при открытии. */
+  onLinesRestore: (lines: EditableInvoiceLine[]) => void;
   vatMode: InvoiceVatMode;
   vatRate: number;
   onVatModeChange: (mode: InvoiceVatMode) => void;
@@ -352,6 +355,7 @@ export function InvoiceBlocks({
         vatRate={vatRate}
         onVatModeChange={onVatModeChange}
         onVatRateChange={onVatRateChange}
+        onLinesRestore={onLinesRestore}
       />
     </>
   );
