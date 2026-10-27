@@ -174,7 +174,7 @@ export function ClientDetailScreen() {
             await restoreClient.mutateAsync(c);
           } catch (error) {
             notify(
-              "Не удалось восстановить",
+              "Не удалось вернуть клиента",
               (error as Error).message || "Проверьте соединение и повторите.",
             );
           }

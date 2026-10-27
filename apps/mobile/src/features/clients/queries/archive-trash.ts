@@ -169,6 +169,10 @@ function useHiddenClients(
       scope.role === "owner",
     // Привязанным клиентом — разбор над `useClients`.
     queryFn: () => read(tenantBoundClient(tenantId as string), tenantId as string),
+    // ПОЛКА ПЕРЕЧИТЫВАЕТСЯ НА КАЖДОМ ОТКРЫТИИ: сервер снимает срок клиенту с
+    // историей уже после удаления, а сигнал базы полку не трогает — и экран
+    // показывал «30 дней» и «Удалить» тому, кого база не сотрёт.
+    refetchOnMount: "always",
   });
 }
 
@@ -228,7 +232,7 @@ export function useDeleteClientForever() {
     mutationFn: async (id: string) => {
       assertOwnCompany(scope, "Стирать клиентов");
       if (scope.role !== "owner") {
-        throw new Error("Стереть клиента навсегда может только владелец.");
+        throw new Error("Удалить клиента насовсем может только владелец.");
       }
       try {
         await deleteClientCached(writeClientOf(scope), id, scope.tenantId, scope.writeOpts);

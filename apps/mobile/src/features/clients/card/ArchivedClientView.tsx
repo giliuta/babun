@@ -14,7 +14,7 @@ import { humanDay } from "@/features/appointments/helpers";
 import { useTeams } from "@/features/reference/queries";
 import { newestFirst, serviceNamesOf } from "./card-history";
 
-/** Карточка удалённого клиента: только чтение и «Восстановить». */
+/** Карточка удалённого клиента: только чтение и «Вернуть». */
 export function ArchivedClientView({
   client,
   appointments,
@@ -127,7 +127,7 @@ export function ArchivedClientView({
               Значка у канонической кнопки нет — слово и так называет
               действие, а спиннер ожидания она умеет сама. */}
           <Button
-            label="Восстановить клиента"
+            label="Вернуть клиента"
             loading={restoring}
             onPress={() => void onRestore()}
           />
