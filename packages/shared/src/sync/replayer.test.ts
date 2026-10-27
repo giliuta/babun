@@ -155,8 +155,7 @@ afterEach(() => {
   __resetCacheForTests();
 });
 
- 
-const asSupabase = (c: unknown) => c as any;
+const asSupabase = (c: unknown) => c as never;
 
 describe("replayer — insert", () => {
   test("successful insert drains the op", async () => {

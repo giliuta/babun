@@ -72,8 +72,7 @@ function supabaseStub() {
       removed.push(ch);
     },
   };
-   
-  return { supabase: stub as any, channels, removed };
+  return { supabase: stub as never, channels, removed };
 }
 
 describe("startRealtimeTenantSync", () => {
