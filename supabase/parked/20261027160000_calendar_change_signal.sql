@@ -36,13 +36,19 @@ declare
   payload jsonb;
 begin
   payload := jsonb_build_object('id', row_id, 'updated_at', row_updated, 'op', tg_op);
-  if new_team is not null then
-    perform realtime.send(payload, 'appointment_changed', 'calendar:' || new_team, true);
-  end if;
-  -- Запись ушла в другую команду: прежний календарь тоже должен её потерять.
-  if old_team is not null and old_team is distinct from new_team then
-    perform realtime.send(payload, 'appointment_changed', 'calendar:' || old_team, true);
-  end if;
+  -- Сигнал — удобство, запись — данные: сбой отправки не откатывает правку
+  -- записи, телефон всё равно перечитает календарь при возврате в приложение.
+  begin
+    if new_team is not null then
+      perform realtime.send(payload, 'appointment_changed', 'calendar:' || new_team, true);
+    end if;
+    -- Запись ушла в другую команду: прежний календарь тоже должен её потерять.
+    if old_team is not null and old_team is distinct from new_team then
+      perform realtime.send(payload, 'appointment_changed', 'calendar:' || old_team, true);
+    end if;
+  exception when others then
+    raise warning 'calendar_change_signal: % (%)', sqlerrm, sqlstate;
+  end;
   return null;
 end;
 $$;
