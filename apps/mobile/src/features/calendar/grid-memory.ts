@@ -97,16 +97,35 @@ function write<T>(key: string, value: T): void {
 
 const zoomListeners = new Set<(zoom: GridZoom) => void>();
 
-export function readGridZoom(): GridZoom | null {
+/** МАСШТАБ ПРИ ОТКРЫТИИ — НАСТРОЙКА, А НЕ ПОСЛЕДНИЙ ЩИПОК. Щипок писал тот
+ *  же ключ, и настройка «Масштаб при открытии» молча становилась тем, чем
+ *  кончился последний жест. Теперь щипок живёт до конца сессии (`noteGridZoom`),
+ *  а на диск масштаб пишет только выбор в настройках. */
+let sessionZoom: GridZoom | null = null;
+
+/** Масштаб, с которым сетка открывается: выбор в настройках. */
+export function readOpeningZoom(): GridZoom | null {
   const v = read<GridZoom>(ZOOM_KEY);
   return v === "fit" || (typeof v === "number" && v > 0) ? v : null;
 }
 
-/** Запись масштаба. `announce` — выбор в настройках: открытая сетка
- *  перестраивается сразу. Щипок сам себе не объявляет — он уже на экране. */
+/** Масштаб сетки сейчас: щипок этой сессии, иначе — при открытии. */
+export function readGridZoom(): GridZoom | null {
+  return sessionZoom ?? readOpeningZoom();
+}
+
+/** Выбор в настройках: пишется на диск, сбрасывает щипок сессии и (с
+ *  `announce`) перестраивает открытую сетку сразу. */
 export function writeGridZoom(zoom: GridZoom, announce = false): void {
   write(ZOOM_KEY, zoom);
+  sessionZoom = null;
   if (announce) for (const cb of zoomListeners) cb(zoom);
+}
+
+/** Щипок: масштаб держится до конца сессии, настройку не трогает. Сам себе
+ *  не объявляет — он уже на экране. */
+export function noteGridZoom(zoom: GridZoom): void {
+  sessionZoom = zoom;
 }
 
 export function subscribeGridZoom(cb: (zoom: GridZoom) => void): () => void {

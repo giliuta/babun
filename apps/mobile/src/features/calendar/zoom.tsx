@@ -47,7 +47,7 @@ import {
   scrollYForTopHour,
   subscribeGridZoom,
   topHourForScrollY,
-  writeGridZoom,
+  noteGridZoom,
   writeTopHour,
   writeViewportH,
   zoomForHourH,
@@ -280,7 +280,7 @@ export function ZoomableTimeGrid({
   const commitZoom = (h: number) => {
     const { startHour: s0, endHour: e0, onZoom: commit } = latest.current;
     const vh = viewportH.value;
-    if (vh > 0) writeGridZoom(zoomForHourH(h, e0 - s0, vh));
+    if (vh > 0) noteGridZoom(zoomForHourH(h, e0 - s0, vh));
     saveTop(scrollY.value, h);
     commit?.(h);
   };

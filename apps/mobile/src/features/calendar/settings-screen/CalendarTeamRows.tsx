@@ -9,6 +9,8 @@ import { CalendarIdentityCard } from "./CalendarIdentityCard";
 import { TourTarget } from "@/components/tour/TourTarget";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 
+const WHOLE_DAY = "Весь день на экране";
+
 type Team = NonNullable<CalendarSettingsState["team"]>;
 
 /** Rows of the open calendar itself: name and colour, timezone, hours and
@@ -97,7 +99,13 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
               tile={SETTINGS_TILE.teal}
               icon={CalendarRange}
               title="Часы календаря"
-              sub={`${formatHm(window.start)}–${formatHm(window.end)} · масштаб ${zoomPct}%`}
+              // Наименьший масштаб — «весь день на экране», а не «0 %»: ноль
+              // читался как «масштаба нет».
+              sub={
+                zoomPct === 0
+                  ? `${formatHm(window.start)}–${formatHm(window.end)} · ${WHOLE_DAY}`
+                  : `${formatHm(window.start)}–${formatHm(window.end)} · масштаб ${zoomPct}%`
+              }
               onPress={() => setPicker("view")}
             />
           </TourTarget>
@@ -107,7 +115,7 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
               tile={SETTINGS_TILE.indigo}
               icon={ZoomIn}
               title="Масштаб"
-              sub={`${zoomPct}%`}
+              sub={zoomPct === 0 ? WHOLE_DAY : `${zoomPct}%`}
               onPress={() => setPicker("zoom")}
             />
           </TourTarget>
