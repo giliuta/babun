@@ -139,7 +139,8 @@ export function sourceBucket(
 }
 
 /** Варианты фильтра: имена источников (под чипом — только его команды) в
- *  порядке справочника, «Неизвестно» — последним. */
+ *  порядке справочника, «Не указан» — последним: клиент без источника или с
+ *  удалённым источником, тем же словом, что в карточке. */
 export function sourceFilterOptions(
   sources: ClientSource[],
   teamId: string | null = null,
@@ -157,7 +158,7 @@ export function sourceFilterOptions(
     seen.add(value);
     out.push({ value, label: sourceDisplayName(s).trim(), color: "" });
   }
-  out.push({ value: "unknown", label: ACQUISITION_LABELS.unknown, color: "" });
+  out.push({ value: "unknown", label: "Не указан", color: "" });
   return out;
 }
 

@@ -29,6 +29,7 @@ import {
   isReferral,
   normalizeSource,
   resolveSource,
+  sourceDisplayName,
   sourcePickerOptions,
   type ClientSource,
 } from "@/features/clients/acquisition-source";
@@ -67,7 +68,8 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
   const { data: ownTeams = [] } = useTeams();
   const sourceTeamId = client.team_id ?? ownTeams[0]?.id ?? null;
   const sourceRow = resolveSource(client.acquisition_source, sources, sourceTeamId);
-  const source = sourceRow?.name ?? null;
+  // Готовый источник («Рекомендация») — на языке интерфейса, свой — как назван.
+  const source = sourceRow ? sourceDisplayName(sourceRow) : null;
   const sourceOptions = sourcePickerOptions(sources, sourceTeamId);
   const sourcesDoor = useClientSettingsDoor("sources", sourceTeamId);
   // «Кто привёл»: список — сами клиенты компании, тот же кеш, что у списка.

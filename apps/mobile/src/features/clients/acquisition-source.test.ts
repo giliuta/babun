@@ -86,7 +86,7 @@ describe("источник клиента", () => {
 
   test("фильтр под чипом — только источники его команды", () => {
     const labels = sourceFilterOptions(SOURCES, "team-2").map((o) => o.label);
-    assert.deepEqual(labels, ["Instagram", "Другое", "Неизвестно"]);
+    assert.deepEqual(labels, ["Instagram", "Другое", "Не указан"]);
   });
 
   test("подпись строки в шестерёнке", () => {
