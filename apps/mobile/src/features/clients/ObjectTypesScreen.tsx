@@ -5,13 +5,14 @@ import { useLocalSearchParams } from "expo-router";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Trash2 } from "lucide-react-native";
+import { Tag, Trash2 } from "lucide-react-native";
 import {
   generateLocationLabelId,
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { useTeamName } from "@/session/team-name";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   AppearanceTile,
@@ -62,6 +63,9 @@ export function ObjectTypesScreen() {
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
     null;
+  const teamName = useTeamName();
+  const teamRaw = ownTeams.find((tm) => tm.id === teamId)?.name;
+  const teamTitle = teamRaw ? teamName(teamRaw) : undefined;
   // «ТОЛЬКО ВИДИТ» (права партнёра): ни кнопки внизу, ни свайпов, ни ручек,
   // строка не открывает редактор. Вне вкладки «Клиенты» (Кабинет, запись) —
   // правка.
@@ -82,11 +86,11 @@ export function ObjectTypesScreen() {
             name: x.name,
             color: x.color ?? null,
             icon: x.icon ?? null,
-            sub: ownTeams.find((tm) => tm.id === x.teamId)?.name,
+            sub: teamName(ownTeams.find((tm) => tm.id === x.teamId)?.name),
             value: x,
           }))
         : [],
-    [isOwner, allLabels, teamId, ownTeams],
+    [isOwner, allLabels, teamId, ownTeams, teamName],
   );
   const {
     data: labels = [],
@@ -170,7 +174,9 @@ export function ObjectTypesScreen() {
       "Удалить тип объекта?",
       {
         message: used
-          ? `«${label.name}» исчезнет из выбора. Объекты, уже названные так (${used}), имя сохранят.`
+          ? // Объект показывает тип по справочнику: без строки в нём тип у
+            // объекта пропадает (домик без слова) — говорим правду.
+            `«${label.name}» исчезнет из выбора, а объекты этого типа (${used}) останутся без типа.`
           : `«${label.name}» исчезнет из выбора.`,
         confirmLabel: "Удалить",
         destructive: true,
@@ -196,7 +202,9 @@ export function ObjectTypesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Типы объектов" subtitle={ownTeams.find((tm) => tm.id === teamId)?.name} />
+      {/* Имя команды — тем же правилом показа, что везде: команда, названная
+          почтой, читается «Babun», а не адресом. */}
+      <ScreenHeader title="Типы объектов" subtitle={teamTitle} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -274,6 +282,9 @@ export function ObjectTypesScreen() {
                       <AppearanceTile
                         color={label.color}
                         icon={label.icon}
+                        // Без своего значка — тот же ярлык, что в выборе типа и
+                        // в строке объекта: тип выглядит одинаково везде (5.3).
+                        fallback={Tag}
                         size={28}
                       />
                       <Text
