@@ -305,7 +305,9 @@ export function useBookForm() {
       recordVatMode: draft.recordVatMode,
       recordVatRate: draft.recordVatRate,
       status: draft.status,
-      comment: draft.comment,
+      // Набранное прямо сейчас, а не осевшее на blur: последние буквы заметки
+      // иначе не попадали в снимок.
+      comment: draft.commentNow.current,
       eventTitle: draft.eventTitle,
       eventColor: draft.eventColor,
       eventTypeId: draft.eventTypeId,
