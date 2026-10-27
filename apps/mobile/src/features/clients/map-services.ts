@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { Compass, Map, MapPin, Navigation } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import type { MapService } from "@babun/shared/common/utils/map-links";
@@ -42,7 +43,17 @@ const prefs = createEnabledPrefs<MapService>({
 // запасной, пока команда на сервере не настраивала.
 const teamSet = teamOrderedSet(prefs, "mapServices");
 
-export const useEnabledMapServices = teamSet.use;
+/** Apple Карты есть только на технике Apple: на Android их ссылка уходит в
+ *  браузер, а не в приложение карт. Набор команды общий для всех телефонов,
+ *  поэтому Apple в нём остаётся (её выбрали люди с iPhone) — Android просто
+ *  её не предлагает, а если в наборе была только она, маршрут ведёт Google. */
+const OFFERED_HERE = (id: MapService) => Platform.OS !== "android" || id !== "apple";
+
+export function useEnabledMapServices(teamId: string | null = null): MapService[] {
+  const enabled = teamSet.use(teamId);
+  const here = enabled.filter(OFFERED_HERE);
+  return here.length > 0 || enabled.length === 0 ? here : ["google"];
+}
 export const useMapServicesOrder = teamSet.useOrder;
 export const useToggleMapService = teamSet.useToggle;
 export const useReorderMapServices = teamSet.useReorder;
