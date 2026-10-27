@@ -195,7 +195,7 @@ export function useLeaveGuard({
       else router.replace("/");
     }, 0);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- уход один раз по флагу; from и router — из этого же рендера
   }, [leaving]);
 
   return { leaveBook, editBaselineRef, requestClose, saveRef, dirty };

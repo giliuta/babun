@@ -256,7 +256,7 @@ export function ZoomableTimeGrid({
       scrollYForTopHour(top, startHour, endHour, h, vh),
     );
     if (h !== layoutH.value) onZoom?.(h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только смена окна часов; shared values стабильны, onZoom — из этого же рендера
   }, [startHour, endHour]);
 
   // Выбор в настройке «Масштаб» — сразу на открытой сетке.
@@ -272,7 +272,7 @@ export function ZoomableTimeGrid({
         );
         restore(vh, zoom, top);
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- подписка одна на маунт; окно часов читается из latest.current
     [],
   );
 

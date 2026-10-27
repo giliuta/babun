@@ -84,7 +84,7 @@ export function SmsScreen() {
     }
     if (topupReturn === "cancelled") toast("Оплата отменена", "info");
     return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- один раз на ответ возврата с оплаты; account.refetch стабилен
   }, [topupReturn]);
 
   // В приложении оплата — в браузере: вернулись в приложение — перечитать
@@ -98,7 +98,7 @@ export function SmsScreen() {
       setTimeout(() => void account.refetch(), 9000);
     });
     return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- подписка одна на маунт; флаг ожидания — в ref
   }, []);
 
   const data = account.data;

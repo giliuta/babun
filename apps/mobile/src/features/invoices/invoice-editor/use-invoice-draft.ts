@@ -180,7 +180,7 @@ export function useInvoiceDraft({
     if (rolled.issuedOn === issuedOn) return;
     setIssuedOn(rolled.issuedOn);
     setDueOnState(rolled.dueOn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только смена дня бизнеса; даты и datesAt — из этого же рендера
   }, [businessToday]);
   const [clientId, setClientId] = useState<string | null>(
     existing ? existing.client_id : seed?.clientId ?? prefill?.clientId ?? null,
@@ -253,7 +253,7 @@ export function useInvoiceDraft({
     if (teamId != null) return;
     const first = teams[0]?.id;
     if (first) changeTeam(first);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- changeTeam пересоздаётся каждый рендер; ждём только команды
   }, [teams, teamId]);
   // Приписка компании подставляется в НОВЫЙ документ; выставленный хранит
   // свою и не переписывается вслед за настройкой.

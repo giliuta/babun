@@ -147,7 +147,7 @@ export function PayRow({
   const [rateText, setRateText] = useState(vat ? String(vat.rate) : "");
   useEffect(() => {
     if (vat) setRateText(String(vat.rate));
-  }, [vat?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [vat?.rate]); // eslint-disable-line react-hooks/exhaustive-deps -- поле догоняет только новую ставку, а не каждый объект vat
   const commitRate = () => {
     if (!vat?.onRateChange) return;
     const next = parseVatRate(rateText);

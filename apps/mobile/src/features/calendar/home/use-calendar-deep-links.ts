@@ -136,7 +136,7 @@ export function useCalendarDeepLinks(deps: UseCalendarDeepLinksDeps) {
       }
       router.setParams({ date: undefined, teamId: undefined });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- сеттеры экрана и router стабильны; эффект ждёт только параметров и данных
   }, [
     params.appointmentId,
     params.new,

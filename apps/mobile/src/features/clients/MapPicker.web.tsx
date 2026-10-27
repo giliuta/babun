@@ -137,7 +137,7 @@ export function MapPicker({
   useEffect(() => {
     if (!follow || !map.current) return;
     map.current.setView([follow.lat, follow.lng], 17);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ключ — координаты (followKey): объект follow новый на каждом рендере
   }, [followKey]);
 
   return (
