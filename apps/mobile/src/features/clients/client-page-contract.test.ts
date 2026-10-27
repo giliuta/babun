@@ -500,18 +500,18 @@ describe("«Объединить с дублем» в «⋯» карточки",
     );
   });
 
-  test("сливает только сервер одной транзакцией; без функции — отказ словами", () => {
+  test("сливает только сервер одной транзакцией; отказ — словами", () => {
     const src = merge();
     const body = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
     assert.ok(
       body.indexOf("await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });") > -1,
       "слияние снова идёт с телефона шагами",
     );
-    assert.match(body, /if \(e instanceof MergeNotOnServer\) \{\s*throw new Error\("Объединение карточек включится после обновления сервера"\);/);
+    assert.doesNotMatch(src, /MergeNotOnServer|включится после обновления сервера/, "вернулась заглушка «до наката»");
     assert.doesNotMatch(src, /mergeStepByStep|archive\.mutateAsync|updateAppt\.mutateAsync/, "вернулся путь по шагам");
     assert.match(body, /if \(running\.current\) return;\s*running\.current = true;/, "двойной тап снова сливает дважды");
     const rpc = read("merge-clients-rpc.ts");
-    assert.match(rpc, /const MISSING_FUNCTION = new Set\(\["PGRST202", "42883"\]\);/);
+    assert.match(rpc, /if \(error\) throw new Error\(mergeRefusal\(error\)\);/);
     assert.match(rpc, /p_tag_ids: tagIds \?\? null,/);
   });
 });

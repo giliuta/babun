@@ -26,7 +26,7 @@ import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
 import { clientKeys } from "@/lib/client-query-keys";
-import { MergeNotOnServer, mergeClientsOnServer } from "@/features/clients/merge-clients-rpc";
+import { mergeClientsOnServer } from "@/features/clients/merge-clients-rpc";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
@@ -36,7 +36,7 @@ import { MergeNotOnServer, mergeClientsOnServer } from "@/features/clients/merge
 //
 // СЛИВАЕТ СЕРВЕР ОДНИМ ВЫЗОВОМ (`merge-clients-rpc.ts`): правка основной,
 // визиты, «Удалённые записи», файлы, долги и корзина дубля — одна транзакция.
-// Пока функции на сервере нет, пункт отвечает отказом словами.
+// Отказ сервера (оплаченные визиты, не владелец) — тостом словами.
 
 interface MergeDuplicateInput {
   /** Карточка страницы; черновик и архив пункта не получают. */
@@ -117,27 +117,18 @@ export function useMergeDuplicate({
       // Объект дубля, совпавший с объектом основной, уходит в него — и
       // визиты на нём переезжают на объект основной.
       const { remap } = mergeLocations(fresh, dupRow);
-      try {
-        await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });
-        // Сервер переписал строки мимо кэша телефона: визиты, файлы, долги и
-        // «Удалённые записи» перечитываются, дубль уходит из списка.
-        for (const key of [
-          clientKeys.all(),
-          clientKeys.cardAll(),
-          clientKeys.attachmentAll(),
-          ["appointments"],
-          ["debts"],
-          ["deleted-appointments"],
-        ]) {
-          void qc.invalidateQueries({ queryKey: key });
-        }
-      } catch (e) {
-        // Пока функции на сервере нет, слияния НЕТ: прежний путь по шагам
-        // терял файлы и долги дубля и оставлял полуслияние на обрыве.
-        if (e instanceof MergeNotOnServer) {
-          throw new Error("Объединение карточек включится после обновления сервера");
-        }
-        throw e;
+      await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });
+      // Сервер переписал строки мимо кэша телефона: визиты, файлы, долги и
+      // «Удалённые записи» перечитываются, дубль уходит из списка.
+      for (const key of [
+        clientKeys.all(),
+        clientKeys.cardAll(),
+        clientKeys.attachmentAll(),
+        ["appointments"],
+        ["debts"],
+        ["deleted-appointments"],
+      ]) {
+        void qc.invalidateQueries({ queryKey: key });
       }
       haptics.success();
       toast("Объединили");

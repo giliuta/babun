@@ -26,13 +26,7 @@ type MergeRpc = {
   }>;
 };
 
-/** Функции на сервере нет — миграция `merge_clients` ещё не накачена. */
-const MISSING_FUNCTION = new Set(["PGRST202", "42883"]);
-
-export class MergeNotOnServer extends Error {}
-
-/** Слить дубля в основную. `MergeNotOnServer` — сервер не знает функции:
- *  слияния нет, зовущий отвечает отказом словами. */
+/** Слить дубля в основную. Отказ сервера — ошибка словами человека. */
 export async function mergeClientsOnServer(input: {
   primaryId: string;
   duplicateId: string;
@@ -48,11 +42,7 @@ export async function mergeClientsOnServer(input: {
     p_tag_ids: tagIds ?? null,
     p_location_remap: Object.fromEntries(input.remap),
   });
-  if (!error) return;
-  if (error.code && MISSING_FUNCTION.has(error.code)) {
-    throw new MergeNotOnServer(error.message);
-  }
-  throw new Error(mergeRefusal(error));
+  if (error) throw new Error(mergeRefusal(error));
 }
 
 /** Отказ сервера словами человека. */
