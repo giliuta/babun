@@ -81,6 +81,11 @@ describe("server hygiene migrations", () => {
     assert.match(sql, /not public\.client_has_history\(c\.id, true\)/, "ночная чистка ждёт пустых корзин");
     assert.match(sql, /appointment:team_archived/);
     assert.match(sql, /cron\.schedule\('purge-deleted-cities'/);
+    // Метки старше 30 дней стирает только крон: экран меток больше не чистит.
+    const cities = readFileSync(path.join(REPO_ROOT, "apps/mobile/src/features/reference/queries/cities.ts"), "utf8");
+    const labels = readFileSync(path.join(REPO_ROOT, "apps/mobile/src/features/reference/screens/LabelsScreen.tsx"), "utf8");
+    assert.doesNotMatch(cities, /\.from\("cities"\)\s*\.delete\(/, "клиент метки насовсем не стирает");
+    assert.doesNotMatch(labels, /purge/i, "экран меток зачистку не зовёт");
   });
 
   test("phone lookup: 100 distinct numbers a day, owner exempt, only a fingerprint is kept", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { Bookmark } from "lucide-react-native";
@@ -18,7 +18,6 @@ import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import {
   useCities,
   useTeams,
-  usePurgeExpiredCities,
 } from "@/features/reference/queries";
 import { useTeamSettingLevel } from "@/session/team-setting-level";
 import { useDataRole } from "@/session/tenant";
@@ -127,18 +126,10 @@ export function LabelsScreen() {
   // Order: live, hidden, deleted (`orderLabels`).
   const cities = useMemo(() => orderLabels(citiesQuery.data ?? []), [citiesQuery.data]);
 
-  // Обещанные 30 дней истекают здесь: крона нет, а зачистка обязана когда-то
-  // случиться. Открытие экрана — тот же момент, где удаляют.
   // «ТОЛЬКО ВИДИТ» — МЕТКИ БЕЗ ПРАВКИ («Метки» в
   // «Настройках команды»): ни кнопки внизу, ни свайпов, ни ручек, строка не
   // открывает редактор. Владельцу — всегда правка.
   const readOnly = useTeamSettingLevel("calendar.labels", teamId) !== "write";
-  const purgeExpired = usePurgeExpiredCities();
-  useEffect(() => {
-    // Зачистка — тоже правка: тому, кто только смотрит, она не положена.
-    if (readOnly) return;
-    void purgeExpired();
-  }, [purgeExpired, readOnly]);
   const dayCities = useMemo(
     () => dayCitiesQuery.data ?? {},
     [dayCitiesQuery.data],
