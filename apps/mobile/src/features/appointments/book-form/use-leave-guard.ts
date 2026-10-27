@@ -26,6 +26,9 @@ export interface LeaveGuardInput {
   from: string | undefined;
   /** Сохранить сейчас можно (всё обязательное есть, тариф позволяет). */
   saveable: boolean;
+  /** Чего не хватает для сохранения («Выберите услугу») — вопрос при
+   *  несохраняемой форме называет это, а не молча убирает «Сохранить». */
+  missingHint?: string;
   navigation: { dispatch: (action: NavigationAction) => void };
   router: ReturnType<typeof useRouter>;
   /** «Не сохранять» — человек выбросил новую запись: черновик на телефоне
@@ -44,6 +47,7 @@ export function useLeaveGuard({
   draft,
   from,
   saveable,
+  missingHint,
   navigation,
   router,
   onDiscardDraft,
@@ -121,11 +125,18 @@ export function useLeaveGuard({
     // СОХРАНИТЬ НЕЛЬЗЯ — НЕ ПРЕДЛАГАЕМ. Без услуги или без тарифа
     // «Сохранить» только показывал плашку и оставлял на форме: человек
     // хотел уйти, а вопрос возвращал его назад. Тогда вопрос один — уйти без них.
+    //
+    // НО ПОЧЕМУ «СОХРАНИТЬ» НЕТ — СКАЗАНО (CAL-11). Новая запись с клиентом
+    // без услуги спрашивала «Закрыть без сохранения?», а правка — «Сохранить
+    // изменения?», и человек не понимал, отчего вопросы разные. Теперь в
+    // вопросе то же, что под кнопкой «Создать»: «Выберите услугу».
     if (!saveable) {
+      const lost = isEdit ? "Изменения не сохранятся." : "Введённое не сохранится.";
+      const why = missingHint && !missingHint.endsWith("…") ? missingHint : null;
       void chooseOption(
         "Закрыть без сохранения?",
         [{ label: "Не сохранять", destructive: true }],
-        { message: isEdit ? "Изменения не сохранятся." : "Введённое не сохранится." },
+        { message: why ? `${why}. ${lost}` : lost },
       ).then((index) => {
         if (index !== 0) return;
         discardNotes();

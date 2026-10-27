@@ -275,6 +275,7 @@ export function useBookForm() {
     },
     from: params.from,
     saveable: verdict.canSave && !verdict.workLocked,
+    missingHint: verdict.canSave ? undefined : verdict.missingHint,
     navigation,
     router,
     onDiscardDraft: draftMemory.forget,

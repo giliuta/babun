@@ -26,3 +26,10 @@ test("Android: «назад» с формы без истории — стрел
   assert.match(guard, /useAndroidBack\(!leaving && !router\.canGoBack\(\), requestClose\);/);
   assert.match(guard, /else router\.replace\("\/"\);/);
 });
+
+test("вопрос у несохраняемой формы называет, чего не хватает (CAL-11)", () => {
+  const guard = readFileSync(resolve(here, "use-leave-guard.ts"), "utf8");
+  assert.match(guard, /message: why \? `\$\{why\}\. \$\{lost\}` : lost/);
+  const form = readFileSync(resolve(here, "use-book-form.ts"), "utf8");
+  assert.match(form, /missingHint: verdict\.canSave \? undefined : verdict\.missingHint,/);
+});
