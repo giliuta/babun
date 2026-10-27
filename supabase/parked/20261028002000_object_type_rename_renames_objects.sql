@@ -10,10 +10,11 @@
 -- пробелов, как `objectTypeKey`) → новое. Тело функции снято с боевой
 -- 27.10; добавлен только блок «Переименованные типы — и у объектов».
 --
--- НЕ ПРОГНАНО. Перед накатом — прогон в откате: правка `clients` идёт под
--- триггерами (`clients_partner_writes_guard`, `clients_free_readonly`,
--- `zz_log_change`), и у партнёра с правом «Типы объектов» без права на
--- клиентов они могут отбить всю операцию.
+-- Правка `clients` идёт под их триггерами. Партнёра они отбивают только при
+-- замороженном или бесплатном тарифе (`clients_partner_writes_guard`,
+-- `clients_free_readonly`) — так же, как саму запись справочника; права на
+-- клиентов не спрашивают: функция — определителя, а «Типы объектов: Меняет»
+-- проверено выше.
 
 create or replace function public.apply_team_location_label_changes(
   p_team_id text,
@@ -242,3 +243,15 @@ begin
      order by l.position, l.created_at, l.id;
 end;
 $function$;
+
+do $guard$
+begin
+  if position('-- Переименованные типы — и у объектов.' in pg_get_functiondef('public.apply_team_location_label_changes(text, jsonb, jsonb)'::regprocedure)) = 0 then
+    raise exception 'apply_team_location_label_changes: переименование у объектов не встало';
+  end if;
+  if has_function_privilege('anon', 'public.apply_team_location_label_changes(text, jsonb, jsonb)', 'execute')
+     or not has_function_privilege('authenticated', 'public.apply_team_location_label_changes(text, jsonb, jsonb)', 'execute') then
+    raise exception 'apply_team_location_label_changes: права изменились';
+  end if;
+end;
+$guard$;

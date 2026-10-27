@@ -256,4 +256,27 @@ describe("server hygiene migrations", () => {
     assert.match(sql, /public\.delete_credit_note\(uuid\)/);
     assert.match(sql, /after insert or update of status, credited_amount on public\.invoices/);
   });
+
+  test("account without operations is deleted and closed whatever its start balance", () => {
+    const sql = code(migration("20261028001000_account_trash_without_moves.sql"));
+    // Обе двери — удаление и закрытие; счёт с операциями — по-прежнему только с нулём.
+    for (const fn of ["account_trash_rules", "guard_account_financial_history"]) {
+      assert.match(sql, new RegExp(`pg_get_functiondef\\('public\\.${fn}\\(\\)'::regprocedure\\)`));
+    }
+    assert.equal(
+      sql.split("and exists (select 1 from public.finance_transactions t where t.account_id = old.id)").length - 1,
+      4,
+      "проверка операций — в обеих новых проверках и в обоих сторожах",
+    );
+  });
+
+  test("renaming an object type renames it on the objects of that team only", () => {
+    const sql = code(migration("20261028002000_object_type_rename_renames_objects.sql"));
+    assert.match(sql, /lower\(btrim\(coalesce\(loc\.value ->> 'label', ''\)\)\) = lower\(btrim\(renamed\.old_name\)\)/);
+    // Объекты только этой команды: тип — справочник команды.
+    assert.match(sql, /where c\.tenant_id = tenant_uuid\s+and c\.team_id = p_team_id/);
+    // Прежнее имя — до записи справочника, иначе сравнивать не с чем.
+    assert.ok(sql.indexOf("for renamed in") < sql.indexOf("insert into public.location_labels"));
+    assert.match(sql, /'block:clients\.settings_objects'/);
+  });
 });
