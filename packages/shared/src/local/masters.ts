@@ -22,12 +22,14 @@ export type {
 // buckets that actually have members.
 export const LEGACY_LEAD_ROLE_ID = "role-lead";
 
-// STORY audit: до этой константы три разных места жёстко проверяли
-// `role.name.trim().toLowerCase() === "бригадир"`. Это хрупкая логика
-// — если диспетчер создал роль с именем «Старший» или «Руководитель»,
-// она не считалась лидерской. Сейчас сводим в одну точку, чтобы
-// позже можно было заменить на явный `is_lead: boolean` флаг на
-// уровне BrigadeRole без правок call-sites.
+// ЛИДЕР КОМАНДЫ — ПО ИМЕНИ РОЛИ, И ЭТО ИЗВЕСТНЫЙ ПРЕДЕЛ. Имя роли пишет
+// человек: «Старший», «Руководитель» или «Lead» лидером не считаются,
+// только «бригадир» (и роль с `LEGACY_LEAD_ROLE_ID`). Признак нужен одному
+// месту — разложить участников по `lead_ids`/`helper_ids` для старых
+// читателей (`team-members.ts`); на права и вид он не влияет. Надёжная
+// замена — флаг `is_lead` у роли (`teams.roles`), тогда меняется только
+// `isLeadRole`. Литерал — в `i18n/ignore.json`: это данные, а не слово
+// интерфейса.
 export const LEAD_ROLE_NAME = "бригадир";
 
 export function isLeadRole(role: { name: string }): boolean {
