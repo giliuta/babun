@@ -5,6 +5,7 @@ import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { useThemeColors } from "@/theme/colors";
 import { parseVatRate } from "./vat-looks/parse-vat-rate";
 import { COL_GAP, KEY_W, Key, RATE_W, Rate, Row, Sum, Unit, VAT_W } from "./vat-looks/parts";
+import { ANDROID_INPUT } from "./total-sheet/columns";
 
 // ДВЕ ИТОГОВЫЕ СТРОКИ ДЕНЕЖНОГО ЛИСТА.
 //
@@ -73,11 +74,13 @@ export function ServicesRow({
           keyboardType="decimal-pad"
           placeholder="0"
           placeholderTextColor={t.placeholder}
+          selectionColor={t.accent}
           accessibilityLabel="Скидка"
           style={{
             flex: 1,
             height: 28,
             paddingHorizontal: 0,
+            ...ANDROID_INPUT,
             textAlign: "right",
             fontSize: 15,
             fontWeight: "700",
@@ -231,11 +234,13 @@ export function PayRow({
                   keyboardType="decimal-pad"
                   placeholder="0"
                   placeholderTextColor={t.placeholder}
+                  selectionColor={t.accent}
                   accessibilityLabel="Ставка VAT, процентов"
                   style={{
                     flex: 1,
                     height: 28,
                     paddingHorizontal: 0,
+                    ...ANDROID_INPUT,
                     textAlign: "right",
                     fontSize: 15,
                     fontWeight: "700",

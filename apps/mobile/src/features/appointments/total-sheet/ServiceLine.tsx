@@ -3,7 +3,7 @@ import { Text, TextInput, View, type TextInput as TextInputType } from "react-na
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
-import { COL_GAP, COL_PRICE, COL_QTY, COL_SUM } from "./columns";
+import { ANDROID_INPUT, COL_GAP, COL_PRICE, COL_QTY, COL_SUM } from "./columns";
 import { moneyCellText, unitFromRowTotal } from "./line-math";
 import { QtyStepper } from "./QtyStepper";
 
@@ -175,14 +175,6 @@ export function ServiceLine({
     </View>
   );
 }
-
-/** Android добавляет полю шрифтовые поля сверху: в высоте 34 цифры
- *  срезались по верху. На iOS эти свойства ничего не меняют. */
-const ANDROID_INPUT = {
-  paddingVertical: 0,
-  includeFontPadding: false,
-  textAlignVertical: "center",
-} as const;
 
 /** Денежное поле колонки. Знака валюты в ячейке нет — он сказан в шапке
  *  колонки один раз; подложка говорит, что число правится. */
