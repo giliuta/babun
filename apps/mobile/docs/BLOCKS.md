@@ -251,8 +251,9 @@
 на странице типов, ни в ссылке клиенту; метка удалённого типа объект не
 красит — он показывается без типа (`findObjectType`).
 
-**Форма объекта** — `src/features/clients/ObjectSheet.tsx` (новый) и
-`src/features/clients/ObjectEditSheet.tsx` (правка), тело у обеих одно:
+**Форма объекта** — один лист `src/features/clients/ObjectSheet.tsx`
+(`mode: "create" | "edit"`; запись — `object-sheet/use-object-create.ts` и
+`use-object-edit.ts`), тело одно:
 `src/features/clients/ObjectFields.tsx` — три карточки: «Тип объекта»
 (`ReferenceBlock` + `PickerSheet`, дверь в справочник — ползунками в шапке
 ШТОРКИ, как у типа события), «Адрес» (главная строка + карта `MapPicker` +

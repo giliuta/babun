@@ -1,7 +1,6 @@
 import { locationAddressForBooking } from "@babun/shared/local/clients";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
@@ -127,6 +126,7 @@ export function BookPickSheets({ form }: { form: BookModel }) {
           заводило клиенту второй такой же дом. */}
       {client ? (
         <ObjectSheet
+          mode="create"
           // Черновик листа — у ЭТОГО клиента: сменили клиента, и адрес,
           // набранный для прежнего, ушёл бы в объекты нового.
           key={client.id}
@@ -187,7 +187,8 @@ export function BookPickSheets({ form }: { form: BookModel }) {
       {/* Правка выбранного объекта — тем же листом, что на карточке, и тем же
           писателем, что у его владельца. */}
       {objectEditClient ? (
-        <ObjectEditSheet
+        <ObjectSheet
+          mode="edit"
           visible={objectEdit}
           client={objectEditClient}
           locationId={objectEdit ? locationId : null}

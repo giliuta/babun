@@ -22,7 +22,7 @@ test("вопрос называет визиты, когда они есть", (
 });
 
 test("лист объекта спрашивает этим заголовком", () => {
-  const sheet = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "ObjectEditSheet.tsx"), "utf8");
+  const sheet = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "object-sheet/use-object-edit.ts"), "utf8");
   assert.match(sheet, /confirmAction\(objectDeleteTitle\(visitsOnObject\(clientVisits\.data, victim\.id\)\), \{/);
   assert.match(sheet, /const clientVisits = useClientAppointments\(client\.id\);/);
 });
