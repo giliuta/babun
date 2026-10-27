@@ -140,4 +140,39 @@ describe("server hygiene migrations", () => {
     assert.doesNotMatch(sql, /dispatcher/);
     assert.match(sql, /alter column language set default 'en'/);
   });
+
+  test("cancel refund is dated the day of cancellation; calendar with an issued invoice stays", () => {
+    const sql = code(migration("20261027225324_cancel_refund_date_and_calendar_invoices.sql"));
+    assert.match(sql, /r_new constant text := E'          business_today,\\n'/);
+    assert.match(sql, /calendar:issued_invoice/);
+    assert.match(sql, /cn\.credit_note_of_id = i\.id/);
+  });
+
+  test("partner edges: card files, legal name, other teams' settings, account money", () => {
+    const sql = code(migration("20261027225325_partner_rights_edges.sql"));
+    assert.equal(sql.match(/partners_card_manageable\(/g)?.length, 4);
+    assert.match(sql, /access_team_level\(public\.current_tenant_id\(\), auth\.uid\(\), 'clients\.requisites', new\.team_id\)/);
+    assert.equal(sql.match(/from public\.member_calendars mc/g)?.length, 4);
+    assert.match(sql, /new\.opening_balance is distinct from old\.opening_balance/);
+  });
+
+  test("client phone key is computed by the server where unambiguous", () => {
+    const sql = code(migration("20261027225326_client_phone_key_by_server.sql"));
+    assert.match(sql, /before insert or update of phone, phone_e164 on public\.clients/);
+    assert.match(sql, /coalesce\(p_country, 'CY'\) = 'CY' and n ~ '\^\[0-9\]\{8\}\$'/);
+    assert.match(sql, /o\.phone_e164 = k\.key and o\.id <> k\.id/, "занятый ключ не ставится — дубль разбирают руками");
+  });
+
+  test("client list handed to a partner is journaled", () => {
+    const sql = code(migration("20261027225327_client_list_disclosure_journal.sql"));
+    assert.match(sql, /rename to list_member_clients_rows/);
+    assert.match(sql, /p_client_id is null and public\.current_user_role\(\) is distinct from 'owner'/);
+    assert.match(sql, /revoke all on function public\.list_member_clients_rows\(uuid\) from public, anon, authenticated/);
+  });
+
+  test("director seeds records no higher than his own level", () => {
+    const sql = code(migration("20261027225328_director_seed_not_above_own.sql"));
+    assert.match(sql, /access_team_level\(p_tenant, p_by, 'calendar\.records', mc\.team_id\) in \('read', 'write'\) then 'read'/);
+    assert.match(sql, /else 'off'/);
+  });
 });
