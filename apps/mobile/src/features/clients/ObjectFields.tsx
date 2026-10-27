@@ -256,7 +256,6 @@ export function ObjectFields({
             // или закрытие листа, как и у полей «Точного адреса».
             onPick={(coords) => onChange({ pin: googleMapsSearchUrl(coords) })}
             onClear={() => onChange({ pin: "" })}
-            onDone={() => setMapOpen(false)}
           />
         ) : null}
 
