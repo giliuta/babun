@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Keyboard,
-  KeyboardAvoidingView,
+  LayoutAnimation,
   Platform,
   View,
+  type KeyboardEvent,
   type KeyboardMetrics,
   type StyleProp,
   type ViewStyle,
@@ -20,14 +21,24 @@ import {
 // `screenY` выше нижнего края (838 из 914 dp на Pixel 7), и лист оставался
 // висеть на ~76 dp над низом экрана.
 //
-// iOS — штатный KeyboardAvoidingView, как было. Android — свой расчёт: рамка
-// меряется в координатах экрана, подъём = насколько её низ заходит за верх
-// клавиатуры; скрытие клавиатуры — ровно ноль.
+// iOS штатный KeyboardAvoidingView тоже не годится: он сравнивает низ рамки
+// из `onLayout` — в координатах РОДИТЕЛЯ — с `screenY` клавиатуры в
+// координатах ЭКРАНА. Страница под вырезом (`Screen edges={["top"]}`,
+// `SafeAreaView`) начинается на `insets.top` ниже, и подъём недобирал ровно
+// его: «Пригласить», «Выставить инвойс», «Сменить пароль», «Создать аккаунт»
+// уходили под клавиатуру на 47 pt (iPhone 17e). Вручную переданный сдвиг
+// спасал только там, где его не забыли, а замерить его заранее нельзя: пока
+// экран въезжает, он ещё не в окне.
+//
+// Поэтому расчёт один на обе платформы: рамка меряется в момент события
+// клавиатуры, в координатах экрана, подъём = насколько её низ заходит за
+// верх клавиатуры; скрытие клавиатуры — ровно ноль.
 
 type Props = {
   style?: StyleProp<ViewStyle>;
-  /** Только iOS: рамка начинается ниже верха окна (шапка под вырезом).
-   *  Android меряет рамку в координатах экрана и сдвиг не нужен. */
+  /** Больше не нужен: рамка меряется в координатах экрана, сдвиг выреза
+   *  учтён сам. Значение игнорируется — проп остался, пока его не сняли с
+   *  вызывающих. */
   keyboardVerticalOffset?: number;
   /** `box-none` — рамка сама касаний не ловит, только её содержимое. Нужно
    *  листу: рамка во весь экран лежит ПОВЕРХ затемнения (сосед, не предок),
@@ -36,50 +47,55 @@ type Props = {
   children?: ReactNode;
 };
 
-export function KeyboardLift(props: Props) {
-  return Platform.OS === "android" ? <AndroidLift {...props} /> : <IosLift {...props} />;
+const IOS = Platform.OS === "ios";
+
+/** Подъём едет в такт клавиатуре (iOS: длительность и кривая из события). */
+function animateWith(e: KeyboardEvent | null) {
+  if (!IOS || !e?.duration) return;
+  const duration = Math.max(e.duration, 10);
+  LayoutAnimation.configureNext({
+    duration,
+    update: { duration, type: LayoutAnimation.Types[e.easing] ?? LayoutAnimation.Types.keyboard },
+  });
 }
 
-function IosLift({ style, keyboardVerticalOffset, pointerEvents, children }: Props) {
-  return (
-    <KeyboardAvoidingView
-      behavior="padding"
-      pointerEvents={pointerEvents}
-      keyboardVerticalOffset={keyboardVerticalOffset}
-      style={style}
-    >
-      {children}
-    </KeyboardAvoidingView>
-  );
-}
-
-function AndroidLift({ style, pointerEvents, children }: Props) {
+export function KeyboardLift({ style, pointerEvents, children }: Props) {
   const ref = useRef<View>(null);
   const [lift, setLift] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    const raise = (kb: KeyboardMetrics) => {
+    const raise = (kb: KeyboardMetrics, e: KeyboardEvent | null) => {
+      // «Предпочитать плавные переходы» (Универсальный доступ iOS): событие
+      // приходит с `screenY` 0 — клавиатура не выезжает, поднимать нечего.
+      if (kb.screenY <= 0) return;
       // Низ рамки до подъёма: рамка уже поднята на `lift`, её paddingBottom
       // входит в высоту, поэтому меряем всю рамку — она не сжимается.
       //
       // КООРДИНАТЫ ЭКРАНА, А НЕ ОКНА. `screenY` клавиатуры — от верха
-      // экрана; `measureInWindow` на странице отсчитывает от низа строки
-      // состояния (рамка под шапкой — 55 dp вместо 107), и подъём недобирал
-      // ровно её высоту: «Создать клиента», «Создать запись» и подвалы
-      // страниц уходили под клавиатуру. В шторке (своё окно `Modal` во весь
-      // экран) оба счёта совпадали, поэтому листы поднимались верно.
-      // `measure` даёт `pageY` от корня во весь экран — и там, и там.
+      // экрана; `measureInWindow` на Android-странице отсчитывает от низа
+      // строки состояния (рамка под шапкой — 55 dp вместо 107), и подъём
+      // недобирал ровно её высоту. `measure` даёт `pageY` от корня во весь
+      // экран — и на странице, и в шторке (своё окно `Modal`).
       ref.current?.measure((_x, _y, _w, h, _pageX, pageY) => {
         if (!alive) return;
+        animateWith(e);
         setLift(Math.max(0, Math.round(pageY + h - kb.screenY)));
       });
     };
-    const show = Keyboard.addListener("keyboardDidShow", (e) => raise(e.endCoordinates));
-    const hide = Keyboard.addListener("keyboardDidHide", () => setLift(0));
+    // iOS: `will*` — подъём в такт анимации клавиатуры, и `keyboardWillShow`
+    // приходит снова, когда клавиатура меняет высоту (полоса подсказок,
+    // другая раскладка). На Android таких событий нет.
+    const show = Keyboard.addListener(IOS ? "keyboardWillShow" : "keyboardDidShow", (e) =>
+      raise(e.endCoordinates, e),
+    );
+    const hide = Keyboard.addListener(IOS ? "keyboardWillHide" : "keyboardDidHide", (e) => {
+      animateWith(e);
+      setLift(0);
+    });
     // Лист открылся, когда клавиатура уже стояла (поле на экране под ним).
     const now = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
-    if (now) raise(now);
+    if (now) raise(now, null);
     return () => {
       alive = false;
       show.remove();

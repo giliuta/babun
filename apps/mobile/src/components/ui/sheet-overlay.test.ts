@@ -39,7 +39,6 @@ test("тап мимо листа закрывает его и с рамкой п
   const sheet = read("BottomSheet.tsx");
   assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
   const lift = read("KeyboardLift.tsx");
-  assert.match(lift, /<KeyboardAvoidingView[\s\S]{0,80}pointerEvents=\{pointerEvents\}/);
   assert.match(lift, /<View ref=\{ref\} pointerEvents=\{pointerEvents\}/);
 });
 
