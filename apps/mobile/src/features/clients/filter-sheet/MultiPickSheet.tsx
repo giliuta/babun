@@ -11,7 +11,7 @@ import { PickRow } from "./PickRow";
 
 /** Попап мультивыбора — общая грамматика блоков: контейнеры попапа
  *  периода (блоки canvas без подписей, ряды 48), отметка = оттиск.
- *  Live-apply, тап НЕ закрывает — накликивается набор. «Готово · N»
+ *  Live-apply, тап НЕ закрывает — накликивается набор. «Применить · N»
  *  (и скрим/свайп) возвращают на СТРАНИЦУ фильтров, где выбранное
  *  видно в строке; на список ведёт только CTA страницы (тап не должен
  *  «перекидывать в клиенты»). */
@@ -32,7 +32,7 @@ export function MultiPickSheet({
   onClear,
   onClose,
 }: {
-  /** Что считается в счётчиках и «Готово · N» (по умолчанию — клиенты). */
+  /** Что считается в счётчиках и «Применить · N» (по умолчанию — клиенты). */
   noun?: Noun3;
   visible: boolean;
   title: string;
@@ -182,7 +182,7 @@ export function MultiPickSheet({
       )}
       <FooterCta
         t={t}
-        verb="Готово"
+        verb="Применить"
         roll={
           shownCount === 0
             ? null
@@ -191,8 +191,8 @@ export function MultiPickSheet({
         hint={zeroHint}
         a11yLabel={
           shownCount === 0
-            ? "Готово"
-            : `Готово, ${shownCount} ${countWordRu(shownCount, ...noun)}`
+            ? "Применить"
+            : `Применить, ${shownCount} ${countWordRu(shownCount, ...noun)}`
         }
         a11yHint="Возвращает к фильтрам"
         onPress={onClose}
