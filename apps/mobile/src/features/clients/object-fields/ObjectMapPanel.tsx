@@ -11,6 +11,7 @@ export function ObjectMapPanel({
   pinCoords,
   follow,
   onPick,
+  onClear,
   onDone,
 }: {
   /** Where the map opens: the saved pin, else the point inside the address. */
@@ -19,6 +20,8 @@ export function ObjectMapPanel({
   /** The geocoded address the map should move to. */
   follow: Coords | null;
   onPick: (coords: Coords) => void;
+  /** Drops the pin — the only way out of a point set by mistake. */
+  onClear: () => void;
   onDone: () => void;
 }) {
   const t = useThemeColors();
@@ -30,17 +33,38 @@ export function ObjectMapPanel({
         onChange={onPick}
       />
       {pinCoords ? (
-        <Text
-          maxFontSizeMultiplier={1.2}
+        <View
           style={{
             marginTop: 8,
-            fontSize: 13,
-            color: t.sub,
-            textAlign: "center",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
           }}
         >
-          {`Точка отмечена · ${formatCoords(pinCoords)}`}
-        </Text>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 13, color: t.sub }}
+          >
+            {`Точка отмечена · ${formatCoords(pinCoords)}`}
+          </Text>
+          <Pressable
+            onPress={() => {
+              haptics.tap();
+              onClear();
+            }}
+            accessibilityRole="button"
+            hitSlop={10}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 13, fontWeight: "600", color: t.danger }}
+            >
+              Убрать точку
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
       <Pressable
         onPress={() => {

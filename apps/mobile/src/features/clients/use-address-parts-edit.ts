@@ -24,7 +24,15 @@ export function useAddressPartsEdit(
   patchLocation: (id: string, patch: Partial<Location>) => void,
 ) {
   const [details, setDetails] = useState<AddressParts>({});
-  const [pin, setPin] = useState("");
+  const [pin, setPinValue] = useState("");
+  // ТОЧКУ УБРАЛИ — прежний `mapUrl` не держим. Пустой пин сам по себе значит
+  // «точки не ставили», и `objectPlacePatch` бережёт прежнюю ссылку объекта;
+  // «Убрать точку» должна её снять.
+  const [pinCleared, setPinCleared] = useState(false);
+  const setPin = (next: string) => {
+    setPinValue(next);
+    setPinCleared(next.trim() === "");
+  };
   const [open, setOpen] = useState(false);
 
   // Только на открытии (по locationId, не по объекту): `loc` — новая ссылка
@@ -33,7 +41,8 @@ export function useAddressPartsEdit(
     if (!visible || !locationId) return;
     const current = locations.find((l) => l.id === locationId);
     setDetails(withoutStreet(current?.addressParts));
-    setPin(current?.mapUrl ?? "");
+    setPinValue(current?.mapUrl ?? "");
+    setPinCleared(false);
     setOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только на открытии
   }, [visible, locationId]);
@@ -44,7 +53,7 @@ export function useAddressPartsEdit(
     if (!loc) return;
     const next = objectPlacePatch(line, details, pin, {
       address: loc.address,
-      mapUrl: loc.mapUrl,
+      mapUrl: pinCleared ? "" : loc.mapUrl,
     });
     // Улица живёт внутри собранной строки, поэтому сравниваем строку, пин и
     // уточнение: прежний объект без частей не переписывается от одного
