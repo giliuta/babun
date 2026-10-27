@@ -123,6 +123,10 @@ export function TagPickerSheet({
               title={tag.name}
               color={tag.color || getAvatarColor(tag.name)}
               selected={draft.includes(tag.id)}
+              // ГЛАВНЫЙ — ПЕРВЫЙ ОТМЕЧЕННЫЙ: его покажет плитка тега на карточке
+              // и строка списка. Без подписи правило угадывалось только по
+              // плитке после «Применить».
+              subtitle={draft[0] === tag.id && draft.length > 1 ? "Главный" : undefined}
               accessibilityRole="checkbox"
               onPress={() => toggle(tag.id)}
             />
