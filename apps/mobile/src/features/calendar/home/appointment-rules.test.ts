@@ -9,6 +9,7 @@ import {
   SERVICES_HOLD_TEAM,
   SETTLED_STAYS,
   holdsMoney,
+  keptForMoneyHistory,
   isPersonalEvent,
   placementRefusal,
   placementTeam,
@@ -91,5 +92,19 @@ describe("placementRefusal", () => {
     assert.equal(placementRefusal(withService, "copy", "2026-10-31", "t2", services), SERVICES_HOLD_TEAM);
     assert.equal(placementRefusal(withService, "move", "2026-10-31", "t1", services), null);
     assert.equal(placementRefusal(work(), "move", "2026-10-31", "t2", services), null);
+  });
+});
+
+describe("keptForMoneyHistory — то же правило, что сторож удаления на сервере", () => {
+  test("запись без денег, способа оплаты и инвойса удаляется", () => {
+    assert.equal(keptForMoneyHistory(work(), false), false);
+    assert.equal(keptForMoneyHistory(event(), false), false);
+  });
+  test("деньги, способ оплаты, возврат или инвойс держат запись", () => {
+    assert.equal(keptForMoneyHistory(work({ prepaid_amount: 10 }), false), true);
+    assert.equal(keptForMoneyHistory(work({ payments: onePayment }), false), true);
+    assert.equal(keptForMoneyHistory(work({ payment_method: "cash" }), false), true);
+    assert.equal(keptForMoneyHistory(work({ payment_status: "refunded" }), false), true);
+    assert.equal(keptForMoneyHistory(work(), true), true);
   });
 });

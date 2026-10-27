@@ -175,6 +175,19 @@ export function partlyPaid(apt: Parameters<typeof recordFilled>[0]): boolean {
   return total > 0 && got > 0 && got < cents(total);
 }
 
+/** ЦВЕТ ЗАПИСИ ЗАДАЮТ ДЕНЬГИ: оплачена, внесена часть или долг после
+ *  визита. Выбранный рукой цвет у такой записи не виден (`resolveRecordColor`:
+ *  деньги сильнее руки), поэтому пункт «Цвет» ей не предлагается. Кто не
+ *  видит оплату, о деньгах не знает — для него решает рука. */
+export function colorSetByMoney(
+  apt: Parameters<typeof recordFilled>[0],
+  todayYmd: string,
+  paymentHidden = false,
+): boolean {
+  if (paymentHidden || apt.kind !== "work" || apt.status === "cancelled") return false;
+  return fullyPaid(apt) || partlyPaid(apt) || !recordFilled(apt, todayYmd).paid;
+}
+
 /** То же, что `recordFilled`, но для того, кто не видит оплату записи: тогда
  *  про оплату сказать нечего, и дырой «не оплачено» она не считается
  *  (у партнёра без «Оплаты» каждая прошедшая запись

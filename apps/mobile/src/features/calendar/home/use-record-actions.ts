@@ -50,7 +50,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   const createAppt = useCreateAppointment();
   const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
-  const { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed } =
+  const { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed, canDelete } =
     useRecordLifecycle({ toast });
 
   // Тап по свободному слоту / действие из агенды / «Записать» с карточки открывает
@@ -175,7 +175,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   return {
     createAppt, memberCopy, deleteAppt, bookAt, openEdit, setCancelled,
     restoreCancelled, cancelVisit, deleteAppointmentConfirmed, startFreeMove, startMove,
-    openReminderMenu, pickReminderFor, recordRoute,
+    openReminderMenu, pickReminderFor, recordRoute, canDelete,
   };
 }
 

@@ -12,13 +12,15 @@ import type { QuickEvents } from "./use-quick-events";
 import type { RecordActions } from "./use-record-actions";
 import type { RecordNaming } from "./use-record-naming";
 import { recordComment } from "@/features/calendar/record-title";
+import { colorSetByMoney } from "@/features/appointments/record-color";
 
 type CreateActionMenuDeps =
   Pick<RecordActions, "openEdit" | "openReminderMenu" | "startFreeMove" | "startMove"
-    | "restoreCancelled" | "cancelVisit" | "deleteAppointmentConfirmed" | "recordRoute">
+    | "restoreCancelled" | "cancelVisit" | "deleteAppointmentConfirmed" | "recordRoute"
+    | "canDelete">
   & Pick<CalendarSources, "clients">
   & Pick<CalendarRights, "canMutateAppointment" | "isCrew" | "smsInPlan" | "actionsIn"
-    | "actorId" | "eventRightsIn" | "workInPlan" | "nudgeTariff">
+    | "actorId" | "eventRightsIn" | "workInPlan" | "nudgeTariff" | "paymentHiddenFor">
   & Pick<CalendarClock, "todayYmd">
   & Pick<CalendarUiState, "setSmsApt" | "setSmsOpen" | "setRecolor" | "setSheetMenu">
   & Pick<QuickEvents, "copyInPlace">
@@ -31,7 +33,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
     smsInPlan, setSmsApt, setSmsOpen, actionsIn, actorId, startFreeMove, startMove,
     eventRightsIn, setRecolor, restoreCancelled, cancelVisit,
     deleteAppointmentConfirmed, copyInPlace, workInPlan, nudgeTariff, setSheetMenu,
-    clientName, recordRoute,
+    clientName, recordRoute, paymentHiddenFor, canDelete,
   } = deps;
   // ─── Контекстное меню записи (долгое нажатие без движения) ──────────
   // Web parity ActionMenuModal (dashboard/page.tsx:1752): «только действия,
@@ -58,6 +60,9 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
     // сдвигает все повторы, а на день вне правила блок просто исчезал. Поэтому
     // вопрос задаётся и у удаления, и у переноса.
     const repeating = !!apt.event_repeat && apt.event_repeat.kind !== "none";
+    // Цвет оплаченной, частично оплаченной и долговой записи задают деньги —
+    // выбранный рукой там не виден, и пункт «Цвет» ничего бы не менял.
+    const moneyColored = colorSetByMoney(apt, todayYmd, paymentHiddenFor(apt));
     const wholeSeries = (run: () => void) => () =>
       repeating
         ? void confirmAction("Перенести всю серию?", {
@@ -127,10 +132,11 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
       if (!event && can.move && apt.event_all_day !== true)
         items.push({ label: "Копировать", run: () => startMove(apt, "copy") });
       // Цвет события — его блок «Тип» (название и цвет): без «Меняет»
-      // сервер отказывает. Отменённой цвет не нужен: она всегда
-      // серая пунктиром, и выбранный цвет на сетке ничего не менял.
+      // сервер отказывает. У отменённой и у той, чей цвет задают деньги,
+      // пункта нет: свой цвет у них на сетке не виден.
       if (
         apt.status !== "cancelled" &&
+        !moneyColored &&
         (event ? ownEvent && eventRightsIn(apt.team_id ?? null).type === "write" : can.color)
       )
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
@@ -140,7 +146,8 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
             ? { label: "Восстановить", run: () => restoreCancelled(apt) }
             : { label: "Отменить визит", run: () => cancelVisit(apt) },
         );
-      if (event ? ownEvent : can.cancel)
+      // Запись с деньгами не удаляется (правило сервера) — пункта нет вовсе.
+      if ((event ? ownEvent : can.cancel) && canDelete(apt))
         items.push({
           label: event ? "Удалить событие" : "Удалить запись",
           destructive: true,
@@ -171,10 +178,10 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
         run: () =>
           apt.event_all_day === true ? copyInPlace(apt) : startMove(apt, "copy"),
       });
-      // ОТМЕНЁННОЙ — БЕЗ «ЦВЕТА»:
-      // отменённая запись всегда серая пунктиром, выбранный цвет на сетке не
-      // показывался — пункт, который ничего не меняет.
-      if ((!event || mutable) && apt.status !== "cancelled")
+      // ОТМЕНЁННОЙ И ТОЙ, ЧЕЙ ЦВЕТ ЗАДАЮТ ДЕНЬГИ, — БЕЗ «ЦВЕТА»: у отменённой
+      // свой цвет состояния, у оплаченной и долговой — цвет денег; выбранный
+      // рукой там не виден, и пункт ничего бы не менял.
+      if ((!event || mutable) && apt.status !== "cancelled" && !moneyColored)
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
       if (!event && phone && smsInPlan)
         items.push({
@@ -194,7 +201,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
             : { label: "Отменить визит", run: () => cancelVisit(apt) },
         );
       }
-      if (mutable)
+      if (mutable && canDelete(apt))
         items.push({
           // Явный null-чек: у одиночного события event_repeat = null, и
           // «undefined !== "none"» обещал бы удаление несуществующей серии.

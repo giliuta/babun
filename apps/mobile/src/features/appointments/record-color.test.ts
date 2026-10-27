@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
   appointmentSituation,
   autoBaseColor,
+  colorSetByMoney,
   recordFilled,
   recordFilledFor,
   resolveRecordColor,
@@ -361,5 +362,20 @@ describe("предоплата — только пока визит вперед
       resolveRecordColor({ prepaid: "#22B8CF", filled: FULL, base: "#34C759", palette: PALETTE, fallback: COBALT }),
       "#22B8CF",
     );
+  });
+});
+
+describe("colorSetByMoney — цвет задают деньги", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 100, date: "2026-10-20", payments: [] as { amount: number }[] };
+  test("оплачена, внесена часть, долг после визита — да", () => {
+    assert.equal(colorSetByMoney({ ...work, payments: [{ amount: 100 }] }, "2026-10-27"), true);
+    assert.equal(colorSetByMoney({ ...work, date: "2026-11-02", prepaid_amount: 30 }, "2026-10-27"), true);
+    assert.equal(colorSetByMoney(work, "2026-10-27"), true);
+  });
+  test("будущая без денег, событие, отмена и скрытая оплата — нет", () => {
+    assert.equal(colorSetByMoney({ ...work, date: "2026-11-02" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney({ ...work, kind: "event" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney({ ...work, status: "cancelled" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney(work, "2026-10-27", true), false);
   });
 });
