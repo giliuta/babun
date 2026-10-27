@@ -32,6 +32,7 @@ import {
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
+import { useTeamName } from "@/session/team-name";
 import { useFeatureOn } from "@/features/settings/company-features";
 
 // «БЛОКИ КЛИЕНТОВ» — ВСЁ О ВИДЕ КЛИЕНТА НА ОДНОЙ СТРАНИЦЕ (заметка, личная, метка, тег,
@@ -87,6 +88,7 @@ export default function ClientBlocksSettingsRoute() {
 function ClientBlocksSettingsScreen() {
   const { team } = useLocalSearchParams<{ team?: string }>();
   const { data: ownTeams = [] } = useTeams();
+  const teamName = useTeamName();
   const teamRow =
     (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
   const teamId = teamRow?.id ?? null;
@@ -122,7 +124,7 @@ function ClientBlocksSettingsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Блоки клиентов" subtitle={teamRow?.name} />
+      <ScreenHeader title="Блоки клиентов" subtitle={teamRow ? teamName(teamRow.name) : undefined} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionCard title="Карточка клиента">
           <AlwaysLine blocks={blocks} />
