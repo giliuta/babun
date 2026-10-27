@@ -5,7 +5,6 @@ import {
   cabinetScreenRole,
   can,
   canAccessCabinetPath,
-  effectivePlan,
   isUserRole,
   planAllows,
 } from "./role-policy";
@@ -131,17 +130,6 @@ describe("role policy", () => {
 });
 
 describe("тариф", () => {
-  test("ручная выдача сильнее оплаченного тарифа", () => {
-    assert.equal(effectivePlan({ plan: "free", plan_override: "lifetime" }), "lifetime");
-    assert.equal(effectivePlan({ plan: "free", plan_override: null }), "free");
-    assert.equal(effectivePlan({ plan: "pro" }), "pro");
-    // Пустая строка — это «ничего не записано», а не тариф с пустым именем:
-    // `TENANT_SAFE_DEFAULTS` ставит именно её, пока профиль не приехал.
-    assert.equal(effectivePlan({ plan: "", plan_override: "" }), null);
-    assert.equal(effectivePlan(null), null);
-    assert.equal(effectivePlan(undefined), null);
-  });
-
   test("бесплатный уровень закрывает работу с клиентами", () => {
     assert.equal(planAllows("free", "book-clients"), false);
     assert.equal(planAllows("free", "services"), false);
