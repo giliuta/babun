@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMoney } from "@/features/settings/currency";
 import { Text, TextInput, View } from "react-native";
-import { formatEURExact } from "@babun/shared/common/utils/money";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { useThemeColors } from "@/theme/colors";
 import { parseVatRate } from "./vat-looks/parse-vat-rate";
@@ -53,7 +52,7 @@ export function ServicesRow({
 }) {
   const t = useThemeColors();
   // Знак скидки в деньгах — валюта компании, а не «€» гвоздём.
-  const currencySymbol = useMoney().symbol;
+  const { symbol: currencySymbol, fmtExact } = useMoney();
   return (
     <Row>
       {/* Слова «Услуги» здесь нет: колонка уже подписана в шапке, а строку
@@ -100,7 +99,7 @@ export function ServicesRow({
           fontVariant: ["tabular-nums"],
         }}
       >
-        {percent && discountAmount > 0 ? `−${formatEURExact(discountAmount)}` : ""}
+        {percent && discountAmount > 0 ? `−${fmtExact(discountAmount)}` : ""}
       </Text>
       <Sum value={afterDiscount} />
     </Row>
@@ -138,6 +137,8 @@ export function PayRow({
   action?: ReactNode;
 }) {
   const t = useThemeColors();
+  // Суммы итога и налога — валютой компании, как скидка выше.
+  const { fmtExact } = useMoney();
   // Текст поля ставки живёт своей жизнью, пока его набирают: «1» на пути к
   // «19» не должен пересчитывать итог на каждом символе в ноль-налог.
   const [rateText, setRateText] = useState(vat ? String(vat.rate) : "");
@@ -272,7 +273,7 @@ export function PayRow({
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {off ? "" : formatEURExact(vat.amount)}
+              {off ? "" : fmtExact(vat.amount)}
             </Text>
           </>
         ) : null}
@@ -286,7 +287,7 @@ export function PayRow({
             fontVariant: ["tabular-nums"],
           }}
         >
-          {formatEURExact(total)}
+          {fmtExact(total)}
         </Text>
       </View>
     </View>

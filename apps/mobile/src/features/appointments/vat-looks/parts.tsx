@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { formatEURExact } from "@babun/shared/common/utils/money";
+import { useMoney } from "@/features/settings/currency";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -74,6 +74,9 @@ export function Unit({ children }: { children: ReactNode }) {
 /** Сумма строки — в той же колонке, что «СУММА» у работ. */
 export function Sum({ value }: { value: number }) {
   const t = useThemeColors();
+  // Валюта компании, как у единицы скидки рядом (`useMoney().symbol`): «€»
+  // гвоздём у компании не в евро печатал суммы строк чужой валютой.
+  const { fmtExact } = useMoney();
   return (
     <Text
       style={{
@@ -88,7 +91,7 @@ export function Sum({ value }: { value: number }) {
         fontVariant: ["tabular-nums"],
       }}
     >
-      {formatEURExact(value)}
+      {fmtExact(value)}
     </Text>
   );
 }
