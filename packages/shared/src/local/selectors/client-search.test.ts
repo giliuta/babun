@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createBlankClient } from "../clients";
-import {
-  clientSearchRank,
-  findDuplicateCandidates,
-  matchesClient,
-  rankClientMatches,
-} from "./client-search";
+import { clientSearchRank, matchesClient, rankClientMatches } from "./client-search";
 
 function client(
   id: string,
@@ -71,39 +66,6 @@ describe("matchesClient", () => {
 
   test("keeps phone matching punctuation-independent", () => {
     assert.equal(matchesClient(item, "99123456"), true);
-  });
-});
-
-describe("findDuplicateCandidates", () => {
-  test("does not confuse a name with a city or note", () => {
-    const item = client("client-1", {
-      full_name: "Иван Петров",
-      city: "Лимассол",
-      notes: [{ id: "n", text: "Мария", created_at: "2026-07-20" }],
-    });
-    assert.deepEqual(
-      findDuplicateCandidates([item], { full_name: "Лимассол" }),
-      [],
-    );
-    assert.deepEqual(findDuplicateCandidates([item], { full_name: "Мария" }), []);
-  });
-
-  test("still matches the normalized client name and phone", () => {
-    const item = client("client-1", {
-      full_name: "Иван Петров",
-      phone: "+357 99 123 456",
-    });
-    assert.equal(
-      findDuplicateCandidates([item], { full_name: "Ivan Petrov" })[0]?.id,
-      item.id,
-    );
-    assert.equal(
-      findDuplicateCandidates([item], {
-        full_name: "Другой клиент",
-        phone: "99 123 456",
-      })[0]?.id,
-      item.id,
-    );
   });
 });
 

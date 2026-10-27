@@ -95,16 +95,6 @@ export function sourceDisplayName(source: Pick<ClientSource, "key" | "name">): s
   return source.key ? tDynamic(source.name) : source.name;
 }
 
-/** Подпись источника клиента; `null` — не указан. */
-export function sourceLabel(
-  value: string | null | undefined,
-  sources: ClientSource[],
-  teamId: string | null | undefined,
-): string | null {
-  const row = resolveSource(value, sources, teamId);
-  return row ? sourceDisplayName(row) : null;
-}
-
 /** «Кто привёл» — у строки, засеянной «Рекомендацией», как её ни назови. */
 export function isReferral(
   value: string | null | undefined,

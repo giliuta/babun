@@ -8,7 +8,6 @@ import {
   normalizeSource,
   sourceBucket,
   sourceFilterOptions,
-  sourceLabel,
   sourcePickerOptions,
   sourcesSummary,
   type ClientSource,
@@ -42,18 +41,8 @@ describe("источник клиента", () => {
     assert.equal(customSourceId("src:"), null);
   });
 
-  test("подпись: строка, переименованный готовый, старый ключ, удалённый, пустой", () => {
-    assert.equal(sourceLabel("src:b1", SOURCES, "team-1"), "Bazaraki");
-    assert.equal(sourceLabel("src:r1", SOURCES, "team-1"), "Сарафан");
-    assert.equal(sourceLabel("instagram", SOURCES, "team-2"), "Instagram");
-    assert.equal(sourceLabel("src:gone", SOURCES, "team-1"), null);
-    assert.equal(sourceLabel("unknown", SOURCES, "team-1"), null);
-    assert.equal(sourceLabel("", SOURCES, "team-1"), null);
-  });
-
   test("старый ключ без строки у своей команды — не указан", () => {
     // У team-1 «Другое» удалено: импорт с `other` не цепляет чужую команду.
-    assert.equal(sourceLabel("other", SOURCES, "team-1"), null);
     assert.equal(normalizeSource("other", SOURCES, "team-1"), "unknown");
     assert.equal(normalizeSource("other", SOURCES, "team-2"), "src:o2");
   });

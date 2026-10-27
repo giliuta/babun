@@ -2,18 +2,17 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   addressOrLinkPatch,
-  addressPartsPatch,
   cleanAddressParts,
   composeAddress,
   hasAddressPlace,
   objectTarget,
-  partsFromLine,
   routeAddress,
-  sameAddressParts,
   composeDetails,
   objectPlacePatch,
   primaryLine,
-  withoutStreet, addressLines } from "./object-address";
+  withoutStreet,
+  addressLines,
+} from "./object-address";
 
 describe("objectTarget", () => {
   test("адрес важнее ссылки", () => {
@@ -155,29 +154,6 @@ describe("уточнение адреса", () => {
     assert.equal(routeAddress({ address: "что угодно", addressParts: parts }), "Makariou 12, Sunny Court, Лимасол 4000");
     assert.equal(routeAddress({ address: " Ул. 5 ", addressParts: { apartment: "5" } }), "Ул. 5");
     assert.equal(routeAddress(null), "");
-  });
-
-  test("addressPartsPatch: строка собирается только при «где»; пустое снимает части", () => {
-    assert.deepEqual(addressPartsPatch({ street: "Makariou 12", apartment: "5" }), {
-      addressParts: { street: "Makariou 12", apartment: "5" },
-      address: "Makariou 12, кв. 5",
-    });
-    assert.deepEqual(addressPartsPatch({ apartment: "5" }), { addressParts: { apartment: "5" } });
-    assert.deepEqual(addressPartsPatch({ street: " " }), { addressParts: undefined });
-  });
-});
-
-describe("partsFromLine / sameAddressParts", () => {
-  test("строка уходит в «Улица и дом», ссылка — в пин, заполненное не трогаем", () => {
-    assert.deepEqual(partsFromLine({}, " Makariou 12 ", ""), { parts: { street: "Makariou 12" }, pin: "" });
-    assert.deepEqual(partsFromLine({}, "https://maps.app.goo.gl/x", ""), { parts: {}, pin: "https://maps.app.goo.gl/x" });
-    assert.deepEqual(partsFromLine({ city: "Пафос" }, "Makariou 12", "p"), { parts: { city: "Пафос" }, pin: "p" });
-    assert.deepEqual(partsFromLine({}, "  ", "p"), { parts: {}, pin: "p" });
-  });
-  test("sameAddressParts сравнивает после чистки", () => {
-    assert.equal(sameAddressParts({ street: " A " }, { street: "A" }), true);
-    assert.equal(sameAddressParts({ street: "A" }, { street: "B" }), false);
-    assert.equal(sameAddressParts({ street: " " }, undefined), true);
   });
 });
 

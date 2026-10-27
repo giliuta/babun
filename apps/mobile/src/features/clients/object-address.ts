@@ -151,43 +151,6 @@ export function routeAddress(
     : (loc.address ?? "").trim();
 }
 
-/** Патч объекта из частей: чистые части и собранная строка. Части без «где»
- *  хранятся, но строку не трогают; пустые части снимаются, строка остаётся
- *  прежней — человек ничего не терял, он лишь убрал уточнение. */
-export function addressPartsPatch(
-  parts: AddressParts | null | undefined,
-): { addressParts: AddressParts | undefined; address?: string } {
-  const clean = cleanAddressParts(parts);
-  if (!clean) return { addressParts: undefined };
-  return hasAddressPlace(clean)
-    ? { addressParts: clean, address: composeAddress(clean) }
-    : { addressParts: clean };
-}
-
-/** Открытие уточнения поверх набранной строки: адрес становится «Улица и дом»,
- *  ссылка — пином. Набранное не пропадает, а уже заполненные части не трогаем. */
-export function partsFromLine(
-  parts: AddressParts,
-  line: string,
-  pin: string,
-): { parts: AddressParts; pin: string } {
-  const value = line.trim();
-  if (!value) return { parts, pin };
-  if (isLikelyUrl(value)) return { parts, pin: pin || value };
-  return {
-    parts: hasAddressPlace(parts) ? parts : { ...parts, street: parts.street || value },
-    pin,
-  };
-}
-
-/** Одни и те же части после чистки — писать нечего. */
-export function sameAddressParts(
-  a: AddressParts | null | undefined,
-  b: AddressParts | null | undefined,
-): boolean {
-  return JSON.stringify(cleanAddressParts(a) ?? null) === JSON.stringify(cleanAddressParts(b) ?? null);
-}
-
 // ─── ГЛАВНАЯ СТРОКА И УТОЧНЕНИЕ ─────────────────────────────────────────────
 // Основное — это адрес или ссылка на карту; уточнение можно раскрыть и
 // свернуть обратно (мини-доп). Главная строка объекта — улица и дом ЛИБО
