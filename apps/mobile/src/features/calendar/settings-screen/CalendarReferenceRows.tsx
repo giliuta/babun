@@ -4,6 +4,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
+import { OnlineBookingSettingsRow } from "@/features/online-booking/OnlineBookingSettingsRow";
 import { DeletedAppointmentsDoor } from "@/features/calendar/DeletedAppointmentsDoor";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
@@ -123,6 +124,10 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
           </TourTarget>
         </SectionCard>
       ) : null}
+      {/* ОНЛАЙН-ЗАПИСЬ КОМАНДЫ — страница babun.app/b для заказчиков:
+          выключатель, ссылка, какие услуги видны. Её публикует владелец —
+          строка только ему, и сервер пускает только его. */}
+      {isOwner ? <OnlineBookingSettingsRow teamId={team?.id ?? null} /> : null}
       {/* «УДАЛЁННЫЕ ЗАПИСИ» — ящик удалённого в этом календаре: 30 дней,
           «Вернуть». Строку видит тот, кто может удалять. */}
       {team ? <DeletedAppointmentsDoor teamId={team.id} /> : null}
