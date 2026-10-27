@@ -20,6 +20,7 @@ import {
 import { CLOSED_ACCOUNT_REASON, OFFLINE_OPERATION } from "./operation-guards";
 import type { createOperationRequestIds } from "./request-ids";
 import { saveErrorText } from "./save-error";
+import { editedGross } from "./vat-frame";
 import type { OperationDebtPayment, OperationType } from "./types";
 
 /** Everything `save` reads, as of the render that built it. */
@@ -152,7 +153,16 @@ export function useOperationSave(s: OperationSaveInput): () => Promise<void> {
         fresh: !s.isEdit || s.vatRetouched,
       });
       const draft = {
-        amount: breakdown.gross,
+        amount:
+          s.isEdit && s.transaction
+            ? editedGross({
+                tx: s.transaction,
+                vatRowAllowed: s.isOwner,
+                amountNum: s.amountNum,
+                vatRetouched: s.vatRetouched,
+                recomputed: breakdown.gross,
+              })
+            : breakdown.gross,
         ...(vatModeToSend ? { vat_mode: vatModeToSend } : {}),
         category_id: s.categoryId,
         // Получатель — только у зарплаты: сменили категорию — человек не

@@ -26,6 +26,22 @@ export function hydratedAmountText(tx: TxVatSnapshot, vatRowAllowed: boolean): s
   return String(inputFromGross(tx.amount, txVatMode(tx), Number(tx.vat_rate ?? 0)));
 }
 
+/** Сумма, которую правка шлёт на счёт. Поле суммы не трогали (то же число, что
+ *  при открытии) и VAT не нажимали заново — сумма остаётся ровно прежней. Путь
+ *  брутто → нетто → брутто при 19 % не обратим на копейке (100,05 → 84,08 →
+ *  100,06): правка одной заметки молча сдвигала деньги на цент. */
+export function editedGross(input: {
+  tx: TxVatSnapshot;
+  vatRowAllowed: boolean;
+  amountNum: number;
+  vatRetouched: boolean;
+  recomputed: number;
+}): number {
+  const untouched =
+    !input.vatRetouched && input.amountNum === Number(hydratedAmountText(input.tx, input.vatRowAllowed));
+  return untouched ? input.tx.amount : input.recomputed;
+}
+
 /** Режим, по которому поле превращается в сумму на счёте. Строки не видно —
  *  поле уже валовое, налог сверху не прибавляется. Режим самой операции при
  *  этом не меняется: его форма отправляет отдельно (`vatModeForDraft`). */
