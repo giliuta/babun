@@ -9,6 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import {
@@ -222,18 +223,9 @@ export function ClientTagsScreen() {
           }}
         />
       ) : tags.length === 0 ? (
-        <EmptyState
-          fill
-          title="Тегов пока нет"
-          action={
-            readOnly
-              ? undefined
-              : {
-                  label: "Добавить тег",
-                  onPress: () => setEditing({ mode: "create" }),
-                }
-          }
-        />
+        // Пустое состояние — только слова: «Добавить тег» внизу, там же, где
+        // у полного списка (AGENTS 7.1).
+        <EmptyState fill title="Тегов пока нет" />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -330,15 +322,14 @@ export function ClientTagsScreen() {
         </ScrollView>
       )}
 
-      {!readOnly && !tagsQuery.isLoading && !tagsQuery.isError && tags.length > 0 ? (
-        <View
-          style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
-        >
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА: пуст список или полон. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton
             label="Добавить тег"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <TagSheet

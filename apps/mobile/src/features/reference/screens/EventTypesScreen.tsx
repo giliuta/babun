@@ -9,6 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -108,7 +109,6 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
           fill
           title="Типов событий пока нет"
           subtitle="Тип называет событие, красит его в календаре и подсказывает длительность."
-          action={readOnly ? undefined : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }}
         />
       ) : (
         <ScrollView
@@ -203,16 +203,17 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
         </ScrollView>
       )}
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: типы
-          заводят пачкой, и после первого не должно приходиться доскролливать
-          список ради второго. Тот же приём, что у меток и услуг. */}
-      {!readOnly && !typesQuery.isLoading && !typesQuery.isError && types.length > 0 ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: пуст список или полон,
+          кнопка на одном месте (AGENTS 7.1); пустое состояние — только слова.
+          Типы заводят пачкой, и после первого не должно приходиться
+          доскролливать список ради второго. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton
             label="Добавить тип"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <EventTypeSheet

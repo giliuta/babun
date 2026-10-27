@@ -18,6 +18,7 @@ import {
   appearanceRowFill,
 } from "@/components/ui/AppearanceSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useToast } from "@/components/ui/Toast";
@@ -207,17 +208,10 @@ export function ObjectTypesScreen() {
           action={{ label: "Повторить", onPress: () => void refetch() }}
         />
       ) : labels.length === 0 ? (
-        <EmptyState
-          fill
-          title="Типов пока нет"
-          // ГОТОВОГО НАБОРА НЕТ: каждый человек сам создаёт свой тип объекта.
-          // Кнопка пустого списка — та же «Добавить тип», что внизу у полного.
-          action={
-            readOnly
-              ? undefined
-              : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }
-          }
-        />
+        // ГОТОВОГО НАБОРА НЕТ: каждый человек сам создаёт свой тип объекта.
+        // Пустое состояние — только слова: «Добавить тип» стоит внизу, там же,
+        // где у полного списка.
+        <EmptyState fill title="Типов пока нет" />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -302,16 +296,16 @@ export function ObjectTypesScreen() {
         </ScrollView>
       )}
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: типы
-          заводят пачкой, и после первого не должно приходиться доскролливать
-          список ради второго. Тот же приём, что у меток и услуг. */}
-      {!readOnly && !isLoading && !isError && labels.length > 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: пуст список или полон,
+          кнопка на одном месте (AGENTS 7.1). Типы заводят пачкой, и после
+          первого не должно приходиться доскролливать список ради второго. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton
             label="Добавить тип"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <TypeSheet

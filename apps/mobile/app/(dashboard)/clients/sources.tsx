@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { NameField } from "@/components/ui/picker-fields";
@@ -165,15 +166,9 @@ function ClientSourcesScreen() {
           action={{ label: "Повторить", onPress: () => void query.refetch() }}
         />
       ) : list.length === 0 ? (
-        <EmptyState
-          fill
-          title="Источников пока нет"
-          action={
-            readOnly
-              ? undefined
-              : { label: "Добавить источник", onPress: () => setEditing({ mode: "create" }) }
-          }
-        />
+        // Пустое состояние — только слова: «Добавить источник» внизу, там же,
+        // где у полного списка (AGENTS 7.1).
+        <EmptyState fill title="Источников пока нет" />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -238,10 +233,11 @@ function ClientSourcesScreen() {
         </ScrollView>
       )}
 
-      {!readOnly && !query.isLoading && !query.isError && list.length > 0 ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА: пуст список или полон. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton label="Добавить источник" onPress={() => setEditing({ mode: "create" })} />
-        </View>
+        </PageFooter>
       ) : null}
 
       <SourceSheet
