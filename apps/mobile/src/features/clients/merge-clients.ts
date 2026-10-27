@@ -11,6 +11,7 @@ import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { clientMemberships } from "@babun/shared/local/clients";
 import { clientRequisitesOf, requisitesPatch } from "@babun/shared/local/client-requisites";
 import { DEFAULT_COUNTRY, tryToE164 } from "@/lib/phone";
+import { EXTRA_LABELS } from "@/features/clients/extra-contacts/extra-labels";
 import type { CountryCode } from "libphonenumber-js";
 
 // СЛИЯНИЕ ДУБЛЕЙ.
@@ -289,7 +290,7 @@ export function mergeClientPatch(
   const addPhones: PhoneEntry[] = [];
   const candidates: PhoneEntry[] = [
     ...(filled(dup.phone)
-      ? [{ id: `dup-${dup.id}`, number: dup.phone, label: "Мобильный" }]
+      ? [{ id: `dup-${dup.id}`, number: dup.phone, label: EXTRA_LABELS[0] }]
       : []),
     ...(dup.phones ?? []),
   ];
