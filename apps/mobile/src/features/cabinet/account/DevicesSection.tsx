@@ -1,10 +1,6 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { Smartphone } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { Divider } from "@/components/ui/Divider";
-import { ICON } from "@/components/ui/tokens";
-import { useThemeColors } from "@/theme/colors";
+import { ActionRow } from "@/components/ui/card-rows";
 import { signOutScopeAndWipe, unsentChangesNow } from "@/lib/auth-clear";
 import { forgetOtherDevices } from "@/lib/push-device";
 import { supabase } from "@/lib/supabase";
@@ -15,7 +11,6 @@ import { isHumanText } from "@babun/shared/i18n/runtime";
 
 // ─── Устройства: выход на других / глобальный выход ─────────────────
 export function DevicesSection() {
-  const t = useThemeColors();
   const [busy, setBusy] = useState(false);
 
   // Веб-паритет (DevicesSection scope:"others"): гасит чужие сессии,
@@ -75,72 +70,29 @@ export function DevicesSection() {
     );
   };
 
+  // СТРОКИ — КАНОНИЧЕСКИЕ `ActionRow`: выход с других устройств и со всех.
+  // Строки «Это устройство · В сети» нет — она не читала ничего и была
+  // одинаковой и офлайн, и с протухшим входом.
+  const askOthers = () =>
+    confirmThen(
+      "Выйти на других устройствах",
+      {
+        message: "Это устройство останется в системе",
+        confirmLabel: "Выйти",
+        destructive: true,
+      },
+      () => void signOutOthers(),
+    );
   return (
     <SectionCard title="Устройства">
-      <View className="flex-row items-center px-4 py-3">
-        <View
-          style={{
-            height: 32,
-            width: 32,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: t.radius.card,
-            backgroundColor: "rgba(44,91,224,0.10)",
-          }}
-        >
-          <Smartphone color={t.accent} size={ICON.sm} />
-        </View>
-        <View className="ml-3 flex-1">
-          <Text className="text-base" style={{ color: t.ink }}>
-            Это устройство
-          </Text>
-          <Text className="text-xs" style={{ color: t.sub }}>
-            В сети · текущая сессия
-          </Text>
-        </View>
-      </View>
-      <Divider inset={56} />
-      <Pressable
-        // С ВОПРОСОМ, как «Выйти со всех устройств»: случайный тап при
-        // прокрутке гасил вход на всех остальных телефонах аккаунта — у
-        // владельца и у тех, кто работает под тем же входом.
-        onPress={() =>
-          confirmThen(
-            "Выйти на других устройствах",
-            {
-              message: "Это устройство останется в системе",
-              confirmLabel: "Выйти",
-              destructive: true,
-            },
-            () => void signOutOthers(),
-          )
-        }
-        disabled={busy}
-        accessibilityRole="button"
-        accessibilityLabel="Выйти на других устройствах"
-        className="px-4 py-3.5 active:opacity-60"
-        style={{ minHeight: 44, opacity: busy ? 0.5 : 1 }}
-      >
-        <Text className="text-base" style={{ color: t.ink }}>
-          Выйти на других устройствах
-        </Text>
-        <Text className="mt-0.5 text-xs" style={{ color: t.sub }}>
-          Это устройство останется в системе
-        </Text>
-      </Pressable>
-      <Divider inset={16} />
-      <Pressable
+      <ActionRow label="Выйти на других устройствах" dimmed={busy} onPress={askOthers} />
+      <ActionRow
+        separated
+        label="Выйти со всех устройств"
+        tone="danger"
+        dimmed={busy}
         onPress={() => void signOutEverywhere()}
-        disabled={busy}
-        accessibilityRole="button"
-        accessibilityLabel="Выйти со всех устройств"
-        className="px-4 py-3.5 active:opacity-60"
-        style={{ minHeight: 44, opacity: busy ? 0.5 : 1 }}
-      >
-        <Text className="text-base" style={{ color: t.danger }}>
-          Выйти со всех устройств
-        </Text>
-      </Pressable>
+      />
     </SectionCard>
   );
 }
