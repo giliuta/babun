@@ -150,6 +150,9 @@ export default function CreditNoteScreen() {
       number: series.data?.number ?? "",
       kind: "credit_note",
       credit_note_of_id: row.id,
+      // Превью печатает «Partial cancellation», как выпущенная частичная нота,
+      // а не «Cancellation» — у черновика флажок наследовался от инвойса (false).
+      credit_partial: !whole,
       status: "issued",
       issued_on: businessToday,
       due_on: null,
