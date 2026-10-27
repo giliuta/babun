@@ -24,10 +24,12 @@
 // wrappers' SQLite cache is un-injected on the Expo-web target, so there is
 // nothing to bridge there; web keeps navigator-driven refetch-on-focus.
 
+import { AppState } from "react-native";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CachedTable } from "@babun/shared/db/cache";
 import {
   subscribeRevalidated,
+  startCalendarSignals,
   startRealtimeTenantSync,
 } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
@@ -181,5 +183,44 @@ export function startSyncBridge(
   activeBridge = controller;
   mount();
   return controller.dispose;
+}
+
+/** Вернулись в приложение из фона — то, что пришло за это время, сигналом
+ *  могло и не доехать (iOS усыпляет сокет), поэтому записи перечитываются. */
+export function isReturnToForeground(prev: string, next: string): boolean {
+  return prev !== "active" && next === "active";
+}
+
+/** МОСТ СОТРУДНИКА. Таблица записей ему закрыта, кэша SQLite у него нет:
+ *  записи читаются дверью сервера прямо в react-query. Свежесть дают сигналы
+ *  его календарей (`calendar-signals.ts`) и перечитывание при возврате из
+ *  фона. Сигнал своей правки узнаётся так же, как у владельца (`own-writes.ts`). */
+export function startMemberSyncBridge(
+  teamIds: readonly string[],
+  qc: QueryClient = queryClient,
+): () => void {
+  let disposed = false;
+  const stopSignals = startCalendarSignals({
+    supabase,
+    teamIds,
+    onChange: (change) => {
+      if (change && isKnownChange(change, cachedAppointmentRows(qc))) {
+        if (change.id) checkAfterOwnWindow(qc, change.id, () => !disposed);
+        return;
+      }
+      invalidate(qc, "appointments");
+    },
+    onResync: () => invalidate(qc, "appointments"),
+  });
+  let appState: string = AppState.currentState;
+  const foreground = AppState.addEventListener("change", (next) => {
+    if (isReturnToForeground(appState, next)) invalidate(qc, "appointments");
+    appState = next;
+  });
+  return () => {
+    disposed = true;
+    stopSignals();
+    foreground.remove();
+  };
 }
 

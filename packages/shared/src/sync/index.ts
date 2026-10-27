@@ -67,4 +67,11 @@ export {
   type RealtimeTenantSyncOptions,
 } from "./realtime";
 
+export {
+  calendarSignalChange,
+  calendarSignalTopic,
+  startCalendarSignals,
+  type CalendarSignalsOptions,
+} from "./calendar-signals";
+
 export { labelForOp, relativeTime } from "./format";
