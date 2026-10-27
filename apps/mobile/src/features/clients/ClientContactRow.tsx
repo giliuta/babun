@@ -73,6 +73,10 @@ export default function ClientContactRow({
   // истории: только работы, без событий).
   const more = moreLabel(appointments.filter((a) => !a.kind || a.kind === "work").length);
 
+  // Истории ему не открыли — блока нет (недоступный блок просто отсутствует).
+  // Проверка — до черновика: черновик показывает те же блоки, что будут у
+  // созданного клиента, а не больше.
+  if (!showSummary && !chat) return null;
   // В НОВОМ КЛИЕНТЕ — ТОТ ЖЕ БЛОК (при создании — те же блоки): записей у него ещё нет — так и сказано, словами.
   if (draft) {
     return (
@@ -86,9 +90,6 @@ export default function ClientContactRow({
       </SectionCard>
     );
   }
-  // Истории ему не открыли — блока нет (недоступный блок просто отсутствует).
-  if (!showSummary && !chat) return null;
-
   return (
     <SectionCard
       title="История"
