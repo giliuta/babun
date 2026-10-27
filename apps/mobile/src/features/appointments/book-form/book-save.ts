@@ -59,8 +59,9 @@ export interface BookSaveInput {
   tenantIdForFiles: BookDraft["tenantIdForFiles"];
   queryClientForFiles: BookDraft["queryClientForFiles"];
   leaveBook: () => void;
-  /** Новая запись создана — черновик на телефоне больше не нужен. */
-  onCreated?: () => void;
+  /** Запись создана или правка сохранена — черновик на телефоне больше не
+   *  нужен. */
+  onSaved?: () => void;
 }
 
 /** «Сохранить» / «Создать» and the self-reminder bell (no hooks inside). */
@@ -102,7 +103,7 @@ export function bookSaveActions({
   tenantIdForFiles,
   queryClientForFiles,
   leaveBook,
-  onCreated,
+  onSaved,
 }: BookSaveInput) {
   const reminderToast = (
     res: Awaited<ReturnType<typeof setSelfReminder>>,
@@ -190,6 +191,7 @@ export function bookSaveActions({
           await updateMut.mutateAsync({ id: editId, patch });
         }
         overpayRequestRef.current = null;
+        onSaved?.();
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
@@ -206,7 +208,7 @@ export function bookSaveActions({
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
-        onCreated?.();
+        onSaved?.();
         if (selfReminder && tenantIdForFiles) {
           void setSelfReminder(
             created,

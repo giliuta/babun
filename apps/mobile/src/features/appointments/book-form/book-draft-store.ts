@@ -18,6 +18,13 @@ import type { ServiceOverride } from "@/features/appointments/helpers";
 // «Удалить черновик» в плашке «Черновик восстановлен»; «Не сохранять» на
 // вопросе при выходе. Оплата, файлы и личное напоминание сюда не входят:
 // деньги и снимки с телефона без человека перед глазами не повторяем.
+//
+// ПРАВКА СУЩЕСТВУЮЩЕЙ ЗАПИСИ — ТАК ЖЕ (I-04). Звонок посреди правки
+// выгружал приложение, и изменения пропадали: снимок был только у новой.
+// У правки ячейка одна на компанию — прерванная форма одна, — и снимок
+// помнит, какой запись была при открытии (`base` = её `updated_at`).
+// Запись успели поменять с другого телефона — снимок не поднимается: он
+// лёг бы поверх чужих изменений.
 
 const BASE = "book-draft";
 /** Черновик старше суток уже не «прерванная запись», а забытая: поднимать
@@ -126,4 +133,55 @@ export function paramsWithDraft<P extends {
     date: snap.date,
     time_start: snap.timeStart,
   };
+}
+
+/** Прерванная правка записи `id`, открытой в виде `base` (`updated_at`). */
+export interface BookEditDraft {
+  v: 1;
+  savedAt: number;
+  id: string;
+  base: string;
+  snap: Omit<BookDraftSnapshot, "v" | "savedAt">;
+}
+
+const editKey = (tenantId: string) => tenantPrefKey(`${BASE}-edit`, tenantId);
+
+/** Снимок правки этой записи, если он свежий и запись с тех пор не менялась. */
+export function readEditDraft(
+  tenantId: string | null,
+  id: string,
+  base: string,
+  now: number = Date.now(),
+): BookEditDraft | null {
+  if (!tenantId) return null;
+  try {
+    const saved = getStorage().get<BookEditDraft>(editKey(tenantId));
+    if (!saved || saved.v !== 1 || saved.id !== id || saved.base !== base) return null;
+    if (!(now - saved.savedAt < BOOK_DRAFT_TTL_MS)) return null;
+    return saved;
+  } catch {
+    // см. `readBookDraft`
+    return null;
+  }
+}
+
+export function writeEditDraft(tenantId: string | null, saved: BookEditDraft): void {
+  if (!tenantId) return;
+  try {
+    getStorage().set(editKey(tenantId), saved);
+  } catch {
+    // см. `readBookDraft`
+  }
+}
+
+/** Стирает снимок правки — только этой записи: ячейку чужой прерванной
+ *  правки открытая запись не трогает. */
+export function clearEditDraft(tenantId: string | null, id: string): void {
+  if (!tenantId) return;
+  try {
+    const saved = getStorage().get<BookEditDraft>(editKey(tenantId));
+    if (saved?.id === id) getStorage().remove(editKey(tenantId));
+  } catch {
+    // см. `readBookDraft`
+  }
 }

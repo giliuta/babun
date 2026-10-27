@@ -31,8 +31,8 @@ export interface LeaveGuardInput {
   missingHint?: string;
   navigation: { dispatch: (action: NavigationAction) => void };
   router: ReturnType<typeof useRouter>;
-  /** «Не сохранять» — человек выбросил новую запись: черновик на телефоне
-   *  тоже уходит (`book-draft-store.ts`). */
+  /** «Не сохранять» — человек выбросил новую запись или правку: черновик на
+   *  телефоне тоже уходит (`book-draft-store.ts`). */
   onDiscardDraft?: () => void;
 }
 
@@ -110,7 +110,7 @@ export function useLeaveGuard({
     // уезжала в объект при уходе экрана, хотя человек нажал «Закрыть»
     // (она же считается в `notesDirty`).
     eventObjectNote.discard();
-    if (!isEdit) onDiscardDraft?.();
+    onDiscardDraft?.();
   };
   // ВЫХОД С ИЗМЕНЕНИЯМИ — ВОПРОС «СОХРАНИТЬ?», А НЕ «ЗАКРЫТЬ?». Человек
   // нажал «назад», потому что закончил: чаще всего он хочет сохранить, и
