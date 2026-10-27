@@ -201,4 +201,20 @@ describe("server hygiene migrations", () => {
     assert.match(shared, /service\.bulk_threshold >= 2/);
     assert.match(shared, /service\.bulk_price > 0/);
   });
+
+  test("storage janitor keeps the listed files of a live company and starts switched off", () => {
+    const sql = code(migration("20261027235000_storage_janitor_keep_and_dry_start.sql"));
+    assert.match(sql, /Сначала накатить 20261027224300_storage_janitor/);
+    // Удалённая компания уходит целиком — список держит только живую.
+    assert.match(sql, /and \(c\.reason = ''tenant_gone'' or not exists \(/);
+    assert.match(sql, /revoke all on table public\.storage_janitor_keep from public, anon, authenticated/);
+    assert.match(sql, /cron\.alter_job\(j\.jobid, active := false\)/);
+    for (const file of [
+      "cde75144-9dcc-4ee7-a92e-6c2b63c11736.jpg",
+      "db4b06ec-a585-429b-9f34-b9c1b56c6a2d.heic",
+      "37381e76-ca65-44d4-adce-8c2be13d393e.jpg",
+    ]) {
+      assert.ok(sql.includes(`11365a87-bef9-4f6c-a030-b15083fe646b/${file}`), `${file} в списке «не трогать»`);
+    }
+  });
 });
