@@ -119,7 +119,14 @@ export function usePaymentBlock({
   // человек дописал услуги, «Итого» стало €280, а блок ещё жил числом 160 и
   // объявлял запись оплаченной. Правило и его причина — в `paymentMath`.
   const { outstanding: recordOutstanding, overpaid } = paymentMath(appointment, totalDraft);
-  const outstanding = invoicePay.open ? invoicePay.remainingCents : recordOutstanding;
+  // ЗАПИСЬ, ЗАКРЫТАЯ СВОИМИ ДЕНЬГАМИ, ДОЛГОМ ИНВОЙСА НЕ СТАНОВИТСЯ. Оплата
+  // инвойса зачитывается в запись только в пределах её остатка (сервер,
+  // `settle_appointment_from_invoice_payment`), и сетка с деньгами дня зовут
+  // такую запись оплаченной. Страница же брала остаток инвойса целиком: при
+  // предоплате €260 и инвойсе €300 — «Долг €300» и плитки, просящие ещё
+  // €300. Долг по самой бумаге остаётся на странице инвойса.
+  const invoiceOwes = invoicePay.open && recordOutstanding > 0;
+  const outstanding = invoiceOwes ? invoicePay.remainingCents : recordOutstanding;
   // Итог формы разошёлся с сохранённым: долг уже настоящий, а вот принять по
   // нему деньги сервер откажется — он считает остаток по своей строке. Пока
   // запись не сохранена, плитки стоят погашенными и говорят почему.
