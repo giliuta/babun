@@ -39,7 +39,7 @@ import {
 
 type DbSupabase = SupabaseClient<Database>;
 
-const TAGS_ONLINE_ONLY = "Изменения тегов недоступны без сети — попробуй позже";
+const TAGS_ONLINE_ONLY = "Изменения тегов недоступны без сети — попробуйте позже";
 
 // МАССИВЫ КЛИЕНТА НЕ ПИШУТСЯ ПОВЕРХ БОЛЕЕ СВЕЖЕЙ СТРОКИ.
 //

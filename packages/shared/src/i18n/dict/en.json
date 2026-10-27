@@ -1431,6 +1431,7 @@
  "Изменения сохраняются на телефоне и отправляются, когда связь вернётся. Владелец видит очередь в Кабинет → Синхронизация.": "Changes are saved on the phone and sent when the connection is back. The owner sees the queue in Office → Sync.",
  "Изменения счёта не сохранятся.": "Changes to the account won't be saved.",
  "Изменения тегов недоступны без сети — попробуй позже": "Tag changes aren't available offline – try again later",
+ "Изменения тегов недоступны без сети — попробуйте позже": "Tag changes aren't available offline – try again later",
  "Изменения хранятся только на этом iPhone и отправятся после подключения.": "Changes are stored only on this iPhone and will be sent once you're online.",
  "Изменения хранятся только на этом телефоне и отправятся после подключения.": "Changes are stored only on this phone and will be sent once you're online.",
  "Изменено": "Changed",

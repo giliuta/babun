@@ -1431,6 +1431,7 @@
  "Изменения сохраняются на телефоне и отправляются, когда связь вернётся. Владелец видит очередь в Кабинет → Синхронизация.": "Änderungen werden auf dem Telefon gespeichert und gesendet, sobald die Verbindung zurück ist. Der Inhaber sieht die Warteschlange unter Büro → Synchronisierung.",
  "Изменения счёта не сохранятся.": "Änderungen am Konto werden nicht gespeichert.",
  "Изменения тегов недоступны без сети — попробуй позже": "Tag-Änderungen sind offline nicht möglich — versuchen Sie es später erneut",
+ "Изменения тегов недоступны без сети — попробуйте позже": "Tag-Änderungen sind offline nicht möglich — versuchen Sie es später erneut",
  "Изменения хранятся только на этом iPhone и отправятся после подключения.": "Änderungen sind nur auf diesem iPhone gespeichert und werden nach dem Verbinden gesendet.",
  "Изменения хранятся только на этом телефоне и отправятся после подключения.": "Änderungen sind nur auf diesem Telefon gespeichert und werden nach dem Verbinden gesendet.",
  "Изменено": "Geändert",
