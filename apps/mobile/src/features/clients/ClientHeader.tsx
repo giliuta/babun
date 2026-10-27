@@ -163,6 +163,8 @@ export default function ClientHeader({
           big
           value={client.full_name}
           placeholder="Имя или компания"
+          // Имя и название компании — с заглавной у каждого слова.
+          autoCapitalize="words"
           live={!!draft}
           // Вставку «Мария +357 99…» черновик делит: номер уезжает в телефон,
           // и поле должно сразу показать, что в имени осталось только имя.
