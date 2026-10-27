@@ -2704,6 +2704,7 @@
  "Оплата ещё не синхронизирована или уже отменена": "The payment isn't synced yet or has already been cancelled",
  "Оплата за календари обновлена": "Calendar billing updated",
  "Оплата записи": "Appointment payment",
+ "Оплата записывается только при связи — создайте запись без оплаты или дождитесь сети": "Payment is recorded only when online — create the appointment without payment or wait for the connection",
  "Оплата не открылась": "Couldn't open payment",
  "Оплата не прошла": "Payment failed",
  "Оплата не прошла — обновите карту": "Payment failed — update your card",

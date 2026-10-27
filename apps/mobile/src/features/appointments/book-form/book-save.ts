@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
+import { isOnline } from "@babun/shared/sync";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { setSelfReminder } from "@/features/calendar/reminders";
@@ -34,6 +35,8 @@ export interface BookSaveInput {
   buildPatch: () => Partial<Appointment>;
   effectiveTotal: number;
   overpayRequestRef: MutableRefObject<string | null>;
+  paymentRequestIdRef: MutableRefObject<string>;
+  savingRef: MutableRefObject<boolean>;
   refundOverpayment: BookDraft["refundOverpayment"];
   updateMut: BookDraft["updateMut"];
   booking: BookReferences["booking"];
@@ -75,6 +78,8 @@ export function bookSaveActions({
   buildPatch,
   effectiveTotal,
   overpayRequestRef,
+  paymentRequestIdRef,
+  savingRef,
   refundOverpayment,
   updateMut,
   booking,
@@ -121,10 +126,20 @@ export function bookSaveActions({
   };
 
   const save = async () => {
+    if (savingRef.current) return;
     if (!canSave || bookingBusy) {
       toast(missingHint, "info");
       return;
     }
+    // ОПЛАТА НОВОЙ ЗАПИСИ — ТОЛЬКО ПРИ СВЯЗИ. Без сети запись уходит в очередь,
+    // а оплата следом падала: записи на сервере ещё нет, и набранные деньги
+    // пропадали с уведомлением «оплата не записана».
+    if (!isEdit && pendingPayment && kind === "work" && !isOnline()) {
+      haptics.warning();
+      toast("Оплата записывается только при связи — создайте запись без оплаты или дождитесь сети", "info");
+      return;
+    }
+    savingRef.current = true;
     // Тап по кнопке фокус у поля не отбирает — заметки клиента и объекта
     // дописываем сами, иначе набранное осталось бы в черновике поля.
     clientNote.commit();
@@ -224,7 +239,7 @@ export function bookSaveActions({
                 appointmentId: created.id,
                 accountId: pendingPayment.accountId,
                 amount: send.amount,
-                requestId: randomUuid(),
+                requestId: paymentRequestIdRef.current,
                 kind: send.kind,
                 closeVisit: send.closeVisit,
               })
@@ -256,6 +271,8 @@ export function bookSaveActions({
       haptics.error();
       // Причина сервера словами, без «updateAppointment:».
       notify("Не удалось сохранить", serverReason(e) ?? (e as Error).message);
+    } finally {
+      savingRef.current = false;
     }
   };
 

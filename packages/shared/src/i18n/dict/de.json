@@ -2704,6 +2704,7 @@
  "Оплата ещё не синхронизирована или уже отменена": "Die Zahlung ist noch nicht synchronisiert oder bereits storniert",
  "Оплата за календари обновлена": "Abrechnung der Kalender aktualisiert",
  "Оплата записи": "Terminzahlung",
+ "Оплата записывается только при связи — создайте запись без оплаты или дождитесь сети": "Zahlungen werden nur mit Verbindung erfasst — lege den Termin ohne Zahlung an oder warte auf das Netz",
  "Оплата не открылась": "Zahlung konnte nicht geöffnet werden",
  "Оплата не прошла": "Zahlung fehlgeschlagen",
  "Оплата не прошла — обновите карту": "Zahlung fehlgeschlagen — Karte aktualisieren",

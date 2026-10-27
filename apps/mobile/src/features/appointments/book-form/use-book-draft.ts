@@ -185,6 +185,12 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
   // Номер попытки возврата переплаты — один на это нажатие «Сохранить» и
   // его повторы после обрыва: сервер второго возврата не запишет.
   const overpayRequestRef = useRef<string | null>(null);
+  // Оплата новой записи — один номер попытки на жизнь формы, как и номер
+  // самой записи: повтор «Создать» сервер второй проводкой не запишет.
+  const paymentRequestIdRef = useRef(randomUuid());
+  // «Уже сохраняю» — синхронно, в отличие от isPending мутаций: второй тап в
+  // том же кадре видел старый рендер и уходил вторым сохранением.
+  const savingRef = useRef(false);
   const [reminderOn, setReminderOn] = useState(restored?.reminderOn ?? false);
   const [colorOverride, setColorOverride] = useState<string | null>(restored?.colorOverride ?? null);
   // МЕТКА ЭТОЙ ЗАПИСИ. Новая запись берёт метку дня СРАЗУ (подставляется автоматически по дню, а
@@ -381,6 +387,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
     recordPayment,
     refundOverpayment,
     overpayRequestRef,
+    paymentRequestIdRef,
+    savingRef,
     reminderOn,
     colorOverride,
     setColorOverride,
