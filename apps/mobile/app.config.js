@@ -39,6 +39,12 @@ function imagePickerCameraText(plugins) {
   return text;
 }
 
+// Bundle id iOS у варианта сборки: от него же — id расширения определителя
+// номера и его App Group.
+function iosBundleId(config) {
+  return IS_DEV ? "com.babun.crm.dev" : config.ios?.bundleIdentifier;
+}
+
 module.exports = ({ config }) => ({
   ...config,
   name: IS_DEV ? "Babun Dev" : config.name,
@@ -70,6 +76,9 @@ module.exports = ({ config }) => ({
     ...(GOOGLE_IOS_SCHEME && !IS_DEV
       ? [["@react-native-google-signin/google-signin", { iosUrlScheme: GOOGLE_IOS_SCHEME }]]
       : []),
+    // Определитель номера: расширение Call Directory и общая с ним App Group
+    // (`plugins/with-call-directory.js`).
+    "./plugins/with-call-directory.js",
   ],
   // КАРТА НА ANDROID (выпуск в Google Play, 04.10): там у react-native-maps
   // один провайдер — Google, и без ключа карта точки объекта пустая. Ключ —
@@ -102,8 +111,29 @@ module.exports = ({ config }) => ({
   ios: {
     ...config.ios,
     ...(IS_DEV ? null : { associatedDomains: ["applinks:babun.app"] }),
-    bundleIdentifier: IS_DEV
-      ? "com.babun.crm.dev"
-      : config.ios?.bundleIdentifier,
+    bundleIdentifier: iosBundleId(config),
+  },
+  // EAS подписывает каждую цель отдельным профилем: расширение определителя
+  // номера объявляется здесь, иначе сборка не найдёт для него сертификат.
+  extra: {
+    ...config.extra,
+    eas: {
+      ...config.extra?.eas,
+      build: {
+        experimental: {
+          ios: {
+            appExtensions: [
+              {
+                targetName: "BabunCallDirectory",
+                bundleIdentifier: `${iosBundleId(config)}.CallDirectory`,
+                entitlements: {
+                  "com.apple.security.application-groups": [`group.${iosBundleId(config)}`],
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
   },
 });
