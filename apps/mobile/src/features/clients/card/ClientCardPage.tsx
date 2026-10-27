@@ -232,7 +232,10 @@ export function ClientCardPage({
           draft={
             isDraft
               ? {
-                  valid: e164 !== null,
+                  // Галка — «номер годится». Номер другого клиента не
+                  // годится: сохранить его нельзя, плашка и футер это уже
+                  // говорят, и зелёная галка рядом им противоречила.
+                  valid: e164 !== null && !duplicate,
                   // Вставка «имя + номер» делится: номер — в телефон.
                   onNameChange: onDraftNameChange,
                   onPhoneChange: onDraftPhoneChange,
