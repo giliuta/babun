@@ -102,7 +102,7 @@ export function useImportWizard({
     if (!parsed) throw new Error("Нет разобранного файла");
     if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
     const db = scopeForeign ? tenantBoundClient(tenantId) : supabase;
-    const existingPhones = await fetchExistingPhoneSet(db, tenantId);
+    const existingPhones = await fetchExistingPhoneSet(db, tenantId, country);
     const v = mapAndValidate({
       rows: parsed.rows,
       headers: parsed.headers,

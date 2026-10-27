@@ -123,6 +123,7 @@ export function MappingStep({
             </View>
             <FieldPicker
               t={t}
+              column={h || `Колонка ${idx + 1}`}
               value={mapping[idx] ?? "skip"}
               onChange={(f) => setCol(idx, f)}
             />
