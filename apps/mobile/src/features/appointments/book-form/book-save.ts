@@ -1,12 +1,12 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
 import { isOnline } from "@babun/shared/sync";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { formatEURExact } from "@babun/shared/common/utils/money";
-import { setSelfReminder } from "@/features/calendar/reminders";
+import { getSelfReminder, setSelfReminder } from "@/features/calendar/reminders";
 import type { SelfReminder } from "@/lib/reminder-time";
 import { serverReason } from "@/features/calendar/server-reason";
 import type { Team } from "@/features/reference/queries";
@@ -108,13 +108,21 @@ export function bookSaveActions({
   const reminderToast = (
     res: Awaited<ReturnType<typeof setSelfReminder>>,
     rule: SelfReminder | null,
-  ) => reminderToastWith(toast, res, rule, Platform.OS === "android");
+  ) =>
+    reminderToastWith(toast, res, rule, Platform.OS === "android", () => {
+      void Linking.openSettings();
+    });
 
   const pickSelfReminder = (rule: SelfReminder | null) => {
-    setSelfReminderRule(rule);
     setReminderSheetOpen(false);
     // У сохранённой записи пуш ставится сразу — это не поле записи, его не
     // надо «сохранять»; у новой — после создания, когда появится id.
+    //
+    // КОЛОКОЛЬЧИК — ПО ОТВЕТУ, А НЕ ДО НЕГО (CAL-40). Он загорался в момент
+    // выбора, а при запрещённых уведомлениях правило не хранится
+    // (`setSelfReminder`): тост красный, колокольчик синий, и человек думал,
+    // что напоминание стоит. Теперь колокольчик показывает то, что лежит на
+    // телефоне после ответа.
     if (isEdit && editing && tenantIdForFiles) {
       void setSelfReminder(
         { ...editing, date, time_start: timeStart },
@@ -122,8 +130,13 @@ export function bookSaveActions({
         team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         tenantIdForFiles,
         client?.full_name,
-      ).then((res) => reminderToast(res, rule));
+      ).then((res) => {
+        setSelfReminderRule(getSelfReminder(editing.id));
+        reminderToast(res, rule);
+      });
+      return;
     }
+    setSelfReminderRule(rule);
   };
 
   const save = async () => {

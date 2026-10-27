@@ -24,3 +24,9 @@ test("оплата новой записи — один номер попытк�
 test("без сети «Создать» с оплатой не отправляет запись", () => {
   assert.match(save, /if \(!isEdit && pendingPayment && kind === "work" && !isOnline\(\)\) \{/);
 });
+
+test("колокольчик правки загорается по ответу, а не до него (CAL-40)", () => {
+  // Запрет уведомлений правило не хранит — колокольчик показывает сохранённое.
+  assert.match(save, /\.then\(\(res\) => \{\s*setSelfReminderRule\(getSelfReminder\(editing\.id\)\);/);
+  assert.match(save, /void Linking\.openSettings\(\);/);
+});
