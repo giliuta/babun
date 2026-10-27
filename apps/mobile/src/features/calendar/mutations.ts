@@ -23,7 +23,6 @@ import {
 import type { Json } from "@babun/shared/db/database.types";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
-  undoAppointmentPayment,
 } from "@babun/shared/db/repositories/finance-transactions";
 import { supabase } from "@/lib/supabase";
 import { preflightQuotaForCreate } from "@/lib/quota";
@@ -288,19 +287,3 @@ export function useTrashAppointment() {
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
-
-/** Server-only because the appointment and its auto-ledger row must commit or
- * roll back together. It deliberately bypasses the offline mutation queue. */
-export function useUndoAppointmentPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: (appointmentId: string) =>
-      undoAppointmentPayment(supabase, appointmentId),
-    onSuccess: () => {
-      for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
-    },
-    meta: { errorHandled: true },
-  });
-}
-

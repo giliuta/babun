@@ -395,7 +395,7 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("удалённая запись уходит с сетки вместе с тостом, а не после перечитывания", () => {
     const src = readModuleSource(resolve(here, "mutations.ts"));
-    const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
+    const del = src.slice(src.indexOf("export function useDeleteAppointment"));
     assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
 

@@ -38,16 +38,6 @@ const FINANCE_VIEWS = new Set([
 /** Команда — буквы, цифры, «_» и «-»: в адрес не уедет ни «&», ни пробел. */
 const TEAM_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-/** Метка дороги назад во вкладку денег: разрез, счёт его ленты и команда
- *  чипа. Разрез «Все» меткой не называется — он и есть корень вкладки. */
-export function financesFrom(
-  view: string | null | undefined,
-  options: { account?: string | null; team?: string | null } = {},
-): string {
-  const cut = view && view !== "all" ? `:${view}${options.account ? `:${options.account}` : ""}` : "";
-  return `finances${cut}${options.team ? `@${options.team}` : ""}`;
-}
-
 export function resolveReturnTo(from: string | undefined): string | null {
   if (!from) return null;
   if (from === "finances" || from.startsWith("finances:") || from.startsWith("finances@")) {
