@@ -21,12 +21,14 @@ const config = read("../../config.toml");
 
 const BUCKETS = ["appointment-photos", "client-attachments", "partner-files", "receipts", "tenant-logos"];
 
-test("удаление аккаунта: компании владельца снимаются ДО каскада, файлы — после", () => {
+test("удаление аккаунта: компании — ДО каскада, файлы — ПОСЛЕ удаления входа", () => {
   for (const src of [accountDelete, cleanup]) {
     const owned = src.indexOf("await ownedTenants(");
     const rpc = src.indexOf('"delete_sole_owned_tenants_for_account"');
+    const hard = src.lastIndexOf("auth.admin.deleteUser(");
     const purge = src.indexOf("await purgeGoneTenantsStorage(");
-    assert.ok(owned > 0 && rpc > owned && purge > rpc, "порядок: членства → каскад → снос файлов");
+    assert.ok(owned > 0 && rpc > owned && hard > rpc && purge > hard,
+      "порядок: членства → каскад → удаление входа → снос файлов");
   }
 });
 

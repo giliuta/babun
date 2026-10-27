@@ -152,11 +152,6 @@ Deno.serve(async (request) => {
     deletedTenantCount: deleted,
   });
 
-  // ФАЙЛЫ УШЕДШИХ КОМПАНИЙ — СРАЗУ. Каскад унёс строки, а фото записей,
-  // чеки, файлы клиентов и логотипы (бакет публичный) остались бы навсегда.
-  // Сбой здесь удаление не останавливает: остаток подберёт `storage-janitor`.
-  await purgeGoneTenantsStorage(service, ownedTenantIds);
-
   const { error: hardDeleteError } = await service.auth.admin.deleteUser(
     user.id,
     false,
@@ -172,6 +167,13 @@ Deno.serve(async (request) => {
     });
     return json(200, { ok: true, pending_cleanup: true });
   }
+
+  // ФАЙЛЫ УШЕДШИХ КОМПАНИЙ — ПОСЛЕ ОКОНЧАТЕЛЬНОГО УДАЛЕНИЯ ВХОДА. Сорвись оно
+  // после сноса — человек остался бы с аккаунтом, но без файлов. Каскад унёс
+  // строки, а фото, чеки, файлы клиентов и логотипы (бакет публичный)
+  // остались бы навсегда; сбой здесь не страшен — остаток подберёт
+  // `storage-janitor`.
+  await purgeGoneTenantsStorage(service, ownedTenantIds);
 
   // No auth row remains, so no retry is required. A stale log is harmless,
   // but remove it on the happy path to retain only actionable cleanup work.
