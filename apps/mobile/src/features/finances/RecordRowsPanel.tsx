@@ -11,6 +11,7 @@ import {
   moneySign,
 } from "@babun/shared/common/utils/money";
 import { Trash2 } from "lucide-react-native";
+import { DayDivider } from "@/components/ui/DayDivider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SELECT_SIDE } from "@/components/ui/select-rows";
@@ -117,29 +118,24 @@ export function RecordRowsPanel({
     // своего фона строки проезжали сквозь неё, и подпись дня ложилась поверх
     // чужого текста.
     return (
-      <View
-        className="flex-row items-center justify-between px-4 pb-1.5 pt-3"
-        style={{ backgroundColor: t.canvas }}
-      >
-        <Text
-          className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: t.sub }}
-        >
-          {/* С годом — разделитель дня. */}
-          {humanDayYear(section.title)}
-        </Text>
-        {/* День без пришедших и ушедших денег (одни долги, перевод между
-            своими счетами) итога не печатает: серый «€0» над долгом €200
-            читался как «денег ноль при долге» — число без смысла. */}
-        {netSign === 0 && !countEveryTone ? null : (
-          <Text
-            className="text-xs font-semibold"
-            style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
-          >
-            {formatEUR(section.net)}
-          </Text>
-        )}
-      </View>
+      // С годом — разделитель дня.
+      <DayDivider
+        label={humanDayYear(section.title)}
+        background={t.canvas}
+        right={
+          // День без пришедших и ушедших денег (одни долги, перевод между
+          // своими счетами) итога не печатает: серый «€0» над долгом €200
+          // читался как «денег ноль при долге» — число без смысла.
+          netSign === 0 && !countEveryTone ? null : (
+            <Text
+              className="text-xs font-semibold"
+              style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
+            >
+              {formatEUR(section.net)}
+            </Text>
+          )
+        }
+      />
     );
   };
 

@@ -2,6 +2,7 @@ import { Text, View, useWindowDimensions } from "react-native";
 import { CalendarCheck, CalendarClock, CalendarX2, type LucideIcon } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientInvoicing } from "@babun/shared/local/selectors/client-stats";
+import { DayDivider } from "@/components/ui/DayDivider";
 import { SelectRow } from "@/components/ui/select-rows";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
@@ -27,18 +28,7 @@ export function visitDay(ymd: string): string {
 /** Заголовок дня над плашками — тем же шрифтом и местом, что день в
  *  «Финансах» (`RecordRowsPanel`). */
 export function VisitDayHeader({ date }: { date: string }) {
-  const t = useThemeColors();
-  return (
-    <View className="px-4 pb-1.5 pt-3">
-      <Text
-        maxFontSizeMultiplier={1.3}
-        className="text-xs font-semibold uppercase tracking-wider"
-        style={{ color: t.sub }}
-      >
-        {visitDay(date)}
-      </Text>
-    </View>
-  );
+  return <DayDivider label={visitDay(date)} />;
 }
 
 /** Цвет числа — тем же языком, что метка визита в списке клиентов. */

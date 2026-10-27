@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, type Href } from "expo-router";
 import { RotateCcw, Trash2 } from "lucide-react-native";
 import { isOnline } from "@babun/shared/sync";

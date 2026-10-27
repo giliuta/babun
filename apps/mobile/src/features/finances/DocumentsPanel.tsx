@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactElement } from "react";
 import {
   SectionList,
-  Text,
   View,
   type RefreshControlProps,
 } from "react-native";
@@ -19,6 +18,7 @@ import {
   Share2,
   Trash2,
 } from "lucide-react-native";
+import { DayDivider } from "@/components/ui/DayDivider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -291,17 +291,7 @@ export function DocumentsPanel({
         // День — подписью над плашками, как в «Истории» и «Файлах» клиента.
         // Прилипает при прокрутке — фон холста закрывает строки под ней.
         renderSectionHeader={({ section }) => (
-          <View
-            className="flex-row items-center px-4 pb-1.5 pt-3"
-            style={{ backgroundColor: t.canvas }}
-          >
-            <Text
-              className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: t.sub }}
-            >
-              {humanDayYear(section.title)}
-            </Text>
-          </View>
+          <DayDivider label={humanDayYear(section.title)} background={t.canvas} />
         )}
         ListHeaderComponent={header}
         // Плашки — с воздухом между ними, без швов.
