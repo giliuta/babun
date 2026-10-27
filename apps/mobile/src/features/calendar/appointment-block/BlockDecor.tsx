@@ -5,6 +5,7 @@ import type { BlockMoney } from "@/features/calendar/block-status";
 import { useThemeColors } from "@/theme/colors";
 import { BLOCK_TEXT } from "@/components/ui/color-contrast";
 import { BLOCK_GLASS } from "@/components/ui/RecordMark";
+import { liveTimeLines } from "./live-time-lines";
 
 /** Блик — общий со знаком записи в настройках (`BLOCK_GLASS`). */
 const GLASS = BLOCK_GLASS;
@@ -78,25 +79,39 @@ export function LiveTimeBadge({ liveStart }: { liveStart: string }) {
       style={{
         position: "absolute",
         top: 2,
+        left: 2,
         right: 2,
         zIndex: 2,
-        paddingHorizontal: 5,
-        borderRadius: t.radius.card,
-        backgroundColor: "rgba(11,18,32,0.78)",
+        alignItems: "flex-end",
       }}
     >
-      <Text
-        maxFontSizeMultiplier={1.2}
+      <View
         style={{
-          color: BLOCK_TEXT,
-          fontSize: 13,
-          lineHeight: 18,
-          fontWeight: "700",
-          fontVariant: ["tabular-nums"],
+          maxWidth: "100%",
+          paddingHorizontal: 4,
+          borderRadius: t.radius.card,
+          backgroundColor: "rgba(11,18,32,0.78)",
         }}
       >
-        {liveStart}
-      </Text>
+        {liveTimeLines(liveStart).map((line) => (
+          <Text
+            key={line}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            maxFontSizeMultiplier={1.2}
+            style={{
+              color: BLOCK_TEXT,
+              fontSize: 13,
+              lineHeight: 17,
+              fontWeight: "700",
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {line}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }

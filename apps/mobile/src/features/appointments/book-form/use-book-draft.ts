@@ -260,6 +260,12 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
       setCity(editing.city ?? null);
       if (editing.kind === "work") {
         setComment(editing.comment ?? "");
+        // Ссылка — сразу, а не эффектом следующего кадра: снимок «как было»
+        // (`use-leave-guard`) снимается в этом же коммите и читает заметку
+        // отсюда. С пустой ссылкой любая запись с заметкой считалась
+        // изменённой, и «Назад» спрашивал «Сохранить изменения?» у того, кто
+        // ничего не трогал.
+        commentNow.current = editing.comment ?? "";
       } else {
         setEventTitle(editing.comment ?? "");
         setEventColor(editing.color_override ?? null);
