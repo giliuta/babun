@@ -81,7 +81,10 @@ function ClientObjectsScreen() {
       ) : !client ? (
         // Клиента нет (удалён, нет связи) — словами, а не вечной загрузкой.
         <EmptyState fill title="Клиент не найден" />
-      ) : !access.objects.show ? null : (
+      ) : !access.objects.show ? (
+        // Блок закрыт правом — словами, а не пустым экраном с одной шапкой.
+        <EmptyState fill title="Нет доступа" />
+      ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <ClientObjectsSection
             client={client}

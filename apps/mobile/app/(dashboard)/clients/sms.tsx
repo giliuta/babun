@@ -69,7 +69,10 @@ function ClientSmsScreen() {
     // Нижнюю зону держит таб-бар — как у «Истории» и «Файлов».
     <Screen edges={inTab ? ["top"] : undefined}>
       <ScreenHeader title="SMS" subtitle={client?.full_name || undefined} />
-      {!access.sms.show ? null : log.isLoading ? (
+      {!access.sms.show ? (
+        // Блок закрыт правом — словами, а не пустым экраном с одной шапкой.
+        <EmptyState fill title="Нет доступа" />
+      ) : log.isLoading ? (
         <EmptyState state="loading" fill />
       ) : log.isError && !log.data ? (
         <EmptyState
