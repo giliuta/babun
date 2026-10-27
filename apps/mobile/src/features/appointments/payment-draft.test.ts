@@ -71,6 +71,10 @@ describe("pendingPaymentToSend — деньги новой записи по ф�
   test("итог обнулили — платить нечего", () => {
     assert.equal(pendingPaymentToSend({ amount: 100, full: true }, { ...form, total: 0 }, NOW), null);
   });
+  test("часть больше итога, урезанного после тапа, — уходит весь итог", () => {
+    const send = pendingPaymentToSend({ amount: 80, full: false }, { ...form, total: 60 }, NOW);
+    assert.equal(send?.amount, 60);
+  });
 });
 
 describe("visitStarted", () => {

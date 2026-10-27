@@ -275,14 +275,19 @@ export function closesVisit(
  * тапа, а закрытие визита — по виду, а не по `closesVisit`.
  *
  * `full` — тап без поля суммы: «вся сумма», то есть итог формы на момент
- * создания. Сумма из поля — как вписали. Пусто — платить нечего.
+ * создания. Сумма из поля — как вписали, но не больше итога: часть €80 при
+ * итоге, урезанном потом до €60, сервер отбил бы («Запись создана, оплата
+ * не записана») — уходит вся сумма. Пусто — платить нечего.
  */
 export function pendingPaymentToSend(
   pending: { amount: number; full: boolean },
   form: Pick<Appointment, "date" | "time_start" | "status"> & { total: number },
   now: BusinessNow,
 ): { amount: number; kind: PaymentKind; closeVisit: boolean } | null {
-  const amountCents = Math.round((pending.full ? form.total : pending.amount) * 100);
+  const totalCents = Math.round(form.total * 100);
+  const amountCents = pending.full
+    ? totalCents
+    : Math.min(Math.round(pending.amount * 100), totalCents);
   if (amountCents <= 0) return null;
   const kind = paymentKindAt(form, now);
   return { amount: amountCents / 100, kind, closeVisit: closesVisit(form, kind, now) };
