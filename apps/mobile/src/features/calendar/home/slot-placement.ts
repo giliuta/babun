@@ -117,19 +117,28 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
     // копия встаёт туда же, где оригинал, какой бы чип ни был выбран.
     if (isCrew) {
       const attempt = `copy|${apt.id}|${dateYmd}|${timeStart}`;
+      const copyId = attemptId(attempt);
       memberCopy.mutate(
         {
           sourceId: apt.id,
           date: dateYmd,
           timeStart,
           timeEnd: addMinutesHM(timeStart, moveWindowMin),
-          id: attemptId(attempt),
+          id: copyId,
         },
         {
           onSuccess: () => {
             settleAttempt(attempt);
             haptics.success();
-            toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success");
+            // Откат — как у владельца: копия уже стоит, «Отменить» её
+            // убирает (право удаления проверяет сервер).
+            toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
+              label: "Отменить",
+              onPress: () =>
+                deleteAppt.mutate(copyId, {
+                  onError: (e) => toast(serverReason(e) ?? "Не удалось убрать копию", "error"),
+                }),
+            });
           },
           onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
         },
