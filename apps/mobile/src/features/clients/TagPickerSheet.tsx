@@ -36,7 +36,14 @@ export function TagPickerSheet({
   selected,
   onApply,
   onClose,
+  title = "Теги клиента",
+  markMain = true,
 }: {
+  /** Заголовок: у пачки клиентов — что делаем («Поставить теги»). */
+  title?: string;
+  /** Подпись «Главный» у первого отмеченного. Снятию тегов порядок не
+   *  важен — подпись соврала бы. */
+  markMain?: boolean;
   visible: boolean;
   /** Шторка открыта по смыслу. Шестерёнка паркует её (`visible` ложно), но
    *  не закрывает: отметки до похода в настройки должны дожить до возврата.
@@ -82,7 +89,7 @@ export function TagPickerSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Теги клиента"
+      title={title}
       headerAction={
         onSettings ? (
           <Pressable
@@ -126,7 +133,7 @@ export function TagPickerSheet({
               // ГЛАВНЫЙ — ПЕРВЫЙ ОТМЕЧЕННЫЙ: его покажет плитка тега на карточке
               // и строка списка. Без подписи правило угадывалось только по
               // плитке после «Применить».
-              subtitle={draft[0] === tag.id && draft.length > 1 ? "Главный" : undefined}
+              subtitle={markMain && draft[0] === tag.id && draft.length > 1 ? "Главный" : undefined}
               accessibilityRole="checkbox"
               onPress={() => toggle(tag.id)}
             />

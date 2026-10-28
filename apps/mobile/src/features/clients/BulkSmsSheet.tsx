@@ -55,7 +55,8 @@ import {
   bulkBodyFor,
   bulkFillable,
   bulkProblem,
-  smsDigits,
+  bulkSmsAudience,
+  bulkSmsAudienceLine,
 } from "./bulk-sms";
 
 export function BulkSmsSheet({
@@ -98,11 +99,10 @@ export function BulkSmsSheet({
   const viaService = canService && mode === "service";
   const fromTeam = pickedTeam && senders[pickedTeam] ? pickedTeam : (senderTeams[0] ?? null);
 
-  const withPhone = useMemo(
-    () => recipients.filter((c) => smsDigits(c).length > 0),
-    [recipients],
-  );
-  const noPhone = recipients.length - withPhone.length;
+  // Только те, кому сообщение уйдёт: с номером, не просившие не писать и не
+  // в чёрном списке (`bulkSmsAudience`) — так же решает сервер.
+  const audience = useMemo(() => bulkSmsAudience(recipients), [recipients]);
+  const withPhone = audience.reachable;
 
   // [Компания] — имя своей компании: от её команды идёт и рассылка.
   const company = useTenant().data?.name ?? null;
@@ -232,7 +232,7 @@ export function BulkSmsSheet({
       onClose={guard.close}
       onExited={guard.onExited}
       title="SMS-рассылка"
-      subtitle={`${withPhone.length} ${countWordRu(withPhone.length, "получатель", "получателя", "получателей")}${noPhone > 0 ? ` · ${noPhone} без телефона ${countWordRu(noPhone, "пропущен", "пропущены", "пропущены")}` : ""}`}
+      subtitle={bulkSmsAudienceLine(audience)}
       // КАНОНИЧЕСКИЙ ЛИСТ, А НЕ СЫРОЙ Modal. Вопрос «Отправить через
       // сервис?» ложится в окно этого листа (`sheet-overlay.tsx`); поверх
       // сырого Modal он был третьим окном, iOS его не показывал, и невидимый

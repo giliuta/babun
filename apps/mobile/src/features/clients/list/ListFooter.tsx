@@ -23,6 +23,13 @@ export function ListFooter({ list }: { list: ClientsList }) {
     setSmsOpen,
     onExport,
     onBulkDelete,
+    canTags,
+    canTeam,
+    canSource,
+    openTags,
+    openTeam,
+    openSource,
+    bulkBusy,
     clientsInPlan,
     chipGuest,
     createHere,
@@ -56,6 +63,10 @@ export function ListFooter({ list }: { list: ClientsList }) {
           count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
+          onTags={canTags ? openTags : undefined}
+          onTeam={canTeam ? openTeam : undefined}
+          onSource={canSource ? openSource : undefined}
+          busy={bulkBusy}
           onDelete={caps.manage ? onBulkDelete : undefined}
         />
       ) : (
