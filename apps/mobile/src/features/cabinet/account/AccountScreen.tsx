@@ -57,7 +57,7 @@ export function AccountScreen() {
             />
             <ColumnDoorRow
               separated
-              label="Зарегистрирован"
+              label="Регистрация"
               value={registered}
               placeholder="—"
               column={PERSON_COLUMN}
