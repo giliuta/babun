@@ -4,6 +4,8 @@ import { describe, test } from "node:test";
 import { cardAccess, type TeamBlocksOn } from "./card-access";
 
 import { statsByBlocks } from "./card-access";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { EMPTY_STATS } from "@babun/shared/local/selectors/client-stats/types";
 
 const ALL_ON: TeamBlocksOn = {
   note: true, people: true, objects: true, labels: true, tags: true, personal: true, files: true, requisites: true,
@@ -85,10 +87,11 @@ describe("карточка клиента: блоки по команде и п�
 });
 
 describe("сводка клиента по его правам", () => {
-  const stats = {
+  const stats: ClientStats = {
     visits: 4, totalSpent: 400, lastVisitDate: "2026-09-20", lastVisitDays: 10,
     nextApt: { date: "2026-10-03", time: "13:30" }, nextAptDays: 3, medianGapDays: 30,
-    unclosedVisits: 1, debt: 300, expectedRevenue: 80,
+    unclosedVisits: 1, lastUnclosedDate: "2026-09-25", pastOpenRecords: 1,
+    debt: 300, expectedRevenue: 80, lastTeamId: "team-1", ageDays: 40, birthdayInDays: 5,
   };
   test("владелец — как есть", () => {
     assert.equal(statsByBlocks({}, stats), stats);
@@ -110,5 +113,18 @@ describe("сводка клиента по его правам", () => {
     assert.equal(s.debt, 0);
     assert.equal(s.totalSpent, 0);
     assert.equal(s.expectedRevenue, 0);
+  });
+  test("без «Истории» пусто ВСЁ, что из записей, — и дата незакрытой записи", () => {
+    const s = statsByBlocks({ blocks: { clients: "read", "clients.history": "off" } }, stats);
+    assert.equal(s.lastUnclosedDate, "");
+    // Сторож перечня: каждое поле сводки, кроме полей карточки, обязано
+    // уйти в пустое — новое поле не проскочит мимо маски.
+    for (const key of Object.keys(EMPTY_STATS) as (keyof ClientStats)[]) {
+      if (key === "ageDays" || key === "birthdayInDays") {
+        assert.equal(s[key], stats[key], key);
+      } else {
+        assert.deepEqual(s[key], EMPTY_STATS[key], key);
+      }
+    }
   });
 });

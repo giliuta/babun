@@ -1,4 +1,6 @@
 import type { Client } from "@babun/shared/local/clients";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { EMPTY_STATS } from "@babun/shared/local/selectors/client-stats/types";
 import type { ClientsCapabilities } from "@/session/clients-company";
 import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 
@@ -122,42 +124,27 @@ export function cardAccess({
   };
 }
 
+// МАСКА — ВСЯ СВОДКА, КРОМЕ ПОЛЕЙ КАРТОЧКИ: перечень полей истории отставал
+// от сводки, и дата незакрытой записи (`lastUnclosedDate`) проступала жёлтым у
+// того, кому «История» скрыта. Новое поле сводки закрыто по умолчанию;
+// открыть его — вписать сюда.
+const NOT_FROM_HISTORY = ["ageDays", "birthdayInDays"] as const satisfies readonly (keyof ClientStats)[];
+
+const HISTORY_HIDDEN: Partial<ClientStats> = Object.fromEntries(
+  Object.entries(EMPTY_STATS).filter(
+    ([key]) => !(NOT_FROM_HISTORY as readonly string[]).includes(key),
+  ),
+);
+
 /** СВОДКА КЛИЕНТА ПО ЕГО ПРАВАМ. Сводку считает экран
  *  из записей, которые сотрудник видит по правам КАЛЕНДАРЯ, — и без маски
  *  долг, выручка и «был …» пролезли бы в строку списка, сортировку «по
  *  долгу», фильтр «Должники» и строку истории в записи мимо прав КЛИЕНТА.
  *  Без «Истории» — ни денег (они идут вместе с ней), ни визитов и дат.
  *  Строка без `blocks` (владелец) — как есть. */
-export function statsByBlocks<S extends {
-  visits: number;
-  totalSpent: number;
-  lastVisitDate: string;
-  lastVisitDays: number | null;
-  nextApt: unknown;
-  nextAptDays: number | null;
-  medianGapDays: number | null;
-  unclosedVisits: number;
-  debt: number;
-  expectedRevenue: number;
-}>(client: Pick<Client, "blocks">, stats: S): S {
+export function statsByBlocks(client: Pick<Client, "blocks">, stats: ClientStats): ClientStats {
   if (!client.blocks) return stats;
   // Деньги — вместе с «Историей».
-  const noHistory = clientBlockLevel(client, "clients.history") === "hidden";
-  const noMoney = noHistory;
-  if (!noMoney && !noHistory) return stats;
-  return {
-    ...stats,
-    ...(noMoney ? { totalSpent: 0, debt: 0, expectedRevenue: 0 } : {}),
-    ...(noHistory
-      ? {
-          visits: 0,
-          lastVisitDate: "",
-          lastVisitDays: null,
-          nextApt: null,
-          nextAptDays: null,
-          medianGapDays: null,
-          unclosedVisits: 0,
-        }
-      : {}),
-  };
+  if (clientBlockLevel(client, "clients.history") !== "hidden") return stats;
+  return { ...stats, ...HISTORY_HIDDEN };
 }
