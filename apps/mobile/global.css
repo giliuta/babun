@@ -34,3 +34,12 @@
   --color-fill: #eef1f5; /* idle chip / segmented track / inset input */
   --color-canvas: #f4f6f9; /* app ground — lifts white surfaces for free */
 }
+
+/* ФОКУС ПОЛЯ ВВОДА — НАШ, НЕ БРАУЗЕРНЫЙ (веб). Браузер рисовал вокруг
+   каждого поля свою рамку фокуса: второй синий (rgb(0,95,204)) мимо акцента
+   и прямые углы мимо радиуса поля. Фокус показывает кольцо акцентом на рамке
+   самого поля (`inputFrame` в components/ui/Field.tsx). */
+input:focus,
+textarea:focus {
+  outline: none;
+}

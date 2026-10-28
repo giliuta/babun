@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { Check, MailCheck, Send, UserRound, type LucideIcon } from "lucide-react-native";
 
 import { FieldRow } from "@/components/ui/card-rows";
+import { Field } from "@/components/ui/Field";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { GUTTER } from "@/components/ui/tokens";
@@ -103,25 +104,30 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
   if (p.emailOnly) {
     return (
       <SectionCard title="Партнёр" padded={false}>
-        <FieldRow
-          stacked
-          hideLabel
-          big
-          label="Почта"
-          placeholder="Почта"
-          value={p.identity.email}
-          live={p.emailEditable}
-          readOnly={!p.emailEditable}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoFocus={p.emailEditable && p.autoFocusName}
-          inputRef={p.refs?.email}
-          inputColor={danger}
-          valueColor={danger}
-          trailing={p.emailState === "valid" ? check : null}
-          onEditEnd={p.onEmailEditEnd}
-          onSave={p.onEmailChange ?? noop}
-        />
+        {/* ПОЧТА — ПОЛЕ ФОРМЫ, А НЕ СТРОКА КАРТОЧКИ. Здесь её вводят с нуля,
+            и строка `FieldRow` без рамки на вебе была голым вводом в 20px
+            высотой: не видно, куда печатать. Поле — то же, что у пароля и
+            почты аккаунта (`Field`, DS «Input 52»). */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          <Field
+            label=""
+            accessibilityLabel="Почта"
+            placeholder="Почта"
+            value={p.identity.email}
+            editable={p.emailEditable}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="email"
+            autoFocus={p.emailEditable && p.autoFocusName}
+            inputRef={p.refs?.email}
+            style={danger ? { color: danger } : undefined}
+            trailing={p.emailState === "valid" ? check : null}
+            onChangeText={p.onEmailChange ?? noop}
+            onBlur={p.onEmailEditEnd}
+          />
+        </View>
       </SectionCard>
     );
   }

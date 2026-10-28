@@ -3,7 +3,7 @@ import { Pressable, TextInput, View } from "react-native";
 import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { AppearanceSheet, AppearanceTile } from "./AppearanceSheet";
-import { FieldLabel } from "./Field";
+import { FieldLabel, INPUT_HEIGHT, INPUT_RING, inputFrame, useInputFocus } from "./Field";
 import { type IconPreset } from "./icon-set";
 import { ICON } from "./tokens";
 import { TourTarget } from "@/components/tour/TourTarget";
@@ -93,6 +93,7 @@ export function NameField({
   labelAction?: ReactNode;
 }) {
   const t = useThemeColors();
+  const focus = useInputFocus({ onBlur });
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? (
@@ -112,15 +113,10 @@ export function NameField({
         )
       ) : null}
       <View
-        style={{
-          borderRadius: t.radius.input,
-          borderCurve: "continuous",
-          borderWidth: 1,
-          borderColor: t.separator,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 16,
-        }}
+        style={[
+          inputFrame(t, focus.focused),
+          { flexDirection: "row", alignItems: "center", paddingLeft: 16 },
+        ]}
       >
         <TextInput
           value={name}
@@ -131,12 +127,13 @@ export function NameField({
           keyboardAppearance="light"
           autoFocus={autoFocus}
           maxLength={maxLength}
-          onBlur={onBlur}
+          onFocus={focus.onFocus}
+          onBlur={focus.onBlur}
           returnKeyType="done"
           onSubmitEditing={onBlur}
           style={{
             flex: 1,
-            minHeight: 48,
+            minHeight: INPUT_HEIGHT - 2 * INPUT_RING,
             paddingRight: 16,
             paddingVertical: 12,
             fontSize: 15,
@@ -234,6 +231,8 @@ export function NameColorField({
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
+  // Кольцо фокуса — только у поля в рамке; строка карточки (`bare`) его не рисует.
+  const focus = useInputFocus({ onBlur });
 
   return (
     // ВЫБОР ПРИЕЗЖАЕТ ШТОРКОЙ, А НЕ РАСТЁТ ИЗ СТРОКИ. Плавающая карточка над
@@ -259,14 +258,7 @@ export function NameColorField({
       ) : null}
       <View
         style={{
-          ...(bare
-            ? { minHeight: minHeight ?? 52 }
-            : {
-                borderRadius: t.radius.input,
-                borderCurve: "continuous",
-                borderWidth: 1,
-                borderColor: t.separator,
-              }),
+          ...(bare ? { minHeight: minHeight ?? INPUT_HEIGHT } : inputFrame(t, focus.focused)),
           flexDirection: "row",
           alignItems: "center",
           paddingLeft: 16,
@@ -310,12 +302,13 @@ export function NameColorField({
           autoCapitalize={autoCapitalize}
           autoFocus={autoFocus}
           maxLength={maxLength}
-          onBlur={onBlur}
+          onFocus={focus.onFocus}
+          onBlur={focus.onBlur}
           returnKeyType="done"
           onSubmitEditing={onBlur}
           style={{
             flex: 1,
-            minHeight: 48,
+            minHeight: bare ? 48 : INPUT_HEIGHT - 2 * INPUT_RING,
             paddingRight: trailing ? 12 : 16,
             paddingVertical: 12,
             // ПОДСКАЗКА НА ОДНОЙ ЛИНИИ С ПЛИТКОЙ. Без явной высоты строки iOS
