@@ -6,7 +6,7 @@ import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { notify } from "@/lib/notify";
@@ -40,7 +40,7 @@ import { useCloseFlow } from "./use-close-flow";
 // деньги: в «Итого» записи и клавишами операции; счёт только показывает,
 // сколько VAT на нём к уплате (`AccountMoneyGroup`).
 //
-// «ПРИМЕНИТЬ» В ФУТЕРЕ: в настройках счёта — кнопка «Применить». Имя, вид и «В оплате
+// «СОХРАНИТЬ» В ФУТЕРЕ: лист правки счёта сам пишет счёт. Имя, вид и «В оплате
 // записи» копятся черновиком и уходят на сервер одной правкой; закрыть лист с
 // черновиком — только после вопроса. Действия («Перевести», «Выписка»,
 // «Скрыть», «Удалить») — сразу, это не настройки; черновик они не трогают.
@@ -83,7 +83,7 @@ export function EditAccountSheet({
   const alertError: AlertError = (title) => (e) =>
     notify(title, isOnline() ? (e as Error).message : OFFLINE_ACCOUNT_EDIT);
   const save = accountSaver(update, accountId, alertError);
-  // Правки листа живут до «Применить» — перевод их не закрывает (`use-close-flow`).
+  // Правки листа живут до «Сохранить» — перевод их не закрывает (`use-close-flow`).
   const dirtyRef = useRef(false);
   const flow = useCloseFlow({ onDone: onClose, alertError, canFinishAfterTransfer: () => !dirtyRef.current });
 
@@ -114,7 +114,7 @@ export function EditAccountSheet({
     online,
   });
   const saved = view.kind === "edit" ? view.account : null;
-  // Лист показывает счёт С ЧЕРНОВИКОМ поверх — как он станет после «Применить».
+  // Лист показывает счёт С ЧЕРНОВИКОМ поверх — как он станет после «Сохранить».
   const account = saved ? { ...saved, ...pending } : null;
 
   const guard = useGuardedClose({
@@ -196,9 +196,9 @@ export function EditAccountSheet({
           // Лист без полей (`padded={false}`): отступ у кнопки свой — та же
           // ширина, что у кнопок внизу страниц. Кнопка на месте всегда — и
           // пока счёт грузится, и без сети: лист не меняет высоту.
-          <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE, paddingTop: 8 }}>
             <GradientButton
-              label="Применить"
+              label="Сохранить"
               disabled={!account || !dirty || update.isPending}
               onPress={() => void apply()}
             />
@@ -229,7 +229,7 @@ export function EditAccountSheet({
                   // «СКРЫТЬ» ⇄ «ПОКАЗАТЬ» — СРАЗУ, БЕЗ ВОПРОСА (скрытый счёт работает,
                   // виден только на странице «Счета»).
                   // Прятать — вместе с «В оплате записи»: черновик этого
-                  // тумблера уходит, иначе «Применить» упёрся бы в запрет базы.
+                  // тумблера уходит, иначе «Сохранить» упёрся бы в запрет базы.
                   const hide = !account.is_hidden;
                   if (hide) {
                     setPending(({ show_in_payments: _drop, ...rest }) => rest);

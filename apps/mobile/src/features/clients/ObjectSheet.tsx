@@ -149,10 +149,11 @@ function EditMode(props: Extract<ObjectSheetProps, { mode: "edit" }>) {
           </SectionCard>
         ) : null
       }
-      // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ И КАРТОЧКИ — «Применить».
+      // Лист сам пишет объект — «Сохранить» (AGENTS, правило 7: лист правки
+      // сущности сохраняет, шторка выбора применяет).
       footer={
         <Button
-          label="Применить"
+          label="Сохранить"
           onPress={() => {
             form.commitAll();
             props.onClose();
