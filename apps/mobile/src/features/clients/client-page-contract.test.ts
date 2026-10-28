@@ -384,8 +384,8 @@ describe("сценарий г-б: новый человек со связью", 
     assert.match(src, /onCreate=\{onCreateLinked\}/, "страница не отдаёт шторке создание");
     assert.match(
       src,
-      /router\.push\(draftHref\(draftLinkParams\(c\.id, link, prefill\)\)\)/,
-      "черновик открывается без связи или без набранного в поиске",
+      /router\.push\(\s*draftHref\(\{ \.\.\.draftLinkParams\(c\.id, link, prefill\), \.\.\.\(c\.team_id \? \{ team: c\.team_id \} : \{\}\) \}\),?\s*\)/,
+      "черновик открывается без связи, без набранного в поиске или не в команде группы",
     );
     assert.match(
       src,
