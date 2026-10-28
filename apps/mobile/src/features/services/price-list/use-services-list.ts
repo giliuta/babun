@@ -158,7 +158,7 @@ export function useServicesList(teamId: string | undefined) {
       used = -1;
     }
     confirmThen(
-      "Удалить услугу навсегда?",
+      "Удалить услугу насовсем?",
       {
         message: purgeMessage(svc.name, used),
         confirmLabel: "Удалить",

@@ -187,7 +187,7 @@ export function useListBulkEdit({
     if (!pick) return;
     const choice = await chooseOption(`Теги выбранным: ${pick.allowed.length}`, [
       { label: "Поставить теги" },
-      { label: "Снять теги", destructive: true },
+      { label: "Убрать теги", destructive: true },
     ]);
     if (choice === null) return;
     const mode: BulkTagMode = choice === 0 ? "add" : "remove";

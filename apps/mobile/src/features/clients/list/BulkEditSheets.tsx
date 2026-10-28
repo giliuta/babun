@@ -30,7 +30,7 @@ export function BulkEditSheets({ list }: { list: ClientsList }) {
     <>
       <TagPickerSheet
         visible={bulkSheet?.kind === "tags"}
-        title={bulkSheet?.kind === "tags" && bulkSheet.mode === "remove" ? "Снять теги" : "Поставить теги"}
+        title={bulkSheet?.kind === "tags" && bulkSheet.mode === "remove" ? "Убрать теги" : "Поставить теги"}
         markMain={bulkSheet?.kind === "tags" && bulkSheet.mode === "add"}
         tags={sheetTags}
         selected={[]}
