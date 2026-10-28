@@ -504,7 +504,6 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Тип объекта | `ReferenceBlock` в форме объекта | `ui/PickerSheet` | нет — тап выбирает |
 | Тип события | `appointments/EventTypeBlock` (`ReferenceBlock`) | `ui/PickerSheet` | нет — тап выбирает |
 | Категорию, счёт, значение | строка со значением | `ui/ValuePickerSheet` | нет |
-| Клиента или заявку инвойса | строка со значением | `invoices/EntityPickerSheet` | нет |
 | Команду и мастера | докет команды | `appointments/BookingSheets` → `TeamMasterSheet` | «Применить» |
 | Действие («Добавить», «Как связаться») | строка-дверь | `ui/PickerSheet` | нет |
 
