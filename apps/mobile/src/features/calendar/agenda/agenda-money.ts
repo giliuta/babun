@@ -43,3 +43,22 @@ export function agendaMoney(input: {
   if (debt >= total) return { ...plain, amount: said, amountWarn: true, debtSaid: true };
   return { ...plain, note: said, noteWarn: true, debtSaid: true };
 }
+
+/** Слово слева от имени — статус записи. О деньгах оно говорит только то,
+ *  чего справа не сказано: у записи без суммы долга нет и слова о деньгах
+ *  нет; долг суммой справа или ситуацией «Долг» уже назван — «Не оплачена»
+ *  его не повторяет (при скрытых суммах выходило «Не оплачена · Долг»).
+ *  Незакрытый визит здесь не словом, а своим правилом даты. */
+export function agendaStatusWord(input: {
+  cancelled: boolean;
+  /** Время прошло, статус остался «запланирована». */
+  overdue: boolean;
+  debt: number;
+  debtSaid: boolean;
+  situationSaysDebt: boolean;
+}): string | null {
+  if (input.cancelled) return "Отменена";
+  if (!input.overdue || !(input.debt > 0)) return null;
+  if (input.debtSaid || input.situationSaysDebt) return null;
+  return "Не оплачена";
+}

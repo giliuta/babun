@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/color-contrast";
 import type { ThemeColors } from "@/theme/colors";
 import { EventRow } from "./EventRow";
-import { agendaMoney } from "./agenda-money";
+import { agendaMoney, agendaStatusWord } from "./agenda-money";
 import { LIST_ROW } from "@/components/ui/tokens";
 
 const DEBT_SITUATION = COLOR_SITUATIONS.find((s) => s.id === "unpaid")?.label;
@@ -47,20 +47,26 @@ export function AgendaRow({
   t: ThemeColors;
 }) {
   const cancelled = apt.status === "cancelled";
+  const debt = getDebtAmount(apt);
   const money = showAmounts
     ? agendaMoney({
         total: apt.total_amount,
-        debt: getDebtAmount(apt),
+        debt,
         cancelled,
         afterVisit: apt.status === "completed" || overdue,
       })
     : null;
   // Долг, сказанный суммой справа, слева не повторяется ни словом «Не
-  // оплачена», ни ситуацией «Долг».
+  // оплачена», ни ситуацией «Долг»; ситуация «Долг» — словом «Не оплачена».
   const debtSaid = money?.debtSaid ?? false;
-  const statusWord =
-    overdue && !debtSaid ? "Не оплачена" : cancelled ? "Отменена" : null;
   const shownSituation = debtSaid && situation === DEBT_SITUATION ? null : situation;
+  const statusWord = agendaStatusWord({
+    cancelled,
+    overdue,
+    debt,
+    debtSaid,
+    situationSaysDebt: shownSituation === DEBT_SITUATION,
+  });
   // ЦВЕТ ЗАПИСИ ЗАЛИВАЕТ ВСЮ СТРОКУ, а не квадратик слева. Рецепт тот же, что у блока в сетке: заливка BLOCK_FILL,
   // выполненная тише. Отменённая — в цвете отмены; без него (`hue` пустой)
   // теряет цвет.
