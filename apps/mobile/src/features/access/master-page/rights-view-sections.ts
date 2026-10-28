@@ -171,10 +171,14 @@ export function teamLevels(
  *  строк самого раздела: «События, метка дня, график команды». Ничего —
  *  «Всё закрыто»; всё — «Всё открыто». */
 export function sectionBrief(section: Pick<ViewSection, "rows">): string {
+  // «ОГРАНИЧЕНИЯ» — НЕ ДОСТУП, А СРЕЗ ЧУЖОГО: окно по времени режет записи,
+  // деньги или базу, но само ничего не открывает. Посчитанное открытым, оно
+  // подписывало «Финансы: Ограничения» человеку, у которого денег нет вовсе.
+  const rows = section.rows.filter((row) => !isWindowBlock(row.block));
   // Серая строка (главный блок скрыт) не открыта, что бы в ней ни стояло.
-  const open = section.rows.filter((row) => !row.foldedBy && !isClosedStep(row.level));
+  const open = rows.filter((row) => !row.foldedBy && !isClosedStep(row.level));
   if (open.length === 0) return "Всё закрыто";
-  if (open.length === section.rows.length) return "Всё открыто";
+  if (open.length === rows.length) return "Всё открыто";
   const titles = open.map((row, i) => {
     const title = briefTitle(row.block);
     // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета».
@@ -187,6 +191,11 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
     return `${titles.slice(0, BRIEF_NAMES).join(", ")} и ещё ${titles.length - BRIEF_NAMES}`;
   }
   return titles.join(", ");
+}
+
+/** Право-окно («Ограничения»): ступени — сроки, а не «видит / меняет». */
+function isWindowBlock(block: Pick<AccessBlock, "levels">): boolean {
+  return block.levels.includes("week") && block.levels.includes("own");
 }
 
 /** Сколько имён прав подпись раздела называет до «и ещё N». */

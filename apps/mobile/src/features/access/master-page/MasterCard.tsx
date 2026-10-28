@@ -37,6 +37,7 @@ import {
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { useDraftTeamAccess } from "./draft-team-access";
+import { draftWithRole } from "./role-draft";
 import { useStepAllowed, useTeamsAllowed } from "@/session/use-partner-manager";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ. Как у клиента, создание и жизнь — одна карточка с режимом (AGENTS, Canon
@@ -159,6 +160,8 @@ function MasterDraftCard({
     initialTeam: teamId,
     rightsHref: `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
     onAdd: () => setCalendarsOpen(true),
+    onApplyRole: (role, team) =>
+      blocks && updateMasterDraft((currentDraft) => draftWithRole(currentDraft, blocks, role, team)),
   });
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и
