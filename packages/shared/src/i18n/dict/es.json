@@ -3218,7 +3218,6 @@
  "Последний календарь удалить нельзя": "No se puede eliminar el último calendario",
  "Последняя": "Último",
  "Последняя запись": "Última cita",
- "Посмотреть его глазами": "Ver con sus ojos",
  "Поставить теги": "Añadir etiquetas",
  "Поставьте время": "Indica el tiempo",
  "Постоянные": "Habituales",
@@ -3241,7 +3240,6 @@
  "Права вернулись": "Permisos restaurados",
  "Права владельца не меняются": "Los permisos del propietario no se pueden cambiar",
  "Права директора меняет владелец": "Los permisos de un director los cambia el propietario",
- "Права его, данные ваши": "Sus permisos, tus datos",
  "Права изменены": "Permisos modificados",
  "Права как в «{0}»": "Permisos como en «{0}»",
  "Права календаря ставятся только в календарях мастера.": "Los permisos del calendario solo se asignan en los calendarios del técnico.",
@@ -3701,7 +3699,6 @@
  "Смотрит файлы клиента": "Ve los archivos del cliente",
  "Смотрит файлы события": "Ve los archivos del evento",
  "Смотрит фото и файлы записи": "Ve las fotos y archivos de la cita",
- "Смотрите глазами: {0}": "Viendo como: {0}",
  "Сначала верните оплату инвойса {0}": "Primero reembolsa el pago de la factura {0}",
  "Сначала верните оплату; клиента, команду и исполнителя менять нельзя": "Primero reembolsa el pago; el cliente, el equipo y el técnico no se pueden cambiar",
  "Сначала добавьте реквизиты: Кабинет → Реквизиты": "Primero añade los datos fiscales: Oficina → Datos fiscales",
@@ -5181,5 +5178,12 @@
  "Этот браузер": "Este navegador",
  "Браузер {0}": "Navegador {0}",
  "Изменения хранятся только {0} и отправятся после подключения.": "Los cambios se guardan solo {0} y se enviarán al conectarse.",
- "Нет ожидающих изменений {0}.": "No hay cambios pendientes {0}."
+ "Нет ожидающих изменений {0}.": "No hay cambios pendientes {0}.",
+ "Смотрите как {0}": "Viendo como {0}",
+ "Права партнёра, данные ваши": "Permisos del socio, tus datos",
+ "команда": "equipo",
+ "команд": "equipos",
+ "Посмотреть как {0}": "Ver como {0}",
+ "Посмотреть как партнёр": "Ver como el socio",
+ "Всё видит": "Ve todo"
 }

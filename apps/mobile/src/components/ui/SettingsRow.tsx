@@ -231,7 +231,10 @@ export function SettingsRow({
       numberOfLines={valueWraps ? 2 : 1}
       style={{
         flexShrink: valueWraps ? 1 : 0,
-        ...(valueWraps ? { textAlign: "right" as const } : null),
+        // Значение РАСТЁТ к правому краю: без этого на широком экране
+        // (веб, планшет) название упиралось в свои 55%, а значение вставало
+        // сразу за ним — столбец значений посередине строки.
+        ...(valueWraps ? { flexGrow: 1, textAlign: "right" as const } : null),
         fontSize: 17,
         lineHeight: 22,
         fontWeight: valueQuiet ? "500" : "700",

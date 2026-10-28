@@ -291,3 +291,17 @@ export function roleAllowed(
     return block ? stepAllowed(block, change.team_id, change.level) : false;
   });
 }
+
+/** РОЛЬ В СТРОКЕ СПИСКА «ПАРТНЁРЫ»: одна роль во всех его командах — её
+ *  имя; разные или руками — «Своя». Команд нет — `null`. */
+export function roleSummary(
+  blocks: readonly AccessBlock[],
+  levelOf: LevelReader,
+  teamIds: readonly string[],
+): string | null {
+  if (teamIds.length === 0) return null;
+  const keys = teamIds.map((teamId) => matchRole(blocks, levelOf, teamId));
+  const first = keys[0];
+  if (first && keys.every((key) => key === first)) return rolePreset(first).title;
+  return CUSTOM_ROLE_WORD;
+}

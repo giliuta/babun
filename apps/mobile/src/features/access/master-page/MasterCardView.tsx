@@ -150,7 +150,7 @@ export interface MasterCardViewProps {
   /** Итог прав человека в команде выжимкой через точку (строка команды).
    *  Есть — строка команды открывает её права. */
   teamLine?: (teamId: string) => string;
-  /** «Посмотреть его глазами» — строкой в блоке «Доступ». */
+  /** «Посмотреть как {Имя}» — строкой в блоке «Доступ». */
   onMirror?: () => void;
   /** Блоки ниже прав: «Работа», «Личное». */
   children?: ReactNode;
@@ -254,6 +254,7 @@ export function MasterCardView(p: MasterCardViewProps) {
               onRemoveTeam={p.onDetachCalendar}
               onAddTeam={openCalendars && anyUnchosen ? openCalendars : undefined}
               onMirror={p.onMirror}
+              mirrorName={p.identity.name}
             />
           ) : null}
 

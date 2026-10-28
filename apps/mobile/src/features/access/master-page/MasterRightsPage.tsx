@@ -122,6 +122,7 @@ function DraftRights({
         updateMasterDraft((currentDraft) => withLevel(currentDraft, block, level, teamId, blocks))
       }
       area={rightsAreaOf(area)}
+      previewName={draft.name.trim() || undefined}
       onPreview={partners.owner ? () =>
         preview({
           blocks,
@@ -207,6 +208,7 @@ function InviteRights({
       // ПРИГЛАШЕНИЕ — САМЫЙ ПОЛЕЗНЫЙ МОМЕНТ ДЛЯ ЗЕРКАЛА: человек ещё не в
       // компании, и посмотреть, что он увидит, стоит ДО того, как позвали.
       // Кнопки здесь не было — три режима одной страницы разошлись.
+      previewName={draft.name.trim() || undefined}
       onPreview={partners.owner ? () =>
         preview({
           blocks,

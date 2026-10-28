@@ -260,7 +260,16 @@ describe("подпись раздела в «Доступе»", () => {
       { block: block("finance.window", window, 107), level: "week" },
     ];
     assert.equal(sectionBrief({ rows: closed } as unknown as Parameters<typeof sectionBrief>[0]), "Всё закрыто");
-    const open = [{ ...closed[0], level: "read" }, { ...closed[1], level: "own" }];
+    const open = [{ ...closed[0], level: "full" }, { ...closed[1], level: "own" }];
     assert.equal(sectionBrief({ rows: open } as unknown as Parameters<typeof sectionBrief>[0]), "Всё открыто");
+  });
+  test("всё открыто, но не на высшей ступени — «Всё видит», а не «Всё открыто»", () => {
+    const rows = [
+      { block: block("finance.income", ["off", "read", "write", "full"], 103), level: "read" },
+      { block: block("calendar.events", ["off", "read", "write"], 12), level: "write" },
+    ];
+    assert.equal(sectionBrief({ rows } as unknown as Parameters<typeof sectionBrief>[0]), "Всё видит");
+    const max = [{ ...rows[0], level: "full" }, rows[1]];
+    assert.equal(sectionBrief({ rows: max } as unknown as Parameters<typeof sectionBrief>[0]), "Всё открыто");
   });
 });

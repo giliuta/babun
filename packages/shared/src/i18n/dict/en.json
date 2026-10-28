@@ -3218,7 +3218,6 @@
  "Последний календарь удалить нельзя": "You can't delete the last calendar",
  "Последняя": "Last",
  "Последняя запись": "Last appointment",
- "Посмотреть его глазами": "See through their eyes",
  "Поставить теги": "Add tags",
  "Поставьте время": "Set the time",
  "Постоянные": "Regulars",
@@ -3241,7 +3240,6 @@
  "Права вернулись": "Permissions restored",
  "Права владельца не меняются": "Owner permissions can't be changed",
  "Права директора меняет владелец": "A director's access is changed by the owner",
- "Права его, данные ваши": "Their permissions, your data",
  "Права изменены": "Permissions changed",
  "Права как в «{0}»": "Permissions as in “{0}”",
  "Права календаря ставятся только в календарях мастера.": "Calendar permissions can only be set in the technician's calendars.",
@@ -3701,7 +3699,6 @@
  "Смотрит файлы клиента": "Views the client's files",
  "Смотрит файлы события": "Views the event's files",
  "Смотрит фото и файлы записи": "Views appointment photos and files",
- "Смотрите глазами: {0}": "Viewing as: {0}",
  "Сначала верните оплату инвойса {0}": "Refund the payment for invoice {0} first",
  "Сначала верните оплату; клиента, команду и исполнителя менять нельзя": "Refund the payment first; the client, team and technician can't be changed",
  "Сначала добавьте реквизиты: Кабинет → Реквизиты": "Add your business details first: Office → Business details",
@@ -5181,5 +5178,12 @@
  "Этот браузер": "This browser",
  "Браузер {0}": "Browser {0}",
  "Изменения хранятся только {0} и отправятся после подключения.": "Changes are stored only {0} and will be sent once you're online.",
- "Нет ожидающих изменений {0}.": "No pending changes {0}."
+ "Нет ожидающих изменений {0}.": "No pending changes {0}.",
+ "Смотрите как {0}": "Viewing as {0}",
+ "Права партнёра, данные ваши": "Partner's rights, your data",
+ "команда": "team",
+ "команд": "teams",
+ "Посмотреть как {0}": "View as {0}",
+ "Посмотреть как партнёр": "View as the partner",
+ "Всё видит": "Sees everything"
 }

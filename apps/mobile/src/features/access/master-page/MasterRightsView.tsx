@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from "react";
+import { previewLabel } from "./preview-label";
 import { ScrollView } from "react-native";
 
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -66,6 +67,7 @@ export function MasterRightsView({
   onPick,
   area,
   onPreview,
+  previewName,
   title = "Права",
   onlyCalendar = false,
   onlyCompany = false,
@@ -101,8 +103,10 @@ export function MasterRightsView({
   onPick: (block: AccessBlock, level: AccessLevel, teamId: string | null) => void;
   /** Раздел, с которого открыли страницу, — к нему и прокручиваем. */
   area?: RightsArea;
-  /** «Посмотреть его глазами»: включает зеркало и уводит в продукт. */
+  /** «Посмотреть как {Имя}»: включает зеркало и уводит в продукт. */
   onPreview?: () => void;
+  /** Имя того, чьими правами смотрим, — для кнопки зеркала. */
+  previewName?: string;
 }) {
   const t = useThemeColors();
   const scrollRef = useRef<ScrollView>(null);
@@ -184,7 +188,7 @@ export function MasterRightsView({
           из этого выйдет. */}
       {onPreview ? (
         <PageFooter>
-          <GradientButton label="Посмотреть его глазами" onPress={onPreview} />
+          <GradientButton label={previewLabel(previewName)} onPress={onPreview} />
         </PageFooter>
       ) : null}
     </Screen>

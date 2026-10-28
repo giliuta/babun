@@ -22,6 +22,7 @@ import {
   invitationSegment,
 } from "@/features/access/master-page/master-draft";
 import { PendingInvitationRow, PersonRow } from "@/features/access/PeopleRows";
+import { MemberListRow } from "@/features/access/MemberListRow";
 import {
   AccessRequestError,
   useCompanyMembers,
@@ -169,13 +170,6 @@ export default function MastersScreen() {
     for (const team of teams) if (team.color) m.set(team.id, team.color);
     return m;
   }, [teams]);
-  // Под именем — его команды («Команда 1, Команда 3»): по ним и открываются
-  // права на его странице.
-  const teamNames = (ids: readonly string[]) =>
-    ids
-      .map((id) => teams.find((team) => team.id === id)?.name)
-      .filter((name): name is string => !!name)
-      .join(", ");
 
   return (
     <Screen edges={["top"]}>
@@ -208,7 +202,7 @@ export default function MastersScreen() {
             <>
               {hasAnyone ? (
                 <View
-                  className="mx-3 mb-2 mt-2 h-11 flex-row items-center rounded-[10px] px-3"
+                  className="mx-4 mb-2 mt-2 h-11 flex-row items-center rounded-[10px] px-3"
                   style={{ backgroundColor: t.fill }}
                 >
                   <Search color={t.faint} size={17} />
@@ -239,12 +233,12 @@ export default function MastersScreen() {
           renderItem={({ item }) => {
             if (item.kind === "member") {
               return (
-                <PersonRow
+                <MemberListRow
+                  userId={item.member.userId}
                   name={item.member.name}
                   initials={getInitials(item.member.name)}
                   tint={teamColorById.get(item.member.calendars[0] ?? "") || t.faint}
-                  sub={teamNames(item.member.calendars) || "Без команды"}
-                  accessibilityLabel={`${item.member.name}, права доступа`}
+                  teamIds={item.member.calendars}
                   onPress={() =>
                     router.push(`/cabinet/people/access/${item.member.userId}` as Href)
                   }
@@ -288,7 +282,8 @@ export default function MastersScreen() {
               />
             );
           }}
-          ItemSeparatorComponent={() => <Divider inset={64} />}
+          // Разделитель — от имени: поле 16 + аватар 40 + зазор 12.
+          ItemSeparatorComponent={() => <Divider inset={68} />}
           ListEmptyComponent={
             membersFailed ? null : (
               <EmptyState

@@ -169,7 +169,8 @@ export function teamLevels(
 
 /** Подпись строки раздела в блоке «Доступ» — что в нём открыто, словами
  *  строк самого раздела: «События, метка дня, график команды». Ничего —
- *  «Всё закрыто»; всё — «Всё открыто». */
+ *  «Всё закрыто»; всё на высшей ступени — «Всё открыто», всё, но не на
+ *  высшей, — «Всё видит». */
 export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   // «ОГРАНИЧЕНИЯ» — НЕ ДОСТУП, А СРЕЗ ЧУЖОГО: окно по времени режет записи,
   // деньги или базу, но само ничего не открывает. Посчитанное открытым, оно
@@ -178,7 +179,14 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   // Серая строка (главный блок скрыт) не открыта, что бы в ней ни стояло.
   const open = rows.filter((row) => !row.foldedBy && !isClosedStep(row.level));
   if (open.length === 0) return "Всё закрыто";
-  if (open.length === rows.length) return "Всё открыто";
+  // «ВСЁ ОТКРЫТО» — ТОЛЬКО НА МАКСИМУМЕ. Раздел, где всё лишь видно, тоже
+  // подписывался «Всё открыто», и владелец читал «может всё» про человека,
+  // который ничего не меняет.
+  if (open.length === rows.length) {
+    return rows.every((row) => row.level === row.block.levels[row.block.levels.length - 1])
+      ? "Всё открыто"
+      : "Всё видит";
+  }
   const titles = open.map((row, i) => {
     const title = briefTitle(row.block);
     // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета».

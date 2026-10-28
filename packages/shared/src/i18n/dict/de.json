@@ -3218,7 +3218,6 @@
  "Последний календарь удалить нельзя": "Der letzte Kalender kann nicht gelöscht werden",
  "Последняя": "Zuletzt",
  "Последняя запись": "Letzter Termin",
- "Посмотреть его глазами": "Aus seiner Sicht ansehen",
  "Поставить теги": "Tags setzen",
  "Поставьте время": "Geben Sie die Zeit an",
  "Постоянные": "Stammkunden",
@@ -3241,7 +3240,6 @@
  "Права вернулись": "Berechtigungen wiederhergestellt",
  "Права владельца не меняются": "Inhaberberechtigungen lassen sich nicht ändern",
  "Права директора меняет владелец": "Die Rechte eines Direktors ändert der Inhaber",
- "Права его, данные ваши": "Seine Berechtigungen, Ihre Daten",
  "Права изменены": "Berechtigungen geändert",
  "Права как в «{0}»": "Berechtigungen wie in „{0}“",
  "Права календаря ставятся только в календарях мастера.": "Kalenderberechtigungen werden nur in den Kalendern des Technikers vergeben.",
@@ -3701,7 +3699,6 @@
  "Смотрит файлы клиента": "Sieht Dateien des Kunden an",
  "Смотрит файлы события": "Sieht die Dateien des Ereignisses",
  "Смотрит фото и файлы записи": "Sieht Fotos und Dateien des Termins",
- "Смотрите глазами: {0}": "Ansicht als: {0}",
  "Сначала верните оплату инвойса {0}": "Erstatten Sie zuerst die Zahlung der Rechnung {0}",
  "Сначала верните оплату; клиента, команду и исполнителя менять нельзя": "Erstatten Sie zuerst die Zahlung; Kunde, Team und Techniker können nicht geändert werden",
  "Сначала добавьте реквизиты: Кабинет → Реквизиты": "Fügen Sie zuerst Firmendaten hinzu: Büro → Firmendaten",
@@ -5181,5 +5178,12 @@
  "Этот браузер": "Dieser Browser",
  "Браузер {0}": "Browser {0}",
  "Изменения хранятся только {0} и отправятся после подключения.": "Änderungen werden nur {0} gespeichert und nach der Verbindung gesendet.",
- "Нет ожидающих изменений {0}.": "Keine ausstehenden Änderungen {0}."
+ "Нет ожидающих изменений {0}.": "Keine ausstehenden Änderungen {0}.",
+ "Смотрите как {0}": "Ansicht als {0}",
+ "Права партнёра, данные ваши": "Rechte des Partners, Ihre Daten",
+ "команда": "Team",
+ "команд": "Teams",
+ "Посмотреть как {0}": "Ansehen als {0}",
+ "Посмотреть как партнёр": "Als Partner ansehen",
+ "Всё видит": "Sieht alles"
 }

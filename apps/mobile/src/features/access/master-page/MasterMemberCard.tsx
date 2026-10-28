@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { previewLabel } from "./preview-label";
 import { Keyboard } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
@@ -363,7 +364,7 @@ export function MasterMemberCard({
         // ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ (канон 7.1): посмотреть, что из этого выйдет.
         footer={
           manager.canPreview ? (
-            <GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name, userId })} />
+            <GradientButton label={previewLabel(name)} onPress={() => preview({ blocks, draft, name, userId })} />
           ) : undefined
         }
       >
