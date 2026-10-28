@@ -6,7 +6,7 @@ describe("bookTitle", () => {
   test("new record, saved record, event", () => {
     assert.equal(bookTitle(false, "work"), "Новая запись");
     assert.equal(bookTitle(true, "work"), "Запись");
-    assert.equal(bookTitle(false, "event"), "Событие");
+    assert.equal(bookTitle(false, "event"), "Новое событие");
     assert.equal(bookTitle(true, "event"), "Событие");
   });
 });

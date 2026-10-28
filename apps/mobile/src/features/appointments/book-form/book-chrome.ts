@@ -17,7 +17,7 @@ export function bookTitle(isEdit: boolean, kind: "work" | "event"): string {
       ? "Событие"
       : "Запись"
     : kind === "event"
-      ? "Событие"
+      ? "Новое событие"
       : "Новая запись";
 }
 
