@@ -5411,8 +5411,6 @@ export type Database = {
       }
       access_company_level: { Args: { p_block: string }; Returns: string }
       access_contact_client_ids: { Args: never; Returns: string[] }
-      access_day_contact_client_ids: { Args: never; Returns: string[] }
-      access_day_contact_teams: { Args: never; Returns: string[] }
       access_map_for: {
         Args: { p_include_off: boolean; p_tenant_id: string; p_user_id: string }
         Returns: Json
@@ -5600,6 +5598,7 @@ export type Database = {
         Args: { p_company_id: string; p_tenant_id: string }
         Returns: Json
       }
+      bulk_edit_clients: { Args: { p_edits: Json }; Returns: Json }
       bump_sms_balance: {
         Args: { p_amount_cents: number; p_tenant_id: string }
         Returns: Json

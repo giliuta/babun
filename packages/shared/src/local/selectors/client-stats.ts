@@ -137,6 +137,7 @@ export function buildStats(
   let unclosedVisits = 0;
   let lastUnclosedDate = "";
   let pastOpenRecords = 0;
+  let upcomingRecords = 0;
 
   for (const a of apts) {
     // Match by id; fall back to comment-name match for seed records
@@ -191,6 +192,7 @@ export function buildStats(
       }
     }
     if (upcoming && a.date >= today) {
+      upcomingRecords += 1;
       expectedRevenue += a.total_amount ?? 0;
       const cur = nextApt;
       const candKey = a.date + a.time_start;
@@ -229,6 +231,7 @@ export function buildStats(
     unclosedVisits,
     lastUnclosedDate,
     pastOpenRecords,
+    upcomingRecords,
     ageDays: 0,
     birthdayInDays: null,
   });

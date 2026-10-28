@@ -53,6 +53,7 @@ export function ClientBlock({
   onOpenCard,
   onClear,
   note,
+  deletedName,
 }: {
   client: Client | null;
   /** Последний визит (или запись вперёд) — дата под именем, как в списке
@@ -73,6 +74,10 @@ export function ClientBlock({
   /** Заметка клиента под строкой — узлом, а не флагом: блок не решает, чем
    *  её писать. */
   note?: ReactNode;
+  /** Клиент записи удалён (`client_id` есть, в рабочем списке его нет) — его
+   *  имя, только для подписи. Без него блок звал «Выбрать клиента», будто
+   *  человека не было. Тап — выбор другого: удалённого в запись не выбрать. */
+  deletedName?: string | null;
 }) {
   const t = useThemeColors();
   const tenantId = useTenantId();
@@ -85,7 +90,7 @@ export function ClientBlock({
   // упираются в край карточки.
   const gap = onClear ? "mr-2" : "mr-4";
   // Выбирать некого и нечем: блок без клиента в режиме «смотрит» пуст.
-  if (!shown && !onPick) return null;
+  if (!shown && !onPick && !deletedName) return null;
   const locked = shown ? contactsLocked(shown) : false;
   const noPhoneRight = locked && shown?.contacts_hidden === "right";
   // Дата — как в списке клиентов; «Историю записей» закрыли — даты нет.
@@ -198,6 +203,25 @@ export function ClientBlock({
             </Pressable>
           ) : null}
         </View>
+      ) : deletedName ? (
+        <Pressable
+          className="px-4 py-2.5"
+          disabled={!onPick}
+          onPress={
+            onPick
+              ? () => {
+                  onPick();
+                  haptics.tap();
+                }
+              : undefined
+          }
+          accessibilityRole={onPick ? "button" : "text"}
+          accessibilityLabel={[`Клиент: ${deletedName}`, "Клиент удалён"].join(". ")}
+          accessibilityHint={onPick ? "Открывает выбор клиента" : undefined}
+        >
+          <Text style={{ fontSize: 17, fontWeight: "700", color: t.sub }}>{deletedName}</Text>
+          <Text style={{ marginTop: 2, fontSize: 13, color: t.sub }}>Клиент удалён</Text>
+        </Pressable>
       ) : (
         <ChooseRow
           icon={UserRound}

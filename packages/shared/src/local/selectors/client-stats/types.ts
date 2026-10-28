@@ -37,6 +37,9 @@ export interface ClientStats {
   /** Все прошедшие незакрытые записи, и без долга, — для вопроса «есть ли
    *  у клиента история» (удаление): запись на €0 — тоже запись. */
   pastOpenRecords: number;
+  /** Неотменённые записи с сегодняшнего дня вперёд. Удаление клиента их не
+   *  трогает — вопрос «Удалить клиента?» говорит, что они останутся. */
+  upcomingRecords: number;
   /** Неполученные деньги: завершённые визиты с недоплатой ПЛЮС прошедшие
    *  записи, по которым команда не отчиталась, — для владельца это одно и
    *  то же «нам не заплатили». */
@@ -66,6 +69,7 @@ export const EMPTY_STATS: ClientStats = {
   unclosedVisits: 0,
   lastUnclosedDate: "",
   pastOpenRecords: 0,
+  upcomingRecords: 0,
   debt: 0,
   expectedRevenue: 0,
   lastTeamId: null,

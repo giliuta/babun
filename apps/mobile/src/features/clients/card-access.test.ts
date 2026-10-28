@@ -90,7 +90,7 @@ describe("сводка клиента по его правам", () => {
   const stats: ClientStats = {
     visits: 4, totalSpent: 400, lastVisitDate: "2026-09-20", lastVisitDays: 10,
     nextApt: { date: "2026-10-03", time: "13:30" }, nextAptDays: 3, medianGapDays: 30,
-    unclosedVisits: 1, lastUnclosedDate: "2026-09-25", pastOpenRecords: 1,
+    unclosedVisits: 1, lastUnclosedDate: "2026-09-25", pastOpenRecords: 1, upcomingRecords: 2,
     debt: 300, expectedRevenue: 80, lastTeamId: "team-1", ageDays: 40, birthdayInDays: 5,
   };
   test("владелец — как есть", () => {
