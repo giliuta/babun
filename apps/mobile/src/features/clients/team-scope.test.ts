@@ -9,6 +9,7 @@ import {
   teamForNewClient,
   toggleTeamChoice,
   withNewClientTeam,
+  withoutArchivedTeams,
 } from "./team-scope";
 
 const teams = ["team-1", "team-3"];
@@ -35,6 +36,19 @@ describe("лента команд во вкладке «Клиенты»", () =>
     // «a» — клиент Команды 1, обслужен Командой 3; отменённая запись «c» не в счёт.
     assert.deepEqual(clientsOfTeam(clients, "team-3", apts).map((c) => c.id), ["a", "b"]);
     assert.deepEqual(clientsOfTeam(clients, "team-1", apts).map((c) => c.id), ["a"]);
+  });
+
+  test("«Все» без клиентов архивной команды, кроме обслуженных живой", () => {
+    const archived = new Set(["team-3"]);
+    assert.deepEqual(withoutArchivedTeams(clients, archived).map((c) => c.id), ["a", "c"]);
+    const apts = [
+      { team_id: "team-1", client_id: "b", status: "completed" as const },
+    ];
+    assert.deepEqual(withoutArchivedTeams(clients, archived, apts).map((c) => c.id), ["a", "b", "c"]);
+    // Отменённая запись живой команды не держит клиента в списке.
+    const cancelled = [{ team_id: "team-1", client_id: "b", status: "cancelled" as const }];
+    assert.deepEqual(withoutArchivedTeams(clients, archived, cancelled).map((c) => c.id), ["a", "c"]);
+    assert.equal(withoutArchivedTeams(clients, new Set()).length, 3);
   });
 
   test("под чипом считаются только записи этой команды", () => {

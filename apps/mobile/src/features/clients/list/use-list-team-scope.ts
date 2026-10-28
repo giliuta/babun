@@ -18,10 +18,11 @@ import {
   appointmentsOfTeam,
   clientsOfTeam,
   liveTeamChoice,
+  withoutArchivedTeams,
 } from "@/features/clients/team-scope";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { useAccessMapOf } from "@/features/clients/use-card-access";
-import type { Team } from "@/features/reference/queries";
+import { useTeams, type Team } from "@/features/reference/queries";
 import { dataSpanOf } from "./list-derive";
 import type { ListTeam } from "./use-list-merge";
 
@@ -83,9 +84,19 @@ export function useListTeamScope({
   // команды; выбрал свою — только свои клиенты. Клиенты партнёра стоят в общем списке, но их строки
   // по-прежнему такие, какими их отдал сервер (без номеров и денег по
   // правам), а выбрать их для выгрузки и рассылки нельзя (`selectable`).
+  // КЛИЕНТЫ КОМАНД В АРХИВЕ ПОД «ВСЕ» НЕ СТОЯТ (`withoutArchivedTeams`):
+  // чипа у архивной команды нет, и её «Тест» висели в общем списке ничьими.
+  const { data: companyTeams = [] } = useTeams({ includeInactive: true });
+  const archivedTeamIds = useMemo(
+    () => new Set(companyTeams.filter((tm) => !tm.is_active).map((tm) => tm.id)),
+    [companyTeams],
+  );
   const teamClients = useMemo(
-    () => (teamChoice === ALL_TEAMS ? clients : clientsOfTeam(clients, teamChoice, appointments)),
-    [clients, teamChoice, appointments],
+    () =>
+      teamChoice === ALL_TEAMS
+        ? withoutArchivedTeams(clients, archivedTeamIds, appointments)
+        : clientsOfTeam(clients, teamChoice, appointments),
+    [clients, teamChoice, appointments, archivedTeamIds],
   );
   const teamAppointments = useMemo(
     () => appointmentsOfTeam(appointments, teamChoice),

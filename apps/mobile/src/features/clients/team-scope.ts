@@ -68,6 +68,28 @@ export function clientsOfTeam<T extends Pick<Client, "id" | "team_id">>(
   return clients.filter((c) => c.team_id === choice || served.has(c.id));
 }
 
+/** «Все» без клиентов команд в архиве. Архивный календарь выведен из живого
+ *  продукта (его деньги не существуют в живых «Финансах»), и его клиенты под
+ *  «Все» стояли бы без своего чипа. Клиента это не удаляет: календарь вернули
+ *  из архива — клиент снова в списке. Клиент, которого обслуживала живая
+ *  команда, остаётся: он и под её чипом. */
+export function withoutArchivedTeams<T extends Pick<Client, "id" | "team_id">>(
+  clients: readonly T[],
+  archivedTeamIds: ReadonlySet<string>,
+  appointments: readonly Pick<Appointment, "team_id" | "client_id" | "status">[] = [],
+): T[] {
+  if (archivedTeamIds.size === 0) return clients as T[];
+  const servedByLive = new Set<string>();
+  for (const a of appointments) {
+    if (a.client_id && a.team_id && !archivedTeamIds.has(a.team_id) && a.status !== "cancelled") {
+      servedByLive.add(a.client_id);
+    }
+  }
+  return clients.filter(
+    (c) => !c.team_id || !archivedTeamIds.has(c.team_id) || servedByLive.has(c.id),
+  );
+}
+
 /** Команда нового клиента: выбранная в ленте, иначе первая команда.
  *  Прямая офлайн-запись умолчания сервера не знает, поэтому пусто уходит
  *  только у компании без команд. */
