@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { bundleIdOf, isNewBuild, runningBundleId } from "./web-build";
+import { bundleIdOf, dropStaleServiceWorkers, isNewBuild, runningBundleId } from "./web-build";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (name: string) => readFileSync(resolve(here, name), "utf8");
@@ -46,5 +46,27 @@ describe("веб: новая сборка сайта — по имени бан�
     assert.doesNotMatch(bar, /if \(!fresh\) return/);
     const gate = read("AppUpdateGate.tsx");
     assert.match(gate, /Platform\.OS === "web"\) return <WebUpdateShell>\{children\}<\/WebUpdateShell>/);
+  });
+
+  test("старый service worker прежнего сайта снимается вместе с его кешами", async () => {
+    let unregistered = 0;
+    const deleted: string[] = [];
+    const cacheStore = {
+      keys: async () => ["babun-v827-pages", "babun-v827-static"],
+      delete: async (key: string) => (deleted.push(key), true),
+    };
+    const registry = (n: number) => ({
+      getRegistrations: async () =>
+        Array.from({ length: n }, () => ({ unregister: async () => (unregistered += 1, true) })),
+    });
+    assert.equal(await dropStaleServiceWorkers(registry(1), cacheStore), 1);
+    assert.equal(unregistered, 1);
+    assert.deepEqual(deleted, ["babun-v827-pages", "babun-v827-static"]);
+    // Нечего снимать — кеши не трогаем; браузер без service worker — молчим.
+    deleted.length = 0;
+    assert.equal(await dropStaleServiceWorkers(registry(0), cacheStore), 0);
+    assert.deepEqual(deleted, []);
+    assert.equal(await dropStaleServiceWorkers(undefined, cacheStore), 0);
+    assert.match(read("WebUpdateBar.tsx"), /dropStaleServiceWorkers\(navigator\.serviceWorker, cacheStore\)/);
   });
 });
