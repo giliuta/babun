@@ -19,8 +19,13 @@ export function useRestoredBookDraft(
   tenantId: string | null,
   editId: string | null,
   kind: "work" | "event",
+  /** Форма открыта копией (`copyOf`): её поля — из оригинала, а не из
+   *  прошлого черновика. */
+  copying = false,
 ) {
-  const [restored] = useState(() => (editId ? null : readBookDraft(tenantId, kind)));
+  const [restored] = useState(() =>
+    editId || copying ? null : readBookDraft(tenantId, kind),
+  );
   // Запись создана или черновик выброшен рукой — больше не пишем, даже если
   // форма ещё дорисовывает последний кадр перед уходом.
   const stoppedRef = useRef(false);

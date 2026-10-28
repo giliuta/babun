@@ -1,5 +1,6 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { duplicateAppointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
 import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
@@ -21,6 +22,8 @@ export interface BookPrefillInput {
   isEdit: boolean;
   editing: Appointment | null;
   hydrate: (editing: Appointment) => void;
+  /** Список календаря — из него берётся оригинал копии (`params.copyOf`). */
+  allAppts: Appointment[];
   team: Team | null | undefined;
   calendarSettings: CalendarSettings | undefined;
   date: string;
@@ -55,6 +58,7 @@ export function useBookPrefill({
   isEdit,
   editing,
   hydrate,
+  allAppts,
   team,
   calendarSettings,
   date,
@@ -110,6 +114,19 @@ export function useBookPrefill({
     editHydrated.current = true;
     hydrate(editing);
   }, [isEdit, editing, hydrate]);
+
+  // ═══ КОПИЯ ═══ — те же поля, что у правки, но запись новая: без денег,
+  // статуса и повтора (`duplicateAppointment`), в дне, который пришёл
+  // параметром (у вхождения повтора он свой). Копия, созданная до формы,
+  // оставалась дублем в дне у того, кто вышел, ничего не нажав (CAL-33).
+  const copyOf = first(params.copyOf);
+  const copySource = copyOf ? allAppts.find((a) => a.id === copyOf) ?? null : null;
+  const copyHydrated = useRef(false);
+  useEffect(() => {
+    if (isEdit || copyHydrated.current || !copySource) return;
+    copyHydrated.current = true;
+    hydrate({ ...duplicateAppointment(copySource), date: first(params.date) ?? copySource.date });
+  }, [isEdit, copySource, hydrate, params.date]);
 
   // ── дефолт команды при первом рендере (params → последняя → первая) ──
   const teamSeeded = useRef(false);

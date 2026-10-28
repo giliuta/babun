@@ -72,6 +72,7 @@ export function useBookForm() {
     tenantId,
     first(params.appointmentId) ?? null,
     first(params.kind) === "event" ? "event" : "work",
+    first(params.copyOf) != null,
   );
   const formParams = useMemo(
     () => paramsWithDraft(params, draftMemory.restored),
@@ -376,6 +377,7 @@ export function useBookForm() {
     setStatus: draft.setStatus,
     editBaselineRef: guard.editBaselineRef,
     leaveBook: guard.leaveBook,
+    leaveThen: guard.leaveThen,
     toast,
     router,
   });

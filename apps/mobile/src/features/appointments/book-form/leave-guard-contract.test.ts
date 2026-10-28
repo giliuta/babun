@@ -33,3 +33,24 @@ test("вопрос у несохраняемой формы называет, ч
   const form = readFileSync(resolve(here, "use-book-form.ts"), "utf8");
   assert.match(form, /missingHint: verdict\.canSave \? undefined : verdict\.missingHint,/);
 });
+
+test("«Копировать» из «⋯» с несохранённым — вопрос, потом копия, а не календарь (CAL-22)", () => {
+  // Переход в копию перехватывала защита формы, и «Сохранить» из её вопроса
+  // уводил назад: копия создана, человек — в календаре.
+  const guard = readFileSync(resolve(here, "use-leave-guard.ts"), "utf8");
+  assert.match(guard, /const next = nextRef\.current;\s*nextRef\.current = null;\s*if \(next\) \{\s*next\(\);\s*return;/);
+  // Несохранившееся «Сохранить» не оставляет продолжение следующему.
+  assert.match(guard, /if \(!leavingRef\.current\) nextRef\.current = null;/);
+  const menu = readFileSync(resolve(here, "use-record-menu.ts"), "utf8");
+  assert.match(menu, /leaveThen\(\(saved\) => copyNow\(saved \? \{ \.\.\.source, \.\.\.saved \} : source\)\)/);
+});
+
+test("копия события на весь день — форма нового, запись только на «Создать» (CAL-33)", () => {
+  // Копия создавалась до формы: вышел, не меняя дня, — дубль в том же дне.
+  const quick = readFileSync(resolve(here, "../../calendar/home/use-quick-events.ts"), "utf8");
+  const copyInPlace = quick.slice(quick.indexOf("const copyInPlace"));
+  assert.doesNotMatch(copyInPlace.slice(0, copyInPlace.indexOf("};")), /createAppt/);
+  assert.match(copyInPlace, /params: \{ copyOf: source, kind: "event"/);
+  const prefill = readFileSync(resolve(here, "use-book-prefill.ts"), "utf8");
+  assert.match(prefill, /hydrate\(\{ \.\.\.duplicateAppointment\(copySource\)/);
+});

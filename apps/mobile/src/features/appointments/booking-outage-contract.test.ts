@@ -52,7 +52,7 @@ describe("booking form while the server is down", () => {
   test("a programmatic leave drops the guard first, then navigates", () => {
     // Защита пропускала уход повтором перехваченного действия — у формы,
     // открытой ссылкой без истории, `replace("/")` гас, и форма оставалась.
-    assert.match(book, /const leaveBook = \(\) => setLeaving\(true\);/);
+    assert.match(book, /const leaveBook = \(\) => \{\s*leavingRef\.current = true;\s*setLeaving\(true\);/);
     assert.match(book, /usePreventRemove\(dirty && !leaving,/);
     assert.doesNotMatch(book, /bypassGuardRef/);
   });

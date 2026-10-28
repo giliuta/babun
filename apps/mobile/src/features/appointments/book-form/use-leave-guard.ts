@@ -59,6 +59,11 @@ export function useLeaveGuard({
   // форма оставалась — второе «Создать» било бы в дубль, и «Отмена → Закрыть»
   // не закрывала бы ничего.
   const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
+  // КУДА УЙТИ ВМЕСТО «НАЗАД». «Копировать» из «⋯» уводит не в календарь, а
+  // в копию; без этого продолжения «Сохранить» из вопроса уходил назад, и
+  // копия, уже созданная, оставалась за спиной (CAL-22).
+  const nextRef = useRef<(() => void) | null>(null);
 
   // A notification/deep link can open /book without a navigation history.
   // In that case router.back() is a dead action; return to the calendar tab.
@@ -67,7 +72,10 @@ export function useLeaveGuard({
   // календарь, поэтому стек — «финансы → календарь → запись», и слепой
   // `router.back()` клал человека на календарь. Если пришли с меткой `from`,
   // уходим по ней, а не по истории.
-  const leaveBook = () => setLeaving(true);
+  const leaveBook = () => {
+    leavingRef.current = true;
+    setLeaving(true);
+  };
 
   // ── «есть несохранённое» ──
   //
@@ -121,7 +129,7 @@ export function useLeaveGuard({
   const saveRef = useRef<(() => void | Promise<void>) | null>(null);
   // Вопрос называет то, что на экране: у события — «событие», не «запись».
   const event = draft.kind === "event";
-  const confirmDiscard = (onDiscard: () => void) => {
+  const confirmDiscard = (onDiscard: () => void, beforeSave?: () => void) => {
     // СОХРАНИТЬ НЕЛЬЗЯ — НЕ ПРЕДЛАГАЕМ. Без услуги или без тарифа
     // «Сохранить» только показывал плашку и оставлял на форме: человек
     // хотел уйти, а вопрос возвращал его назад. Тогда вопрос один — уйти без них.
@@ -154,7 +162,12 @@ export function useLeaveGuard({
       },
     ).then((index) => {
       if (index === 0) {
-        void saveRef.current?.();
+        beforeSave?.();
+        void Promise.resolve(saveRef.current?.()).finally(() => {
+          // Сохранение не ушло (ошибка сервера) — продолжение снимается,
+          // иначе следующее «Сохранить» увело бы не туда.
+          if (!leavingRef.current) nextRef.current = null;
+        });
         return;
       }
       if (index === 1) {
@@ -169,6 +182,25 @@ export function useLeaveGuard({
       return;
     }
     confirmDiscard(leaveBook);
+  };
+  /** Уйти из формы не назад, а дальше — в копию записи из «⋯». Несохранённое
+   *  спрашивается тем же вопросом, что у «назад»; `run` получает правку,
+   *  если её сохранили, — копия делается с сохранённого, а не со старого. */
+  const leaveThen = (run: (saved: Partial<Appointment> | null) => void) => {
+    if (!dirty) {
+      run(null);
+      return;
+    }
+    confirmDiscard(
+      () => {
+        nextRef.current = () => run(null);
+        leaveBook();
+      },
+      () => {
+        const patch = buildPatch();
+        nextRef.current = () => run(patch);
+      },
+    );
   };
 
   // Back-свайп и аппаратная «назад» теряли заполненную запись без спроса —
@@ -189,6 +221,12 @@ export function useLeaveGuard({
   useEffect(() => {
     if (!leaving) return;
     const timer = setTimeout(() => {
+      const next = nextRef.current;
+      nextRef.current = null;
+      if (next) {
+        next();
+        return;
+      }
       const returnTo = resolveReturnTo(from);
       if (returnTo) router.replace(returnTo as Href);
       else if (router.canGoBack()) router.back();
@@ -198,5 +236,5 @@ export function useLeaveGuard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- уход один раз по флагу; from и router — из этого же рендера
   }, [leaving]);
 
-  return { leaveBook, editBaselineRef, requestClose, saveRef, dirty };
+  return { leaveBook, leaveThen, editBaselineRef, requestClose, saveRef, dirty };
 }

@@ -28,6 +28,8 @@ export interface RecordMenuInput {
   setStatus: (status: AppointmentStatus) => void;
   editBaselineRef: MutableRefObject<string | null>;
   leaveBook: () => void;
+  /** Уход в копию через вопрос о несохранённом (`useLeaveGuard`). */
+  leaveThen: (run: (saved: Partial<Appointment> | null) => void) => void;
   toast: ReturnType<typeof useToast>;
   router: ReturnType<typeof useRouter>;
 }
@@ -45,6 +47,7 @@ export function useRecordMenu({
   setStatus,
   editBaselineRef,
   leaveBook,
+  leaveThen,
   toast,
   router,
 }: RecordMenuInput) {
@@ -71,7 +74,13 @@ export function useRecordMenu({
     toast("Копия создана — поменяйте дату и время", "info");
     router.replace({ pathname: "/book", params: { appointmentId: id } } as Href);
   };
-  const copy = (apt: Appointment) => {
+  // С НЕСОХРАНЁННЫМИ ПРАВКАМИ — СНАЧАЛА ВОПРОС. Переход в копию перехватывала
+  // защита формы, и «Сохранить» из её вопроса уводил назад в календарь:
+  // копия создана, а человек не в ней (CAL-22). Теперь копия — после ответа
+  // и с сохранённого.
+  const copy = (source: Appointment) =>
+    leaveThen((saved) => copyNow(saved ? { ...source, ...saved } : source));
+  const copyNow = (apt: Appointment) => {
     if (role === "master") {
       const id = randomUuid();
       // Копию сотрудника делает сервер — в ту же команду (`member_appointment_copy`).
