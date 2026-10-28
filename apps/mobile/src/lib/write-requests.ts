@@ -26,6 +26,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "appointment_link_lookup",
   // Оплаты тарифа в Кабинете (20261004085616): `stable`.
   "cabinet_tariff_payments",
+  // Сводка «есть ли работа» по командам для «Тарифа» (20261028154000): `stable`.
+  "calendar_work_summary",
   "current_tenant_profile_safe",
   "current_user_role",
   "invitation_preview",
