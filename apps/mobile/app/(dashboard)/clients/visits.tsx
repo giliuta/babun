@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useInClientsTab } from "@/lib/reference-href";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
+import { isVisit } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -123,10 +124,10 @@ function ClientVisitsScreen() {
   }, [rows]);
 
   // Итог сверху — то, ради чего историю чаще всего и открывают.
-  // Визит — прошедшая неотменённая работа: статуса «Выполнена» нет.
-  const done = appointments.filter(
-    (a) => a.status !== "cancelled" && (a.kind ?? "work") === "work" && a.date <= today,
-  );
+  // ВИЗИТ — ОДНО ПРАВИЛО С ДРУГИМИ ЭКРАНАМИ (`isVisit`, сводка и строка списка):
+  // закрытая работа. Прошедшая незакрытая запись визитом не считается — в
+  // ленте она с пометкой «не закрыта», а в итоге — в долге.
+  const done = appointments.filter((a) => isVisit(a) && (a.kind ?? "work") === "work");
   // «Заплачено» — деньги, полученные по записям (аванс плюс оплаты), а не
   // сумма «выполненных» минус долг.
   const spent = appointments

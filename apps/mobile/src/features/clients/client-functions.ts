@@ -17,7 +17,9 @@ export type ClientFunctionKey =
   | "client_objects"
   | "client_labels"
   | "client_personal"
-  | "client_tags";
+  | "client_tags"
+  // Блок SMS карточки — выключатель команды, как у остальных блоков.
+  | "client_sms";
 
 /** Ключи с выключателем компании (STORY-088). У остальных блоков его нет —
  *  они выключаются только у команды. */

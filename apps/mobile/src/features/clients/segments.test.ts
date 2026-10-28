@@ -12,7 +12,6 @@ import {
   segmentEvidence,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
-  sortClients,
 } from "./filter";
 
 function client(patch: Partial<Client> = {}): Client {
@@ -33,6 +32,7 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     unclosedVisits: 0,
     lastUnclosedDate: "",
     pastOpenRecords: 0,
+    lastPastOpenDate: "",
     upcomingRecords: 0,
     nextApt: null,
     nextAptDays: null,
@@ -120,24 +120,6 @@ describe("блоки статусов", () => {
     assert.equal(flat.length, SEGMENT_OPTIONS.length);
     assert.equal(new Set(flat).size, flat.length);
     for (const o of SEGMENT_OPTIONS) assert.ok(flat.includes(o.key));
-  });
-});
-
-describe("ось «Ожидается»", () => {
-  test("сверху самые дорогие предстоящие работы, без ожиданий — в хвост", () => {
-    const list = [
-      client({ id: "мало" }),
-      client({ id: "нет" }),
-      client({ id: "много" }),
-    ];
-    const map = new Map([
-      ["мало", stats({ expectedRevenue: 120 })],
-      ["много", stats({ expectedRevenue: 900 })],
-    ]);
-    assert.deepEqual(
-      sortClients(list, map, "expected").map((c) => c.id),
-      ["много", "мало", "нет"],
-    );
   });
 });
 

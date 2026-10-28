@@ -72,6 +72,7 @@ const BLOCK_WORDS: [ClientFunctionKey, string][] = [
   ["client_labels", "метка"],
   ["client_tags", "тег"],
   ["client_personal", "личное"],
+  ["client_sms", "SMS"],
 ];
 
 export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: string | null }) {
@@ -100,6 +101,7 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
     client_labels: useClientFunctionOn("client_labels", teamId),
     client_tags: useClientFunctionOn("client_tags", teamId),
     client_personal: useClientFunctionOn("client_personal", teamId),
+    client_sms: useClientFunctionOn("client_sms", teamId),
   };
   // «БЛОКИ КЛИЕНТОВ» — ОДНОЙ СТРОКОЙ (всё на одной странице, там и
   // редактируют): тумблеры блоков уехали на эту страницу, здесь —

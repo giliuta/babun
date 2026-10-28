@@ -56,6 +56,7 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
   const personal = useClientFunctionOn("client_personal", teamId);
   const files = useClientFunctionOn("client_files", teamId);
   const requisites = useClientFunctionOn("client_requisites", teamId);
+  const sms = useClientFunctionOn("client_sms", teamId);
   const blocks = client?.blocks;
   // Черновик сотрудника: положения по его карте прав и команде черновика; без
   // команды сервер кладёт клиента в первую, где «Карточки клиентов: Меняет».
@@ -98,6 +99,7 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
           personal,
           files,
           requisites,
+          sms,
         },
         draft,
         draftBlocks,
@@ -107,6 +109,6 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
         Object.entries(access).map(([key, block]) => [key, { show: block.show, edit: false }]),
       ) as CardAccess;
     },
-    [frozen, draftBlocks, blocks, caps, note, people, objectsCompany, objects, labels, tags, personal, files, requisites, draft],
+    [frozen, draftBlocks, blocks, caps, note, people, objectsCompany, objects, labels, tags, personal, files, requisites, sms, draft],
   );
 }

@@ -222,6 +222,8 @@ export function ClientLabelTags({
         // общая с «Связью»: у клиента чужого аккаунта и без права её нет
         // (иначе вела бы в свои теги).
         onSettings={tagsDoor ? () => doorway.open(() => router.push(tagsDoor)) : undefined}
+        // Каталог пуст — «Создать тег» ведёт туда же, в теги этой команды.
+        onCreateTag={tagsDoor ? () => doorway.open(() => router.push(tagsDoor)) : undefined}
         onClose={() => setTagsOpen(false)}
       />
     </>

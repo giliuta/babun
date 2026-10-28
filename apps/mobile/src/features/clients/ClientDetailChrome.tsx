@@ -40,6 +40,8 @@ interface ClientDetailChromeProps {
   onDelete: () => void;
   /** Заголовок меню — имя клиента, как у долгого нажатия в списке. */
   menuTitle?: string;
+  /** Имя в шапке, когда карточка с именем уехала вверх; нет — «Клиент». */
+  scrolledTitle?: string | null;
   /** «Напомнить» и «В чёрный список» — «Меню клиента». */
   canEdit?: boolean;
   /** «Удалить» — «Удаление клиента». */
@@ -74,6 +76,7 @@ export function ClientDetailChrome({
   onToggleBlacklist,
   onDelete,
   menuTitle,
+  scrolledTitle,
   canEdit = true,
   canDelete = false,
   onMerge,
@@ -108,7 +111,7 @@ export function ClientDetailChrome({
           архитектуре, как везде, — заголовок посередине. Своя шапка держала бы
           заголовок слева и 16-м кеглем. */}
       <ScreenHeader
-        title={draft ? "Новый клиент" : "Клиент"}
+        title={draft ? "Новый клиент" : scrolledTitle || "Клиент"}
         backTourId="client.back"
         // Пока идёт запись, «назад» молчит: уход посреди сохранения терял бы
         // правку, которую строка ещё не донесла.

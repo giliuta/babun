@@ -22,6 +22,7 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     unclosedVisits: 0,
     lastUnclosedDate: "",
     pastOpenRecords: 0,
+    lastPastOpenDate: "",
     upcomingRecords: 0,
     nextApt: null,
     nextAptDays: null,
@@ -84,19 +85,9 @@ describe("sortClients", () => {
     ]);
   });
 
-  test("«Самый большой долг»: считает ТОЛЬКО недоплату по визитам", () => {
-    // Легаси-колонка `balance` не долг: её никто
-    // не считает и не даёт править, а она поднимала наверх списка человека,
-    // которому не сделали ни одной работы.
-    const list = [
-      client("без-долга"),
-      client("баланс-минус", { balance: -300 }),
-      client("долг-по-визитам"),
-    ];
-    const map = new Map([["долг-по-визитам", stats({ debt: 100 })]]);
-    const sorted = ids(sortClients(list, map, "debt"));
-    assert.equal(sorted[0], "долг-по-визитам");
-    assert.equal(sorted.includes("баланс-минус"), true);
+  test("денежных сортировок нет — денег в строке нет", () => {
+    assert.deepEqual(SORT_ORDER, ["name", "recent", "stale"]);
+    assert.equal(Object.keys(SORT_LABELS_LONG).length, 3);
   });
 
   test("закрепление больше не поднимает клиента (владелец 03.10)", () => {
@@ -126,8 +117,8 @@ describe("sortClients", () => {
   test("порядок детерминирован при полностью равных значениях", () => {
     const list = [client("б"), client("а"), client("в")];
     const map = new Map<string, ClientStats>();
-    const once = ids(sortClients(list, map, "revenue"));
-    const twice = ids(sortClients([...list].reverse(), map, "revenue"));
+    const once = ids(sortClients(list, map, "stale"));
+    const twice = ids(sortClients([...list].reverse(), map, "stale"));
     assert.deepEqual(once, twice);
     assert.deepEqual(once, ["а", "б", "в"]); // тай-брейк по имени
   });

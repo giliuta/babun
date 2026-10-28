@@ -5,6 +5,7 @@ import {
   Clock,
   FileText,
   Home,
+  MessageSquare,
   Paperclip,
   Phone,
   StickyNote,
@@ -16,7 +17,6 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { RowCaption } from "@/components/ui/card-rows";
 import { AlwaysLine, BlockCell } from "@/components/ui/block-toggles";
 import {
   DEFAULT_CARD_FIELDS,
@@ -55,7 +55,7 @@ type PageBlock = {
 };
 
 // Порядок — порядок страницы клиента (`CLIENT_CARD_ROW_ORDER`): метка и тег
-// самым верхом. SMS здесь нет — блок живёт выключателем SMS, а не этим.
+// самым верхом; SMS — последним, как на странице клиента.
 const PAGE_BLOCKS: PageBlock[] = [
   { label: "Метка", key: "client_labels", icon: Bookmark },
   { label: "Тег", key: "client_tags", icon: Tags },
@@ -67,6 +67,7 @@ const PAGE_BLOCKS: PageBlock[] = [
   { label: "Файлы", key: "client_files", icon: Paperclip },
   { label: "Реквизиты", key: "client_requisites", icon: FileText },
   { label: "Личное", key: "client_personal", icon: UserRound },
+  { label: "SMS", key: "client_sms", icon: MessageSquare },
 ];
 
 // Денег в строке нет — они на странице клиента.
@@ -107,6 +108,7 @@ function ClientBlocksSettingsScreen() {
     client_labels: useClientFunctionOn("client_labels", teamId),
     client_tags: useClientFunctionOn("client_tags", teamId),
     client_personal: useClientFunctionOn("client_personal", teamId),
+    client_sms: useClientFunctionOn("client_sms", teamId),
   };
   // Выключено у всей компании — у команды его не включить: строка гаснет.
   const companyPeople = useFeatureOn("client_people");
@@ -145,7 +147,6 @@ function ClientBlocksSettingsScreen() {
               );
             })}
         </SectionCard>
-        <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
 
         <SectionCard title="В списке">
           <AlwaysLine blocks={[{ label: "Имя", pinned: true }]} />
@@ -161,7 +162,6 @@ function ClientBlocksSettingsScreen() {
             />
           ))}
         </SectionCard>
-        <RowCaption text="Что видно под именем в списке клиентов." />
       </ScrollView>
     </Screen>
   );

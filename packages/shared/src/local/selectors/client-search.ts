@@ -302,3 +302,47 @@ function matchesPiece(
   }
   return false;
 }
+
+/** ПОЧЕМУ КЛИЕНТ НАШЁЛСЯ, ЕСЛИ НЕ ПО ИМЕНИ И НЕ ПО НОМЕРУ: «Адрес: Makarios 8»,
+ *  «Заметка: код ворот 42». Без этой строки человек видит в выдаче имя, в
+ *  котором набранного нет, и думает, что поиск сломан. Нашёлся по имени или
+ *  номеру, или слова запроса разошлись по разным полям — `null`. */
+export function clientMatchEvidence(client: Client, rawQuery: string): string | null {
+  const q = rawQuery.trim();
+  if (!q || isEmptyQuery(q)) return null;
+  if (clientSearchRank(client, q) < 2) return null;
+  const fields: [label: string, value: string | null | undefined, sound: boolean][] = [
+    ["Адрес", client.address, true],
+    ["Метка", client.city, true],
+    ...(client.locations ?? []).flatMap((loc): [string, string | null | undefined, boolean][] => [
+      ["Адрес", loc.address, true],
+      ["Объект", loc.label, false],
+      ["Объект", loc.note, false],
+    ]),
+    ...(client.phones ?? []).flatMap((p): [string, string | null | undefined, boolean][] => [
+      ["Доп. номер", p.number, false],
+      ["Контакт", p.name, true],
+    ]),
+    ["Почта", client.email, false],
+    ["Имя для SMS", client.sms_name, true],
+    ["Реквизиты", client.legal_name, true],
+    ["Реквизиты", client.vat_number, false],
+    ["Комментарий", client.comment, false],
+    ...(client.notes ?? []).map((n): [string, string, boolean] => ["Заметка", n.text, false]),
+  ];
+  const words = q.split(/\s+/).filter((w) => normalizePlain(w).length > 0);
+  for (const [label, value, sound] of fields) {
+    if (!value?.trim()) continue;
+    const digits = normalizeDigits(value);
+    const hay: Haystacks = {
+      normalized: sound ? [normalizeSearchable(value)] : [],
+      plain: sound ? [] : [normalizePlain(value)],
+      digits: digits.length >= 4 ? [digits] : [],
+      phones: label === "Доп. номер" && digits.length >= 6 ? [digits] : [],
+    };
+    const hit =
+      matchesPiece(q, hay, []) || (words.length > 1 && words.every((w) => matchesPiece(w, hay, [])));
+    if (hit) return `${label}: ${value.trim().replace(/\s+/g, " ")}`;
+  }
+  return null;
+}

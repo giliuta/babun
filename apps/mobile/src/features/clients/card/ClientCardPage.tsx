@@ -31,6 +31,10 @@ import type { CardMenu } from "./card-menu-actions";
 import { CardDataNotice } from "./CardDataNotice";
 import type { ClientCard } from "./use-client-card";
 
+/** Сколько прокрутить, чтобы имя ушло под шапку: метка и тег сверху плюс
+ *  строка имени. */
+const NAME_SCROLL_Y = 96;
+
 /** The client card page (the draft too): chrome, blocks in their order and
  *  the draft's footer. All data comes in `card`; `menu` is the «⋯». */
 export function ClientCardPage({
@@ -97,6 +101,9 @@ export function ClientCardPage({
   // «СМЕНИТЬ КОМАНДУ» — ТОЛЬКО ВЛАДЕЛЕЦ СВОЕЙ БАЗЫ и только когда есть куда:
   // варианты — живые видимые команды. Пишет дверь `set_client_team`.
   const [teamOpen, setTeamOpen] = useState(false);
+  // ИМЯ В ШАПКЕ ПРИ ПРОКРУТКЕ: блок с именем уехал вверх — шапка говорит,
+  // чья это карточка, вместо безликого «Клиент».
+  const [nameScrolled, setNameScrolled] = useState(false);
   const setClientTeam = useSetClientTeam();
   const { choices: teamChoices } = useClientTeamChoices();
   const onChangeTeam =
@@ -141,6 +148,7 @@ export function ClientCardPage({
         onDelete={onDelete}
         // Меню то же, что у долгого нажатия в списке: имя сверху.
         menuTitle={c.full_name || c.phone || "Клиент"}
+        scrolledTitle={nameScrolled ? c.full_name || c.phone || null : null}
         // «Напомнить» и «В чёрный список» — своя база по праву карточки,
         // партнёр — по «Меню клиента».
         canEdit={scope?.kind === "member" ? partnerMenu : access.card.edit}
@@ -159,6 +167,11 @@ export function ClientCardPage({
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          const past = e.nativeEvent.contentOffset.y > NAME_SCROLL_Y;
+          if (past !== nameScrolled) setNameScrolled(past);
+        }}
       >
         <CardDataNotice card={card} />
 

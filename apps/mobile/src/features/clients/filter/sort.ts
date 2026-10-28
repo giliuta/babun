@@ -7,13 +7,7 @@ import { visitMark } from "../visit-mark";
 
 // ── Sort ───────────────────────────────────────────────────────────
 
-export type SortKey =
-  | "recent"
-  | "stale"
-  | "debt"
-  | "revenue"
-  | "expected"
-  | "name";
+export type SortKey = "recent" | "stale" | "name";
 
 /** ЗАКОН СОРТИРОВКИ: сортируем только по
  *  тому числу, которое НАПЕЧАТАНО в карточке списка, а подпись описывает
@@ -25,15 +19,9 @@ export type SortKey =
 export const SORT_LABELS_LONG: Record<SortKey, string> = {
   recent: "Недавно были",
   stale: "Давно не были",
-  // Короткие имена осей («просто долг, доход» — «самый большой» многословно).
-  // Больше — всегда сверху: обратной
-  // стороны у денег не бывает, поэтому направление в подписи не нужно.
-  debt: "Долг",
-  revenue: "Доход",
-  // Третье число карточки наконец стало осью: «Период: следующая неделя»
-  // + эта ось = самые дорогие предстоящие работы сверху. Подпись НЕ
-  // обещает «за период» — expectedRevenue суммирует все будущие записи.
-  expected: "Ожидается",
+  // ДЕНЕЖНЫХ ОСЕЙ («Долг», «Доход», «Ожидается») НЕТ: денег в строке нет
+  // (`card-prefs.ts`), и по закону выше порядок по ним глазами не объяснить.
+  // Должников отбирает статус «Должники», а не сортировка.
   // Всё идёт по алфавитному порядку.
   name: "По алфавиту",
 };
@@ -41,22 +29,11 @@ export const SORT_LABELS_LONG: Record<SortKey, string> = {
 /** СОРТИРОВКА ПО УМОЛЧАНИЮ — по алфавиту: в фильтрах она выбрана сразу. */
 export const DEFAULT_SORT: SortKey = "name";
 
-export const SORT_ORDER: SortKey[] = [
-  "name",
-  "recent",
-  "stale",
-  "debt",
-  "revenue",
-  "expected",
-];
+export const SORT_ORDER: SortKey[] = ["name", "recent", "stale"];
 
 /** Смысловые группы рядов попапа (волосок между блоками): алфавит —
- *  первым, он же умолчание · время · деньги. */
-export const SORT_BLOCKS: SortKey[][] = [
-  ["name"],
-  ["recent", "stale"],
-  ["debt", "revenue", "expected"],
-];
+ *  первым, он же умолчание · время. */
+export const SORT_BLOCKS: SortKey[][] = [["name"], ["recent", "stale"]];
 
 /** ДОЛГ КЛИЕНТА — ОДНА ФОРМУЛА НА ВЕСЬ ПРОДУКТ (`appointmentDebt`):
  *  недоплата по выполненным записям, прошедшие записи, по которым не
@@ -107,26 +84,16 @@ export function sortClients(
     const mark = visitMark(s);
     const last = mark && mark.kind !== "ahead" ? mark.date : "";
     let has = 1; // есть ли значение по активной оси
-    let num = 0; // числовая ось (деньги)
     let str = ""; // строковая ось (даты)
     if (sort === "recent" || sort === "stale") {
       has = last ? 1 : 0;
       str = last;
-    } else if (sort === "debt") {
-      num = clientDebt(c, s);
-      has = num > 0 ? 1 : 0;
-    } else if (sort === "revenue") {
-      num = s?.totalSpent ?? 0;
-      has = num > 0 ? 1 : 0;
-    } else if (sort === "expected") {
-      num = s?.expectedRevenue ?? 0;
-      has = num > 0 ? 1 : 0;
     } else {
       // Имя — тоже ось: безымянный клиент не имеет значения и уходит в
       // хвост, а не встаёт первым в «По алфавиту».
       has = c.full_name.trim() ? 1 : 0;
     }
-    return { c, has, num, str, last };
+    return { c, has, str, last };
   });
   // ISO-даты и uuid сравниваем строками напрямую — коллатор нужен только
   // именам (он на порядок дороже и на датах бессмыслен).
@@ -137,12 +104,6 @@ export function sortClients(
         if (a.str !== b.str) return a.str < b.str ? 1 : -1;
       } else if (sort === "stale") {
         if (a.str !== b.str) return a.str < b.str ? -1 : 1;
-      } else if (
-        sort === "debt" ||
-        sort === "revenue" ||
-        sort === "expected"
-      ) {
-        if (a.num !== b.num) return b.num - a.num;
       } else {
         const n = collator.compare(a.c.full_name, b.c.full_name);
         if (n !== 0) return n;

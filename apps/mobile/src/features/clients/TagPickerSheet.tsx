@@ -32,6 +32,7 @@ export function TagPickerSheet({
   visible,
   open,
   onSettings,
+  onCreateTag,
   tags,
   selected,
   onApply,
@@ -57,6 +58,9 @@ export function TagPickerSheet({
   onApply: (ids: string[]) => void;
   /** Шестерёнка в шапке — страница справочника тегов (как у метки). */
   onSettings?: () => void;
+  /** Пустой каталог — «Создать тег» футером шторки (не кнопкой внутри
+   *  пустоты — канон `EmptyState.action`). Нет — футера нет. */
+  onCreateTag?: () => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -115,6 +119,10 @@ export function TagPickerSheet({
                 onClose();
               }}
             />
+          </View>
+        ) : onCreateTag ? (
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
+            <Button label="Создать тег" onPress={onCreateTag} />
           </View>
         ) : undefined
       }

@@ -23,9 +23,11 @@ export interface CityLike {
   color: string | null;
 }
 
-/** Ключ типа объекта — тот же, по которому варианты схлопываются в фасет. */
+/** Ключ типа объекта — тот же, по которому варианты схлопываются в фасет.
+ *  ПО ПОДПИСИ, а не по сырому значению: старое `house` подписано «Дом», и
+ *  рядом с живым «Дом» фильтр показывал два одинаковых «Дом». */
 export function propertyKey(value: string): string {
-  return value.trim().toLowerCase();
+  return propertyTypeLabel(value).trim().toLowerCase();
 }
 
 /** Label facet options: the whole library plus legacy free values. */
@@ -86,7 +88,7 @@ export function propertyFacetOptions(clients: Client[]): FacetOption[] {
   const uses = new Map<string, { value: string; count: number }>();
   for (const c of clients) {
     for (const value of clientPropertyTypes(c)) {
-      const key = value.trim().toLowerCase();
+      const key = propertyKey(value);
       if (!key) continue;
       const prev = uses.get(key);
       if (prev) prev.count += 1;

@@ -9,6 +9,9 @@ import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
 import { useThemeColors } from "@/theme/colors";
+import { clientMatchEvidence } from "@babun/shared/local/selectors/client-search";
+import { segmentEvidence } from "@/features/clients/filter";
+import { useBusinessToday } from "@/features/settings/business-today";
 import type { ClientsList } from "./use-clients-list";
 
 /** The list itself: loading, the error notice, or the rows. */
@@ -37,7 +40,17 @@ export function ListBody({ list }: { list: ClientsList }) {
     setMenuClient,
     filtering,
     teamChoice,
+    query,
+    filter,
   } = list;
+  // УЛИКА ПОД ИМЕНЕМ: при поиске — поле, по которому клиент нашёлся, если не
+  // по имени и не по номеру; без поиска — почему он в выбранном статусе
+  // («не был 87 дней»). Иначе строка в выдаче выглядит случайной.
+  const today = useBusinessToday();
+  const evidenceOf = (c: Parameters<typeof segmentEvidence>[0]) =>
+    query.trim()
+      ? clientMatchEvidence(c, query)
+      : segmentEvidence(c, filter.segments, statsMap.get(c.id), today);
   return (
     <>
       {isLoading ? (
@@ -93,6 +106,7 @@ export function ListBody({ list }: { list: ClientsList }) {
                 client={item}
                 stats={stats}
                 cardFields={cardFieldsFor(item.team_id)}
+                evidence={evidenceOf(item)}
                 // «Связаться» клиента работодателя — набор и шестерёнка его
                 // компании, а не своей.
                 source={guest}

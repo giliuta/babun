@@ -72,9 +72,7 @@ export function PeriodSplitRow({
           onOpenWheels();
         }}
         accessibilityRole="button"
-        accessibilityLabel={`Даты: ${
-          hasPeriod ? datesLabel : "не заданы"
-        }`}
+        accessibilityLabel={hasPeriod ? `Даты: ${datesLabel}` : "Даты не заданы"}
         accessibilityHint="Открывает выбор диапазона"
         style={({ pressed }) => ({
           flexDirection: "row",
