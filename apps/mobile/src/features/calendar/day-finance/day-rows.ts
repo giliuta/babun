@@ -7,6 +7,7 @@ import {
   recordRows,
   type RecordRow,
   type RecordRowRefs,
+  type RowAccount,
 } from "@/features/finances/record-rows";
 
 // ОДНА ОПЕРАЦИЯ — ОДНА СТРОКА В ДНЕ И В ЛЕНТЕ. Своя сборка дня называла оплату
@@ -44,4 +45,21 @@ export function dayExtraRow(e: DayExtra, ymd: string): RecordRow {
     time: null,
     count: 1,
   };
+}
+
+/** Счета оплат записи — для подписи «время · счёт · услуги». Строки оплат в
+ *  плане дня не встают (их несёт сама запись), поэтому счёт берётся из них;
+ *  место счёта — его место среди плиток, как в ленте. */
+export function recordAccountTags(
+  appointmentId: string,
+  payments: readonly Pick<FinanceTransaction, "appointment_id" | "account_id">[],
+  accounts: readonly { id: string; name: string }[],
+): RowAccount[] | undefined {
+  const tags: RowAccount[] = [];
+  for (const tx of payments) {
+    if (tx.appointment_id !== appointmentId || !tx.account_id) continue;
+    const rank = accounts.findIndex((acc) => acc.id === tx.account_id);
+    if (rank >= 0) tags.push({ name: accounts[rank]!.name, rank });
+  }
+  return tags.length > 0 ? tags : undefined;
 }

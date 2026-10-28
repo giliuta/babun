@@ -9,7 +9,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { RecordRowView } from "@/features/finances/RecordRow";
-import type { RecordRow as FeedRow } from "@/features/finances/record-rows";
+import type { RecordRow as FeedRow, RowAccount } from "@/features/finances/record-rows";
 import { useThemeColors } from "@/theme/colors";
 import type { LucideIcon } from "lucide-react-native";
 import { HandCoins, CalendarClock } from "lucide-react-native";
@@ -43,6 +43,7 @@ export function DayList({
   listExtras,
   clientName,
   serviceNames,
+  recordAccounts,
   recordStatus,
   debtCaption,
   openRecord,
@@ -63,6 +64,8 @@ export function DayList({
   listExtras: DayExtra[];
   clientName: (a: Appointment) => string;
   serviceNames: (a: Appointment) => string[];
+  /** Счета оплат записи — подпись «время · счёт · услуги», как в ленте. */
+  recordAccounts: (a: Appointment) => readonly RowAccount[] | undefined;
   recordStatus: (a: Appointment) => RecordStatus;
   /** Возраст долга записи — подпись под суммой, как в ленте. */
   debtCaption: (a: Appointment) => string;
@@ -104,6 +107,7 @@ export function DayList({
                     name={clientName(item.record)}
                     time={item.record.time_start?.slice(0, 5) || null}
                     services={serviceNames(item.record)}
+                    accounts={recordAccounts(item.record)}
                     amount={status.amount}
                     color={status.color}
                     status={status.word}
@@ -122,6 +126,7 @@ export function DayList({
             name={clientName(a)}
             time={a.time_start?.slice(0, 5) || null}
             services={serviceNames(a)}
+            accounts={recordAccounts(a)}
             // Остаток, а не итог — у обоих списков:
             // плитка «Ожидается» складывает остатки, и запись €100 с
             // предоплатой €30 стояла строкой €100 под плиткой €70.

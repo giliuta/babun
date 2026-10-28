@@ -76,3 +76,30 @@ test("старая ручная операция — строкой той же 
   assert.equal(row.amount, -15);
   assert.equal(whatLine(row), "Ручная операция");
 });
+
+test("запись плана: «время · счёт · услуги» через «·», как в ленте", async () => {
+  const { recordAccountTags } = await import("./day-rows");
+  const accounts = [
+    { id: "cash", name: "Cash" },
+    { id: "card", name: "Card" },
+  ];
+  const tags = recordAccountTags(
+    "a1",
+    [
+      { appointment_id: "a1", account_id: "card" },
+      { appointment_id: "a2", account_id: "cash" },
+    ],
+    accounts,
+  );
+  const a = appt({
+    time_start: "11:00",
+    services: [
+      { serviceId: "s1", serviceName: "A/C Cleaning" },
+      { serviceId: "s2", serviceName: "A/C Cleaning (Commercial)" },
+    ] as never,
+  });
+  const { appointmentServiceNames } = await import("@/features/finances/record-rows");
+  const line = whatLine({ time: "11:00", services: appointmentServiceNames(a, new Map()), accounts: tags });
+  assert.equal(line, "11:00 · Card · A/C Cleaning · A/C Cleaning (Commercial)");
+  assert.equal(recordAccountTags("a3", [], accounts), undefined);
+});

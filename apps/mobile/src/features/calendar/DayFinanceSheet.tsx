@@ -29,7 +29,7 @@ import { useSession } from "@/providers/SessionProvider";
 import { AccountSplit } from "./day-finance/AccountSplit";
 import { dayList } from "./day-finance/day-list";
 import { DayList, type RecordStatus } from "./day-finance/DayList";
-import { dayTxRow } from "./day-finance/day-rows";
+import { dayTxRow, recordAccountTags } from "./day-finance/day-rows";
 import { DayTiles } from "./day-finance/DayTiles";
 import type { DayView } from "./day-finance/types";
 import { useDayAccounts } from "./day-finance/use-day-accounts";
@@ -198,6 +198,7 @@ export function DayFinanceSheet({
   );
   const catalog = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
   const serviceNames = (a: Appointment) => appointmentServiceNames(a, catalog);
+  const recordAccounts = (a: Appointment) => recordAccountTags(a.id, incomeRows, accounts);
   const debtCaption = (a: Appointment) => debtAge(a.date, businessToday);
   const servicesOf = (a: Appointment) =>
     (a.services ?? []).map((s) => s.serviceName).filter(Boolean).join(", ");
@@ -346,6 +347,7 @@ export function DayFinanceSheet({
             listExtras={listExtras}
             clientName={clientName}
             serviceNames={serviceNames}
+            recordAccounts={recordAccounts}
             debtCaption={debtCaption}
             recordStatus={recordStatus}
             openRecord={openRecord}

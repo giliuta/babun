@@ -2,19 +2,20 @@ import { Text, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { SelectRow } from "@/components/ui/select-rows";
-import { whatLine } from "@/features/finances/record-rows";
+import { whatLine, type RowAccount } from "@/features/finances/record-rows";
 import { useThemeColors } from "@/theme/colors";
 
 // ЗАПИСЬ ПЛАНА ДНЯ — ПЛАШКОЙ ЛЕНТЫ «ФИНАНСОВ». Операции дня рисует сам
 // `RecordRowView` ленты (`day-rows.ts`); у записи без денег строки ленты нет,
-// поэтому плашка своя, но геометрия, подпись (`whatLine`: время · услуги) и
-// подпись под суммой — те же: под долгом его возраст, как у долга в ленте.
+// поэтому плашка своя, но геометрия, подпись (`whatLine`: время · счёт ·
+// услуги) и подпись под суммой — те же: под долгом его возраст, как в ленте.
 
 /** Строка записи (долг, план): клиент, время и услуги под ним, сумма справа. */
 export function RecordRow({
   name,
   time,
   services,
+  accounts,
   amount,
   color,
   status,
@@ -25,6 +26,8 @@ export function RecordRow({
   name: string;
   time: string | null;
   services: string[];
+  /** Счета, через которые прошла оплата записи, — как у строки ленты. */
+  accounts?: readonly RowAccount[];
   amount: number;
   color: string;
   /** «оплачено» · «долг» · «ожидается» — для VoiceOver; глазу это говорят
@@ -36,7 +39,7 @@ export function RecordRow({
   onPress: () => void;
 }) {
   const t = useThemeColors();
-  const what = whatLine({ time, services });
+  const what = whatLine({ time, services, accounts });
   return (
     <SelectRow
       icon={icon}

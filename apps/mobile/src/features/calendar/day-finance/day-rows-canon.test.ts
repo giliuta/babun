@@ -15,7 +15,7 @@ test("операция дня — RecordRowView ленты, запись — п�
   assert.match(list, /<RecordRowView key=\{key\} row=\{\{ \.\.\.row, key \}\} tone=\{dayTxTone\(tx\)\}/);
   assert.doesNotMatch(list, /<TxRow/);
   const rows = read("rows.tsx");
-  assert.match(rows, /const what = whatLine\(\{ time, services \}\);/);
+  assert.match(rows, /const what = whatLine\(\{ time, services, accounts \}\);/);
   assert.equal((rows.match(/<SelectRow/g) ?? []).length, 1);
   assert.doesNotMatch(rows, /minHeight: 56/);
   assert.doesNotMatch(rows, /fontSize: 16/);
