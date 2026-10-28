@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
-import { Linking, Pressable, ScrollView, Text, View, Platform } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { deviceForSupport } from "@/lib/device-word";
 import { useRouter, type Href } from "expo-router";
 import {
   ChevronDown,
@@ -73,8 +74,8 @@ export function HelpScreen() {
     // В письме — та же версия, что на «О приложении»: на телефоне — версия
     // магазина и номер сборки, на сайте — внутренняя.
     // Устройство — настоящее: письмо с Android подписывалось «iPhone», и
-    // поддержка искала ошибку не на той платформе.
-    const device = `${Platform.OS === "android" ? "Android" : "iPhone"} ${String(Platform.Version)}`;
+    // поддержка искала ошибку не на той платформе (`device-word.ts`).
+    const device = deviceForSupport();
     Linking.openURL(supportLink(row, versionSummary(appBuildFacts()), device)).catch(() => {
       // Нет приложения под ссылку (например, почты) — сказать, а не молчать.
       toast("Не удалось открыть", "error");

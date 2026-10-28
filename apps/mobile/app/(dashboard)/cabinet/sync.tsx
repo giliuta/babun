@@ -5,7 +5,6 @@ import {
   ScrollView,
   Text,
   View,
-  Platform,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { CheckCircle2, RefreshCw, Trash2 } from "lucide-react-native";
@@ -24,6 +23,7 @@ import {
   type QueuedOp,
 } from "@babun/shared/db/cache/sql";
 import { Button } from "@/components/ui/Button";
+import { onThisDevice } from "@/lib/device-word";
 import { GUTTER } from "@/components/ui/tokens";
 import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
@@ -192,11 +192,7 @@ export default function SyncStatusScreen() {
         {!online ? (
           <NoticeBar
             tone="warn"
-            message={
-              Platform.OS === "android"
-                ? "Изменения хранятся только на этом телефоне и отправятся после подключения."
-                : "Изменения хранятся только на этом iPhone и отправятся после подключения."
-            }
+            message={`Изменения хранятся только ${onThisDevice()} и отправятся после подключения.`}
           />
         ) : null}
 
@@ -212,11 +208,7 @@ export default function SyncStatusScreen() {
           <EmptyState
             icon={<CheckCircle2 color={t.success} size={36} />}
             title="Всё синхронизировано"
-            subtitle={
-              Platform.OS === "android"
-                ? "На этом телефоне нет ожидающих изменений."
-                : "На этом iPhone нет ожидающих изменений."
-            }
+            subtitle={`Нет ожидающих изменений ${onThisDevice()}.`}
           />
         ) : null}
 
@@ -242,9 +234,7 @@ export default function SyncStatusScreen() {
                       ? op.last_error || "Сервер отклонил изменение."
                       : online
                         ? "Ожидает отправки"
-                        : Platform.OS === "android"
-                          ? "Сохранено на этом телефоне"
-                          : "Сохранено на этом iPhone"}
+                        : `Сохранено ${onThisDevice()}`}
                   </Text>
                 </View>
               </View>

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { onThisDevice } from "@/lib/device-word";
 import { RefreshCw, Trash2 } from "lucide-react-native";
 import {
   removeMemberOp,
@@ -22,8 +23,7 @@ export function MemberQueueCards({ ops, online }: { ops: MemberQueuedOp[]; onlin
   const t = useThemeColors();
   const [busy, setBusy] = useState(false);
   const held = heldBehindRefusal(ops);
-  const savedHere =
-    Platform.OS === "android" ? "Сохранено на этом телефоне" : "Сохранено на этом iPhone";
+  const savedHere = `Сохранено ${onThisDevice()}`;
 
   const retry = async (op: MemberQueuedOp) => {
     if (!online) {

@@ -57,6 +57,7 @@ import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { useCurrentRole } from "@/session/tenant";
 import { useMirror } from "@/session/mirror-state";
+import { thisDeviceTitle } from "@/lib/device-word";
 import { confirmAndSignOut } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -115,7 +116,7 @@ export default function CabinetHome() {
             за свой (`OwnAccountSection`). */}
         <OwnAccountSection />
 
-        <SectionEyebrow>Этот телефон</SectionEyebrow>
+        <SectionEyebrow>{thisDeviceTitle()}</SectionEyebrow>
         <SectionCard>
           <TourTarget id="cabinet.notifications">
             <NotificationsRow />
