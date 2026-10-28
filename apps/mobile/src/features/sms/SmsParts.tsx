@@ -3,7 +3,6 @@ import { MessageSquare } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { LOW_BALANCE_CENTS, type SmsAccount } from "./sms-model";

@@ -11,7 +11,6 @@ import {
   HiddenClientsScreen,
 } from "@/features/clients/HiddenClientsScreen";
 import { useCurrentRole } from "@/session/tenant";
-import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { Screen } from "@/components/ui/Screen";
@@ -42,7 +41,6 @@ export default function ClientTrashScreenRoute() {
 }
 
 function ClientTrashScreen() {
-  const t = useThemeColors();
   const trashed = useTrashedClients();
   const restore = useRestoreClient();
   const erase = useDeleteClientForever();
