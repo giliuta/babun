@@ -64,7 +64,7 @@ export function CalendarPickerSheet({
             />
           ))
         ) : (
-          <EmptyState title="В компании пока нет команд" />
+          <EmptyState title="Команд пока нет" />
         )}
       </SelectList>
     </BottomSheet>

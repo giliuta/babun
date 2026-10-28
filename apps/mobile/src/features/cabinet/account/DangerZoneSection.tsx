@@ -79,7 +79,7 @@ export function DangerZoneSection({ email }: { email: string }) {
           tile={SETTINGS_TILE.red}
           icon={Trash2}
           title="Удалить аккаунт"
-          sub="Все данные сотрутся навсегда"
+          sub="Все данные удалятся насовсем"
           onPress={openSheet}
         />
       </SectionCard>
