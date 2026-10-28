@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { labelsOfferedFor, servingTeamIds } from "./serving-teams";
+import { labelsOfferedFor, linkableToGroup, servingTeamIds } from "./serving-teams";
 import { filterLabelsFor, filterTagsFor } from "./list/list-derive";
 import { bulkTagsOffered } from "./bulk-edit";
 import type { ClientTag } from "@babun/shared/local/clients";
@@ -73,7 +73,8 @@ describe("шторка «Метка клиента»", () => {
   test("карточка строит варианты по обслуживающим календарям, а не по всей компании", () => {
     const tiles = read("ClientLabelTags.tsx");
     assert.match(tiles, /servingTeamIds\(client, appointments, archivedTeamIds\)/);
-    assert.match(tiles, /labelsOfferedFor\(cities, servingTeams\)/);
+    assert.match(tiles, /labelsOfferedFor\(liveCities, servingTeams\)/);
+    assert.match(tiles, /const \{ data: liveCities = \[\] \} = useLiveCities\(\);/);
     assert.match(tiles, /options=\{labelOptions\}/);
     // Прежний обход всего справочника не вернулся.
     assert.doesNotMatch(tiles, /return cities\s*\.filter/);
@@ -126,5 +127,44 @@ describe("«Кто привёл» — ровно видимое в «Клиен�
     assert.match(src, /const \{ data: allClients = \[\] \} = useClients\(\);/);
     assert.match(src, /withoutArchivedTeams\(allClients, archivedTeamIds, companyAppointments\)/);
     assert.match(src, /title="Кто привёл"\s*clients=\{referrerPool\}/);
+  });
+});
+
+describe("«Люди» — только обслуживающие команды группы", () => {
+  const people = [
+    { id: "own", team_id: YD },
+    { id: "visited", team_id: DK },
+    { id: "foreign", team_id: DK },
+    { id: "cancelled", team_id: DK },
+  ];
+  const appts = [appt("visited", YD), appt("cancelled", YD, "cancelled"), appt("foreign", DK)];
+  test("человек своей команды группы и тот, кого она обслуживала", () => {
+    assert.deepEqual(
+      linkableToGroup({ team_id: YD }, people, appts, archived).map((p) => p.id),
+      ["own", "visited"],
+    );
+  });
+  test("группа без команды не запирает, группа архива — никого", () => {
+    assert.equal(linkableToGroup({ team_id: null }, people, appts, archived).length, people.length);
+    assert.equal(linkableToGroup({ team_id: ARCHIVED }, people, appts, archived).length, 0);
+  });
+  test("дверь связи отдаёт шторке только их, новый человек — в команду группы", () => {
+    const door = read("ClientLinkDoor.tsx");
+    assert.match(door, /linkableToGroup\(group, directory, appointments, archivedTeamIds\)/);
+    assert.match(door, /group=\{group\}\s*clients=\{candidates\}/);
+    assert.match(read("ClientPeopleDoor.tsx"), /\.\.\.\(c\.team_id \? \{ team: c\.team_id \} : \{\}\)/);
+  });
+});
+
+describe("метки для выбора — `cities_live` с откатом до наката", () => {
+  const src = () => read("../reference/queries/cities.ts");
+  test("читает представление, без него — прежнее чтение живых строк", () => {
+    assert.match(src(), /\.from\("cities_live" as "cities"\)/);
+    assert.match(src(), /if \(!isMissingRelation\(error\)\) throw new Error\(error\.message\);\s*return fetchCities\(client, tenantId, false, null\);/);
+    assert.match(src(), /error\.code === "PGRST205"/);
+    assert.match(src(), /queryKey: \["cities", tenantId, "picker"\] as const/);
+  });
+  test("шторка клиента и фильтр списка читают его", () => {
+    assert.match(read("list/use-list-sources.ts"), /useLiveCities\(\)/);
   });
 });

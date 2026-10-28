@@ -182,7 +182,7 @@ export function useClientPeople({
   /** Черновик нового клиента — ТОЙ ЖЕ дорогой, которой открыта карточка:
    *  общий адрес `/client` лежит поверх звавшего (запись), и уход во вкладку
    *  «Клиенты» положил бы поверх неё вторую копию табов. */
-  const draftHref = (params: DraftLinkParams): Href =>
+  const draftHref = (params: DraftLinkParams & { team?: string }): Href =>
     newClientDraftHref(pathname, scope, params);
 
   const askLink = (ask: LinkDoorAsk) => {
@@ -217,7 +217,11 @@ export function useClientPeople({
     afterDoor.current = null;
     setDoor(null);
     if (!c) return;
-    router.push(draftHref(draftLinkParams(c.id, link, prefill)));
+    // Новый человек — в команду группы: иначе связь с ней сервер отбил бы
+    // (`client:people_other_team`) уже после того, как имя набрано.
+    router.push(
+      draftHref({ ...draftLinkParams(c.id, link, prefill), ...(c.team_id ? { team: c.team_id } : {}) }),
+    );
   };
 
   /** Карточка человека из строки связи. Ключ не наш — открывать нечего:

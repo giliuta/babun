@@ -25,6 +25,7 @@ export {
 export {
   fetchCities,
   useCities,
+  useLiveCities,
   useCreateCity,
   useReorderCities,
 } from "./queries/cities";

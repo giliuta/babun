@@ -65,3 +65,24 @@ export function labelsOfferedFor<
 >(rows: readonly Row[], teamIds: ReadonlySet<string>): Row[] {
   return uniqueByName(rows.filter((row) => liveRowOfTeams(row, teamIds)));
 }
+
+/** «ЛЮДИ»: кого можно привязать к карточке-группе. Связь живёт у человека, и
+ *  сервер (`client:people_other_team`) пускает её, только когда команда
+ *  группы — обслуживающая для человека: его своя или команда его записи.
+ *  Группа без команды ничего не запирает; группа календаря в архиве не
+ *  обслуживает никого. */
+export function linkableToGroup<T extends Pick<Client, "id" | "team_id">>(
+  group: Pick<Client, "team_id">,
+  clients: readonly T[],
+  appointments: readonly Pick<Appointment, "team_id" | "client_id" | "status">[],
+  archivedTeamIds: ReadonlySet<string>,
+): T[] {
+  const team = group.team_id;
+  if (!team) return clients as T[];
+  if (archivedTeamIds.has(team)) return [];
+  const served = new Set<string>();
+  for (const a of appointments) {
+    if (a.team_id === team && a.client_id && a.status !== "cancelled") served.add(a.client_id);
+  }
+  return clients.filter((c) => c.team_id === team || served.has(c.id));
+}

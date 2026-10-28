@@ -15,7 +15,7 @@ import { labelsOfferedFor, servingTeamIds } from "@/features/clients/serving-tea
 import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 import { useReferenceHref } from "@/lib/reference-href";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
-import { useCities } from "@/features/reference/queries";
+import { useCities, useLiveCities } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
@@ -57,6 +57,10 @@ export function ClientLabelTags({
   const t = useThemeColors();
   const router = useRouter();
   const { data: cities = [] } = useCities();
+  // Варианты — из `cities_live` (без удалённых и архивных календарей; до
+  // наката представления — прежнее чтение). Полный справочник выше — только
+  // чтобы назвать цветом уже стоящую метку.
+  const { data: liveCities = [] } = useLiveCities();
   // ВАРИАНТЫ — ТОЛЬКО ОБСЛУЖИВАЮЩИХ КАЛЕНДАРЕЙ (`serving-teams.ts`): своя
   // команда клиента и команды его записей, без архива и удалённых строк.
   // Раньше шторка клиента Y&D предлагала метки всех календарей компании,
@@ -68,8 +72,8 @@ export function ClientLabelTags({
   );
   // ОДНО ИМЯ — ОДНА СТРОКА: метка принадлежит команде, у клиента она — имя.
   const servingLabels = useMemo(
-    () => labelsOfferedFor(cities, servingTeams),
-    [cities, servingTeams],
+    () => labelsOfferedFor(liveCities, servingTeams),
+    [liveCities, servingTeams],
   );
   const labelOptions = useMemo(
     () => servingLabels.map((c) => ({ name: c.name, color: c.color ?? getAvatarColor(c.name) })),

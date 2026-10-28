@@ -52,6 +52,46 @@ export function useCities(opts?: {
   });
 }
 
+// МЕТКИ ДЛЯ ВЫБОРА — ПРЕДСТАВЛЕНИЕ `cities_live`: без удалённых и без меток
+// календарей в архиве, под теми же правами строки, что `cities`. Пока
+// представления на сервере нет (накат 20261028200100), — прежнее чтение
+// живых строк: шторки работают и до наката, и после. Ключ лежит под
+// `["cities"]`, поэтому любая правка меток перечитывает и его.
+export function useLiveCities() {
+  const { tenantId, client, ready } = useReferenceCompany();
+  return useQuery({
+    queryKey: ["cities", tenantId, "picker"] as const,
+    enabled: !!tenantId && ready,
+    queryFn: () => fetchLiveCities(client, tenantId as string),
+  });
+}
+
+/** Нет представления — PostgREST не нашёл его в кэше схемы (PGRST205) или
+ *  Postgres не знает отношения (42P01). Остальные ошибки — настоящие. */
+export function isMissingRelation(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "PGRST205" ||
+    error.code === "42P01" ||
+    /could not find the table|does not exist/i.test(error.message ?? "")
+  );
+}
+
+export async function fetchLiveCities(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<City[]> {
+  const { data, error } = await client
+    // Представления нет в сгенерированных типах до наката; строки те же.
+    .from("cities_live" as "cities")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("position")
+    .order("created_at");
+  if (!error) return data;
+  if (!isMissingRelation(error)) throw new Error(error.message);
+  return fetchCities(client, tenantId, false, null);
+}
+
 /** Чтение городов ЧИСТОЙ функцией (см. `fetchTeams`). */
 export async function fetchCities(
   client: typeof supabase,
