@@ -1,16 +1,12 @@
 import { useState, type MutableRefObject } from "react";
-import type { Href, useRouter } from "expo-router";
+import { useNavigation, type Href, type useRouter } from "expo-router";
 import type { Appointment, AppointmentStatus } from "@babun/shared/local/appointments";
-import { duplicateAppointment } from "@babun/shared/local/appointments";
-import { randomUuid } from "@babun/shared/sync";
 import type { useToast } from "@/components/ui/Toast";
 import type { ActionMenu, ActionMenuItem } from "@/components/blocks/ActionMenuSheet";
 import { haptics } from "@/lib/haptics";
 import { humanDayTitle } from "@/features/appointments/helpers";
 import { useCalendarActions } from "@/features/appointments/useRecordRights";
 import { canMutateCalendarAppointment, isCalendarEvent } from "@/features/calendar/event-access";
-import { useCreateAppointment, useMemberCopyAppointment } from "@/features/calendar/mutations";
-import { serverReason } from "@/features/calendar/server-reason";
 import { useRecordLifecycle } from "@/features/calendar/home/use-record-lifecycle";
 import { withBaselineStatus } from "@/features/appointments/edit-baseline";
 import { useCurrentRole } from "@/session/tenant";
@@ -55,8 +51,7 @@ export function useRecordMenu({
   const role = useCurrentRole().data;
   const userId = useSession().session?.user.id ?? null;
   const can = useCalendarActions(editing?.team_id ?? null);
-  const createAppt = useCreateAppointment();
-  const memberCopy = useMemberCopyAppointment();
+  const navigation = useNavigation();
   const lifecycle = useRecordLifecycle({
     toast,
     // Статус сменился мимо «Сохранить» — форма и её снимок «как в базе»
@@ -70,34 +65,28 @@ export function useRecordMenu({
     onTrashed: () => leaveBook(),
   });
 
-  const openCopy = (id: string) => {
-    toast("Копия создана — поменяйте дату и время", "info");
-    router.replace({ pathname: "/book", params: { appointmentId: id } } as Href);
-  };
-  // С НЕСОХРАНЁННЫМИ ПРАВКАМИ — СНАЧАЛА ВОПРОС. Переход в копию перехватывала
-  // защита формы, и «Сохранить» из её вопроса уводил назад в календарь:
-  // копия создана, а человек не в ней (CAL-22). Теперь копия — после ответа
-  // и с сохранённого.
-  const copy = (source: Appointment) =>
-    leaveThen((saved) => copyNow(saved ? { ...source, ...saved } : source));
-  const copyNow = (apt: Appointment) => {
-    if (role === "master") {
-      const id = randomUuid();
-      // Копию сотрудника делает сервер — в ту же команду (`member_appointment_copy`).
-      memberCopy.mutate(
-        { sourceId: apt.id, date: apt.date, timeStart: apt.time_start, timeEnd: apt.time_end, id },
-        {
-          onSuccess: (made) => openCopy(made ?? id),
-          onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
-        },
-      );
+  // «КОПИРОВАТЬ» — КАК В КАЛЕНДАРЕ: СНАЧАЛА «КУДА», ПОТОМ КОПИЯ. Копия
+  // создавалась сразу в тот же слот, дублем поверх оригинала, и место
+  // приходилось править руками (У6). Теперь запись уходит в календарь, в
+  // режим зелёных кубиков (`useRecordCopyLink`); событие на весь день
+  // кубиками не ставится — оно открывается формой нового (как `copyInPlace`).
+  // С НЕСОХРАНЁННЫМИ ПРАВКАМИ — СНАЧАЛА ВОПРОС (CAL-22): уход — после ответа,
+  // копия — с сохранённого.
+  const copy = (source: Appointment) => leaveThen(() => copyFrom(source));
+  const copyFrom = (apt: Appointment) => {
+    if (apt.event_all_day === true) {
+      router.replace({
+        pathname: "/book",
+        params: { copyOf: apt.id, kind: "event", date: apt.date, ...(apt.team_id ? { teamId: apt.team_id } : {}) },
+      } as Href);
       return;
     }
-    const made = { ...duplicateAppointment(apt), id: randomUuid() };
-    createAppt.mutate(made, {
-      onSuccess: () => openCopy(made.id),
-      onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
-    });
+    // Вкладки под страницей — возвращаемся к ним, а не рожаем вторую копию
+    // всех вкладок (`replace` в корневом стеке); холодная ссылка — `replace`.
+    const href = { pathname: "/", params: { copyRecord: apt.id } } as Href;
+    const tabsBelow = navigation.getState()?.routes.some((route) => route.name === "(dashboard)");
+    if (tabsBelow) router.dismissTo(href);
+    else router.replace(href);
   };
 
   const items = (apt: Appointment): ActionMenuItem[] => {

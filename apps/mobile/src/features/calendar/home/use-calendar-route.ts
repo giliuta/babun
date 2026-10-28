@@ -37,6 +37,9 @@ export function useCalendarRoute() {
     /** Команда того же задания — везём её до формы, а не теряем на
      *  пересадке в календаре. */
     pickTeam?: string;
+    /** «Копировать» со страницы записи: календарь встаёт в режим кубиков
+     *  копии этой записи (`useRecordCopyLink`). */
+    copyRecord?: string;
   }>();
   const tenantId = useTenantId();
 

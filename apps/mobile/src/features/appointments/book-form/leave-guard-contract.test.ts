@@ -42,7 +42,23 @@ test("«Копировать» из «⋯» с несохранённым — в
   // Несохранившееся «Сохранить» не оставляет продолжение следующему.
   assert.match(guard, /if \(!leavingRef\.current\) nextRef\.current = null;/);
   const menu = readFileSync(resolve(here, "use-record-menu.ts"), "utf8");
-  assert.match(menu, /leaveThen\(\(saved\) => copyNow\(saved \? \{ \.\.\.source, \.\.\.saved \} : source\)\)/);
+  assert.match(menu, /const copy = \(source: Appointment\) => leaveThen\(\(\) => copyFrom\(source\)\);/);
+});
+
+test("«Копировать» из записи — сначала слот в календаре, без мгновенного дубля (У6)", () => {
+  // Копия создавалась сразу в тот же слот, поверх оригинала.
+  const menu = readFileSync(resolve(here, "use-record-menu.ts"), "utf8");
+  const copyFrom = menu.slice(menu.indexOf("const copyFrom"), menu.indexOf("const items ="));
+  assert.doesNotMatch(copyFrom, /createAppt|memberCopy|\.mutate\(/);
+  // Время — в кубики календаря; весь день — формой нового, как в календаре.
+  assert.match(copyFrom, /params: \{ copyRecord: apt\.id \}/);
+  assert.match(copyFrom, /if \(tabsBelow\) router\.dismissTo\(href\);/);
+  assert.match(copyFrom, /apt\.event_all_day === true[\s\S]*params: \{ copyOf: apt\.id, kind: "event"/);
+  const link = readFileSync(resolve(here, "../../calendar/home/use-record-copy-link.ts"), "utf8");
+  assert.match(link, /router\.setParams\(\{ copyRecord: "" \}\);/);
+  assert.match(link, /startMove\(source, "copy"\);/);
+  const controller = readFileSync(resolve(here, "../../calendar/home/use-calendar-controller.ts"), "utf8");
+  assert.match(controller, /useRecordCopyLink\(acting\);/);
 });
 
 test("копия события на весь день — форма нового, запись только на «Создать» (CAL-33)", () => {
