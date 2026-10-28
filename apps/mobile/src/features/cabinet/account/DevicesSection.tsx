@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { LogOut, MonitorSmartphone } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { signOutScopeAndWipe, unsentChangesNow } from "@/lib/auth-clear";
@@ -96,7 +97,7 @@ export function DevicesSection() {
         sub="Это устройство останется в системе"
         onPress={busy ? undefined : askOthers}
       />
-      <Divider inset={56} />
+      <Divider inset={SETTINGS_ROW_INSET} />
       {/* Два выхода — одно действие разной ширины, поэтому одна плитка:
           красный не отличал их, а пугал. Насколько далеко идёт второй,
           говорит его подпись и вопрос перед выходом. */}

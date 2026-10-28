@@ -9,6 +9,7 @@ import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { useAppointments } from "@/features/calendar/queries";
 import { useActorChanges, useCanReadHistory } from "@/lib/use-change-log";
 import type { Master } from "@/features/reference/queries";
@@ -81,9 +82,10 @@ export function MasterWorkBlock({
       />
       {canReadHistory && userId ? (
         <>
-          <Divider inset={48} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <SettingsRow
-            tile={SETTINGS_TILE.purple}
+            // Бирюза — как строка «История изменений» в Кабинете и в превью прав.
+            tile={SETTINGS_TILE.teal}
             icon={History}
             title="История изменений"
             sub={changesValue ?? undefined}

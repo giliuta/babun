@@ -31,12 +31,17 @@ import type { RightLook } from "./right-look";
 // меняет аккаунт. Действие строки `PickerSheet` и так выполняет, когда
 // шторка уже ушла, — вопрос не ложится поверх неё.
 
+// РОЛЬ — ОДНИМ ПИГМЕНТОМ, КОТОРОГО НЕТ У РАЗДЕЛОВ. Роли носили цвета
+// разделов под ними («Директор» оранжевый — как «Кабинет», «Своя» синяя —
+// как «Календарь»), и строка роли читалась ещё одним разделом. Роль различает
+// значок, цвет у строки один — фиолетовый (`right-look.ts` его не берёт).
+const ROLE_TILE = SETTINGS_TILE.purple;
 const ROLE_LOOK: Record<RoleKey, RightLook> = {
-  master: { icon: Wrench, tile: SETTINGS_TILE.teal },
-  lead: { icon: ClipboardList, tile: SETTINGS_TILE.indigo },
-  director: { icon: Briefcase, tile: SETTINGS_TILE.orange },
+  master: { icon: Wrench, tile: ROLE_TILE },
+  lead: { icon: ClipboardList, tile: ROLE_TILE },
+  director: { icon: Briefcase, tile: ROLE_TILE },
 };
-const CUSTOM_LOOK: RightLook = { icon: SlidersHorizontal, tile: SETTINGS_TILE.blue };
+const CUSTOM_LOOK: RightLook = { icon: SlidersHorizontal, tile: ROLE_TILE };
 
 export function TeamRoleRow({
   blocks,

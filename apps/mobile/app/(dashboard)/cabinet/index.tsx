@@ -40,6 +40,7 @@ import { useMemberQueue } from "@/lib/member-queue/use-member-queue";
 import { useTenantId } from "@/lib/tenant";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -121,13 +122,13 @@ export default function CabinetHome() {
           <TourTarget id="cabinet.notifications">
             <NotificationsRow />
           </TourTarget>
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <TourTarget id="cabinet.languages">
             <LanguageRow />
           </TourTarget>
           {showSync ? (
             <>
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 // Бирюза — не зелёный: зелёный уже носят «Приглашения», и два
                 // одинаковых якоря на экране глаз спутает.
@@ -156,12 +157,12 @@ export default function CabinetHome() {
                   onPress={() => router.push("/cabinet/account")}
                 />
               </TourTarget>
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
             </>
           )}
           {/* ПОМОЩЬ — частые вопросы и связь с поддержкой. */}
           <HelpRow />
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <AboutRow />
         </SectionCard>
 
