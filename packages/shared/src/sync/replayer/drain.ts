@@ -152,7 +152,6 @@ export async function drain(
   const sentinels = new Map<string, { from: string; to: string }>();
 
   for (const op of ops) {
-    let legacyUpdate = false;
     if (heldRows.has(rowKey(op))) continue;
     if (waitsForClient(op)) {
       heldRows.add(rowKey(op));
@@ -199,7 +198,6 @@ export async function drain(
           () => null,
         );
         payloadTenant = (cached as { tenant_id?: unknown } | null)?.tenant_id;
-        legacyUpdate = true;
       }
       if (typeof payloadTenant !== "string" || payloadTenant.length === 0) {
         // ОПЕРАЦИЯ БЕЗ КОМПАНИИ НЕ ВЫГРУЖАЕТСЯ ВОВСЕ: отправить её — значит
@@ -286,7 +284,6 @@ export async function drain(
       const conflict = await dispatch(
         opts.supabase,
         sendOp,
-        legacyUpdate,
         (to, from = op.expected_updated_at ?? undefined) => {
           if (from) sentinels.set(rowKey(op), { from, to });
         },
@@ -296,10 +293,6 @@ export async function drain(
         opts.onConflict?.(GUARDED_CONFLICT_MESSAGE);
       } else if (conflict === "server-newer") {
         opts.onConflict?.(serverNewerMessage(op.table));
-      } else if (conflict) {
-        opts.onConflict?.(
-          "Запись была обновлена на другом устройстве. Применены ваши изменения.",
-        );
       }
       serverTransientStreak.delete(op.id);
       await removeOp(op.id);

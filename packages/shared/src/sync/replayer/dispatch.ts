@@ -8,26 +8,20 @@ import { replayInsert } from "./replay-insert";
 import { replayUpdate } from "./replay-update";
 import { tableForOp } from "./table-rules";
 
-/** Returns `true` if the dispatch succeeded but a conflict was
- *  detected (UPDATE matched 0 rows on the first pass; we then
- *  retried without expected_updated_at and that one succeeded).
+/** Returns `false` when the op went through (or has nothing left to apply).
  *  `"server-won"` — правка статуса или денег записи при конфликте уступила
  *  серверу (`APPOINTMENT_GUARDED_FIELDS`): о ней надо сказать словами.
- *  `"server-newer"` — правка записи или клиента уступила строке, которую
- *  изменили на сервере позже (`serverNewerWins`).
+ *  `"server-newer"` — правка уступила строке, которую изменили на сервере
+ *  позже (`replayUpdate`).
  *  Throws on unrecoverable errors so the caller bumps attempts. */
 export async function dispatch(
   supabase: DbSupabase,
   op: QueuedOp,
-  /** Правка старого образца (без компании в теле, см. гейт в `drain`). Она
-   *  пролежала в очереди часы и дни, и строку за это время правили — при
-   *  конфликте побеждает сервер, а не она. */
-  serverWinsOnConflict = false,
   /** Правка легла чисто, и у строки теперь новое `updated_at`. */
   onApplied?: AppliedFn,
   /** Компания устройства всё ещё та, под которой начат слив. */
   tenantStill?: () => boolean,
-): Promise<boolean | "server-won" | "server-newer"> {
+): Promise<false | "server-won" | "server-newer"> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
   // talk directly to PostgREST here (not through the typed repo
@@ -44,12 +38,5 @@ export async function dispatch(
   if (op.op === "insert") {
     return replayInsert(supabase, op, tableName, onApplied);
   }
-  return replayUpdate(
-    supabase,
-    op,
-    tableName,
-    serverWinsOnConflict,
-    onApplied,
-    tenantStill,
-  );
+  return replayUpdate(supabase, op, tableName, onApplied, tenantStill);
 }

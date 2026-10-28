@@ -8,9 +8,9 @@
 // guards ported byte-for-byte from the web replayer:
 //   • insert idempotency: 23505 / «duplicate key» → op removed (success)
 //   • UUID-guard: non-uuid row_id on update/delete → perm-failed, kept
-//   • LWW UPDATE: expected_updated_at matched → op removed, no conflict
-//   • LWW conflict: 0 rows on first pass → force-update via .maybeSingle()
-//     (never .single()), onConflict toast fired, op removed
+//   • guarded UPDATE: expected_updated_at matched → op removed, no conflict
+//   • conflict: 0 rows → no forced write; the server row is read via
+//     .maybeSingle() (never .single()), cached, toast fired, op removed
 //   • injected QuotaGate: `.quota === true` throw → op perm-failed
 //   • successful delete/insert drain the queue
 
@@ -470,9 +470,9 @@ describe("replayer — LWW update", () => {
     });
   });
 
-  test("0-row conflict on a tag → force-update via maybeSingle (never single), toast fires", async () => {
-    // Теги держатся «последний побеждает»; запись и клиент уступают более
-    // свежей строке (тесты ниже).
+  test("0-row conflict on a tag → no forced write, server row via maybeSingle (never single)", async () => {
+    // Сторожа у тегов в жизни нет (`client_tags` без `updated_at`), но если
+    // правка его несёт — правило то же, что у записи и клиента: силой не пишем.
     await cacheUpsert("tags", {
       id: UUID_A,
       tenant_id: TENANT,
@@ -488,17 +488,14 @@ describe("replayer — LWW update", () => {
       expected_updated_at: "2026-01-01T00:00:00.000Z",
     });
 
-    let call = 0;
     const { client, calls } = makeFakeSupabase((rec) => {
-      if (rec.op === "update") {
-        call += 1;
-        if (call === 1) return { data: [], error: null }; // conflict: 0 rows
-        // force-update returns the canonical server row
+      if (rec.op === "update") return { data: [], error: null }; // conflict: 0 rows
+      if (rec.op === "select") {
         return {
           data: {
             id: UUID_A,
             tenant_id: TENANT,
-            name: "Mine",
+            name: "Server",
             updated_at: "2026-02-02T00:00:00.000Z",
           },
           error: null,
@@ -515,15 +512,16 @@ describe("replayer — LWW update", () => {
       },
     });
 
-    expect(toast).toContain("Применены ваши изменения");
+    expect(toast).toContain("показываю свежую версию");
     expect(await queueDepth()).toBe(0);
     expect(calls[0].table).toBe("client_tags");
-    // The force path MUST use maybeSingle, never single (PGRST116 footgun).
-    const forceCall = calls[1];
-    expect(forceCall.usedMaybeSingle).toBe(true);
-    expect(forceCall.usedSingle).toBe(false);
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    // The refresh MUST use maybeSingle, never single (PGRST116 footgun).
+    const refresh = calls[1];
+    expect(refresh.usedMaybeSingle).toBe(true);
+    expect(refresh.usedSingle).toBe(false);
     const cached = await cacheGetOne<CachedTag>("tags", UUID_A);
-    expect(cached?.name).toBe("Mine");
+    expect(cached?.name).toBe("Server");
   });
 
   test("клиента изменили позже — правка уступает: силой не пишем, кэш берёт строку сервера", async () => {
@@ -1545,11 +1543,10 @@ describe("replayer — удаление отчитывается строкам�
 });
 
 // ─── Правка, которую сервер не дал применить ──────────────────────────
-// Ноль строк у ПРИНУДИТЕЛЬНОЙ правки так же двусмыслен, как у удаления:
-// строку удалили на другом устройстве — или она видна, но сервер отказал в
-// праве её менять (`view` без `edit_all`). Раньше оба случая уходили из
-// очереди с тостом «Применены ваши изменения»: человеку сообщали об успехе,
-// а его правка молча пропадала.
+// Ноль строк у правки со сторожем так же двусмыслен, как у удаления: строку
+// удалили на другом устройстве — или она видна, но сервер отказал в праве её
+// менять (`view` без `edit_all`). Различает их строка сервера: её нет —
+// операция снята молча; версия та же — отказ, операция остаётся с причиной.
 
 describe("replayer — правка, которую сервер не дал применить", () => {
   const enqueueStaleUpdate = () =>
@@ -1560,17 +1557,12 @@ describe("replayer — правка, которую сервер не дал п�
       payload: { full_name: "Mine" },
       expected_updated_at: "2026-01-01T00:00:00.000Z",
     });
-  // Первая правка (с `updated_at`) — ноль строк; принудительная
-  // (`maybeSingle`) — пусто; чтение видимости — по сценарию теста.
+  // Правка (с `updated_at`) — ноль строк; чтение строки сервера — по
+  // сценарию теста.
   const refusedUpdate = (visibility: Result) =>
-    makeFakeSupabase((rec) => {
-      if (rec.op === "update") {
-        return rec.usedMaybeSingle
-          ? { data: null, error: null }
-          : { data: [], error: null };
-      }
-      return visibility;
-    });
+    makeFakeSupabase((rec) =>
+      rec.op === "update" ? { data: [], error: null } : visibility,
+    );
 
   test("строки не видно — операция снята, «применено» не пишется", async () => {
     await enqueueStaleUpdate();
