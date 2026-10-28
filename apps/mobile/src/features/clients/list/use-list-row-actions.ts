@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Share } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
@@ -12,6 +11,7 @@ import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useTrashClientAsPartner, type useUpdateClientById } from "@/features/clients/queries";
 import type { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import { shareText, type ShareTextOptions } from "@/features/clients/client-share";
+import { shareMessage } from "@/features/clients/location-request-share";
 import {
   capabilitiesOf,
   type ClientsCapabilities,
@@ -204,12 +204,12 @@ export function useListRowActions({
   // даже при скрытом блоке «Реквизиты»). Видно ли — решает лист меню в
   // компании строки (`menuScope` ниже): у клиента работодателя выключатели
   // его компании и команды, а не своей.
+  // На десктопном вебе листа «Поделиться» нет — текст уходит в буфер, и тост
+  // говорит, куда он делся (`shareMessage`).
   const onShareClient = async (c: Client, opts: ShareTextOptions) => {
-    try {
-      await Share.share({ message: shareText(c, opts) });
-    } catch {
-      // user dismissed the share sheet — no-op.
-    }
+    const outcome = await shareMessage(shareText(c, opts));
+    if (outcome === "copied") toast("Скопировано");
+    else if (outcome === "failed") toast("Не удалось поделиться", "error");
   };
 
   return {

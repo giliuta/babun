@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import type { Coords } from "@/features/clients/location-request-form";
 
 // АДРЕС СЛОВАМИ → ТОЧКА НА КАРТЕ: вписанный точный адрес отображается на
@@ -15,6 +16,18 @@ import type { Coords } from "@/features/clients/location-request-form";
 // остаётся там, куда её поставили рукой.
 
 const ENDPOINT = "https://nominatim.openstreetmap.org/search";
+/** ПРЕДСТАВЛЯЕМСЯ, КАК ПРОСИТ СЛУЖБА. Правила Nominatim требуют назвать
+ *  приложение: User-Agent или Referer. Браузер ставит Referer сам, а
+ *  User-Agent из страницы задать нельзя (запретный заголовок); приложение на
+ *  телефоне не шлёт ни того, ни другого — представляемся сами. */
+const NOMINATIM_HEADERS: Record<string, string> =
+  Platform.OS === "web"
+    ? { Accept: "application/json" }
+    : {
+        Accept: "application/json",
+        "User-Agent": "Babun/1.0 (+https://babun.app)",
+        Referer: "https://babun.app/",
+      };
 /** Один и тот же адрес во время правки набирают десятки раз — второй раз в сеть
  *  не ходим. Память живёт столько же, сколько сессия приложения. */
 const cache = new Map<string, Coords | null>();
@@ -31,10 +44,7 @@ export async function geocodeAddress(
 
   const url = `${ENDPOINT}?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`;
   try {
-    const res = await fetch(url, {
-      signal,
-      headers: { Accept: "application/json" },
-    });
+    const res = await fetch(url, { signal, headers: NOMINATIM_HEADERS });
     if (!res.ok) return null;
     const rows = (await res.json()) as { lat?: string; lon?: string }[];
     const first = rows?.[0];
