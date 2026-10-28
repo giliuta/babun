@@ -45,6 +45,7 @@ describe("история изменений — слова", () => {
     assert.equal(changeTitle(row({ entity: "clients", action: "restore" })), "Клиент возвращён");
     assert.equal(changeTitle(row({ entity: "finance_transactions", action: "insert", meta: { type: "expense" } })), "Расход создан");
     assert.equal(changeTitle(row({ entity: "member_access", action: "insert" })), "Права изменены");
+    assert.equal(changeTitle(row({ entity: "member_access", action: "delete" })), "Право снято");
     assert.equal(changeTitle(row({ entity: "tenant_members", action: "insert" })), "Партнёр добавлен");
     assert.equal(changeTitle(row({ entity: "invitations", action: "update", changes: { accepted_at: [null, "x"] } })), "Приглашение принято");
     assert.equal(changeTitle(row({ entity: "team_design", action: "update" })), "Настройки записей изменены");
@@ -54,6 +55,10 @@ describe("история изменений — слова", () => {
     assert.equal(changeSubject(row({})), "Анастасия · 4 окт, 10:00");
     const tx = changeSubject(row({ entity: "finance_transactions", label: "Топливо", meta: { type: "expense", amount: 40 } }));
     assert.match(tx, /^Топливо · .*40/);
+    // Снятое право — без уровня, которого больше нет.
+    const rights = { entity: "member_access", label: "Дмитрий", meta: { block_title: "Прибыль", level: "read" } } as const;
+    assert.equal(changeSubject(row({ ...rights, action: "delete" })), "Дмитрий · Прибыль");
+    assert.match(changeSubject(row({ ...rights, action: "insert" })), /^Дмитрий · Прибыль: /);
   });
 
   test("поля правки: было → стало, служебное — словом", () => {

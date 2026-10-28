@@ -34,6 +34,16 @@ describe("кем управляет директор", () => {
     assert.equal(partnerManager(director, { userId: "x", map: undefined }).canRemove, false);
   });
 
+  test("партнёром чужих команд и без команд — нет, его ведёт владелец", () => {
+    for (const target of [map({}, { t2: {} }), map({}), undefined]) {
+      assert.deepEqual(partnerManager(director, { userId: "x", map: target }), {
+        readOnly: "Права партнёра чужих команд меняет владелец",
+        canPreview: false,
+        canRemove: false,
+      });
+    }
+  });
+
   test("собой и другим директором — нет", () => {
     assert.equal(partnerManager(director, { userId: "dir", map: map({}) }).readOnly, "Свои права меняет владелец");
     assert.equal(
@@ -60,6 +70,34 @@ describe("ступени директора — не выше своих", () =>
   test("«Добавляет» можно, «Правит всё» — нет", () => {
     assert.equal(stepAllowed(director, income, "t1", "write"), true);
     assert.equal(stepAllowed(director, income, "t1", "full"), false);
+  });
+
+  test("«Сумма» и «Оплата» без «Услуг» у директора не действуют", () => {
+    const levels = ["off", "read", "write"] as const;
+    const amount = { key: "record.amount", scope: "calendar" as const, levels };
+    const payment = { key: "record.payment", scope: "calendar" as const, levels };
+    const cut = {
+      role: "master",
+      myMap: map(
+        { "company.partners": "write" },
+        { t1: { "record.services": "off", "record.amount": "write", "record.payment": "write" } },
+      ),
+    };
+    assert.equal(stepAllowed(cut, amount, "t1", "read"), false);
+    assert.equal(stepAllowed(cut, payment, "t1", "read"), false);
+    const open = {
+      role: "master",
+      myMap: map(
+        { "company.partners": "write" },
+        { t1: { "record.services": "read", "record.amount": "off", "record.payment": "write" } },
+      ),
+    };
+    assert.equal(stepAllowed(open, payment, "t1", "read"), false);
+    const full = {
+      role: "master",
+      myMap: map({ "company.partners": "write" }, { t1: { "record.services": "read", "record.amount": "write" } }),
+    };
+    assert.equal(stepAllowed(full, amount, "t1", "write"), true);
   });
 
   test("в чужой команде — ничего", () => {

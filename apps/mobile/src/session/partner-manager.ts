@@ -8,8 +8,10 @@ import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access
 // было дверей, которые кончатся отказом:
 //   • себя, владельца и других директоров директор не правит — их ведёт
 //     только владелец;
+//   • партнёра без общей с ним команды — тоже владелец;
 //   • право «Партнёры» выдаёт только владелец;
-//   • ступень — не выше его собственной в той же команде;
+//   • ступень — не выше его собственной в той же команде, действующей:
+//     «Сумма» и «Оплата» без «Услуг» у него не действуют;
 //   • команды — только те, где работает он сам;
 //   • убрать из аккаунта — только партнёра, все команды которого — его.
 // Владельцу всё открыто, как прежде.
@@ -57,12 +59,17 @@ export function partnerManager(
   if (targetDirector || target.map?.isOwner) {
     return { readOnly: "Права директора меняет владелец", canPreview: false, canRemove: false };
   }
-  // Убрать из аккаунта директор может только партнёра, все команды которого —
-  // его команды (`partners_removable`): иначе он выгнал бы человека и из
-  // чужих команд. Партнёра без команд убирает владелец.
   const theirs = target.map?.attachedCalendars ?? [];
   const mine = new Set(viewer.myMap?.attachedCalendars ?? []);
-  const canRemove = theirs.length > 0 && theirs.every((teamId) => mine.has(teamId));
+  // Партнёра чужих команд — его права на весь аккаунт и карточку — ведёт
+  // владелец (`partners_manageable`); партнёра без команд тоже.
+  if (!theirs.some((teamId) => mine.has(teamId))) {
+    return { readOnly: "Права партнёра чужих команд меняет владелец", canPreview: false, canRemove: false };
+  }
+  // Убрать из аккаунта директор может только партнёра, все команды которого —
+  // его команды (`partners_removable`): иначе он выгнал бы человека и из
+  // чужих команд.
+  const canRemove = theirs.every((teamId) => mine.has(teamId));
   return { readOnly: null, canPreview: false, canRemove };
 }
 
@@ -81,7 +88,13 @@ export function stepAllowed(
   let mine: AccessLevel | undefined;
   if (block.scope === "calendar") {
     if (!teamId || !map.calendars[teamId]) return false;
-    mine = map.calendars[teamId][block.key];
+    const own = map.calendars[teamId];
+    mine = own[block.key];
+    // Сервер меряет действующим уровнем (`partners_check_caps`): «Сумма» и
+    // «Оплата» без «Услуг», «Оплата» без «Суммы» у директора не действуют.
+    const services = own["record.services"] ?? "off";
+    if ((block.key === "record.amount" || block.key === "record.payment") && services === "off") mine = undefined;
+    if (block.key === "record.payment" && (own["record.amount"] ?? "off") === "off") mine = undefined;
   } else {
     mine = map.company[block.key];
   }
