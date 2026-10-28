@@ -150,7 +150,7 @@ export function useListRowActions({
     const hasHistory =
       (stats?.visits ?? 0) > 0 ||
       (stats?.totalSpent ?? 0) > 0 ||
-      (stats?.unclosedVisits ?? 0) > 0 ||
+      (stats?.pastOpenRecords ?? 0) > 0 ||
       stats?.nextApt != null;
     confirmThen(
       "Удалить клиента?",

@@ -21,6 +21,7 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     medianGapDays: null,
     unclosedVisits: 0,
     lastUnclosedDate: "",
+    pastOpenRecords: 0,
     nextApt: null,
     nextAptDays: null,
     debt: 0,

@@ -136,6 +136,7 @@ export function buildStats(
   const visitDates: string[] = [];
   let unclosedVisits = 0;
   let lastUnclosedDate = "";
+  let pastOpenRecords = 0;
 
   for (const a of apts) {
     // Match by id; fall back to comment-name match for seed records
@@ -154,7 +155,8 @@ export function buildStats(
     //
     // ВИЗИТОМ такая запись не считается — визитов у клиента ровно столько,
     // сколько подтверждённых работ; на них живут ритм, «Пропали» и доход.
-    debt += appointmentDebt(a, today, invoicing);
+    const owed = appointmentDebt(a, today, invoicing);
+    debt += owed;
 
     if (isVisit(a)) {
       visits += 1;
@@ -177,10 +179,16 @@ export function buildStats(
     const upcoming =
       a.status === "scheduled" || a.status === "in_progress";
     // Прошедшая и незакрытая — не «следующая» и не визит. Считаем отдельно:
-    // это работа, повисшая без денег.
+    // это работа, повисшая без денег. БЕЗ ДОЛГА — НЕ ПОВИСШАЯ (правило
+    // календаря, `calendar/overdue.ts`): запись на €0 или оплаченная вперёд
+    // закрыть нечем — закрытие идёт оплатой, — и дата клиента горела бы
+    // жёлтым, как у должника, навсегда. В историю она всё равно входит.
     if (upcoming && a.date && a.date < today) {
-      unclosedVisits += 1;
-      if (a.date > lastUnclosedDate) lastUnclosedDate = a.date;
+      pastOpenRecords += 1;
+      if (owed > 0) {
+        unclosedVisits += 1;
+        if (a.date > lastUnclosedDate) lastUnclosedDate = a.date;
+      }
     }
     if (upcoming && a.date >= today) {
       expectedRevenue += a.total_amount ?? 0;
@@ -220,6 +228,7 @@ export function buildStats(
     medianGapDays,
     unclosedVisits,
     lastUnclosedDate,
+    pastOpenRecords,
     ageDays: 0,
     birthdayInDays: null,
   });
