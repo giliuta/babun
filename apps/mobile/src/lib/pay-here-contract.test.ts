@@ -27,7 +27,12 @@ test("страница «Тариф»: без флага — состояние 
   const src = read("features/tariffs/TariffScreen.tsx");
   assert.match(src, /const action = CAN_PAY_HERE \? full : full\?\.kind === "trial" \? full : null;/);
   assert.match(src, /const showTiers = CAN_PAY_HERE;/);
-  assert.match(src, /\{CAN_PAY_HERE \? \(\s*<>\s*<Text[^>]*>\s*\{card\.monthly\}/);
+  // Цена в строке тарифа, счёт за календари с годовой ценой и цена в подписи
+  // VoiceOver — каждая под флагом (у выданного навсегда цен нет вовсе:
+  // `&& !forever` только сужает показ).
+  assert.match(src, /\{CAN_PAY_HERE(?: && !forever)? \? \(\s*<>\s*<Text[^>]*>\s*\{card\.monthly\}/);
+  assert.match(src, /\{CAN_PAY_HERE(?: && !forever)? \? \(\s*<View[^>]*>\s*<Text[^>]*>\s*\{`Рабочих календарей: /);
+  assert.match(src, /accessibilityLabel=\{CAN_PAY_HERE(?: && !forever)? \? `\$\{card\.name\}, \$\{card\.monthly\}/);
   assert.match(src, /\{CAN_PAY_HERE && owner && state\.paid && !state\.forever \?/);
   assert.match(src, /tariffStatus\(state, periodEnd, CAN_PAY_HERE\)/);
 });
