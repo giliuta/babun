@@ -54,7 +54,9 @@ export function maskHistoryRow(row: Appointment, client: Pick<Client, "blocks">)
     expenses: [],
     payments: [],
     payment: null,
-    prepaid_amount: 0,
+    // Аванс — тоже сумма «Истории»: `paid_amount` его не содержит, и без него
+    // долг клиента у сотрудника выходил больше ровно на аванс.
+    prepaid_amount: money ? row.prepaid_amount : 0,
     total_amount: money ? row.total_amount : 0,
     custom_total: money ? row.custom_total : false,
     discount_amount: money ? row.discount_amount : 0,

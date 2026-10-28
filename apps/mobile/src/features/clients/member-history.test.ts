@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { Appointment } from "@babun/shared/local/appointments";
+import { getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 
 import { maskHistoryRow, mirrorHistory, withClientHistory } from "./member-history";
@@ -59,6 +59,15 @@ describe("«История записей» сотрудника (01.10)", () =>
     assert.equal(open.services[0].totalPrice, 120);
     assert.equal(open.location_id, "loc-1");
     assert.equal(open.comment, "", "заметка записи — право календаря");
+  });
+
+  test("аванс идёт вместе с суммами: оплаченная авансом запись — не долг", () => {
+    const prepaid = row("a", { total_amount: 737.8, paid_amount: 0, prepaid_amount: 737.8, payment_status: "paid" });
+    const open = maskHistoryRow(prepaid, withBlocks({ "clients.history": "read" }));
+    assert.equal(open.prepaid_amount, 737.8);
+    assert.equal(open.total_amount - getPaidAmount(open), 0);
+    const closed = maskHistoryRow(prepaid, withBlocks({ "clients.history": "off" }));
+    assert.equal(closed.prepaid_amount, 0);
   });
 
   test("«его глазами»: только клиенты набора с открытой историей и только работы", () => {

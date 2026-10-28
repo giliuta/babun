@@ -81,3 +81,16 @@ describe("client isolation on the server", () => {
     assert.equal(sql.split("perform set_config(''babun.client_refs_trusted'', '''', true);").length - 1, 2);
   });
 });
+
+describe("client page money and the label view", () => {
+  test("a partner's client history carries the advance with the other sums", () => {
+    const sql = code(migration("20261028210100_member_history_prepaid.sql"));
+    assert.match(sql, /anchor constant text := E' {6}''prepaid_amount'', 0,\\n';/);
+    assert.match(sql, /''prepaid_amount'', case when h\.see_money then coalesce\(a\.prepaid_amount, 0\) else 0 end,\\n'/);
+  });
+
+  test("cities_live is read only", () => {
+    const sql = code(migration("20261028210200_cities_live_read_only.sql"));
+    assert.match(sql, /revoke insert, update, delete, truncate, references, trigger on public\.cities_live from authenticated, service_role;/);
+  });
+});
