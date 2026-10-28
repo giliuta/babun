@@ -22,6 +22,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react-native";
+import { LIST_ROW } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
   changeSubject,
@@ -83,8 +84,11 @@ export function ChangeRow({
 }) {
   const t = useThemeColors();
   const { row } = item;
+  // ЗЕЛЁНЫЙ В ПРОДУКТЕ — «ДЕНЬГИ ПРИШЛИ». Создание записи им не красится:
+  // «Запись создана» зелёным читалось как оплата. Создание — акцент,
+  // правка — чернила, удаление — опасность.
   const tone =
-    row.action === "delete" ? t.danger : row.action === "update" ? t.accent : t.success;
+    row.action === "delete" ? t.danger : row.action === "update" ? t.sub : t.accent;
   const subject =
     item.count > 1
       ? [item.labels.slice(0, 2).join(", "), item.labels.length > 2 ? `ещё ${item.labels.length - 2}` : ""]
@@ -114,29 +118,29 @@ export function ChangeRow({
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.3}
-            style={{ flexShrink: 1, fontSize: 16, fontWeight: "600", color: t.ink }}
+            style={{ flexShrink: 1, ...LIST_ROW.name, color: t.ink }}
           >
             {changeTitle(row)}
             {item.count > 1 ? ` ×${item.count}` : ""}
           </Text>
           <Text
             maxFontSizeMultiplier={1.2}
-            style={{ marginLeft: "auto", fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
+            style={{ marginLeft: "auto", ...LIST_ROW.sub, color: t.sub, fontVariant: ["tabular-nums"] }}
           >
             {hhmm(row.created_at)}
           </Text>
         </View>
         {subject ? (
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 14, color: t.ink }}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ ...LIST_ROW.sub, color: t.ink }}>
             {subject}
           </Text>
         ) : null}
         {changes ? (
-          <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub }}>
+          <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ ...LIST_ROW.sub, color: t.sub }}>
             {changes}
           </Text>
         ) : null}
-        <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.faint }}>
+        <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ ...LIST_ROW.sub, color: t.faint }}>
           {who}
         </Text>
       </View>

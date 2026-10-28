@@ -16,6 +16,7 @@ export function NavRow({
   separated,
   loud,
   dimmed,
+  tabular,
   onPress,
 }: {
   label: string;
@@ -30,6 +31,8 @@ export function NavRow({
   separated?: boolean;
   loud?: boolean;
   dimmed?: boolean;
+  /** В значении деньги или счёт — цифры моноширинные, столбец не гуляет. */
+  tabular?: boolean;
   /** Без обработчика строка становится ПОКАЗАНИЕМ, а не дверью: тот же ритм
    *  и типографика, но без шеврона, нажатия и роли кнопки (лента истории
    *  печатает так заметки — внутрь них проваливаться некуда). */
@@ -82,6 +85,7 @@ export function NavRow({
             style={{
               fontSize: 15,
               fontWeight: "500",
+              fontVariant: tabular ? ["tabular-nums"] : undefined,
               color: loud
                 ? t.onAccent
                 : value

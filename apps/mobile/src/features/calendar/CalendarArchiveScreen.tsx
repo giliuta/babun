@@ -3,7 +3,7 @@ import { ScrollView } from "react-native";
 import { ArchiveRestore, Trash2 } from "lucide-react-native";
 import { money } from "@babun/shared/common/utils/money";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { NavRow, RowCaption } from "@/components/ui/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -147,11 +147,13 @@ export function CalendarArchiveScreen() {
                 separated={index > 0}
                 label={calendar.name}
                 value={archivedCalendarCaption(calendar, (amount) => money(amount))}
+                tabular
                 onPress={() => open(calendar)}
               />
             ))}
           </SectionCard>
-          <RowCaption text="Записи этих календарей видны в карточках клиентов. Вернуть календарь или удалить насовсем — нажатием на него." />
+          {/* Абзаца под карточкой нет (DS: «объясняшек под карточками нет»):
+              что делает тап, говорит сама шторка календаря. */}
         </ScrollView>
       )}
 
