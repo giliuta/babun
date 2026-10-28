@@ -151,7 +151,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "restore_deleted_appointment",
   "set_client_sms_opt_out",
   "set_client_team",
-  // Теги, команда и источник выбранным одной пачкой (parked 20261028153000).
+  // Теги, команда и источник выбранным одной пачкой (миграция 20261028153000).
   "bulk_edit_clients",
   "member_trash_client",
   // «Объединить с дублем» одной транзакцией (parked 20261027234500_merge_clients).
