@@ -106,7 +106,9 @@ describe("client native persistence contract", () => {
     // на все массивы: второй копии этой логики в проекте быть не должно.
     const writer = read("use-json-writer.ts");
     // Источник — свежайшее значение очереди, записи — цепочкой.
-    assert.match(writer, /fn\(storeRef\.current\.latest\)/);
+    // У общей очереди объектов свежайшее — из самой свежей копии клиента в
+    // кэше, а не из экрана (С11, `freshest-client-field.ts`).
+    assert.match(writer, /const st = storeRef\.current;\s*if \(sharedKey\) refresh\(st, st\.latest\);\s*return commit\(fn\(st\.latest\)\);/);
     assert.match(writer, /st\.chain = run/);
     // ОЧЕРЕДЬ ОДНА НА КЛИЕНТА И ПОЛЕ: карточка и страница «Все
     // объекты» / «Все реквизиты» пишут один массив — очередь модульная.
