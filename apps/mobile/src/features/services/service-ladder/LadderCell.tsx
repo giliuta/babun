@@ -71,11 +71,26 @@ export function LadderCell({
         placeholder={placeholder}
         placeholderTextColor={t.placeholder}
         keyboardType="decimal-pad"
+        // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ, как в остальных денежных полях: у
+        // цифровой клавиатуры нет стрелок, и правка «135» на «140» давала
+        // «140135».
+        selectTextOnFocus
         accessibilityLabel={accessibilityLabel}
         selectionColor={t.accent}
         keyboardAppearance="light"
+        // ЧИСЛО ОБЯЗАНО ПОМЕЩАТЬСЯ В САМУЮ УЗКУЮ ЯЧЕЙКУ — «Кол», 30 pt внутри.
+        // Три вещи выталкивали его оттуда, и строки ступеней читались пустыми
+        // при «1» в базовой строке (та — `Text`, а не поле):
+        //   · веб: у `<input>` своя ширина по умолчанию, и без `minWidth: 0`
+        //     поле не сжимается до ячейки, а вылезает вправо, под цену;
+        //   · Android: у EditText свои поля по бокам съедают 30 pt;
+        //   · крупный шрифт системы: подпись рядом держит множитель 1.2, а
+        //     поле росло без предела.
+        maxFontSizeMultiplier={1.2}
         style={{
           flex: 1,
+          minWidth: 0,
+          paddingHorizontal: 0,
           textAlign: align,
           fontSize: 16,
           fontWeight: "600",

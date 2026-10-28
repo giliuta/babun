@@ -36,16 +36,31 @@ export type RecordColorSituation = (typeof RECORD_COLOR_SITUATIONS)[number];
 /** Чем красить запись, у которой нет своего цвета. */
 export type RecordColorRule = "team" | "label" | "service";
 
-export const RECORD_COLOR_RULES: readonly RecordColorRule[] = [
+const RECORD_COLOR_RULES: readonly RecordColorRule[] = [
   "team",
   "label",
   "service",
 ];
 
+/** ОТМЕНА И ОПЛАТА — ТОЖЕ КЛЮЧИ ПАЛИТРЫ, но не «дыры»: в лист «чего не
+ *  хватает» (`RECORD_COLOR_SITUATIONS`, худшая дыра дня в месяце) они не
+ *  входят. Оплата одна на все способы: чем именно платили, видно в записи. */
+export const RECORD_CANCELLED_KEY = "cancelled";
+export const RECORD_PAID_KEY = "paid";
+export const RECORD_PREPAID_KEY = "prepaid";
+
 /** Цвет на ситуацию. `null` у ситуации — «эта ситуация не красит»; отсутствие
  *  всей палитры — «владелец не трогал, действуют заводские цвета». */
+type RecordPaletteKey =
+  | RecordColorSituation
+  | typeof RECORD_CANCELLED_KEY
+  | typeof RECORD_PAID_KEY
+  | typeof RECORD_PREPAID_KEY;
+
+/** `<ключ>_was` — цвет, который держал случай, когда его выключили:
+ *  включили снова — возвращается он, а не заводской. */
 export type RecordColorPalette = Partial<
-  Record<RecordColorSituation, string | null>
+  Record<RecordPaletteKey | `${RecordPaletteKey}_was`, string | null>
 >;
 
 export interface CalendarSettings {
@@ -218,10 +233,18 @@ function sanitizeRecordPalette(
   const raw = value as Record<string, unknown>;
   const out: RecordColorPalette = {};
   let touched = false;
-  for (const id of RECORD_COLOR_SITUATIONS) {
-    if (!(id in raw)) continue;
-    out[id] = hexOrNull(raw[id]);
-    touched = true;
+  for (const id of [
+    ...RECORD_COLOR_SITUATIONS,
+    RECORD_CANCELLED_KEY,
+    RECORD_PAID_KEY,
+    RECORD_PREPAID_KEY,
+  ] as const) {
+    if (id in raw) {
+      out[id] = hexOrNull(raw[id]);
+      touched = true;
+    }
+    const was = `${id}_was` as const;
+    if (was in raw) out[was] = hexOrNull(raw[was]);
   }
   return touched ? out : undefined;
 }

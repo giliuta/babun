@@ -52,7 +52,7 @@ function dateLabel(date: string): string {
 // Состояние выбранной точки относительно рабочей полосы дня. Границы
 // полуоткрытые — паритет с wash сетки: startMin включительно (08:00 при
 // смене с 08:00 — рабочее), endMin исключительно (19:00 ровно — уже вне).
-export type OffState =
+type OffState =
   | { kind: "outside"; band: WorkBand }
   | { kind: "break"; startMin: number; endMin: number }
   | { kind: "dayoff" }

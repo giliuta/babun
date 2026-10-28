@@ -7,7 +7,7 @@ import {
   type AddedLocation,
 } from "./event-locations";
 
-export interface ClientLocationsInput {
+interface ClientLocationsInput {
   client: Client | null;
   clients: Client[];
   locationId: string | null;
@@ -37,20 +37,18 @@ export function useClientLocations({
   const selectedLocation =
     clientLocations.find((l) => l.id === locationId) ?? null;
 
-  // ОБЪЕКТ СОБЫТИЯ — КАК У ЗАПИСИ: СНАЧАЛА КЛИЕНТ, ПОТОМ ЕГО ОБЪЕКТ.
-  // Объект в базе принадлежит клиенту — он лежит в его `locations`, своей
-  // таблицы у него нет. Событие без клиента выбирало из объектов всех
-  // клиентов, и объект вставал в событие ничьим: в записи так нельзя, а в
-  // событии было можно. Теперь выбор — только объекты клиента события.
-  //
-  // Общий пул остаётся для СТАРЫХ событий: объект чужого клиента, выбранный
-  // раньше, не пропадает и подписан, чей он.
+  // ОБЪЕКТ СОБЫТИЯ: С КЛИЕНТОМ — ЕГО ОБЪЕКТЫ, БЕЗ КЛИЕНТА — ЛЮБОЙ.
+  // Событие не обязано иметь клиента: «съездить посмотреть дом» — это объект
+  // без человека. Выбран клиент — список сужается до его объектов, и
+  // объект закрепляется за ним; нет клиента — выбирают из объектов всех
+  // клиентов, и под каждым подписано, чей он. Новый объект заводится только
+  // клиенту (`openEventObjectAdd`): своей таблицы у объекта нет.
   const eventLocationPool = useMemo(
     () => eventLocationRows(clients, client, clientLocations),
     [clients, client, clientLocations],
   );
   const eventPickPool = useMemo(
-    () => (client ? eventLocationPool.filter((row) => row.ownerId === client.id) : []),
+    () => (client ? eventLocationPool.filter((row) => row.ownerId === client.id) : eventLocationPool),
     [client, eventLocationPool],
   );
   const eventLocationEntry =

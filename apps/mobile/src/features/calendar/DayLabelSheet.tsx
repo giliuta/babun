@@ -24,7 +24,7 @@ import { useThemeColors } from "@/theme/colors";
 //
 // ШЕСТЕРЁНКА СПРАВА В ШАПКЕ, метка посередине. Тот же глиф `Settings2`, что в шапке счетов и в панелях финансов.
 
-export type CityOption = LabelOption;
+type CityOption = LabelOption;
 
 export function DayLabelSheet({
   visible,
@@ -94,7 +94,7 @@ export function DayLabelSheet({
             accessibilityLabel="Настроить метки"
             className="h-11 w-11 items-center justify-center active:opacity-60"
           >
-            <Settings2 color={t.sub} size={ICON.sm} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }

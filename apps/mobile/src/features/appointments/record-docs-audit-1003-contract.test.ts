@@ -21,13 +21,12 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(block, /useBusinessNow\(teamId\)/);
   });
 
-  test("маршрут листа выезда и события — общей шторкой карт", () => {
-    for (const file of ["appointments/CrewWorkRecord.tsx", "appointments/CrewAppointmentSheet.tsx"]) {
-      const body = src(file);
-      assert.doesNotMatch(body, /maps\.apple\.com/, file);
-      assert.match(body, /onPress=\{\(\) => route\.open\(null, address\)\}/, file);
-      assert.match(body, /\{route\.sheet\}/, file);
-    }
+  test("маршрут вольного адреса события — общей кнопкой карт", () => {
+    // Записи и события открываются одной страницей /book; адрес без объекта
+    // ведёт в карты той же кнопкой, что строка объекта, а не ссылкой Apple.
+    const body = src("appointments/book-form/EventObjectBlock.tsx");
+    assert.doesNotMatch(body, /maps\.apple\.com/);
+    assert.match(body, /trailing=\{<ObjectRouteButton address=\{eventAddress\} teamId=\{teamId\} \/>\}/);
   });
 
   test("повтор SMS — той же командой и на тот же номер", () => {
@@ -68,7 +67,8 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("партнёр: один номер новой записи на форму, команда записи не меняется", () => {
     const book = bookFormSource();
     assert.match(book, /patch: \{ \.\.\.buildPatch\(\), id: newRecordIdRef\.current \},/);
-    assert.match(book, /const newRecordIdRef = useRef\(randomUuid\(\)\);/);
+    // Номер один на форму — и на форму, поднятую из черновика: тот же номер.
+    assert.match(book, /const newRecordIdRef = useRef\(restored\?\.newRecordId \?\? randomUuid\(\)\);/);
     assert.match(book, /teams=\{isMemberView && isEdit \? teams\.filter\(\(tm\) => tm\.id === teamId\) : teams\}/);
     assert.match(readModuleSource(resolve(here, "../calendar/mutations.ts")), /if \(error && !isOwnRecordAlreadyCreated\(error\)\) \{/);
   });

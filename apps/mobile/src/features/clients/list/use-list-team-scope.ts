@@ -1,8 +1,10 @@
 import { useMemo } from "react";
+import { useTeamName } from "@/session/team-name";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { statsByBlocks } from "@/features/clients/card-access";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import {
@@ -16,10 +18,11 @@ import {
   appointmentsOfTeam,
   clientsOfTeam,
   liveTeamChoice,
+  withoutArchivedTeams,
 } from "@/features/clients/team-scope";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { useAccessMapOf } from "@/features/clients/use-card-access";
-import type { Team } from "@/features/reference/queries";
+import { useTeams, type Team } from "@/features/reference/queries";
 import { dataSpanOf } from "./list-derive";
 import type { ListTeam } from "./use-list-merge";
 
@@ -68,9 +71,12 @@ export function useListTeamScope({
     : caps.create;
   // Команды компаний-партнёров — ТЕМ ЖЕ ЧИПОМ, что свои (как будто все
   // команды его): граница баз держится данными, а не видом.
+  // Имя — тем же правилом, что чип календаря: команда, названная почтой,
+  // не обрезается в «babun.app+r…» (`session/team-name.ts`).
+  const teamName = useTeamName();
   const teamChips = useMemo(
-    () => teams.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
-    [teams],
+    () => teams.map((tm) => ({ id: tm.id, name: teamName(tm.name), color: tm.color })),
+    [teams, teamName],
   );
   // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
   // клиенты команды и те, кого она обслуживала; цифры — по её записям.
@@ -78,9 +84,19 @@ export function useListTeamScope({
   // команды; выбрал свою — только свои клиенты. Клиенты партнёра стоят в общем списке, но их строки
   // по-прежнему такие, какими их отдал сервер (без номеров и денег по
   // правам), а выбрать их для выгрузки и рассылки нельзя (`selectable`).
+  // КЛИЕНТЫ КОМАНД В АРХИВЕ ПОД «ВСЕ» НЕ СТОЯТ (`withoutArchivedTeams`):
+  // чипа у архивной команды нет, и её «Тест» висели в общем списке ничьими.
+  const { data: companyTeams = [] } = useTeams({ includeInactive: true });
+  const archivedTeamIds = useMemo(
+    () => new Set(companyTeams.filter((tm) => !tm.is_active).map((tm) => tm.id)),
+    [companyTeams],
+  );
   const teamClients = useMemo(
-    () => (teamChoice === ALL_TEAMS ? clients : clientsOfTeam(clients, teamChoice, appointments)),
-    [clients, teamChoice, appointments],
+    () =>
+      teamChoice === ALL_TEAMS
+        ? withoutArchivedTeams(clients, archivedTeamIds, appointments)
+        : clientsOfTeam(clients, teamChoice, appointments),
+    [clients, teamChoice, appointments, archivedTeamIds],
   );
   const teamAppointments = useMemo(
     () => appointmentsOfTeam(appointments, teamChoice),
@@ -102,13 +118,17 @@ export function useListTeamScope({
   // инвойса; инвойс без записи под чипом команды — только своей.
   const invoicing = useClientInvoicing();
   const teamInvoicing = useClientInvoicing(teamChoice === ALL_TEAMS ? null : teamChoice);
+  const today = useBusinessToday();
   const allStatsMap = useMemo(
-    () => buildStatsMap(clients, appointments, invoicing),
-    [clients, appointments, invoicing],
+    () => buildStatsMap(clients, appointments, invoicing, today),
+    [clients, appointments, invoicing, today],
   );
   const teamStatsMap = useMemo(
-    () => (teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments, teamInvoicing)),
-    [teamChoice, teamClients, teamAppointments, teamInvoicing],
+    () =>
+      teamChoice === ALL_TEAMS
+        ? null
+        : buildStatsMap(teamClients, teamAppointments, teamInvoicing, today),
+    [teamChoice, teamClients, teamAppointments, teamInvoicing, today],
   );
   // Деньги и визиты строки — по правам этого клиента: у сотрудника
   // сводка из видимых записей не должна показывать то, что закрыто в

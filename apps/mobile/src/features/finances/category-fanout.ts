@@ -51,7 +51,7 @@ export function fanoutSummary(r: {
     return {
       title: "Создано не везде",
       message:
-        `Категория создана в ${created}, ещё ${left} не получилось.`
+        `Категория создана в ${created}, ещё в ${formatCountRu(left, IN_TEAMS)} не получилось.`
         + " Нажмите «Создать категорию» ещё раз — созданное не задвоится.",
     };
   }

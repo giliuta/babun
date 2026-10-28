@@ -8,7 +8,6 @@ import {
   blockLadder,
   textOverflows,
   rowsThatFit,
-  textRows,
   TEXT_MIN_W,
 } from "./block-geometry";
 
@@ -28,27 +27,6 @@ describe("строки блока", () => {
     assert.equal(rowsThatFit(37, LINE_H), 1);
     assert.equal(rowsThatFit(38, LINE_H), 2);
     assert.equal(rowsThatFit(54, LINE_H), 3);
-  });
-
-  test("получасовая запись при обычном зуме печатает ОДНУ строку", () => {
-    // Прежняя формула floor((cardH − 9)/lineH) + 1 давала здесь две, и время
-    // рисовалось разрезанным пополам обрезкой карточки.
-    const cardH = 28; // 30 минут при 60pt на час, минус 2pt дыхания
-    assert.equal(textRows(cardH, LINE_H), 1);
-  });
-
-  test("у самого низкого блока имя всё равно пытается напечататься", () => {
-    assert.equal(textRows(10, LINE_H), 1);
-    assert.equal(textRows(0, LINE_H), 1);
-  });
-
-  test("потолок три строки держится", () => {
-    assert.equal(textRows(500, LINE_H), 3);
-  });
-
-  test("крупный системный шрифт поднимает порог вместе со строкой", () => {
-    assert.equal(textRows(38, 21), 1);
-    assert.equal(textRows(48, 21), 2);
   });
 });
 
@@ -121,29 +99,20 @@ describe("чипы «весь день»", () => {
 });
 
 describe("лестница содержимого блока", () => {
-  // Имя, время, услуга — и значки внизу; адреса нет, имя одной строкой и
-  // одним кеглем.
-  const base = { hasService: true, hasStatus: true };
-  test("высокий блок: имя, время, услуга и значки внизу", () => {
+  // Имя, время, услуга; адреса и значков нет, имя одной строкой и одним
+  // кеглем.
+  const base = { hasService: true };
+  test("высокий блок: имя, время, услуга", () => {
     assert.deepEqual(blockLadder({ ...base, rowsFit: 6 }), {
       showTime: true,
       showService: true,
-      showStatus: true,
       lastRow: "service",
     });
   });
-  test("на три строки: имя, время, услуга — значкам места нет", () => {
-    const l = blockLadder({ ...base, rowsFit: 3 });
-    assert.equal(l.showService, true);
-    assert.equal(l.showStatus, false);
-  });
-  test("нет услуги — значки встают сразу под временем", () => {
+  test("нет услуги — последней стоит время", () => {
     const l = blockLadder({ ...base, hasService: false, rowsFit: 3 });
-    assert.equal(l.showStatus, true);
+    assert.equal(l.showService, false);
     assert.equal(l.lastRow, "time");
-  });
-  test("сказать нечего — строки значков нет", () => {
-    assert.equal(blockLadder({ ...base, hasStatus: false, rowsFit: 6 }).showStatus, false);
   });
   test("самый низкий блок печатает хотя бы имя", () => {
     assert.equal(blockLadder({ ...base, rowsFit: 0 }).lastRow, "name");

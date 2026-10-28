@@ -10,7 +10,7 @@ export type SmsBucket = "all" | "delivered" | "waiting" | "failed";
  *  без отчёта спустя сутки уже ничего не ждёт: оператор отчёт не вернёт, и
  *  SMS, ушедшие без отчётов, навсегда висели бы в «Ждут».
  *  Строка при этом честно говорит «Отправлено», а плитка считает их ушедшими. */
-export const SENT_REPORT_WAIT_MS = 24 * 60 * 60 * 1000;
+const SENT_REPORT_WAIT_MS = 24 * 60 * 60 * 1000;
 
 export function bucketOf(
   status: SmsHistoryItem["status"],
@@ -79,7 +79,7 @@ export function dayTitle(date: Date, now: Date): string {
   return `${WEEKDAYS[date.getDay()]}, ${date.getDate()} ${MONTHS[date.getMonth()]}${year}`;
 }
 
-export interface SmsDay {
+interface SmsDay {
   key: string;
   title: string;
   count: number;

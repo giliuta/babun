@@ -34,7 +34,8 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { ContactFieldRows } from "@/features/clients/extra-contacts/ContactFieldRows";
-import { EXTRA_LABELS, nextExtraLabel } from "@/features/clients/extra-contacts/extra-labels";
+import { EXTRA_LABELS, extraLabelText, nextExtraLabel } from "@/features/clients/extra-contacts/extra-labels";
+import { useExtraPhoneFinish, useExtraPhoneTaken } from "@/features/clients/extra-contacts/use-extra-phone-taken";
 
 // ДОПОЛНИТЕЛЬНЫЕ КОНТАКТЫ КЛИЕНТА — строки блока идентичности под главным
 // номером: ещё номера (`client.phones`), мессенджеры и почта, и один плюс на
@@ -48,14 +49,9 @@ import { EXTRA_LABELS, nextExtraLabel } from "@/features/clients/extra-contacts/
  *  дёргал пересинхронизацию писателя. */
 const EMPTY_PHONES: PhoneEntry[] = [];
 
-/** Значок подписи — тот же язык, что у остальных листов продукта. */
-const LABEL_ICONS: Record<string, LucideIcon> = {
-  Мобильный: Smartphone,
-  Рабочий: Briefcase,
-  Домашний: Home,
-  WhatsApp: MessageCircle,
-  Другой: Phone,
-};
+/** Значок подписи — тот же язык, что у остальных листов продукта; порядок —
+ *  `EXTRA_LABELS` (ключи там защищены от перевода, здесь — нет). */
+const LABEL_ICONS: LucideIcon[] = [Smartphone, Briefcase, Home, MessageCircle, Phone];
 
 export function ClientExtraContacts({
   client,
@@ -94,6 +90,10 @@ export function ClientExtraContacts({
   const t = useThemeColors();
   const country = useDefaultCountry(teamId);
   const copy = useCopyValue();
+  // У строк сотрудника (`EmployeeIdentityBlock`) id клиента нет — тогда
+  // сверяется со всеми клиентами.
+  const ownId = "id" in client ? (client as { id?: string }).id : undefined;
+  const warnIfTaken = useExtraPhoneTaken(ownId, country);
 
   const extras = client.phones ?? EMPTY_PHONES;
   // Номера — тот же jsonb-массив, что объекты: писать его можно только из
@@ -102,6 +102,7 @@ export function ClientExtraContacts({
   const phones = useJsonArrayWriter<PhoneEntry>(extras, (next) =>
     Promise.resolve(update({ phones: next })).then((ok) => ok !== false),
   );
+  const finishRow = useExtraPhoneFinish(phones, ownId, country);
 
   // Новый номер живёт ЛОКАЛЬНО, пока в нём нет цифр: тап по «+ Добавить
   // номер» раньше сразу писал в базу пустую запись, и у клиента навсегда
@@ -154,15 +155,20 @@ export function ClientExtraContacts({
     // Уже отменили или закоммитили — второй раз не пишем.
     if (!row) return;
     const { id, label } = row;
+    const empty = isDialOnly(value, country);
     void phones.apply((all) => {
       const rest = all.filter((p) => p.id !== id);
       // Пустое поле записью не становится, а уже созданную стирает: строки
       // «WHATSAPP — Номер» без номера в данных быть не должно. Один код
       // страны — тоже пусто: это подставленная подсказка, а не номер.
-      return isDialOnly(value, country)
-        ? rest
-        : [...rest, { id, number: value, label }];
+      return empty ? rest : [...rest, { id, number: value, label }];
     });
+  };
+  /** Набор кончился — номер в общем виде и проверка дубля (см. хук). */
+  const finishPending = () => {
+    const row = pendingRef.current;
+    setPendingRow(null);
+    if (row) finishRow(row.id);
   };
   const patchPhone = (id: string, patch: Partial<PhoneEntry>) =>
     void phones.apply((all) =>
@@ -174,7 +180,10 @@ export function ClientExtraContacts({
   const savePhone = (id: string, raw: string, live: boolean) => {
     const value = raw.trim();
     if (!isDialOnly(value, country)) {
-      patchPhone(id, { number: value });
+      // В черновике строка пишется на каждый символ — формат там держит
+      // само поле; на уходе с поля номер ложится в общем виде.
+      patchPhone(id, { number: live ? value : formatPhoneAsYouType(value, country) });
+      if (!live) warnIfTaken(value);
       return;
     }
     // В ЧЕРНОВИКЕ строка пишется на КАЖДЫЙ символ — удалять её на пустом поле
@@ -232,7 +241,7 @@ export function ClientExtraContacts({
           <FieldRow
             noCopy={noCopy}
             key={p.id}
-            label={p.label || "Другой"}
+            label={extraLabelText(p.label)}
             value={
               draft
                 ? formatPhoneAsYouType(p.number, country)
@@ -273,7 +282,7 @@ export function ClientExtraContacts({
             trailing={
               <PhoneChannelButton
                 number={p.number}
-                label={p.label}
+                label={extraLabelText(p.label)}
                 teamId={teamId}
               />
             }
@@ -295,13 +304,14 @@ export function ClientExtraContacts({
           keyboardType="phone-pad"
           tabular
           autoFocus
+          live={draft}
           onSave={(v) => commitPending(withHomeCode(v, country))}
-          onEditEnd={() => setPendingRow(null)}
+          onEditEnd={finishPending}
         />
       ) : pending ? (
         <FieldRow
             noCopy={noCopy}
-          label={pending.label}
+          label={extraLabelText(pending.label)}
           // Код страны компании подставлен заранее (+357…): если надо
           // исправить — стирают и вписывают другой. Это ПОДСКАЗКА, а не значение: номер,
           // введённый со своим «+», уважается как есть.
@@ -322,7 +332,7 @@ export function ClientExtraContacts({
           // Правка закончилась — номер уже в данных, и строка становится
           // обычной строкой-номером (с переключением подписи). Пустая
           // строка исчезает сама: отменять её крестиком нечего.
-          onEditEnd={() => setPendingRow(null)}
+          onEditEnd={finishPending}
         />
       ) : null}
 
@@ -340,6 +350,7 @@ export function ClientExtraContacts({
         noCopy={noCopy}
         compact={compact}
         inline={inline}
+        live={draft}
       />
 
       {/* ОДИН ПЛЮС НА ВСЁ: номер, WhatsApp, Telegram,
@@ -366,8 +377,8 @@ export function ClientExtraContacts({
         title="Подпись номера"
         items={EXTRA_LABELS.map((label) => ({
           id: label,
-          label,
-          icon: LABEL_ICONS[label] ?? Phone,
+          label: extraLabelText(label),
+          icon: LABEL_ICONS[EXTRA_LABELS.indexOf(label)] ?? Phone,
           color: t.accent,
           onPress: () => {
             if (labelFor) patchPhone(labelFor.id, { label });

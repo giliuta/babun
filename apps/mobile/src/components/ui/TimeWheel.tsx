@@ -25,6 +25,7 @@ export {
   VISIBLE_ROWS,
   WHEEL_H,
 } from "./time-wheel/wheel-geometry";
+import { capsText } from "./caps-text";
 export { LoopWheelColumn, WheelWithLines } from "./time-wheel/LoopWheelColumn";
 
 /**
@@ -227,11 +228,10 @@ export function TimeRangePicker({
             fontSize: 11,
             fontWeight: "600",
             letterSpacing: 0.6,
-            textTransform: "uppercase",
             color: on ? t.accent : t.faint,
           }}
         >
-          {label}
+          {capsText(label)}
         </Text>
         <Text
           maxFontSizeMultiplier={1.2}

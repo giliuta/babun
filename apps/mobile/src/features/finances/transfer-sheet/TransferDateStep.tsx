@@ -2,7 +2,6 @@ import { View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { DateSpinner } from "@/components/ui/DateSpinner";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { StepBack } from "@/components/ui/StepBack";
 import { GUTTER } from "@/components/ui/tokens";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import type { TransferView } from "./transfer-view";
@@ -18,7 +17,8 @@ export function renderTransferDateStep(v: TransferView) {
     <BottomSheet
     padded={false}
       visible={visible && !guard.hidden}
-      onClose={guard.close}
+      // Как шаг счёта: закрытие возвращает к форме без смены дня.
+      onClose={() => setStep("form")}
       onExited={guard.onExited}
       title={title}
       footer={
@@ -36,7 +36,6 @@ export function renderTransferDateStep(v: TransferView) {
       }
     >
       <View style={{ paddingHorizontal: GUTTER, paddingBottom: 12 }}>
-        <StepBack onPress={() => setStep("form")} />
         <View style={{ alignItems: "center" }}>
           {/* ПИКЕР РОЖДАЕТСЯ СО ЗНАЧЕНИЕМ. Смонтированный до того, как дата
               известна, компактный DateTimeInput навсегда запоминает

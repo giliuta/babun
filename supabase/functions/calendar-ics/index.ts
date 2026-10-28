@@ -19,6 +19,7 @@
 // (25.08) — подписчиков на них нет.
 
 import { serviceClient } from "../_shared/service-client.ts";
+import { eventSpan, resolveTimeZone } from "./ics-time.ts";
 
 /** 24 случайных байта hex — форма токена из `calendar_feed_tokens`. */
 const TOKEN_RE = /^[0-9a-f]{48}$/;
@@ -36,11 +37,6 @@ interface AptRow {
 
 function notFound(): Response {
   return new Response("Not Found", { status: 404 });
-}
-
-/** "YYYYMMDDTHHmmss" — floating local time, no Z, per the Next route. */
-function stamp(dateKey: string, hhmm: string): string {
-  return `${dateKey.replace(/-/g, "")}T${hhmm.replace(":", "")}00`;
 }
 
 function stampNow(): string {
@@ -72,7 +68,10 @@ function summarize(apt: AptRow): string {
   return apt.comment || "Запись";
 }
 
-function buildIcs(apts: AptRow[]): string {
+// ВРЕМЯ — В UTC (Z), посчитанное в зоне компании (`calendar_settings.timezone`).
+// «Плавающее» время с X-WR-TIMEZONE часть календарей читала в своей зоне, и
+// визит у подписчика в другой стране съезжал на разницу часов.
+function buildIcs(apts: AptRow[], timeZone: string): string {
   const lines: string[] = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
@@ -80,14 +79,19 @@ function buildIcs(apts: AptRow[]): string {
   lines.push("CALSCALE:GREGORIAN");
   lines.push("METHOD:PUBLISH");
   lines.push("X-WR-CALNAME:Babun");
-  lines.push("X-WR-TIMEZONE:Europe/Nicosia");
+  // Подсказка о зоне компании — только для подписи календаря: времена
+  // событий ниже уже абсолютные.
+  lines.push(`X-WR-TIMEZONE:${timeZone}`);
 
   for (const apt of apts) {
+    const span = eventSpan(apt.date, apt.time_start, apt.time_end, timeZone);
+    // Битое время у одной записи не должно ронять всю ленту.
+    if (!span) continue;
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:${apt.id}@babun.app`);
     lines.push(`DTSTAMP:${stampNow()}`);
-    lines.push(`DTSTART:${stamp(apt.date, apt.time_start)}`);
-    lines.push(`DTEND:${stamp(apt.date, apt.time_end)}`);
+    lines.push(`DTSTART:${span.start}`);
+    lines.push(`DTEND:${span.end}`);
     lines.push(`SUMMARY:${escapeIcs(summarize(apt))}`);
     if (apt.address) lines.push(`LOCATION:${escapeIcs(apt.address)}`);
     if (apt.comment) lines.push(`DESCRIPTION:${escapeIcs(apt.comment)}`);
@@ -124,7 +128,7 @@ Deno.serve(async (req: Request) => {
   // не узнать. Живой токен без записей — пустой календарь (200).
   const { data: known, error: tokenErr } = await sb
     .from("calendar_feed_tokens")
-    .select("token")
+    .select("token, tenant_id")
     .eq("token", token)
     .is("revoked_at", null)
     .maybeSingle();
@@ -136,7 +140,19 @@ Deno.serve(async (req: Request) => {
   });
   if (rowsErr) return new Response("Service Unavailable", { status: 503 });
 
-  const body = buildIcs((rows ?? []) as AptRow[]);
+  // Зона компании токена. Нет настроек или зона битая — Europe/Nicosia, как
+  // у `tenant_business_date` в базе.
+  const { data: settings, error: settingsErr } = await sb
+    .from("calendar_settings")
+    .select("timezone")
+    .eq("tenant_id", (known as { tenant_id: string }).tenant_id)
+    .maybeSingle();
+  if (settingsErr) return new Response("Service Unavailable", { status: 503 });
+  const timeZone = resolveTimeZone(
+    (settings as { timezone: string | null } | null)?.timezone,
+  );
+
+  const body = buildIcs((rows ?? []) as AptRow[], timeZone);
   return new Response(req.method === "HEAD" ? null : body, {
     status: 200,
     headers: {

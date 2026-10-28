@@ -10,7 +10,7 @@
 export const SWIPE_LEADING = "swipe-leading";
 export const SWIPE_TRAILING = "swipe-trailing";
 
-export interface SwipeA11yAction {
+interface SwipeA11yAction {
   name: string;
   label?: string;
 }

@@ -7,7 +7,6 @@ export type UserRole = (typeof USER_ROLES)[number];
 
 export type AppCapability =
   | "view-cabinet"
-  | "view-company-profile"
   | "manage-company"
   | "manage-workforce"
   | "manage-calendar-settings"
@@ -24,16 +23,9 @@ export type AppCapability =
 // inbox stays closed until every server/provider prerequisite is ready.
 export const MESSAGING_ENABLED = isMessagingReady();
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  owner: "Владелец",
-  dispatcher: "Диспетчер",
-  master: "Бригадир / мастер",
-};
-
 const ROLE_CAPABILITIES: Record<UserRole, ReadonlySet<AppCapability>> = {
   owner: new Set<AppCapability>([
     "view-cabinet",
-    "view-company-profile",
     "manage-company",
     "manage-workforce",
     "manage-calendar-settings",
@@ -48,7 +40,6 @@ const ROLE_CAPABILITIES: Record<UserRole, ReadonlySet<AppCapability>> = {
   ]),
   dispatcher: new Set<AppCapability>([
     "view-cabinet",
-    "view-company-profile",
     "operate-calendar",
     "create-appointment",
     "operate-clients",
@@ -58,7 +49,6 @@ const ROLE_CAPABILITIES: Record<UserRole, ReadonlySet<AppCapability>> = {
   ]),
   master: new Set<AppCapability>([
     "view-cabinet",
-    "view-company-profile",
     "operate-calendar",
     "manage-personal-account",
   ]),
@@ -79,11 +69,10 @@ export function can(
 // ЛИЧНЫЕ СТРАНИЦЫ КАБИНЕТА ОТКРЫТЫ ЛЮБОЙ РОЛИ («Кабинет — личное»):
 // приглашения приходят человеку, а не компании, и профиль — его имя и
 // телефон. Данных компании там нет, поэтому и закрывать их нечем. Так же
-// личные «Уведомления» и «О приложении» (это телефон человека) и «Компания»
-// (`?tenant=` — его собственное членство: роль и календари; тариф страница
-// показывает только владельцу). «Помощь» — частые вопросы и связь с
-// поддержкой: строка стоит в блоке «Аккаунт» у любой роли, и партнёр, нажав
-// её, упирался в «Недостаточно прав». «Языки» — язык этого телефона.
+// личные «Уведомления» и «О приложении» (это телефон человека). «Помощь» —
+// частые вопросы и связь с поддержкой: строка стоит в блоке «Аккаунт» у любой
+// роли, и партнёр, нажав её, упирался в «Недостаточно прав». «Языки» — язык
+// этого телефона.
 const PERSONAL_CABINET_ROUTES = [
   "/cabinet/invitations",
   "/cabinet/profile",
@@ -91,7 +80,6 @@ const PERSONAL_CABINET_ROUTES = [
   "/cabinet/languages",
   "/cabinet/about",
   "/cabinet/help",
-  "/cabinet/company",
 ] as const;
 
 // «Сводка» открыта всем ролям: значок аналитики открывается у каждого, а данных может не быть.
@@ -118,7 +106,6 @@ const DISPATCHER_CABINET_ROUTES = new Set([
   ...ACCOUNT_CABINET_ROUTES,
   INSIGHTS_ROUTE,
   "/cabinet/account",
-  "/cabinet/business",
   "/cabinet/inventory",
   "/cabinet/sync",
   REQUISITES_ROUTE,
@@ -132,7 +119,6 @@ const MASTER_CABINET_ROUTES = new Set([
   ...ACCOUNT_CABINET_ROUTES,
   INSIGHTS_ROUTE,
   "/cabinet/account",
-  "/cabinet/business",
   "/cabinet/inventory",
   REQUISITES_ROUTE,
   ...PERSONAL_CABINET_ROUTES,
@@ -220,19 +206,6 @@ export function cabinetScreenRole(
 /** Возможность, которую открывает тариф («Соло · Про · Макс»,
  *  `session/tiers.ts`). */
 export type PlanCapability = TierFeature;
-
-/** Действующий тариф: ручная выдача (`plan_override`) всегда сильнее
- *  оплаченного. Повторяет `public.tenant_effective_plan` — если правило
- *  меняется, оно меняется в обоих местах одним заходом. */
-export function effectivePlan(
-  tenant: { plan?: string | null; plan_override?: string | null } | null | undefined,
-): string | null {
-  if (!tenant) return null;
-  const override = tenant.plan_override?.trim();
-  if (override) return override;
-  const plan = tenant.plan?.trim();
-  return plan ? plan : null;
-}
 
 /** Разрешает ли ТАРИФ это действие.
  *

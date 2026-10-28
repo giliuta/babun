@@ -10,7 +10,7 @@ import {
   type ServiceCostSource,
 } from "../services";
 
-export interface AppointmentMaterialSource {
+interface AppointmentMaterialSource {
   service_ids?: unknown;
   services?: unknown;
   /** Материалы, замороженные сервером при закрытии записи (миграция
@@ -54,7 +54,7 @@ export interface MaterialCatalogService extends ServiceCostSource {
   name?: string;
 }
 
-export interface AppointmentMaterialCostLine {
+interface AppointmentMaterialCostLine {
   serviceId: string;
   serviceName: string;
   quantity: number;

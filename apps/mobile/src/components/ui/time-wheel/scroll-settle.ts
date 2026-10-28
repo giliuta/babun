@@ -10,7 +10,7 @@ import { ITEM_H } from "./wheel-geometry";
 // приём у веб-барабана даты, `DateSpinner.web.tsx`).
 
 /** Сколько тишины считать концом прокрутки. */
-export const SETTLE_QUIET_MS = 120;
+const SETTLE_QUIET_MS = 120;
 
 type Timer = ReturnType<typeof setTimeout>;
 
@@ -48,4 +48,24 @@ export function createScrollSettle(
  *  половинки цифр. */
 export function offRow(y: number): boolean {
   return Math.abs(y - Math.round(y / ITEM_H) * ITEM_H) > 0.5;
+}
+
+/** КОЛЁСИКО МЫШИ — ОДНА СТРОКА ЗА ЩЕЛЧОК. Браузер прокручивает щелчок на
+ *  100–120 px, а строка барабана — 40: один щелчок проезжал 12 → 15.
+ *  Колесо перехватывает прокрутку и шагает само: щелчок любой длины — ровно
+ *  строка; тачпад шлёт поток мелких сдвигов, и строка набегает за каждые
+ *  `ITEM_H` пути. Возвращает шаг: −1, 0 или +1. */
+export function createWheelStepper(rowPx: number = ITEM_H) {
+  let acc = 0;
+  return (deltaY: number, deltaMode = 0): -1 | 0 | 1 => {
+    // deltaMode 1/2 — строки и страницы (Firefox): это всегда щелчок.
+    const px = deltaMode === 0 ? deltaY : Math.sign(deltaY) * rowPx;
+    // Смена направления — новый счёт, иначе первый щелчок назад гасил бы
+    // остаток прежнего хода.
+    if (Math.sign(px) !== Math.sign(acc)) acc = 0;
+    acc += px;
+    if (Math.abs(acc) < rowPx) return 0;
+    acc = 0;
+    return px > 0 ? 1 : -1;
+  };
 }

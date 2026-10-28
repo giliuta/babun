@@ -11,6 +11,7 @@ export function FilterRow({
   value,
   tick,
   hint,
+  expanded,
   onPress,
 }: {
   name: string;
@@ -19,6 +20,8 @@ export function FilterRow({
   tick?: string;
   /** VoiceOver-хинт: у одиночного и мультивыбора он разный. */
   hint?: string;
+  /** Варианты раскрыты под строкой — шеврон смотрит вверх. */
+  expanded?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -39,7 +42,8 @@ export function FilterRow({
             : value.label
           : "Все",
       }}
-      accessibilityHint={hint ?? "Открывает выбор"}
+      accessibilityHint={hint ?? (expanded ? "Сворачивает выбор" : "Раскрывает выбор")}
+      accessibilityState={{ expanded: !!expanded }}
       // Раскладка ТОЛЬКО в style: NativeWind v5 роняет style-функцию
       // Pressable, если рядом есть className. Нажатие углубляет материал,
       // а не гасит прозрачностью.
@@ -66,7 +70,12 @@ export function FilterRow({
       >
         {name}
       </Text>
-      <ChevronDown color={t.chevron} size={14} strokeWidth={2.6} />
+      <ChevronDown
+        color={t.chevron}
+        size={14}
+        strokeWidth={2.6}
+        style={expanded ? { transform: [{ rotate: "180deg" }] } : undefined}
+      />
       <View
         style={{
           flexDirection: "row",

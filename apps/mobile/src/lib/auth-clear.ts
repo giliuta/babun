@@ -1,6 +1,6 @@
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
-import { queueDepth } from "@babun/shared/db/cache/sql";
+import { memberQueueDepth, queueDepth } from "@babun/shared/db/cache/sql";
 import { confirmAction } from "@/lib/confirm";
 import { queryClient } from "@/lib/query-client";
 import { unsentChangesNote } from "@/lib/unsent-changes";
@@ -18,6 +18,7 @@ import {
   babunNotificationRegistrySnapshot,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
+import { forgetOtherDevices, forgetThisDevice } from "@/lib/push-device";
 import {
   LAST_USER_KEY,
   consumeSignedOutOnPurpose,
@@ -59,7 +60,9 @@ let intentionalSignOutBarrier: Promise<void> | null = null;
  *  nothing would be lost (an unreadable cache has nothing to lose either). */
 export async function unsentChangesNow(): Promise<string | null> {
   try {
-    return unsentChangesNote(await queueDepth());
+    // Обе очереди: правки таблиц владельца и отложенные вызовы сотрудника —
+    // выход стирает их вместе.
+    return unsentChangesNote((await queueDepth()) + (await memberQueueDepth()));
   } catch {
     return null;
   }
@@ -141,6 +144,10 @@ export async function signOutScopeAndWipe(
   });
   intentionalSignOutBarrier = barrier;
   try {
+    // ПУШИ — ДО ВЫХОДА: после него сессии для запроса уже нет, а сервер
+    // продолжал бы слать на этот телефон клиентов вышедшего человека.
+    if (scope === "global") await forgetOtherDevices();
+    await forgetThisDevice();
     const { error } = await supabase.auth.signOut({ scope });
     if (error) throw new Error(error.message);
     await wipeTenantScopedData();

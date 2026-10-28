@@ -25,7 +25,11 @@ export function TagSheet({
   onClose,
   onSubmit,
   templates,
+  newColor = DEFAULT_COLOR,
 }: {
+  /** Цвет нового тега — первый свободный в палитре команды, чтобы теги
+   *  различались с первого взгляда. */
+  newColor?: string;
   /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
   templates?: readonly TemplateItem<ClientTag>[];
   editing: Editing | null;
@@ -42,7 +46,7 @@ export function TagSheet({
   // editing при каждом открытии (паттерн «render-time reset», как у меток).
   const [seeded, setSeeded] = useState<Editing | null>(null);
   const seedName = isEdit ? editing.tag.name : "";
-  const seedColor = isEdit ? editing.tag.color || DEFAULT_COLOR : DEFAULT_COLOR;
+  const seedColor = isEdit ? editing.tag.color || DEFAULT_COLOR : newColor;
   const seedIcon = isEdit ? (editing.tag.icon ?? null) : null;
   if (editing !== seeded) {
     setSeeded(editing);
@@ -96,6 +100,7 @@ export function TagSheet({
       <>
       <NameColorField
         name={name}
+        placeholder="Название тега"
         onNameChange={setName}
         color={color}
         onColorChange={setColor}

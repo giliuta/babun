@@ -8,7 +8,7 @@ import {
   effectiveWorkHours,
 } from "@/features/calendar/setting-options";
 import {
-  deriveScrollHour,
+  deriveOpenHour,
   deriveWindow,
   effectiveCalendarWindow,
   hmToMinutes,
@@ -17,17 +17,23 @@ import {
   useTeamSchedule,
   useUpsertTeamSchedule,
 } from "@/features/reference/team-schedule";
+import type { BookingServiceRef } from "@/features/appointments/booking-selection";
+import { SETTLED_STAYS, placementRefusal, placementTeam, settledVisit } from "./appointment-rules";
 import { sheetBandResolver, workBandResolver } from "./work-band";
 import type { CalendarClock } from "./use-calendar-clock";
+import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarScope } from "./use-calendar-scope";
 import type { CalendarSources } from "./use-calendar-sources";
 import type { CalendarView } from "./use-calendar-view";
 import type { GridModes } from "./use-grid-modes";
 import type { VisibleAppointments } from "./use-visible-appointments";
 
+const NO_SERVICES: readonly BookingServiceRef[] = [];
+
 type UseCalendarGridDeps =
   Pick<CalendarScope, "activeTeam" | "activeTeamId">
-  & Pick<CalendarSources, "calSettings">
+  & Pick<CalendarSources, "calSettings" | "servicesQuery">
+  & Pick<CalendarRights, "isCrew">
   & Pick<CalendarView, "mode">
   & Pick<VisibleAppointments, "weekYmds" | "dayYmd" | "visibleAppts" | "apptsFor">
   & Pick<GridModes, "moving" | "movingKind" | "pickClientId">
@@ -38,7 +44,7 @@ type UseCalendarGridDeps =
 export function useCalendarGrid(deps: UseCalendarGridDeps) {
   const {
     activeTeam, calSettings, activeTeamId, mode, weekYmds, dayYmd, visibleAppts, moving,
-    movingKind, pickClientId, apptsFor, todayYmd, nowMinutes,
+    movingKind, pickClientId, apptsFor, todayYmd, nowMinutes, servicesQuery, isCrew,
   } = deps;
   // Буфер после каждой записи (дорога/уборка) — СВОЙ У БРИГАДЫ, компанейский
   // остаётся фолбэком (буфер живёт в графике команды).
@@ -123,13 +129,21 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
   const visStartHour = visWindow.startHour;
   const visEndHour = visWindow.endHour;
 
-  // Час открытия — начало работы просматриваемого дня (стабильное значение:
-  // «сейчас» тикает раз в минуту, а openScroll перезапускается на каждое его
-  // изменение — рельс дёргался бы под пальцем. Вернуться к текущему часу есть
-  // чем: «Сегодня» в шапке и «к сейчас» на сетке).
+  // Час открытия: сегодня — «сейчас» с запасом, другой день — начало работы
+  // или первая запись (`deriveOpenHour`). Сетка читает его только пока своего
+  // места в этом запуске нет, поэтому тиканье «сейчас» прокрутку не дёргает.
   const scrollToHour = useMemo(
-    () => deriveScrollHour(workBandFor?.(dayYmd), globalWork, visWindow),
-    [workBandFor, dayYmd, globalWork, visWindow],
+    () =>
+      deriveOpenHour({
+        days: visibleDays,
+        todayYmd,
+        nowMinutes,
+        bandFor: workBandFor,
+        fallback: globalWork,
+        appts: visibleAppts,
+        window: visWindow,
+      }),
+    [visibleDays, todayYmd, nowMinutes, workBandFor, globalWork, visibleAppts, visWindow],
   );
 
   // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь
@@ -142,6 +156,17 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
     ? (movingSpan > 0 && moving.time_end === "23:59" ? movingSpan + 1 : movingSpan) ||
       (activeTeam?.default_slot_minutes ?? 30)
     : 0;
+  const services = servicesQuery.data ?? NO_SERVICES;
+  const moveTeam = moving ? placementTeam(moving, activeTeamId ?? null, isCrew) : null;
+  // Причина, по которой в открытой команде запись встанет не везде, — для
+  // плашки режима: пустая сетка без слова выглядела бы поломкой.
+  const moveLimit = useMemo(() => {
+    if (!moving) return null;
+    return (
+      placementRefusal(moving, movingKind, moving.date, moveTeam, services) ??
+      (movingKind === "move" && settledVisit(moving) ? SETTLED_STAYS : null)
+    );
+  }, [moving, movingKind, moveTeam, services]);
   const freeSlotsFor = useMemo(() => {
     if (!pickClientId && !moving) return undefined;
     // Считаем каждую дату ОДИН раз: пейджер держит три страницы, и в Неделе
@@ -159,6 +184,11 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
       // Прошедшие дни не предлагаются вовсе: записать «во вчера» нельзя,
       // туда можно только перенести уже существующую запись.
       if (dateYmd < todayYmd) return [];
+      // Куда запись не встанет — там и не горит: оплаченная — только в своём
+      // дне, с услугами своего прайса — не в чужой команде.
+      if (moving && placementRefusal(moving, movingKind, dateYmd, moveTeam, services)) {
+        return [];
+      }
       // ТОЛЬКО ЗАНЯТОСТЬ ЭТОЙ БРИГАДЫ. Общий срез календаря содержит ещё и
       // личные события без команды — они видны в КАЖДОМ календаре, и одно
       // событие «весь день» обнуляло свободное время у всех команд разом:
@@ -196,6 +226,8 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
     pickClientId,
     moving,
     movingKind,
+    moveTeam,
+    services,
     moveWindowMin,
     apptsFor,
     activeTeamId,
@@ -211,7 +243,7 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
   return {
     bufferMinutes, teamScheduleQuery, teamSchedule, upsertSchedule, workBandFor,
     globalWork, sheetBandFor, visStartHour, visEndHour, scrollToHour, moveWindowMin,
-    freeSlotsFor,
+    freeSlotsFor, moveLimit,
   };
 }
 

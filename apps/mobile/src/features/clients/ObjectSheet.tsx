@@ -1,211 +1,234 @@
-import { useEffect, useRef, useState } from "react";
-import { useRouter, type Href } from "expo-router";
-import { AccessibilityInfo, ScrollView, Text, TextInput, View } from "react-native";
+import { useRef, type ReactNode, type RefObject } from "react";
+import { useRouter } from "expo-router";
+import { ScrollView, Text, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Star } from "lucide-react-native";
+import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { ActionRow } from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   ObjectFields,
   useObjectTypeOptions,
   type ObjectFieldsValue,
 } from "@/features/clients/ObjectFields";
-import { hasAddressPlace, objectPlacePatch } from "@/features/clients/object-address";
-import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
-import { snapObjectType } from "@/features/clients/object-types";
-import { useReferenceHref } from "@/lib/reference-href";
-import { haptics } from "@/lib/haptics";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
+import { useObjectCreate, type AddedObject } from "./object-sheet/use-object-create";
+import { useObjectEdit } from "./object-sheet/use-object-edit";
 
-// ЛИСТ «НОВЫЙ ОБЪЕКТ» — ДОБАВЛЕНИЕ СНИЗУ ВВЕРХ.
+// ЛИСТ ОБЪЕКТА — ОДИН НА СОЗДАНИЕ И ПРАВКУ (AGENTS, правило 2).
 //
-// Новый объект не открываем полноценной страницей — он выезжает снизу вверх.
-// Отсюда разделение: ДОБАВИТЬ объект — лист (три вопроса,
-// объект существует по адресу или ссылке); ИНФОРМАЦИЯ объекта — строка
-// карточки. Страницы создания объекта в продукте нет.
+// Новый объект не открываем полноценной страницей — он выезжает снизу вверх;
+// отдельной страницы объекта нет и у правки: тап по строке открывает этот же
+// лист. Вид — `ObjectFields`, одно тело на оба режима. Режимы отличаются
+// только СПОСОБОМ ЗАПИСИ: создание копит черновик и пишет одной кнопкой
+// (`object-sheet/use-object-create.ts`), правка пишет сразу, на уходе с
+// каждого поля (`object-sheet/use-object-edit.ts`). Два файла-листа уже
+// разошлись однажды: подсказка над кнопкой была только у создания, «Сделать
+// основным» — только у правки.
 //
-// ВИД ЛИСТА ЖИВЁТ НЕ ЗДЕСЬ, А В `ObjectFields` — одном теле на создание и на
-// правку (см. его заголовок). Этот файл отвечает ровно за одно: за черновик и
-// за то, как он уезжает в базу одной кнопкой. Правка того же объекта пишет
-// сразу, на уходе с каждого поля, — это законная разница СПОСОБА ЗАПИСИ, а не
-// повод рисовать вторую форму.
-//
-// В ЧЕРНОВИКЕ КЛИЕНТА лист работает так же: писатель `locations` кладёт объекты
-// в черновик, а `locations` проходит белый список create_client_with_tags — то
-// есть уедет в базу вместе с «Готово».
+// ЖИЛЬЦОВ В ЛИСТЕ НЕТ (добавлять жильца отсюда — перебор). Под виллой на
+// странице клиента остаётся только ПОКАЗАНИЕ уже связанных.
 
-const EMPTY_DRAFT: ObjectFieldsValue = {
-  type: "",
-  target: "",
-  parts: {},
-  partsOpen: false,
-  pin: "",
-  note: "",
-};
-
-export function ObjectSheet({
-  visible,
-  writer,
-  initialTarget,
-  onAdded,
-  onRequestFromClient,
-  onClose,
-  teamId = null,
-}: {
+type Common = {
   visible: boolean;
-  /** Писатель `locations` — общий с листом правки: свой завёл бы вторую
+  /** Писатель `locations` карточки — один на все листы: свой завёл бы вторую
    *  очередь от своего снимка массива и стирал чужие правки. */
   writer: LocationWriter;
-  /** Чем заполнить главную строку при открытии. Экран записи открывает лист с
-   *  уже набранным там адресом — перепечатывать его незачем. */
-  initialTarget?: string;
-  /** Объект записан. Экран записи по этому сигналу СРАЗУ выбирает его. */
-  onAdded?: (added: {
-    id: string;
-    label: string;
-    address: string;
-    mapUrl?: string;
-    note?: string;
-  }) => void;
   /** «Попросить адрес у клиента» (STORY-077): выписать ссылку и открыть
-   *  «Поделиться». Нет — иконки нет (черновик клиента, роль мастера). */
+   *  «Поделиться». Правке это нужно даже чаще — объект часто заводят по
+   *  названию улицы и уточняют точку при первом выезде. Нет — иконки нет
+   *  (черновик клиента, роль мастера). */
   onRequestFromClient?: () => void;
   onClose: () => void;
-  /** Команда клиента — её «Типы объектов» (у каждой команды свои). */
-  teamId?: string | null;
+};
+
+type ObjectSheetProps = Common &
+  (
+    | {
+        mode: "create";
+        /** Команда клиента — её «Типы объектов» (у каждой команды свои). */
+        teamId?: string | null;
+        /** Чем заполнить главную строку при открытии. Экран записи открывает
+         *  лист с уже набранным там адресом — перепечатывать его незачем. */
+        initialTarget?: string;
+        /** Объект записан. Экран записи по этому сигналу СРАЗУ выбирает его. */
+        onAdded?: (added: AddedObject) => void;
+      }
+    | {
+        mode: "edit";
+        client: Client;
+        /** Какой объект правим. null — лист закрыт. */
+        locationId: string | null;
+        /** Открыт свайпом «Удалить» — спрашиваем сразу, форму не показываем. */
+        askDelete?: boolean;
+        /** Объект удалён. Форма записи по этому сигналу снимает выбор, если
+         *  выбран был именно он: иначе в запись уехал бы id удалённого объекта. */
+        onDeleted?: (id: string) => void;
+      }
+  );
+
+export function ObjectSheet(props: ObjectSheetProps) {
+  // Режим у смонтированного листа не меняется: карточка держит по листу на
+  // режим, поэтому хуки каждого режима живут в своей ветке.
+  return props.mode === "edit" ? <EditMode {...props} /> : <CreateMode {...props} />;
+}
+
+function CreateMode(props: Extract<ObjectSheetProps, { mode: "create" }>) {
+  const teamId = props.teamId ?? null;
+  const typeOptions = useObjectTypeOptions(teamId);
+  const form = useObjectCreate({ ...props, typeOptions });
+  const t = useThemeColors();
+  return (
+    <Shell
+      {...props}
+      teamId={teamId}
+      title="Новый объект"
+      value={form.value}
+      typeOptions={typeOptions}
+      onChange={form.onChange}
+      addressRef={form.addressRef}
+      flush={() => {}}
+      footer={
+        <>
+          {/* ПОЧЕМУ КНОПКА СЕРАЯ — СКАЗАНО НАД НЕЙ: тот же
+              приём, что у CTA страницы записи. */}
+          {!form.ready && !form.saving ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 13, color: t.sub, textAlign: "center", marginBottom: 8 }}
+            >
+              Впишите адрес, вставьте ссылку или отметьте точку на карте
+            </Text>
+          ) : null}
+          <Button
+            label="Добавить объект"
+            onPress={() => void form.add()}
+            disabled={!form.ready}
+            loading={form.saving}
+          />
+        </>
+      }
+    />
+  );
+}
+
+function EditMode(props: Extract<ObjectSheetProps, { mode: "edit" }>) {
+  const teamId = props.client.team_id ?? null;
+  const typeOptions = useObjectTypeOptions(teamId);
+  /** Что сделать, когда лист полностью уйдёт (см. `onExited`). */
+  const afterExit = useRef<(() => void) | null>(null);
+  const form = useObjectEdit({ ...props, typeOptions, afterExit });
+  // Пришли со свайпа — сразу вопрос, без формы: жест уже сказал, чего хотят.
+  if (!form.loc || props.askDelete) return null;
+  const loc = form.loc;
+  return (
+    <Shell
+      {...props}
+      teamId={teamId}
+      title="Объект"
+      value={form.value}
+      typeOptions={typeOptions}
+      onChange={form.onChange}
+      onCommit={form.commitAll}
+      flush={form.commitAll}
+      afterExit={afterExit}
+      // «УДАЛИТЬ ОБЪЕКТ» СТРОКОЙ ЗДЕСЬ НЕТ: удаление — свайп по строке объекта
+      // в карточке, он же приходит сюда с `askDelete`. ОСНОВНОЙ — СО
+      // ЗВЁЗДОЧКОЙ: та же звезда стоит у основного объекта в списке.
+      extra={
+        !loc.isPrimary ? (
+          <SectionCard dense>
+            <ActionRow icon={Star} label="Сделать основным" onPress={form.makePrimary} />
+          </SectionCard>
+        ) : null
+      }
+      // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ И КАРТОЧКИ — «Применить».
+      footer={
+        <Button
+          label="Применить"
+          onPress={() => {
+            form.commitAll();
+            props.onClose();
+          }}
+        />
+      }
+    />
+  );
+}
+
+function Shell({
+  visible,
+  title,
+  teamId,
+  value,
+  typeOptions,
+  onChange,
+  onCommit,
+  addressRef,
+  flush,
+  afterExit: ownAfterExit,
+  onRequestFromClient,
+  onClose,
+  extra,
+  footer,
+}: {
+  visible: boolean;
+  title: string;
+  teamId: string | null;
+  value: ObjectFieldsValue;
+  typeOptions: string[];
+  onChange: (patch: Partial<ObjectFieldsValue>) => void;
+  onCommit?: () => void;
+  addressRef?: RefObject<TextInput | null>;
+  /** Записать недописанное перед уходом: правке — всё, созданию — ничего
+   *  (черновик доживает до следующего открытия). */
+  flush: () => void;
+  afterExit?: { current: (() => void) | null };
+  onRequestFromClient?: () => void;
+  onClose: () => void;
+  extra?: ReactNode;
+  footer: ReactNode;
 }) {
   const t = useThemeColors();
   const router = useRouter();
   const doorway = useSheetDoorway();
-  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
-  const typesHref = useReferenceHref().objectTypes;
+  // Шестерёнка типов — та же дверь, что у остальных строк шестерёнки
+  // клиентов: компания в адресе, нет права или команда чужая — двери нет.
+  const typesDoor = useClientSettingsDoor("objects", teamId);
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
-
-  const [draft, setDraft] = useState<ObjectFieldsValue>(EMPTY_DRAFT);
-  const [saving, setSaving] = useState(false);
-  /** Идёт запись — синхронно, в отличие от `saving`. */
-  const busy = useRef(false);
   /** Что сделать, когда лист полностью уйдёт: системный «Поделиться» поверх
    *  уходящего модального окна iOS закрывается вместе с ним. */
-  const afterExit = useRef<(() => void) | null>(null);
-
-  // Предзаполнение — РОВНО ОДИН РАЗ на открытие и только в пустой черновик:
-  // лист остаётся смонтированным, и без засова подстановка перетирала бы то,
-  // что человек уже набрал.
-  const seeded = useRef(false);
-  // КУРСОР СРАЗУ В АДРЕС: лист открыли, чтобы вписать адрес, —
-  // тап по полю был лишним шагом самого частого действия. Ждём, пока лист
-  // доедет: фокус на уезжающем вверх окне клавиатура не поднимает.
-  const addressRef = useRef<TextInput>(null);
-  useEffect(() => {
-    if (!visible) return;
-    const timer = setTimeout(() => addressRef.current?.focus(), 350);
-    return () => clearTimeout(timer);
-  }, [visible]);
-  useEffect(() => {
-    if (!visible) {
-      seeded.current = false;
-      return;
-    }
-    if (seeded.current) return;
-    seeded.current = true;
-    const start = initialTarget?.trim();
-    if (start) setDraft((d) => (d.target.trim() ? d : { ...d, target: start }));
-  }, [visible, initialTarget]);
-
-  const typeOptions = useObjectTypeOptions(teamId);
-  // ТИП НЕ ПОДСТАВЛЯЕТСЯ: в большинстве заказов не известно, дом это, вилла
-  // или квартира, — не сразу «Дом», а «добавить». Новый
-  // объект открывается с пустым типом — дверью «Выбрать тип объекта»; выбрать
-  // можно, но не обязательно, и объект без типа записывается одним адресом.
-  // Если подставлять тип основного объекта клиента или первый тип словаря,
-  // почти каждый объект молча станет «Домом». Пустой тип
-  // продукт уже умеет: списки печатают такой объект как «Объект».
-
-  // Объект существует, когда есть адрес, части с «где» ИЛИ отмеченная точка:
-  // по пину команда доедет даже без единого слова адреса — на кипрских виллах
-  // это обычное дело.
-  const ready =
-    draft.target.trim().length > 0 ||
-    hasAddressPlace(draft.parts) ||
-    isLikelyUrl(draft.pin.trim());
-
-  const add = async (): Promise<boolean> => {
-    // Засов СИНХРОННЫЙ: между тапом и появлением `saving` есть кадр, в который
-    // второй тап успевал влезть в ту же очередь.
-    if (!ready || busy.current) return false;
-    busy.current = true;
-    setSaving(true);
-    try {
-      // Главная строка + уточнение → одно место: строка-ссылка станет пином,
-      // строка-текст — «улица и дом» (см. objectPlacePatch).
-      const { address, mapUrl, addressParts } = objectPlacePatch(
-        draft.target,
-        draft.parts,
-        draft.pin,
-      );
-      const label = snapObjectType(draft.type, typeOptions);
-      const note = draft.note.trim() || undefined;
-      const id = await writer.addLocation({
-        label,
-        address,
-        mapUrl,
-        addressParts,
-        note,
-      });
-      if (!id) {
-        // Причину показал useUpdateClient — набранное НЕ выбрасываем.
-        haptics.error();
-        return false;
-      }
-      haptics.success();
-      onAdded?.({ id, label, address, mapUrl, note });
-      // Форма пустеет ТОЛЬКО после подтверждённой записи (выше — ранний
-      // выход по !id): иначе набранный адрес исчезал вместе с неудавшимся
-      // PATCH-ем. Тип остаётся: три виллы подряд заводят одним типом.
-      setDraft((d) => ({ ...EMPTY_DRAFT, type: d.type }));
-      // Анонс — не в тот же кадр: форма в этот момент пустеет (а на записи
-      // лист ещё и уходит), и VoiceOver перебивал бы сам себя (тот же приём,
-      // что в листе фильтров).
-      setTimeout(
-        () =>
-          AccessibilityInfo.announceForAccessibility(
-            `Объект добавлен: ${address || mapUrl || ""}`,
-          ),
-        350,
-      );
-      // ДОБАВИЛИ — ЛИСТ УХОДИТ, ВСЕГДА. У записи объект уезжает в саму запись
-      // (`onAdded` выбирает его). Лист, оставшийся открытым с пустой формой
-      // ради трёх вилл подряд, выглядит так, будто ничего не сохранилось:
-      // нажал «Добавить объект», а перед глазами та же пустая форма. Объект встаёт в блок
-      // за листом; следующий — одним тапом по той же двери.
-      onClose();
-      return true;
-    } finally {
-      busy.current = false;
-      setSaving(false);
-    }
-  };
+  const localAfterExit = useRef<(() => void) | null>(null);
+  const afterExit = ownAfterExit ?? localAfterExit;
 
   return (
     <BottomSheet
       padded={false}
       visible={visible && !doorway.parked}
-      onClose={onClose}
-      // ЗАГОЛОВОК — КАНОНИЧЕСКИЙ, БЕЗ «ГОТОВО» В УГЛУ: у нас нижняя кнопка.
-      // Набранное при закрытии не теряется: лист остаётся
-      // смонтированным и черновик доживает до следующего открытия.
-      title="Новый объект"
-      maxHeightRatio={0.92}
-      avoidKeyboard
+      // Закрытие скримом/свайпом — тоже уход со строки: без этого набранный
+      // в правке адрес пропадал вместе с листом. Черновик создания при
+      // закрытии не теряется: лист остаётся смонтированным.
+      onClose={() => {
+        flush();
+        onClose();
+      }}
       onExited={() => {
         const run = afterExit.current;
         afterExit.current = null;
         run?.();
       }}
+      // ЗАГОЛОВОК — КАНОНИЧЕСКИЙ, БЕЗ «ГОТОВО» В УГЛУ: у нас нижняя кнопка.
+      title={title}
+      maxHeightRatio={0.92}
+      avoidKeyboard
     >
       {/* Тело листа — язык страницы (группы строк на прохладном фоне): лист
           заменяет собой страницу, и строки в нём те же самые. Паддинги только
@@ -219,34 +242,38 @@ export function ObjectSheet({
         <ObjectFields
           addressRef={addressRef}
           teamId={teamId}
-          value={draft}
+          value={value}
           typeOptions={typeOptions}
-          onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
-          onTypeSettings={() => {
-            // ДВЕРЬ ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ ЕГО, как выбор категории:
-            // закрытый лист вернул бы «назад» на карточку, а начатый объект
-            // пришлось бы заводить заново. Лист уезжает вниз и
-            // возвращается с набранным (`use-sheet-doorway`, AGENTS 5.4).
-            doorway.open(() =>
-              router.push(
-                (teamId ? { pathname: typesHref, params: { team: teamId } } : typesHref) as Href,
-              ),
-            );
-          }}
+          onChange={onChange}
+          onCommit={onCommit}
           onRequestFromClient={
             onRequestFromClient
               ? () => {
                   // Лист сперва уходит, действие запускается после его ухода.
                   afterExit.current = onRequestFromClient;
+                  flush();
                   onClose();
                 }
               : undefined
           }
+          onTypeSettings={
+            typesDoor
+              ? () => {
+                  // ДВЕРЬ ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ ЕГО, как выбор категории:
+                  // закрытый лист вернул бы «назад» на карточку, а начатый объект
+                  // пришлось бы заводить заново. Лист уезжает вниз и
+                  // возвращается с набранным (`use-sheet-doorway`, AGENTS 5.4).
+                  flush();
+                  doorway.open(() => router.push(typesDoor));
+                }
+              : undefined
+          }
         />
+        {extra}
       </ScrollView>
 
       {/* Футер — единственная громкая поверхность листа. Над клавиатурой его
-          держит avoidKeyboard, поэтому добавлять можно, не убирая её. */}
+          держит avoidKeyboard. */}
       <View
         style={{
           paddingHorizontal: 16,
@@ -259,32 +286,7 @@ export function ObjectSheet({
           backgroundColor: t.surface,
         }}
       >
-        {/* ПОЧЕМУ КНОПКА СЕРАЯ — СКАЗАНО НАД НЕЙ: тот же
-            приём, что у CTA страницы записи. */}
-        {!ready && !saving ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            maxFontSizeMultiplier={1.3}
-            style={{
-              fontSize: 13,
-              color: t.sub,
-              textAlign: "center",
-              marginBottom: 8,
-            }}
-          >
-            Впишите адрес, вставьте ссылку или отметьте точку на карте
-          </Text>
-        ) : null}
-        {/* КНОПКА — КАНОНИЧЕСКАЯ. Своя `Pressable` с плоской заливкой
-            `t.accent` была бы единственной главной кнопкой в продукте,
-            нарисованной руками: рядом с «Создать клиента» и «Применить» она
-            выглядела бы чужой, без градиента и без ореола. */}
-        <Button
-          label="Добавить объект"
-          onPress={() => void add()}
-          disabled={!ready}
-          loading={saving}
-        />
+        {footer}
       </View>
     </BottomSheet>
   );

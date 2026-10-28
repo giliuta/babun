@@ -165,20 +165,60 @@ export function deriveWindow(
   return { startHour, endHour };
 }
 
+/** Запас над линией «сейчас»: видно и только что прошедшую работу. */
+const NOW_LEAD_MIN = 60;
+/** Шаг, до которого округляется «сейчас»: число меняется раз в полчаса, а
+ *  не каждую минуту. */
+const NOW_STEP_MIN = 30;
+/** Час открытия пустого дня, когда рабочие часы нигде не заданы: полночь
+ *  открыла бы шесть часов ночи, где работы не бывает. */
+const QUIET_OPEN_HOUR = 8;
+
 /**
- * Час ПЕРВОГО открытия календаря — пока сетка не запомнила своё место
- * (`grid-memory.ts`). Начало работы просматриваемого дня.
+ * Час, на котором календарь ОТКРЫВАЕТСЯ, пока сетка не запомнила своё место
+ * в этом запуске (`grid-memory.ts`).
  *
- * Сознательно НЕ «сейчас»: openScroll перезапускается на каждое изменение
- * этого числа (zoom.tsx), а «сейчас» тикает раз в минуту — рельс дёргался бы
- * под пальцем. Вернуться к текущему часу и так есть чем: кнопка «Сегодня» в
- * шапке и «к сейчас» на сетке.
+ * На экране сегодня — линия «сейчас» с часом запаса сверху: человек открывает
+ * календарь, чтобы увидеть, что идёт и что следующее. Другой день — начало
+ * рабочего окна команды или первая запись, если она раньше: ночь до работы
+ * пуста, и начинать с неё значит листать к делу каждый раз. Рабочих часов нет
+ * и записей нет — утро, а не полночь.
  */
-export function deriveScrollHour(
-  band: WorkBand | null | undefined,
-  fallback: { start: number; end: number },
-  window: { startHour: number; endHour: number },
-): number {
-  const h = band ? Math.floor(band.startMin / 60) : fallback.start;
-  return Math.max(window.startHour, Math.min(h, window.endHour - 1));
+export function deriveOpenHour(input: {
+  /** Дни на экране: один в «Дне», семь в «Неделе». */
+  days: readonly string[];
+  todayYmd: string;
+  nowMinutes: number | null | undefined;
+  bandFor?: (ymd: string) => WorkBand | null | undefined;
+  /** Общие рабочие часы — когда у команды нет своего графика. Начало 0
+   *  значит «не заданы»: это стандарт окна 00–24, а не рабочий день. */
+  fallback: { start: number; end: number };
+  appts: readonly Appointment[];
+  window: { startHour: number; endHour: number };
+}): number {
+  const clamp = (h: number) =>
+    Math.max(input.window.startHour, Math.min(h, input.window.endHour - 1));
+
+  if (input.nowMinutes != null && input.days.includes(input.todayYmd)) {
+    const lead = input.nowMinutes - NOW_LEAD_MIN;
+    return clamp(Math.floor(lead / NOW_STEP_MIN) * (NOW_STEP_MIN / 60));
+  }
+
+  let workStart = Infinity;
+  for (const ymd of input.days) {
+    const band = input.bandFor?.(ymd);
+    if (band) workStart = Math.min(workStart, band.startMin);
+    else if (band === undefined && input.fallback.start > 0) {
+      workStart = Math.min(workStart, input.fallback.start * 60);
+    }
+  }
+  let firstAppt = Infinity;
+  for (const a of input.appts) {
+    if (a.event_all_day === true || !input.days.includes(a.date)) continue;
+    const h = Number(a.time_start?.slice(0, 2));
+    const m = Number(a.time_start?.slice(3, 5));
+    if (Number.isFinite(h)) firstAppt = Math.min(firstAppt, h * 60 + (Number.isFinite(m) ? m : 0));
+  }
+  const start = Math.min(workStart, firstAppt);
+  return clamp(start === Infinity ? QUIET_OPEN_HOUR : Math.floor(start / 60));
 }

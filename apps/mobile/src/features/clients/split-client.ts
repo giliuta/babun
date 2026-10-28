@@ -101,7 +101,7 @@ export function splitRowText(entry: PhoneEntry): { label: string; hint?: string 
  *    убирать нечего, и это не ошибка;
  *  • `changed` — в черновике набрали ДРУГОЙ номер: вынесен не он, и стирать
  *    его из исходной значило бы потерять живой номер.  */
-export type SplitSourceStep =
+type SplitSourceStep =
   | { kind: "patch"; patch: Pick<Client, "phones"> }
   | { kind: "gone" }
   | { kind: "changed" };

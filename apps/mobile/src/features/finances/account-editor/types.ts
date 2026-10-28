@@ -2,14 +2,14 @@ import type { AccountDraft } from "@babun/shared/db/repositories/accounts";
 import type { useUpdateAccount } from "../accounts";
 
 /** Мутация правки счёта — одна на лист правки, её делят все группы. */
-export type AccountUpdate = ReturnType<typeof useUpdateAccount>;
+type AccountUpdate = ReturnType<typeof useUpdateAccount>;
 
 /** Алерт с человеческой причиной отказа: офлайн вместо сырого «Network
  *  request failed» (см. `EditAccountSheet`). */
 export type AlertError = (title: string) => (e: unknown) => void;
 
 /** Правка счёта со СВОИМ заголовком ошибки. Промис отвечает, сохранилось ли. */
-export type SaveAccount = (
+type SaveAccount = (
   patch: Partial<AccountDraft>,
   errorTitle: string,
 ) => Promise<boolean>;

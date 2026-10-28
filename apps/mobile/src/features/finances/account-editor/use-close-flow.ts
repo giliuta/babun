@@ -79,17 +79,20 @@ function explain(target: AccountWithBalance) {
 export function useCloseFlow({
   onDone,
   alertError,
+  canFinishAfterTransfer,
 }: {
   /** Счёт закрыт, удалён или разговор оборвался ошибкой — лист закрывается. */
   onDone: () => void;
   alertError: AlertError;
+  /** Лист счёта можно закрыть после перевода (в нём нет несохранённых правок). */
+  canFinishAfterTransfer?: () => boolean;
 }) {
   const qc = useQueryClient();
   const tenantId = useTenantId();
   const trashAcc = useTrashAccount();
   const undoTrash = useUndoAccountTrash();
-  // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА: свайп «Скрыть»
-  // говорил «Счёт скрыт», а кнопка листа то же действие делала молча.
+  // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА «Удалить»: «Счёт удалён» с «Отменить»;
+  // кнопка листа то же действие молча не делает.
   const toast = useToast();
 
   const [parked, setParked] = useState(false);
@@ -199,7 +202,7 @@ export function useCloseFlow({
    * дверь к нему была только на «Финансах»). Лист уезжает с дороги (два листа
    * в одном кадре iOS не покажет), открывается тот же лист перевода, что в
    * футере «Финансов», с этим счётом источником и всем его остатком; по
-   * закрытии лист счёта возвращается — вопроса о скрытии здесь нет.
+   * закрытии лист счёта возвращается — вопроса об удалении здесь нет.
    */
   const startTransfer = (account: AccountWithBalance) => {
     closingFrom.current = null;
@@ -221,12 +224,20 @@ export function useCloseFlow({
     run?.();
   };
 
+  // ПЕРЕВОД ИЗ ЛИСТА СЧЁТА ЗАКРЫВАЕТ И ЛИСТ. Тост «Переведено · Отменить»
+  // рисуется в окне страницы, а вернувшийся лист — модальное окно поверх:
+  // скрим ложился на тост, и тап по «Отменить» закрывал лист вместо отмены
+  // перевода. Несохранённые правки листа важнее — тогда лист возвращается.
+  const sent = useRef(false);
   const onTransferClose = () => {
     setTransferOpen(false);
     const before = closingFrom.current;
     closingFrom.current = null;
+    const wasSent = sent.current;
+    sent.current = false;
     if (!before) {
-      returnSheet();
+      if (wasSent && (canFinishAfterTransfer?.() ?? true)) onDone();
+      else returnSheet();
       return;
     }
     const from = before;
@@ -257,6 +268,9 @@ export function useCloseFlow({
       toId: preset?.toId ?? null,
       amount: preset?.amount ?? null,
       onClose: onTransferClose,
+      onSent: () => {
+        sent.current = true;
+      },
     },
   };
 }

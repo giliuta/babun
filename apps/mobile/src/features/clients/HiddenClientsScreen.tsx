@@ -1,11 +1,11 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type React from "react";
 import { FlatList, RefreshControl, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import ClientRow from "@/features/clients/ClientRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useLastNonNull } from "@/lib/use-last-non-null";
 import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
@@ -57,7 +58,8 @@ export function HiddenClientsScreen({
   caption: (client: Client) => string;
   trailing?: (client: Client) => ReactNode;
   empty: { title: string; subtitle: string; icon: ReactNode };
-  /** Пункты меню по долгому нажатию: «Восстановить», «Стереть навсегда». */
+  /** Действия строки: «Вернуть» (`id: "restore"`) и «Удалить насовсем»
+   *  (`id: "erase"`) — кромками свайпа и листом по долгому нажатию. */
   actions: (client: Client) => HiddenAction[];
 }) {
   const t = useThemeColors();
@@ -88,11 +90,15 @@ export function HiddenClientsScreen({
   // обязана совпадать с той, что была вчера.
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsMap = useMemo(
-    () => buildStatsMap(clients, appointments, invoicing),
-    [clients, appointments, invoicing],
+    () => buildStatsMap(clients, appointments, invoicing, today),
+    [clients, appointments, invoicing, today],
   );
 
+  // Заголовок и глагол вставляются в фразу в кавычках, как есть: к этому
+  // времени они уже переведены, и `toLowerCase()` ломал бы немецкие
+  // существительные («gelöschte kunden»).
   const run = async (client: Client, label: string, action: () => Promise<void>) => {
     if (busyId) return;
     setBusyId(client.id);
@@ -100,7 +106,7 @@ export function HiddenClientsScreen({
       await action();
     } catch (error) {
       notify(
-        `Не удалось: ${label.toLowerCase()}`,
+        `Не удалось выполнить «${label}»`,
         (error as Error).message || "Проверьте соединение и повторите.",
       );
     } finally {
@@ -113,12 +119,12 @@ export function HiddenClientsScreen({
       <ScreenHeader title={title} />
       {query.isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <Spinner size={28} label={`Загрузка: ${title.toLowerCase()}`} />
+          <Spinner size={28} label={`Загружаем «${title}»`} />
         </View>
       ) : query.isError ? (
         <ClientDataNotice
           fullScreen
-          title={`Не удалось загрузить: ${title.toLowerCase()}`}
+          title={`Не удалось загрузить «${title}»`}
           message={query.error.message}
           onRetry={() => void query.refetch()}
           retrying={query.isRefetching}
@@ -140,18 +146,6 @@ export function HiddenClientsScreen({
             // ДЕЙСТВИЯ ЖИВУТ ЗА ДОЛГИМ НАЖАТИЕМ, и без подписи их не найти:
             // на этих экранах нет ни свайпов, ни кнопок в строке. Одна
             // тихая строка сверху дешевле, чем кнопка в каждой строке.
-            ListHeaderComponent={
-              (clients.length > 0
-                ? (
-                    <Text
-                      className="px-4 pb-1 pt-2 text-xs"
-                      style={{ color: t.sub }}
-                    >
-                      Нажмите и удерживайте строку — вернуть или стереть
-                    </Text>
-                  )
-                : null) as React.ReactElement | null
-            }
             ItemSeparatorComponent={() => (
               <View
                 className="ml-4 h-px"
@@ -160,7 +154,32 @@ export function HiddenClientsScreen({
             )}
             renderItem={({ item }) => {
               const stats = statsMap.get(item.id);
+              // КРОМКИ — КАК У ТРЁХ ДРУГИХ КОРЗИН (счета, операции, записи):
+              // вправо «Вернуть», влево «Удалить» — только тому, кого база
+              // даст стереть. Долгое нажатие — тот же выбор листом.
+              const acts = actions(item);
+              const back = acts.find((a) => a.id === "restore");
+              const erase = acts.find((a) => a.id === "erase");
+              const name = item.full_name || item.phone || "Клиент";
               return (
+                <SwipeRow
+                  leading={
+                    back
+                      ? {
+                          label: "Вернуть",
+                          color: t.success,
+                          icon: back.icon,
+                          accessibilityLabel: `Вернуть клиента ${name}`,
+                          onAction: () => void run(item, back.label, back.run),
+                        }
+                      : undefined
+                  }
+                  label={erase ? "Удалить" : undefined}
+                  color={t.danger}
+                  icon={erase?.icon}
+                  accessibilityLabel={erase ? `Удалить клиента ${name} насовсем` : undefined}
+                  onAction={erase ? () => void run(item, erase.label, erase.run) : undefined}
+                >
                 <View style={{ opacity: busyId === item.id ? 0.5 : 1 }}>
                   <ClientRow
                     client={item}
@@ -179,6 +198,7 @@ export function HiddenClientsScreen({
                     onLongPress={() => setMenuClient(item)}
                   />
                 </View>
+                </SwipeRow>
               );
             }}
             ListEmptyComponent={

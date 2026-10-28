@@ -43,21 +43,19 @@ describe("blockLayout", () => {
     assert.equal(l.totalMin, 16 * 60);
   });
 
-  test("completed: status row below the ladder; an off label gets the dot", () => {
+  test("completed: an off label gets the dot", () => {
     const l = blockLayout({ ...base, offLabelColor: "#f00", placed: one("10:00", "12:00", "completed") });
     assert.equal(l.dotReserve, 12);
     assert.equal(l.completed, true);
-    assert.equal(l.showStatus, true);
     assert.equal(l.textW, l.width - 2 * 6 - 2);
   });
 
-  test("a cancelled record shows no status row and no fading tail", () => {
+  test("a cancelled record has no fading tail", () => {
     const l = blockLayout({
       ...base,
       label: "Константин Константинопольский",
       placed: one("10:00", "12:00", "cancelled"),
     });
-    assert.equal(l.showStatus, false);
     assert.deepEqual(l.fadeRows, []);
   });
 

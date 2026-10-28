@@ -33,10 +33,11 @@ export function paymentLinesTotal(tx: Pick<Tx, "amount" | "vat_mode" | "vat_amou
 
 /**
  * Доходы, которым ещё нужен чек: приход, не возвращённый целиком (сервер
- * откажет «оформлен полный возврат»), и без своего чека. Старые — первыми:
- * предоплата раньше доплаты.
+ * откажет «оформлен полный возврат»), без своего чека и не оплата долга —
+ * на неё сервер чек не выписывает (`receipt:debt_payment`), а отказ приходил
+ * уже после превью. Старые — первыми: предоплата раньше доплаты.
  */
-export function incomesAwaitingReceipt<T extends Tx>(
+export function incomesAwaitingReceipt<T extends Tx & { debt_id?: string | null }>(
   ledger: readonly T[],
   receipts: readonly { transaction_id: string | null }[],
 ): T[] {
@@ -52,6 +53,7 @@ export function incomesAwaitingReceipt<T extends Tx>(
       (tx) =>
         tx.type === "income" &&
         tx.amount > 0 &&
+        !tx.debt_id &&
         !withReceipt.has(tx.id) &&
         cents(tx.amount - (refunded.get(tx.id) ?? 0)) > 0,
     )

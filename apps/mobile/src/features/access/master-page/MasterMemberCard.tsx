@@ -26,6 +26,7 @@ import {
 import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { MasterWorkBlock } from "./MasterProfileBlocks";
+import { MemberTeamRole } from "./MemberTeamRole";
 import { PartnerPersonalBlocks } from "./PartnerPersonalBlocks";
 import { PartnerFilesBlock } from "./PartnerFilesBlock";
 import { seenLine } from "./partner-facts";
@@ -79,7 +80,7 @@ export function MasterMemberCard({
   const toast = useToast();
   const router = useRouter();
   const qc = useQueryClient();
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
   // ДИРЕКТОР: себя и директоров не правит, команды — только свои,
@@ -334,6 +335,18 @@ export function MasterMemberCard({
           // нет.
           <AccessSectionsCard
             sections={rightsSectionsNow}
+            role={
+              activeId ? (
+                <MemberTeamRole
+                  userId={userId}
+                  blocks={blocks}
+                  map={map}
+                  teamId={activeId}
+                  teamName={teamNameOf(activeId) ?? ""}
+                  locked={!!manager.readOnly}
+                />
+              ) : undefined
+            }
             onOpen={(section) => {
               Keyboard.dismiss();
               const group = CALENDAR_GROUPS.find((each) => each === section.key);

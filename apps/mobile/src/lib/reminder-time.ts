@@ -5,12 +5,6 @@ import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
-export type AppointmentReminderTiming =
-  | "before-30"
-  | "before-60"
-  | "previous-day-20"
-  | "same-day-08";
-
 type AppointmentWallTime = {
   date: string;
   time_start: string;
@@ -34,32 +28,7 @@ function shiftDateKey(dateKey: string, days: number): string {
   return proof.toISOString().slice(0, 10);
 }
 
-/** Resolve a reminder against the appointment's brigade/business timezone. */
-export function appointmentReminderInstant(
-  appointment: AppointmentWallTime,
-  timing: AppointmentReminderTiming,
-  timeZone: string,
-): Date {
-  if (timing === "before-30" || timing === "before-60") {
-    const start = zonedWallTimeToInstant(
-      appointment.date,
-      appointment.time_start,
-      timeZone,
-    );
-    const offsetMinutes = timing === "before-30" ? 30 : 60;
-    return new Date(start.getTime() - offsetMinutes * 60 * 1000);
-  }
-  if (timing === "previous-day-20") {
-    return zonedWallTimeToInstant(
-      shiftDateKey(appointment.date, -1),
-      "20:00",
-      timeZone,
-    );
-  }
-  return zonedWallTimeToInstant(appointment.date, "08:00", timeZone);
-}
-
-export interface EventReminderOccurrence {
+interface EventReminderOccurrence {
   when: Date;
   label: string;
   date: string;

@@ -6,7 +6,7 @@ import type { FieldRowView } from "./use-field-row";
 // the element tree stays exactly what it was before the split.
 export function renderFieldRowStacked(v: FieldRowView) {
   const {
-    label, value, placeholder, separated, keyboardType, autoCapitalize,
+    label, value, placeholder, separated, nativeKeyboard, autoCapitalize,
     autoFocus, multiline, valueColor, tabular, hideLabel, trailing,
     onLabelPress, addLabel, inputColor, readOnly, compact, onLongPress, noCopy,
     t, editing, editingNow, text, selectOnFocus, valueSize, valueWeight,
@@ -33,11 +33,10 @@ export function renderFieldRowStacked(v: FieldRowView) {
           область он склеивается со строкой для VoiceOver. */}
       <Pressable
         // В ЖИВОМ ВВОДЕ (`live`: новый клиент, лист реквизитов) поле уже
-        // смонтировано, и строка раньше была ВЫКЛЮЧЕНА: курсор ставился
-        // только точным попаданием в само значение, а тап по подписи над ним
-        // («VAT номер») не делал ничего — цифры уходили в прошлое поле
-        // Поэтому тап по любой части
-        // строки ставит курсор в её поле.
+        // смонтировано. Выключенная строка ставила бы курсор только точным
+        // попаданием в само значение, а тап по подписи над ним («VAT номер»)
+        // не делал бы ничего — цифры уходили бы в прошлое поле. Поэтому тап
+        // по любой части строки ставит курсор в её поле.
         onPress={
           readOnly
             ? undefined
@@ -137,7 +136,7 @@ export function renderFieldRowStacked(v: FieldRowView) {
             placeholderTextColor={addLabel ? t.accent : t.placeholder}
             selectionColor={t.accent}
             keyboardAppearance="light"
-            keyboardType={keyboardType}
+            keyboardType={nativeKeyboard}
             selectTextOnFocus={selectOnFocus}
             contextMenuHidden={noCopy}
             autoCapitalize={autoCapitalize}

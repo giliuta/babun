@@ -20,7 +20,7 @@ import {
 } from "./shared";
 
 /** Правка упёрлась в строку, которой уже нет. */
-export const OPERATION_GONE = "Операцию уже удалили на другом устройстве";
+const OPERATION_GONE = "Операцию уже удалили на другом устройстве";
 
 export interface TransactionDraft {
   type: Exclude<TransactionType, "transfer">; // transfers use a separate helper

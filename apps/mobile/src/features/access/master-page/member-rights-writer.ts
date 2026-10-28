@@ -9,6 +9,7 @@ import {
   levelOf as mapLevelOf,
   refusalOf,
   type AccessBlock,
+  type AccessChange,
   type AccessLevel,
   type AccessRefusal,
   type MemberAccessMap,
@@ -22,6 +23,9 @@ import { MEMBER_REFUSAL_TEXT, levelChanges, withMemberChanges } from "./rights-r
 // возвращает прежнюю и говорит словами (`MEMBER_REFUSAL_TEXT`). Две записи
 // не делят один снимок карты: пока летит первая, вторая не уходит — иначе
 // откат второй вернул бы первую.
+
+/** `busyKey` пачки роли — ни одна строка не ждёт отдельно. */
+export const ROLE_BUSY = "role";
 
 export const memberRefusal = (error: unknown): AccessRefusal =>
   error instanceof AccessRequestError ? refusalOf(error) : "other";
@@ -75,8 +79,41 @@ export function useMemberRightsWriter(userId: string, blocks: readonly AccessBlo
     });
   };
 
+  /** Пачка прав разом — роль: одна поездка `set_member_access`, тот же
+   *  оптимистичный откат, что у строки. В тосте «Отменить» возвращает
+   *  прежние положения тех же прав такой же пачкой. */
+  const applyBatch = (changes: readonly AccessChange[], done: string) => {
+    if (!blocks || setAccess.isPending || changes.length === 0) return;
+    const previous = qc.getQueryData<MemberAccessMap>(key);
+    const undo: AccessChange[] | null = previous
+      ? changes.map((change) => {
+          const block = blocks.find((candidate) => candidate.key === change.block);
+          return {
+            ...change,
+            level: block ? mapLevelOf(block, previous, change.team_id ?? "") : change.level,
+          };
+        })
+      : null;
+    setSaving(ROLE_BUSY);
+    if (previous) qc.setQueryData(key, withMemberChanges(previous, blocks, changes));
+    setAccess.mutate(changes, {
+      onSuccess: () =>
+        toast(
+          done,
+          "success",
+          undo ? { label: "Отменить", onPress: () => applyBatch(undo, "Права вернулись") } : undefined,
+        ),
+      onError: (error) => {
+        if (previous) qc.setQueryData(key, previous);
+        toast(memberRefusalText(error), "error");
+      },
+      onSettled: () => setSaving(null),
+    });
+  };
+
   return {
     pick,
+    applyBatch,
     pending: setAccess.isPending,
     /** Строка, что сейчас сохраняется (`null` — ничего не летит). */
     busyKey: setAccess.isPending ? saving : null,

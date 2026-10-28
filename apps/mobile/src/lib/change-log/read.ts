@@ -23,7 +23,7 @@ type ChangeLogRpc = (
   args: ListChangeLogArgs,
 ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 
-export interface ChangeLogQuery {
+interface ChangeLogQuery {
   /** Начало периода включительно (ISO). */
   from?: string | null;
   /** Конец периода, не включая (ISO). */

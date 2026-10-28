@@ -136,7 +136,7 @@ describe("двери чека берут одно правило", () => {
 
   test("составитель: у оплаты без клиента и возвращённой — честная причина, клиент берётся из оплаты", () => {
     const page = readFileSync(resolve(here, "../../app/documents/receipt-new.tsx"), "utf8");
-    assert.match(page, /const clientId = forPayment \? \(paymentTx\?\.client_id \?\? null\) : draft\.clientId;/);
+    assert.match(page, /const clientId = paymentTx\?\.client_id \?\? null;/);
     assert.match(page, /"У оплаты нет клиента — чек выписывается на человека, поэтому на эту оплату его не выписать"/);
     assert.match(page, /paymentFullyRefunded\(/);
     assert.match(page, /"Оплата возвращена целиком — чек на неё не выписывается"/);

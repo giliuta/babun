@@ -1,6 +1,5 @@
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import { formatCountRu, type PluralFormsRu } from "@babun/shared/common/utils/plural-ru";
-import { categoriesDoorLine } from "./category-asks";
 import { hasBudget } from "./category-budget";
 
 // ПОДПИСИ ДВЕРЕЙ «НАСТРОЕК ФИНАНСОВ» ОДНОЙ КОМАНДЫ: настройки финансов свои у
@@ -35,32 +34,8 @@ export function accountsSettingsHref(teamId: string | null, noTeam: string): str
     : "/accounts/settings";
 }
 
-/** «Расход 5 · доход 2 · 1 бюджет» — категории команды и сколько у них
- *  бюджетов. Скрытые и служебные не считаются. */
-export function teamCategoriesLine(
-  categories: readonly FinanceCategory[],
-  teamId: string | null,
-): string {
-  const own = categories.filter((c) => c.team_id === teamId);
-  const line = categoriesDoorLine(own);
-  const budgets = own.filter((c) => !c.hidden && hasBudget(c)).length;
-  return budgets > 0 ? `${line} · ${formatCountRu(budgets, FORMS_BUDGET)}` : line;
-}
-
 const FORMS_CATEGORY: PluralFormsRu = ["категория", "категории", "категорий"];
 const FORMS_SET: PluralFormsRu = ["набор", "набора", "наборов"];
-
-/** Сколько живых категорий вида у команды — число на плитке «Категории».
- *  Скрытые и служебные не считаются, как у `teamCategoryKindLine`. */
-export function teamCategoryKindCount(
-  categories: readonly FinanceCategory[],
-  teamId: string | null,
-  kind: "income" | "expense" | "debt",
-): number {
-  return categories.filter(
-    (c) => c.team_id === teamId && c.type === kind && !c.is_system && !c.hidden,
-  ).length;
-}
 
 /** Дверь «Реквизиты»: «1 набор · INV-2026-005» — сколько рабочих наборов и
  *  номер следующего инвойса основного. Номер ещё едет — только наборы. */

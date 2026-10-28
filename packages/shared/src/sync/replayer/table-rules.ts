@@ -57,6 +57,14 @@ export function touchesGuardedAppointmentFields(
 export const GUARDED_CONFLICT_MESSAGE =
   "Запись изменилась на другом устройстве, и ваша правка статуса или оплаты не применена. Откройте запись и сделайте это ещё раз.";
 
+/** Сообщение, когда правка уступила более свежей строке сервера
+ *  (`replayUpdate`): правка снята, кэш взял строку сервера. */
+export function serverNewerMessage(table: QueuedOp["table"]): string {
+  return table === "clients"
+    ? "Карточку клиента изменили на другом устройстве — показываю свежую версию"
+    : "Запись изменили на другом устройстве — показываю свежую версию";
+}
+
 /** Insert payload after table rules; a client may replay as an aggregate. */
 export function prepareInsert(op: QueuedOp): PreparedInsert {
   if (op.table === "clients") return prepareClientInsert(op);

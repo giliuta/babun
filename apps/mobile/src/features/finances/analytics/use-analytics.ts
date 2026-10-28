@@ -101,7 +101,7 @@ export function useAnalytics(start: AnalyticsStart) {
     ? pickedPanel
     : "services";
 
-  const teamsData = useTeams().data;
+  const teamsData = useTeams({ display: true }).data;
   const teams = useMemo(() => teamsData ?? [], [teamsData]);
   // Выбранная команда исчезла (удалили, ушли в другую компанию) — снова вся
   // компания, а не чужой срез.

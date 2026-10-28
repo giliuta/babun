@@ -4,6 +4,7 @@ import { type CalMode } from "@/features/calendar/ViewModeDropdown";
 import { usePeriodPager } from "@/features/calendar/pager";
 import { monthTitle, weekTitle } from "@/features/calendar/header-title";
 import { startOfDay } from "./dates";
+import { parseYMD } from "@/features/appointments/helpers";
 import type { CalendarClock } from "./use-calendar-clock";
 import type { CalendarUiState } from "./use-calendar-ui-state";
 import type { CalendarView } from "./use-calendar-view";
@@ -15,7 +16,7 @@ type UseCalendarHeaderNavDeps =
     | "rememberViewRef">
   & Pick<VisibleAppointments, "weekDays" | "weekYmds" | "dayYmd">
   & Pick<CalendarClock, "now" | "todayYmd">
-  & Pick<GridModes, "setEditingApt" | "setMoving">
+  & Pick<GridModes, "editingApt" | "setEditingApt" | "setMoving">
   & Pick<CalendarUiState, "setMiniCalOpen">;
 
 /** Header title, the Today button, mode switch, month paging and the long-press
@@ -23,7 +24,7 @@ type UseCalendarHeaderNavDeps =
 export function useCalendarHeaderNav(deps: UseCalendarHeaderNavDeps) {
   const {
     mode, weekDays, monthAnchor, day, now, weekYmds, todayYmd, dayYmd, setDay, setMode,
-    setEditingApt, setMoving, rememberView, rememberViewRef, setMiniCalOpen,
+    editingApt, setEditingApt, setMoving, rememberView, rememberViewRef, setMiniCalOpen,
   } = deps;
   // Неделя на стыке месяцев называет оба (`header-title.ts`). «Список» —
   // месяц, как и его лента.
@@ -52,7 +53,12 @@ export function useCalendarHeaderNav(deps: UseCalendarHeaderNavDeps) {
   // «День» в текущей неделе, ждёт сегодня, а не старый выбранный день.
   // Чужая неделя — якорь сохраняется: её смотрят сознательно.
   const changeMode = (m: CalMode) => {
-    if (m === "day" && mode === "week" && weekYmds.includes(todayYmd)) {
+    // СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ ЕДЕТ В ДЕНЬ СВОЕЙ ЗАПИСИ: иначе «День» открывал
+    // сегодня, а плашка «Перемещение: …» висела над днём без этой записи —
+    // тянуть было нечего.
+    if (m === "day" && editingApt) {
+      setDay(startOfDay(parseYMD(editingApt.date)));
+    } else if (m === "day" && mode === "week" && weekYmds.includes(todayYmd)) {
       setDay(startOfDay(now));
     }
     // В Месяце и Списке тянуть нечего — «Свободное перемещение» снимается.
@@ -114,5 +120,3 @@ export function useCalendarHeaderNav(deps: UseCalendarHeaderNavDeps) {
     openWeekFromMonth, pickDay,
   };
 }
-
-export type CalendarHeaderNav = ReturnType<typeof useCalendarHeaderNav>;

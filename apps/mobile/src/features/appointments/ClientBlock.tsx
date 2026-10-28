@@ -43,8 +43,7 @@ import { useThemeColors } from "@/theme/colors";
 // НОМЕР СОТРУДНИКУ — ПО ОДНОМУ (защита базы). Клиент записи у мастера
 // приходит без контактов (`contacts_hidden`): на месте цифр «•• ••• •••», а
 // кнопка звонка открывает номер дверью с журналом — как на карточке
-// клиента (`LockedPhoneRow`). «В день записи» — словами, без кнопки; права
-// нет — строки номера нет. У владельца ключа нет — всё как было.
+// клиента (`LockedPhoneRow`). Права нет — строки номера нет. У владельца ключа нет — всё как было.
 
 export function ClientBlock({
   client,
@@ -88,7 +87,6 @@ export function ClientBlock({
   // Выбирать некого и нечем: блок без клиента в режиме «смотрит» пуст.
   if (!shown && !onPick) return null;
   const locked = shown ? contactsLocked(shown) : false;
-  const lockedDay = locked && shown?.contacts_hidden === "day";
   const noPhoneRight = locked && shown?.contacts_hidden === "right";
   // Дата — как в списке клиентов; «Историю записей» закрыли — даты нет.
   const mark =
@@ -148,21 +146,18 @@ export function ClientBlock({
                 phone={
                   noPhoneRight
                     ? null
-                    : lockedDay
-                      ? "Номер откроется в день записи"
-                      : locked
-                        ? "•• ••• •••"
-                        : shown.phone
-                          ? formatPhoneForDisplay(shown.phone, country)
-                          : "без телефона"
+                    : locked
+                      ? "•• ••• •••"
+                      : shown.phone
+                        ? formatPhoneForDisplay(shown.phone, country)
+                        : "без телефона"
                 }
                 phoneColor={shown.phone || locked ? t.sub : t.placeholder}
                 mark={mark}
-                wide={lockedDay}
               />
             </View>
           </Pressable>
-          {locked && !lockedDay && !noPhoneRight ? (
+          {locked && !noPhoneRight ? (
             // Номер ещё не открыт: та же кнопка на том же месте открывает его
             // (журнал видит владелец), дальше строка — обычная.
             <View className={`${gap} self-center`}>

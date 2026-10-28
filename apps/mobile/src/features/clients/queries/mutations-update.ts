@@ -166,6 +166,9 @@ export function useUpdateClientById() {
           return { ...current, ...restored };
         });
       }
+      // Отказ мог прийти потому, что строку изменили на другом устройстве
+      // (`ClientNewerOnServerError`): кэш уже взял её, карточка перечитывает.
+      qc.invalidateQueries({ queryKey: clientKeys.card(variables.id) });
       notify(
         "Не удалось сохранить",
         (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",

@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import type { DebtDirection } from "@babun/shared/local/finance/debt";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
 import type { Team } from "@/features/reference/queries";
@@ -97,6 +98,7 @@ export function FinancesFooter({
     // скрытыми (накопительный). Иначе один видимый счёт плюс скрытый давали
     // «Для перевода нужен второй счёт».
     company: transferAccounts ?? accounts,
+    teamHidden: (transferAccounts ?? []).filter((a) => a.is_hidden && a.brigade_id === teamId).length,
   });
   // У КОМАНДЫ ЧИПА НЕТ СЧЁТА — ГЛАВНОЕ ДЕЙСТВИЕ ВЕЗДЕ «СОЗДАТЬ СЧЁТ»:
   // без счёта ни доход, ни расход, ни перевод не записать, и первым
@@ -176,7 +178,7 @@ export function FinancesFooter({
             {shownReason}
           </Text>
         ) : null}
-        {button}
+        <TourTarget id="finances.action" shape="control">{button}</TourTarget>
       </View>
       <TransferSheet
         visible={transferOpen}

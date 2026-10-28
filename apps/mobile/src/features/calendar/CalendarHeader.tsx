@@ -4,6 +4,7 @@ import { Calendar, ChevronDown, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ViewModeDropdown, type CalMode } from "@/features/calendar/ViewModeDropdown";
 import { TourTarget } from "@/components/tour/TourTarget";
+import { ICON } from "@/components/ui/tokens";
 
 // Web-parity calendar top bar: gear · «{Month} {Year} ⌄» · today · view dropdown.
 // Title tap opens the MiniCalendar date jumper (web Header.tsx), the
@@ -46,7 +47,7 @@ export function CalendarHeader({
         backgroundColor: t.surface,
       }}
     >
-      <TourTarget id="calendar.gear">
+      <TourTarget id="calendar.gear" shape="control">
       <Pressable
           onPress={onGear}
           hitSlop={6}
@@ -61,11 +62,10 @@ export function CalendarHeader({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >
-          <Settings color={t.sub} size={21} strokeWidth={2} />
+          <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
       </Pressable>
       </TourTarget>
 
-      <TourTarget id="calendar.title" flex>
       <Pressable
         onPress={onTitlePress}
         accessibilityRole="button"
@@ -83,6 +83,9 @@ export function CalendarHeader({
       >
         {/* key=title: смена месяца мягко въезжает (150 мс) — единственный
             сигнал смены месяца в «Дне»; Reduce Motion гасит сам reanimated. */}
+        {/* Подсветка обучения — по надписи со стрелкой, а не по всему полю
+            кнопки: поле тянется на всю ширину шапки и пустое справа. */}
+        <TourTarget id="calendar.title" shape="control" style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
         <Animated.View key={monthTitle} entering={FadeIn.duration(150)}>
           <Text
             // 17/600/-0.2 — вес и трекинг iOS-навбара; 700 спорил с контентом.
@@ -99,8 +102,8 @@ export function CalendarHeader({
           </Text>
         </Animated.View>
         <ChevronDown color={t.faint} size={16} strokeWidth={2.5} />
+        </TourTarget>
       </Pressable>
-      </TourTarget>
 
       {!isOnToday ? (
         <Pressable
@@ -136,7 +139,7 @@ export function CalendarHeader({
         </Pressable>
       ) : null}
 
-      <TourTarget id="calendar.view">
+      <TourTarget id="calendar.view" shape="control">
         <ViewModeDropdown mode={mode} onChange={onModeChange} />
       </TourTarget>
     </View>

@@ -8,7 +8,7 @@ import { formatEURExact } from "@babun/shared/common/utils/money";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER } from "@/components/ui/tokens";
+import { GUTTER, ICON } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import {
   SELECT_SHEET_RATIO,
@@ -177,14 +177,14 @@ export function ServicePicker({
           later: "Прайс команды появится, когда связь вернётся.",
         })
       : null;
-  // ТАП ПО СТРОКЕ — ВЗЯТЬ ИЛИ СНЯТЬ, КОЛИЧЕСТВО — СТЕППЕРОМ.
+  // ТАП ПО СТРОКЕ — ВЗЯТЬ; КОЛИЧЕСТВО И СНЯТИЕ — СТЕППЕРОМ.
   //
-  // Если бы тап по строке ДОБАВЛЯЛ ещё одну, три чистки были бы тремя тапами, а
-  // снять услугу можно было бы только попав в маленький бейдж «×3», о чём на
-  // экране не говорит ничто. Поэтому строка ведёт себя как везде в продукте: тап —
-  // выбор, повторный тап — снятие; количество живёт своим органом «− 3 +»,
-  // который появляется у выбранной услуги.
-  const toggle = (id: string) => {
+  // Тап по строке ДОБАВЛЯЛ бы ещё одну — тогда три чистки были бы тремя тапами.
+  // А снимал бы выбранную — тогда промах мимо «+» на название стирал услугу
+  // вместе с набранным «×3». Поэтому строка только берёт услугу, а «− 3 +»
+  // считает её и снимает: «−» на единице убирает строку.
+  const take = (id: string) => {
+    if (selectedIds.includes(id)) return;
     haptics.tap();
     onToggle(id);
   };
@@ -210,7 +210,7 @@ export function ServicePicker({
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <Settings2 color={t.sub} size={20} strokeWidth={2} />
+          <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
         </Pressable>
       }
       padded={false}
@@ -289,13 +289,14 @@ export function ServicePicker({
                 accessibilityLabel={`${s.name}, ${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)}${
                   on ? `, взято ${qty ?? 1}` : ""
                 }`}
-                onPress={() => toggle(s.id)}
+                onPress={() => take(s.id)}
                 trailing={
                   on ? (
                     <PickerQty
                       name={s.name}
                       qty={qty ?? 1}
                       onChange={(next) => onQtyChange(s.id, next)}
+                      onRemove={() => onToggle(s.id)}
                     />
                   ) : undefined
                 }

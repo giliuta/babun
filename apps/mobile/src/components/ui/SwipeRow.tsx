@@ -261,11 +261,11 @@ export function SwipeRow({
               opacity: pressed ? 0.8 : 1,
             })}
           >
-            {Icon ? <Icon color="#fff" size={18} strokeWidth={2.2} /> : null}
+            {Icon ? <Icon color={t.onAccent} size={18} strokeWidth={2.2} /> : null}
             <Text
               maxFontSizeMultiplier={1.2}
               numberOfLines={1}
-              style={{ fontSize: 15, fontWeight: "600", color: "#fff" }}
+              style={{ fontSize: 15, fontWeight: "600", color: t.onAccent }}
             >
               {label}
             </Text>
@@ -300,12 +300,12 @@ export function SwipeRow({
             })}
           >
             {leading.icon ? (
-              <leading.icon color="#fff" size={18} strokeWidth={2.2} />
+              <leading.icon color={t.onAccent} size={18} strokeWidth={2.2} />
             ) : null}
             <Text
               maxFontSizeMultiplier={1.2}
               numberOfLines={1}
-              style={{ fontSize: 15, fontWeight: "600", color: "#fff" }}
+              style={{ fontSize: 15, fontWeight: "600", color: t.onAccent }}
             >
               {leading.label}
             </Text>

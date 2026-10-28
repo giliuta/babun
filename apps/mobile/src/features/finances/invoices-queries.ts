@@ -4,6 +4,7 @@ import { persistInvoiceLanguage } from "@/features/finances/persist-invoice-lang
 import {
   deleteInvoice,
   getInvoice,
+  InvoiceAlreadyIssuedError,
   issueInvoice,
   updateInvoice,
   listInvoices,
@@ -12,6 +13,7 @@ import {
 } from "@babun/shared/db/repositories/invoices";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import {
+  listInvoiceAppointmentMoney,
   listInvoicePayments,
   recordInvoicePayment,
   type RecordInvoicePaymentDraft,
@@ -168,7 +170,7 @@ export function useSetInvoiceNextNumber() {
  * без отдельной связки сторно печаталось бы в списках как
  * «Инвойс CN-… · Оплачен» с минусовой суммой.
  */
-export interface CreditNoteLinks {
+interface CreditNoteLinks {
   /** id кредит-ноты → id сторнированного инвойса. */
   originalByNoteId: Map<string, string>;
   /** id инвойса → id его кредит-ноты. */
@@ -205,6 +207,18 @@ export function useInvoicePayments() {
     queryKey: invoicePaymentsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listInvoicePayments(supabase, tenantId as string),
+  });
+}
+
+/** Деньги записей, принятые мимо их инвойсов (`listInvoiceAppointmentMoney`):
+ *  остаток инвойса по записи — за вычетом уже полученного записью. Ключ — под
+ *  «transactions»: его сбрасывает и оплата записи, и оплата инвойса. */
+export function useInvoiceAppointmentMoney() {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["transactions", tenantId, "invoice-appointment-money"],
+    enabled: !!tenantId,
+    queryFn: () => listInvoiceAppointmentMoney(supabase, tenantId as string),
   });
 }
 
@@ -248,7 +262,22 @@ export function useIssueInvoice() {
       ...draft
     }: IssueInvoiceDraft & { language?: InvoiceLanguage; repeat?: boolean }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
-      const invoice = await issueInvoice(supabase, tenantId, draft, { repeat });
+      let invoice;
+      try {
+        invoice = await issueInvoice(supabase, tenantId, draft, { repeat });
+      } catch (error) {
+        // ПРОШЛАЯ ПОПЫТКА ВЫСТАВИЛА ДОКУМЕНТ, А ЯЗЫК ЗАПИСАТЬ НЕ УСПЕЛА (он —
+        // вторым шагом). Без этого шага повтор уводил на выставленный инвойс,
+        // и бумага оставалась русской — на английском черновике.
+        if (
+          error instanceof InvoiceAlreadyIssuedError &&
+          language &&
+          error.invoice.language !== language
+        ) {
+          await persistInvoiceLanguage(() => setInvoiceLanguage(supabase, error.invoice.id, language));
+        }
+        throw error;
+      }
       if (language && language !== "ru") {
         const saved = await persistInvoiceLanguage(() =>
           setInvoiceLanguage(supabase, invoice.id, language),

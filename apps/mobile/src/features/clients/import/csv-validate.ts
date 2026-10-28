@@ -36,7 +36,7 @@ export interface MappedRow {
   reasons: RowReason[];
 }
 
-export interface MapAndValidateOptions {
+interface MapAndValidateOptions {
   rows: ParsedRow[];
   headers: string[];
   /** mapping[colIndex] = field; 'skip' means the column is ignored. */

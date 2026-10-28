@@ -28,6 +28,7 @@ import {
   useCompanyMembers,
   type CalendarMember,
 } from "@/session/access-queries";
+import { LIST_ROW } from "@/components/ui/tokens";
 
 // СОТРУДНИКИ КОМПАНИИ — «Кабинет → Сотрудники». Список один на
 // компанию, под именем — его команды; права по командам — на странице
@@ -69,7 +70,7 @@ export default function MastersScreen() {
     ],
     [allMasters],
   );
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
 
   const [search, setSearch] = useState("");
@@ -368,17 +369,17 @@ function MasterRow({
       </View>
       <View className="flex-1">
         <Text
-          style={{ fontSize: 16, fontWeight: "600", color: archived ? t.faint : t.ink }}
+          style={{ ...LIST_ROW.name, color: archived ? t.faint : t.ink }}
           numberOfLines={1}
         >
           {master.full_name || "Без имени"}
         </Text>
         {archived ? (
-          <Text style={{ fontSize: 14, color: t.faint }} numberOfLines={1}>
+          <Text style={{ ...LIST_ROW.sub, color: t.faint }} numberOfLines={1}>
             В архиве — открыть, чтобы вернуть
           </Text>
         ) : master.phone ? (
-          <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
+          <Text style={{ ...LIST_ROW.sub, color: t.sub }} numberOfLines={1}>
             {master.phone}
           </Text>
         ) : null}

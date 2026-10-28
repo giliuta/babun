@@ -13,7 +13,7 @@
 /** Обвязка карточки по вертикали: кант сверху и снизу плюс вертикальный
  *  паддинг. Постоянна при любой толщине канта — паддинг компенсирует её
  *  (при bw 1 это 2+4, при bw 2 — 4+2). */
-export const CARD_CHROME_H = 6;
+const CARD_CHROME_H = 6;
 
 /** Порог, ниже которого текст не печатают: обрезок хуже пустоты. */
 export const TEXT_MIN_W = 24;
@@ -23,15 +23,10 @@ export function rowsThatFit(cardH: number, lineH: number): number {
   return Math.floor((cardH - CARD_CHROME_H) / lineH);
 }
 
-/** Сколько строк печатать: не больше трёх, но и не меньше одной — у самого
- *  низкого блока имя пытается напечататься всегда. */
-export function textRows(cardH: number, lineH: number): number {
-  return Math.min(3, Math.max(1, rowsThatFit(cardH, lineH)));
-}
-
 /** ЛЕСТНИЦА СОДЕРЖИМОГО БЛОКА: имя → время → услуга, столько, сколько
- *  влезает по высоте, и строка значков внизу (оплата, выполнено), если под
- *  ней осталось место.
+ *  влезает по высоте. Значков внизу нет: оплату, долг и отмену говорит цвет
+ *  всего блока (`record-color`) — он виден и у самой короткой записи, а
+ *  строка значков у неё пропадала первой.
  *
  *  Имени, времени и услуги хватает, чтобы узнать визит, — адреса на блоке
  *  нет. Имя — ВСЕГДА ОДНОЙ СТРОКОЙ и одним кеглем. Прежде в узком блоке имя из двух слов
@@ -44,28 +39,23 @@ export function textRows(cardH: number, lineH: number): number {
 export function blockLadder(input: {
   rowsFit: number;
   hasService: boolean;
-  /** Есть что сказать значками (оплата, выполнено). */
-  hasStatus: boolean;
 }): {
   showTime: boolean;
   showService: boolean;
-  showStatus: boolean;
   lastRow: "name" | "time" | "service";
 } {
   const left = Math.max(1, input.rowsFit) - 1;
   const showTime = left >= 1;
   const showService = input.hasService && left >= 2;
-  // Значки — своей строкой у нижнего края, только когда она свободна целиком.
-  const showStatus = input.hasStatus && left >= (showService ? 3 : 2);
   const lastRow = showService ? "service" : showTime ? "time" : "name";
-  return { showTime, showService, showStatus, lastRow };
+  return { showTime, showService, lastRow };
 }
 
 // ── ЧИПЫ «ВЕСЬ ДЕНЬ» ──
 
 export const CHIP_GAP = 2;
 /** Грубая отсечка сверху; настоящее решение принимает `chipsThatFit`. */
-export const CHIP_MIN_W = 34;
+const CHIP_MIN_W = 34;
 
 /** Паддинг чипа. Третья ступень (3pt) — не косметика: колонка недели на
  *  экранах 375 и 390pt даёт чипу со счётчиком ширину текста ниже порога имени

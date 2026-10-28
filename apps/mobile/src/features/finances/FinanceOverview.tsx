@@ -8,11 +8,13 @@ import {
   formatCountRu,
 } from "@babun/shared/common/utils/plural-ru";
 import { useThemeColors } from "@/theme/colors";
+import { TourTarget } from "@/components/tour/TourTarget";
 import type { Team } from "@/features/reference/queries";
 import type { Period } from "@/lib/period";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
 import { SummaryToggle } from "./finance-overview/SummaryToggle";
+import { UNKNOWN_BALANCE_TEXT } from "./accounts";
 
 export { PeriodRow, ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
 export { SummaryToggle } from "./finance-overview/SummaryToggle";
@@ -39,21 +41,21 @@ export type HomeView =
   | "debt"
   | "profit";
 
-export interface InvoiceTileSummary {
+interface InvoiceTileSummary {
   /** Сколько документов (инвойсов и чеков) за период — ровно столько строк
    *  откроется под плиткой (`usePeriodDocuments`). Плитка
    *  печатает ШТУКИ, а не деньги. */
   count: number;
 }
 
-export interface AccountTileSummary {
+interface AccountTileSummary {
   /** Σ остатков набора — та же цифра, что и на странице счетов.
    *  Больше плитке ничего не нужно: она отвечает «сколько у команды», а состав
    *  (сколько счетов, сколько наличными) смотрят на самой странице счетов. */
-  total: number;
+  total: number | null;
 }
 
-export interface OverviewTotals {
+interface OverviewTotals {
   income: number;
   expense: number;
   profit: number;
@@ -138,17 +140,21 @@ export function FinanceOverview({
 
   return (
     <View>
-      <ScopePeriodBar
-        teams={teams}
-        scopeTeamId={scopeTeamId}
-        onScopeChange={onScopeChange}
-        period={period}
-        onOpenPresets={onOpenPresets}
-        onOpenCustom={onOpenCustom}
-        locked={locked}
-      />
+      <TourTarget id="finances.period" shape="strip">
+        <ScopePeriodBar
+          teams={teams}
+          scopeTeamId={scopeTeamId}
+          onScopeChange={onScopeChange}
+          period={period}
+          onOpenPresets={onOpenPresets}
+          onOpenCustom={onOpenCustom}
+          locked={locked}
+        />
+      </TourTarget>
       {/* overview cards */}
-      <View className="px-4 pb-2 pt-2" style={{ gap: 6 }}>
+      <View className="px-4 pb-2 pt-2">
+        {/* Обучение показывает плитки одним шагом: шесть входов одного вида. */}
+        <TourTarget id="finances.tiles" style={{ gap: 6 }}>
         {/* Счета | Документы — ТОТ ЖЕ РЯД, ЧТО И СВОДКА: того же вида, что доход и расход,
             долги и прибыль. Плитки в два этажа (другой рост, другой кегль, свой
             значок) глаз читал бы как объекты другого рода, хотя это такие же
@@ -161,13 +167,13 @@ export function FinanceOverview({
             приход и не расход, у него нет знака, а документ и вовсе не деньги;
             красить их в зелёное значило бы назвать это доходом. */}
         {showAccounts || showDocuments ? (
-        <View className="flex-row" style={{ gap: 6 }}>
+                <View className="flex-row" style={{ gap: 6 }}>
           {showAccounts ? (
           <SummaryToggle
             label={accountsTitle}
             color={t.ink}
-            value={formatEUR(accounts.total)}
-            quiet={moneySign(accounts.total) === 0}
+            value={accounts.total === null ? UNKNOWN_BALANCE_TEXT : formatEUR(accounts.total)}
+            quiet={accounts.total === null || moneySign(accounts.total) === 0}
             active={view === "accounts"}
             locked={locked || lockAccounts}
             onPress={() => onTap("accounts")}
@@ -212,7 +218,7 @@ export function FinanceOverview({
             ШЕВРОНОВ НЕТ НИ У ОДНОГО: это переключатели, и их состояние
             объявляется `expanded`, а не стрелкой, которая обещала бы уход на
             другой экран. */}
-        <View className="flex-row" style={{ gap: 6 }}>
+                <View className="flex-row" style={{ gap: 6 }}>
           {/* ЦВЕТ = СМЫСЛ. Возвраты могут увести доход за период в минус, и
               тогда зелёная цифра под зелёной точкой означала бы прибыль там,
               где деньги ушли. Отрицательный доход красный — по ОКРУГЛЁННЫМ
@@ -241,7 +247,7 @@ export function FinanceOverview({
           />
         </View>
 
-        <View className="flex-row" style={{ gap: 6 }}>
+                <View className="flex-row" style={{ gap: 6 }}>
           {showDebts ? (
           <SummaryToggle
             label="Долги"
@@ -265,6 +271,7 @@ export function FinanceOverview({
             onPress={() => onTap("profit")}
           />
         </View>
+        </TourTarget>
 
         {/* ПЛАШКИ «НДС К УПЛАТЕ» ЗДЕСЬ НЕТ: информацию о налоге переносят в другое место.
             Налог — квартальный вопрос

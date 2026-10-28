@@ -54,6 +54,7 @@ export function SelectSearch({
   onClear,
   autoCapitalize,
   autoFocus,
+  bare,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -67,6 +68,9 @@ export function SelectSearch({
    *  5»): справочник на сотни имён, и первое движение там — набрать имя, а
    *  не искать глазами. */
   autoFocus?: boolean;
+  /** Поле в чужой полосе (шапка списка): без отступов шторки. Поиск в
+   *  продукте один — и в шторке, и в шапке «Клиентов». */
+  bare?: boolean;
 }) {
   const t = useThemeColors();
   return (
@@ -75,8 +79,9 @@ export function SelectSearch({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-        marginHorizontal: GUTTER,
-        marginBottom: 10,
+        // В чужой полосе ширину даёт родитель; `flex: 1` тянул бы поле и по
+        // высоте — до 48 полосы вместо 40 поиска.
+        ...(bare ? null : { marginHorizontal: GUTTER, marginBottom: 10 }),
         paddingLeft: 12,
         paddingRight: value ? 4 : 12,
         minHeight: 40,
@@ -99,6 +104,9 @@ export function SelectSearch({
         spellCheck={false}
         autoCapitalize={autoCapitalize}
         autoFocus={autoFocus}
+        // Return у поиска — «Найти» и убирает клавиатуру: поиск идёт по
+        // мере набора, а «⏎» обещал перенос строки, которого нет.
+        returnKeyType="search"
         style={{ flex: 1, fontSize: 15, color: t.ink }}
       />
       {value && onClear ? (
@@ -326,7 +334,7 @@ export function SelectRow({
         </Text>
       ) : null}
       {trailing ??
-        (selected ? <Check color={t.accent} size={18} strokeWidth={2.4} /> : null)}
+        (selected ? <Check color={t.accent} size={ICON.check} strokeWidth={2.4} /> : null)}
     </Pressable>
   );
 }

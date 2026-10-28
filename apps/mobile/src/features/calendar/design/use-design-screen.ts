@@ -4,6 +4,13 @@ import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useTeams, useUpdateTeam } from "@/features/reference/queries";
 import {
+  CANCELLED_DEFAULT,
+  PAID_DEFAULT,
+  PREPAID_DEFAULT,
+  SITUATION_DEFAULTS,
+  useCancelledColor,
+  usePaidColor,
+  usePrepaidColor,
   useAutoColorRule,
   useBookingBlocks,
   useEventBlockOrder,
@@ -12,6 +19,7 @@ import {
   useRecordBlockOrder,
   useSetAutoColorRule,
   useSetSituationColor,
+  useRememberedColor,
   useSituationPalette,
   useToggleBookingBlock,
   useToggleEventBlock,
@@ -23,6 +31,7 @@ import { useDataRole, usePlanAllows } from "@/session/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useMemberUpdateTeam } from "@/features/calendar/mutations";
 import { useTeamSettingLevel } from "@/session/team-setting-level";
+import { COLOR_SITUATIONS } from "@/features/appointments/record-color";
 import { designColorRows, eventTypesSubtitle, type ColorTarget } from "./design-rows";
 
 /** Team, rights, colours and blocks of the «Записи» page. */
@@ -47,8 +56,12 @@ export function useDesignScreen() {
   const setRule = useSetAutoColorRule(teamId);
   const palette = useSituationPalette(teamId);
   const setSituationColor = useSetSituationColor(teamId);
+  const rememberedColor = useRememberedColor(teamId);
   const fallback = useFallbackColor(teamId);
   const [editingColor, setEditingColor] = useState<ColorTarget | null>(null);
+  const cancelledColor = useCancelledColor(teamId);
+  const paidColor = usePaidColor(teamId);
+  const prepaidColor = usePrepaidColor(teamId);
 
   // ── блоки ──
   const recordBlocks = useBookingBlocks(teamId);
@@ -116,7 +129,62 @@ export function useDesignScreen() {
     objectsOn,
     paymentOn: recordBlocks.includes("payment"),
     palette,
+    cancelled: cancelledColor,
+    paid: paidColor,
+    prepaid: prepaidColor,
+    rule,
   });
+
+  const colorSheetTitle =
+    editingColor === "filled"
+      ? "Обычный цвет"
+      : editingColor === "cancelled"
+        ? "Отменена"
+        : editingColor === "paid"
+          ? "Оплачено"
+          : editingColor === "prepaid"
+            ? "Предоплата"
+            : COLOR_SITUATIONS.find((s) => s.id === editingColor)?.label;
+  const colorSheetValue =
+    editingColor === "filled"
+      ? ordinary
+      : editingColor === "cancelled"
+        ? cancelledColor
+        : editingColor === "paid"
+          ? paidColor
+          : editingColor === "prepaid"
+            ? prepaidColor
+            : editingColor
+            ? palette[editingColor] ?? null
+            : null;
+  // ВЫКЛЮЧАТЕЛЬ СЛУЧАЯ. Выключили — такая запись красится обычным цветом, а
+  // свой цвет случая запоминается; включили — возвращается он (заводской —
+  // только если своего не было).
+  const toggleColor = (target: ColorTarget, next: boolean) => {
+    if (readOnly || target === "filled") return;
+    haptics.tap();
+    const factory =
+      target === "cancelled"
+        ? CANCELLED_DEFAULT
+        : target === "paid"
+          ? PAID_DEFAULT
+          : target === "prepaid"
+            ? PREPAID_DEFAULT
+            : SITUATION_DEFAULTS[target];
+    const current =
+      target === "cancelled"
+        ? cancelledColor
+        : target === "paid"
+          ? paidColor
+          : target === "prepaid"
+            ? prepaidColor
+            : palette[target] ?? null;
+    if (next) {
+      setSituationColor.mutate({ situation: target, color: rememberedColor(target) ?? factory });
+    } else {
+      setSituationColor.mutate({ situation: target, color: null, remember: current });
+    }
+  };
 
   const recordOn = (id: string) => recordBlocks.includes(id as BookingBlockId);
   const eventOn = (id: string) => eventBlocks.includes(id as EventBlockId);
@@ -153,6 +221,9 @@ export function useDesignScreen() {
     setTab,
     openColor,
     colorRows,
+    colorSheetTitle,
+    colorSheetValue,
+    toggleColor,
     recordOn,
     eventOn,
   };

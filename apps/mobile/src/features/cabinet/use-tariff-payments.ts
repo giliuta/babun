@@ -26,7 +26,7 @@ type PaymentsRpc = {
   ) => PromiseLike<{ data: Parameters<typeof buildPayments>[0] | null; error: { message: string } | null }>;
 };
 
-export const tariffPaymentsKey = (tenantId: string | null) => ["tariff-payments", tenantId] as const;
+const tariffPaymentsKey = (tenantId: string | null) => ["tariff-payments", tenantId] as const;
 
 export function useTariffPayments(limit: number = ALL_PAYMENTS) {
   const { tenantId, client } = useAccountScope();

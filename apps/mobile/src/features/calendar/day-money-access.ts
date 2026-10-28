@@ -19,7 +19,7 @@ import { asRecordWindow, recordWindowStart } from "@/features/appointments/recor
 // календаря (`calendar.window`), как окно сервера
 // (`member_day_money_window_starts`).
 
-export const DAY_MONEY_KEY = "calendar.day_money";
+const DAY_MONEY_KEY = "calendar.day_money";
 
 interface Reader {
   role: AccessGateInput["role"];
@@ -32,14 +32,6 @@ export function dayMoneyGate({ role, map, teamId }: Reader & { teamId?: string |
 }
 
 export const seesDayMoney = (gate: AccessGate): boolean => gate === "read" || gate === "write";
-
-/** Строка журнала — деньги дня календаря: оплата записи или операция,
- *  внесённая из календаря. Прочее — касса «Финансов», календарю чужое. */
-export function isDayMoneyRow(
-  tx: Pick<FinanceTransaction, "appointment_id"> & { from_calendar?: boolean | null },
-): boolean {
-  return !!tx.appointment_id || tx.from_calendar === true;
-}
 
 type TxLike = Pick<FinanceTransaction, "team_id" | "occurred_on">;
 

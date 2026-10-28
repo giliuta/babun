@@ -41,6 +41,23 @@ function readCachedSources(tenantId: string | null): ClientSource[] | undefined 
   }
 }
 
+/** Источники компании — все, что разрешит сервер (владелец — все; партнёр
+ *  и сотрудник — команд, где видит клиентов). Тем же чтением гостевые
+ *  компании в общем списке (`guest-sources.ts`). */
+export async function fetchClientSources(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<ClientSource[]> {
+  const { data, error } = await client
+    .from("client_sources")
+    .select(COLUMNS)
+    .eq("tenant_id", tenantId)
+    .order("position")
+    .order("name");
+  if (error) throw new Error(`client_sources: ${error.message}`);
+  return (data ?? []) as ClientSource[];
+}
+
 export function useClientSources() {
   const { scope, tenantId, client } = useSourcesScope();
   return useQuery({
@@ -52,14 +69,7 @@ export function useClientSources() {
     queryFn: async (): Promise<ClientSource[]> => {
       // Клиент записи справочником компании не распоряжается.
       if (scope?.kind === "record") return [];
-      const { data, error } = await client
-        .from("client_sources")
-        .select(COLUMNS)
-        .eq("tenant_id", tenantId as string)
-        .order("position")
-        .order("name");
-      if (error) throw new Error(`client_sources: ${error.message}`);
-      const rows = (data ?? []) as ClientSource[];
+      const rows = await fetchClientSources(client, tenantId as string);
       try {
         getStorage().set(cacheKey(tenantId as string), rows);
       } catch {
@@ -80,7 +90,8 @@ function friendly(message: string): string {
   if (/row-level security|permission denied/i.test(message)) {
     return NO_RIGHT;
   }
-  return message;
+  // Прочее — словами, а не текстом сервера («client_sources: TypeError…»).
+  return "Не удалось сохранить";
 }
 
 function useInvalidate() {

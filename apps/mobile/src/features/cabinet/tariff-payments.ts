@@ -170,7 +170,7 @@ export function parsePayment(row: BillingEventRow): TariffPayment | null {
 
 /** Повторы неудачной оплаты одного счёта — одна строка (самая свежая). На
  *  входе — от новых к старым. */
-export function collapseRetries(payments: readonly TariffPayment[]): TariffPayment[] {
+function collapseRetries(payments: readonly TariffPayment[]): TariffPayment[] {
   const seen = new Set<string>();
   return payments.filter((payment) => {
     if (!payment.failed || !payment.invoiceId) return true;
@@ -236,7 +236,7 @@ export function periodWords(start: number, end: number, now: number): string {
   return from === to ? from : `${from} – ${to}`;
 }
 
-export interface PaymentMonth {
+interface PaymentMonth {
   /** «2026-10» — местный месяц телефона. */
   key: string;
   /** «Октябрь 2026». */

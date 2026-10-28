@@ -1,14 +1,11 @@
-// Replay of a queued UPDATE: last-write-wins via the `updated_at` sentinel,
-// the server-wins conflict path, and the force-update fallback.
+// Replay of a queued UPDATE through the `updated_at` sentinel. On a conflict
+// the fresher server row wins: the op is dropped and the cache takes the
+// server row. Tags carry no sentinel (`client_tags` has no `updated_at`) and
+// go through the plain update.
 
 import type { QueuedOp } from "../../db/cache/sql";
 import { assertTenantStill } from "./guards";
-import {
-  relayClient,
-  rowStillVisible,
-  type DbSupabase,
-  type ReplayTable,
-} from "./relay";
+import { relayClient, type DbSupabase, type ReplayTable } from "./relay";
 import { carrySentinel, type AppliedFn } from "./sentinel";
 import { cacheServerRow, touchesGuardedAppointmentFields } from "./table-rules";
 
@@ -16,16 +13,12 @@ export async function replayUpdate(
   supabase: DbSupabase,
   op: QueuedOp,
   tableName: ReplayTable,
-  /** Правка старого образца (без компании в теле, см. гейт в `drain`). Она
-   *  пролежала в очереди часы и дни, и строку за это время правили — при
-   *  конфликте побеждает сервер, а не она. */
-  serverWinsOnConflict: boolean,
   /** Правка легла чисто, и у строки теперь новое `updated_at`. */
   onApplied?: AppliedFn,
   /** Компания устройства всё ещё та, под которой начат слив. */
   tenantStill?: () => boolean,
-): Promise<boolean | "server-won"> {
-  // op.op === 'update' — last-write-wins via updated_at sentinel.
+): Promise<false | "server-won" | "server-newer"> {
+  // op.op === 'update' — guarded by the updated_at sentinel.
   // Table-agnostic dispatch: cast through `unknown` to a
   // PostgrestFilterBuilder so we can chain `.eq("updated_at", ...)`
   // without per-table type narrowing. The replayer is intentionally
@@ -56,74 +49,34 @@ export async function replayUpdate(
     }
 
     assertTenantStill(tenantStill);
-    const guarded = touchesGuardedAppointmentFields(op.table, updatePayload);
-    if (serverWinsOnConflict || guarded) {
-      // Строку правили после того, как эта правка встала в очередь. Старая
-      // правка поверх новой затёрла бы свежие изменения (время, услуги),
-      // поэтому операция снимается, а кэш берёт строку сервера. Правка
-      // статуса или денег записи уступает ВСЕГДА — см.
-      // `APPOINTMENT_GUARDED_FIELDS`.
-      const { data: fresh, error: freshErr } = await supabase
-        .from(tableName)
-        .select()
-        .eq("id", op.row_id)
-        .maybeSingle();
-      if (freshErr) throw new Error(`replay refresh: ${freshErr.message}`);
-      if (fresh) {
-        const row = fresh as Record<string, unknown>;
-        await cacheServerRow(op, row);
-      }
-      // Строки больше нет — говорить не о чем; есть — правка статуса или
-      // денег уступила, и человек должен это узнать.
-      return guarded && fresh ? "server-won" : false;
-    }
-
-    assertTenantStill(tenantStill);
-    // 0 rows → conflict. Retry without updated_at filter and re-fetch
-    // the canonical server row (now carrying the new updated_at) so
-    // the cache stays consistent. Without this re-fetch, IDB would
-    // hold the pre-conflict updated_at and falsely conflict on the
-    // next edit.
-    const forceFilter = relayClient(supabase)
+    // Ноль строк — либо строку изменили позже (её `updated_at` ушёл), либо
+    // сервер отказал в правке, либо строки не видно. Различает их сама строка
+    // сервера. Силой поверх чужой правки не пишем никогда: правка могла
+    // пролежать в очереди часы, а «последний побеждает» молча вернул бы чужой
+    // перенос назад или стёр бы чужой объект клиента — массивы клиента
+    // пишутся целиком.
+    const { data: fresh, error: freshErr } = await supabase
       .from(tableName)
-      .update(updatePayload)
-      .eq("id", op.row_id)
       .select()
-      // maybeSingle, NOT single. When the force-update matches 0 rows —
-      // the target was deleted on the server, or RLS hides it from this
-      // user (a non-'work' row created by someone else, or a stale
-      // tenant JWT) — `.single()` throws PGRST116 «Cannot coerce the
-      // result to a single JSON object». That re-threw on every retry,
-      // wedging the op at attempt N/N and blocking the ENTIRE queue, so
-      // later writes never synced → silent cross-device desync
-      // (user-reported). maybeSingle returns { data: null } instead.
+      .eq("id", op.row_id)
       .maybeSingle();
-    const { data: forced, error: forceErr } = await forceFilter;
-    if (forceErr)
-      throw new Error(`replay force-update: ${forceErr.message}`);
-    if (forced) {
-      // Cache write-through with the canonical row. Кэш хранит
-      // ДОМЕННУЮ форму (cache-of-domain, slice 5) — сырую серверную
-      // Row прогоняем через тот же row→domain маппер, что и обычное
-      // чтение (иначе строка без photos:[] и с numeric-строками).
-      await cacheServerRow(op, forced as Record<string, unknown>);
-      return true;
-    }
-    // forced === null → 0 rows, и это НЕ конфликт: правку не применили вовсе.
-    // Раньше операция уходила с `true`, то есть с тостом «Применены ваши
-    // изменения», — человеку сообщали об успехе, а правка пропадала. Разводим
-    // тем же чтением видимости, что у удаления:
-    //   • строки не видно — её удалили на другом устройстве. Применять некуда:
-    //     операцию снимаем МОЛЧА (зависшая держала бы очередь), кэш догонит
-    //     следующая полная перечитка (foreground revalidate / onResync);
-    //   • строка ВИДНА — сервер отказал в правке, это права (`view` без
-    //     `edit_all`). Операция остаётся с причиной и по исчерпании попыток
-    //     уходит в `onPermanentFailure`, а не в ложное «применено».
-    assertTenantStill(tenantStill);
-    if (await rowStillVisible(supabase, tableName, op.row_id)) {
+    if (freshErr) throw new Error(`replay refresh: ${freshErr.message}`);
+    // Строки не видно — удалили на другом устройстве: применять некуда,
+    // операцию снимаем молча, кэш догонит полная перечитка.
+    if (!fresh) return false;
+    const row = fresh as Record<string, unknown>;
+    const stamp = typeof row.updated_at === "string" ? row.updated_at : null;
+    // Версия та же, а правка не легла — это отказ сервера (права), а не
+    // чужая правка: операция остаётся с причиной.
+    if (stamp === null || stamp === op.expected_updated_at) {
       throw new Error("Сервер не дал изменить эту запись: нет прав на неё.");
     }
-    return false;
+    await cacheServerRow(op, row);
+    // Правка статуса или денег записи уступила — об этом говорится особыми
+    // словами (`APPOINTMENT_GUARDED_FIELDS`).
+    return touchesGuardedAppointmentFields(op.table, updatePayload)
+      ? "server-won"
+      : "server-newer";
   }
 
   // No expected_updated_at — unconditional update (e.g. queued from

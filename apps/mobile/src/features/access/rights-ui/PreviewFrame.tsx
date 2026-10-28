@@ -15,7 +15,7 @@ import { useThemeColors } from "@/theme/colors";
 // «Меняет» на картинке выглядят одинаково (дверь выбора — это нажатие, а не
 // рисунок), и без подписи ступени казались бы одной и той же.
 
-export type PreviewState = "hidden" | "cannot" | "read" | "write" | "can";
+type PreviewState = "hidden" | "cannot" | "read" | "write" | "can";
 
 const LOOK: Record<PreviewState, { word: string; icon: LucideIcon }> = {
   hidden: { word: "Этого блока у него нет", icon: EyeOff },

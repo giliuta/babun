@@ -1,5 +1,6 @@
 import { Text } from "react-native";
 import { useThemeColors } from "@/theme/colors";
+import { capsText } from "./caps-text";
 
 // Заголовок группы НА канвасе (диалект grouped-iOS): caption-tier caps над
 // карточкой, а не первой строкой внутри неё. Левая базовая линия 20.
@@ -24,11 +25,10 @@ export function SectionEyebrow({ children }: { children: string }) {
         fontSize: 11,
         fontWeight: "700",
         letterSpacing: 0.6,
-        textTransform: "uppercase",
         color: t.faint,
       }}
     >
-      {children}
+      {capsText(children)}
     </Text>
   );
 }

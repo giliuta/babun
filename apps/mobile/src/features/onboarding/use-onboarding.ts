@@ -1,38 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Constants from "expo-constants";
+import * as Updates from "expo-updates";
+import { Platform } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { useCurrentRole } from "@/session/tenant";
+import { CHAPTER_ORDER, type ChapterId } from "./chapter-order";
+import { onboardingServerReady } from "./onboarding-gate";
 
 // ПРОГРЕСС ОБУЧЕНИЯ — В БАЗЕ (`onboarding_progress`), а не на телефоне: на
 // втором устройстве пройденное не начинается заново. `null` — обучения у
 // человека нет совсем (он пришёл раньше обучения или он не владелец).
 
-/** Главы по порядку разблокировки разделов. */
-export const CHAPTER_ORDER = ["calendar", "finances", "clients", "cabinet"] as const;
-export type ChapterId = (typeof CHAPTER_ORDER)[number];
-
-/** Главы, которые уже написаны. Глава, которой ещё нет, считается пройденной:
- *  иначе её раздел и все следующие остались бы закрытыми навсегда. */
-export const WRITTEN_CHAPTERS: ReadonlySet<ChapterId> = new Set(["calendar"]);
-
-export type TabWithChapter = Exclude<ChapterId, "calendar">;
-
-/** Раздел закрыт, пока не пройдены все главы перед ним. */
-export function lockedByOnboarding(done: readonly string[] | null | undefined, tab: TabWithChapter): boolean {
-  if (!done) return false;
-  const before = CHAPTER_ORDER.slice(0, CHAPTER_ORDER.indexOf(tab));
-  return before.some((c) => WRITTEN_CHAPTERS.has(c) && !done.includes(c));
-}
-
-/** Первая непройденная написанная глава. */
-export function nextChapter(done: readonly string[] | null | undefined): ChapterId | null {
-  if (!done) return null;
-  return CHAPTER_ORDER.find((c) => WRITTEN_CHAPTERS.has(c) && !done.includes(c)) ?? null;
-}
+export {
+  CHAPTER_ORDER,
+  lockedByOnboarding,
+  nextChapter,
+  WRITTEN_CHAPTERS,
+  type ChapterId,
+  type TabWithChapter,
+} from "./chapter-order";
 
 const onboardingKey = (tenantId: string | null, userId: string | null) =>
   ["onboarding", tenantId, userId] as const;
+
+// ОБУЧЕНИЕ ХОДИТ НА СЕРВЕР ТОЛЬКО В СБОРКЕ 1.0.4 И НОВЕЕ (`onboarding-gate.ts`).
+// Функции `my_onboarding` и `onboarding_done` приходят миграцией
+// `20261018100000_signup_without_calendar`, её накатывают к отправке 1.0.4 на
+// проверку. В 1.0.3 запрос не уходит вовсе, даже с кодом по воздуху: иначе
+// регистрация менялась бы мимо проверки Apple, а до наката каждый запуск давал
+// бы три ответа 404.
+export const ONBOARDING_SERVER_READY = onboardingServerReady({
+  platform: Platform.OS,
+  dev: __DEV__,
+  runtimeVersion: Updates.runtimeVersion,
+  configVersion: Constants.expoConfig?.version,
+});
 
 export function useOnboardingDone() {
   const tenantId = useTenantId();
@@ -40,9 +44,11 @@ export function useOnboardingDone() {
   const role = useCurrentRole().data;
   return useQuery({
     queryKey: onboardingKey(tenantId, userId),
-    enabled: !!tenantId && !!userId && role === "owner",
+    enabled: ONBOARDING_SERVER_READY && !!tenantId && !!userId && role === "owner",
     // Ответ меняется только отсюда же — перечитывать его незачем.
     staleTime: Infinity,
+    // Отказ сервера повтором не лечится, а повтор — лишний запрос на старте.
+    retry: false,
     queryFn: async (): Promise<string[] | null> => {
       const { data, error } = await supabase.rpc("my_onboarding");
       if (error) throw new Error(error.message);
@@ -58,6 +64,7 @@ export function useMarkOnboardingDone() {
   const userId = useSession().session?.user.id ?? null;
   return useMutation({
     mutationFn: async (chapter: ChapterId | "all"): Promise<string[] | null> => {
+      if (!ONBOARDING_SERVER_READY) return null;
       const { data, error } = await supabase.rpc("onboarding_done", { p_chapter: chapter });
       if (error) throw new Error(error.message);
       return data ?? null;

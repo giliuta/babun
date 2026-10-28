@@ -71,7 +71,7 @@ export function AddRow({
         {label}
       </Text>
       <View className="ml-3 h-7 w-7 items-center justify-center">
-        <ChevronRight color={t.chevron} size={ICON.sm} />
+        <ChevronRight color={t.chevron} size={ICON.chevron} />
       </View>
     </Pressable>
   );

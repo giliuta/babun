@@ -20,7 +20,7 @@ export const MESSAGING_READINESS = Object.freeze({
   mediaStorage: false,
 } satisfies Record<string, boolean>);
 
-export type MessagingReadiness = typeof MESSAGING_READINESS;
+type MessagingReadiness = typeof MESSAGING_READINESS;
 
 export const MESSAGING_UNAVAILABLE_MESSAGE =
   "Каналы сообщений ещё не подключены. Приложение не будет показывать локальные ответы как отправленные.";

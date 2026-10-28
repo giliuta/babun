@@ -3,8 +3,9 @@ import { BarChart3, ChevronRight } from "lucide-react-native";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { SORT_LABELS_LONG, type ClientsFilter, type SortKey } from "../filter";
-import type { FacetSheet } from "./facet-config";
+import type { FacetConfig, FacetSheet } from "./facet-config";
 import { FilterRow } from "./FilterRow";
+import { InlineMultiPick, InlineSinglePick } from "./InlinePick";
 import { PeriodSplitRow } from "./PeriodSplitRow";
 
 type RowValue = { label: string; extra: number; color?: string } | null;
@@ -28,6 +29,11 @@ export function FilterSheetRows({
   onOpenWheels,
   onOpenFacet,
   onAnalytics,
+  expanded,
+  facetConfig,
+  sortBlocks,
+  reduced,
+  onSortChange,
 }: {
   filter: ClientsFilter;
   sort: SortKey;
@@ -47,8 +53,46 @@ export function FilterSheetRows({
   onOpenWheels: () => void;
   onOpenFacet: (facet: FacetSheet) => void;
   onAnalytics?: () => void;
+  /** Что раскрыто под строкой: фасет, сортировка или ничего. Раскрыта
+   *  всегда одна строка. */
+  expanded: FacetSheet | "sort" | null;
+  facetConfig: Record<FacetSheet, FacetConfig>;
+  sortBlocks: { value: string; label: string }[][];
+  reduced: boolean;
+  onSortChange: (s: SortKey) => void;
 }) {
   const t = useThemeColors();
+  // Строка фасета и её варианты — одним абзацем: раскрытое живёт прямо под
+  // своей строкой (InlinePick.tsx), а не шторкой поверх листа.
+  const facet = (key: FacetSheet, name: string, value: RowValue, tick?: string) => {
+    const cfg = facetConfig[key];
+    const open = expanded === key;
+    return (
+      <View key={key} style={{ gap: 8 }}>
+        <FilterRow
+          name={name}
+          value={value}
+          tick={tick}
+          expanded={open}
+          onPress={() => onOpenFacet(key)}
+        />
+        {open ? (
+          <InlineMultiPick
+            name={name}
+            subtitle={cfg.subtitle}
+            blocks={cfg.blocks}
+            blockTitles={cfg.blockTitles}
+            rules={cfg.rules}
+            selected={cfg.selected}
+            counts={cfg.counts}
+            reduced={reduced}
+            onToggle={cfg.toggle}
+            onClear={cfg.clear}
+          />
+        ) : null}
+      </View>
+    );
+  };
   const segmentValue = values.segment;
   const cityValue = values.city;
   const tagValue = values.tag;
@@ -72,11 +116,17 @@ export function FilterSheetRows({
     >
       {/* ── Как показывать: сортировка отдельным абзацем — это НЕ
           фильтр (персистентна, «Сбросить» её не трогает). ── */}
-      <FilterRow
-        name="Сортировка"
-        value={{ label: SORT_LABELS_LONG[sort], extra: 0 }}
-        onPress={onOpenSort}
-      />
+      <View style={{ gap: 8 }}>
+        <FilterRow
+          name="Сортировка"
+          value={{ label: SORT_LABELS_LONG[sort], extra: 0 }}
+          expanded={expanded === "sort"}
+          onPress={onOpenSort}
+        />
+        {expanded === "sort" ? (
+          <InlineSinglePick blocks={sortBlocks} selected={sort} onSelect={(v) => onSortChange(v as SortKey)} />
+        ) : null}
+      </View>
 
       {/* ── Абзац «когда и кого» ── */}
       <View style={{ gap: 8 }}>
@@ -91,11 +141,7 @@ export function FilterSheetRows({
             onOpenWheels={onOpenWheels}
           />
 
-        <FilterRow
-          name="Статус"
-          value={segmentValue}
-          onPress={() => onOpenFacet("segment")}
-        />
+        {facet("segment", "Статус", segmentValue)}
       </View>
 
       {/* ── Абзац «чьих» — обёртка гейтится, иначе пустой абзац
@@ -104,30 +150,9 @@ export function FilterSheetRows({
       hasTags ||
       (!hideTeam && hasTeams) ? (
       <View style={{ gap: 12 }}>
-        {hasCities ? (
-          <FilterRow
-            name="Метка"
-            value={cityValue}
-            tick={cityValue?.color}
-            onPress={() => onOpenFacet("city")}
-          />
-        ) : null}
-        {hasTags ? (
-          <FilterRow
-            name="Теги"
-            value={tagValue}
-            tick={tagValue?.color}
-            onPress={() => onOpenFacet("tag")}
-          />
-        ) : null}
-        {!hideTeam && hasTeams ? (
-          <FilterRow
-            name="Команда"
-            value={teamValue}
-            tick={teamValue?.color}
-            onPress={() => onOpenFacet("team")}
-          />
-        ) : null}
+        {hasCities ? facet("city", "Метка", cityValue, cityValue?.color) : null}
+        {hasTags ? facet("tag", "Теги", tagValue, tagValue?.color) : null}
+        {!hideTeam && hasTeams ? facet("team", "Команда", teamValue, teamValue?.color) : null}
       </View>
       ) : null}
 
@@ -138,20 +163,12 @@ export function FilterSheetRows({
       filter.sources.length > 0 ||
       (objectsOn && filter.propertyTypes.length > 0) ? (
         <View style={{ gap: 12 }}>
-          {hasSourceData || filter.sources.length > 0 ? (
-            <FilterRow
-              name="Источник"
-              value={sourceValue}
-              onPress={() => onOpenFacet("source")}
-            />
-          ) : null}
-          {hasPropertyData || (objectsOn && filter.propertyTypes.length > 0) ? (
-            <FilterRow
-              name="Тип объекта"
-              value={propertyValue}
-              onPress={() => onOpenFacet("property")}
-            />
-          ) : null}
+          {hasSourceData || filter.sources.length > 0
+            ? facet("source", "Источник", sourceValue)
+            : null}
+          {hasPropertyData || (objectsOn && filter.propertyTypes.length > 0)
+            ? facet("property", "Тип объекта", propertyValue)
+            : null}
         </View>
       ) : null}
 

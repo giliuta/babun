@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
-import { durationLabel } from "@/lib/service-format";
+import { durationShort } from "@/lib/service-format";
 import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 import { LadderCell as Cell } from "./service-ladder/LadderCell";
 import { LadderHeader } from "./service-ladder/LadderHeader";
@@ -196,9 +196,15 @@ export function ServiceLadder({
                   opacity: pressed ? 0.5 : 1,
                 })}
               >
+                {/* КОМПАКТНО, «1 ч 30»: полное «1 ч 30 мин» в ячейку не
+                    входит и резалось многоточием (`durationShort`). Сжатие
+                    шрифта — только страховка для длинных языков («12 Std.
+                    30»), а не способ уместить русский. */}
                 <Text
                   maxFontSizeMultiplier={1.2}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                   style={{
                     textAlign: "right",
                     fontSize: 16,
@@ -207,7 +213,7 @@ export function ServiceLadder({
                     fontVariant: ["tabular-nums"],
                   }}
                 >
-                  {durationLabel(minutes)}
+                  {durationShort(minutes)}
                 </Text>
               </Pressable>
 

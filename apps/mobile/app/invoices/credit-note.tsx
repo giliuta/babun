@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from "react";
-import {
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ScrollView, Text } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { PageFooter } from "@/components/ui/PageFooter";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
+import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
+import { confirmThen } from "@/lib/confirm";
 import {
   calculateInvoiceSettlement,
   type InvoiceLedgerWithLines,
@@ -24,19 +24,20 @@ import { useClients } from "@/features/clients/queries";
 import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
 import { buildInvoiceDocument } from "@/lib/paper/document";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
-import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
+import { formatInvoiceMoney, parseMoneyAmount } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
-import { creditNoteLeftToPay } from "@/features/invoices/credit-note-amounts";
+import { creditNoteLeftToPay, creditNoteVat } from "@/features/invoices/credit-note-amounts";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import {
   useCancelInvoice,
   useInvoice,
   useInvoicePayments,
+  useInvoices,
   useIssuePartialCreditNote,
   useNextInvoiceSeries,
 } from "@/features/finances/invoices-queries";
-import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useLiveBusinessToday } from "@/features/settings/live-business-today";
 import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
@@ -67,15 +68,13 @@ export default function CreditNoteScreen() {
   const original = useInvoice(invoiceId);
   const clients = useClients();
   const tenant = useTenant();
-  const calendarSettings = useCalendarSettings();
   // Дату ноты ставит сервер (`tenant_business_date`); превью — тот же день
   // компании по её часовому поясу.
-  const businessToday = todayYmd(
-    calendarSettings.data?.timezone ?? "Europe/Nicosia",
-  );
+  const businessToday = useLiveBusinessToday();
   const cancel = useCancelInvoice(invoiceId ?? "");
   const partial = useIssuePartialCreditNote(invoiceId ?? "");
   const paymentRows = useInvoicePayments();
+  const invoices = useInvoices();
   const requestId = useRef(randomUuid()).current;
   /** Этот id уже уходил на сервер: ответ мог потеряться, а нота — выписаться. */
   const sentRef = useRef(false);
@@ -115,6 +114,10 @@ export default function CreditNoteScreen() {
   const parsed = parseMoneyAmount(text);
   const value = parsed ?? 0;
   const whole = Math.abs(value - due) < 0.005;
+  // Налог, уже унесённый прежними нотами этого инвойса.
+  const priorVat = (invoices.data ?? [])
+    .filter((note) => note.kind === "credit_note" && note.credit_note_of_id === row?.id)
+    .reduce((sum, note) => sum - note.vat_amount, 0);
   // Получено больше нового «к оплате» — столько вернётся клиенту (у всей
   // суммы — всё полученное).
   const toRefund = Math.max(0, Math.round((paid - (due - value)) * 100) / 100);
@@ -140,9 +143,15 @@ export default function CreditNoteScreen() {
   // с минусом, без строк (бумага печатает одну строку «к инвойсу …»).
   const paperDoc = useMemo(() => {
     if (!row) return null;
-    // Налог ноты — доля налога инвойса; строки — только у полной отмены без
-    // прежних частичных (как у сервера).
-    const vat = row.total > 0 ? Math.round((row.vat_amount * value) / row.total * 100) / 100 : 0;
+    // Налог ноты — доля налога инвойса, у полной отмены — его остаток; строки —
+    // только у полной отмены без прежних частичных (как у сервера).
+    const vat = creditNoteVat({
+      vat: row.vat_amount,
+      total: row.total,
+      amount: value,
+      priorVat,
+      closes: whole,
+    });
     const fullFirst = whole && (row.credited_amount ?? 0) === 0;
     const draft: InvoiceLedgerWithLines = {
       ...row,
@@ -150,6 +159,9 @@ export default function CreditNoteScreen() {
       number: series.data?.number ?? "",
       kind: "credit_note",
       credit_note_of_id: row.id,
+      // Превью печатает «Partial cancellation», как выпущенная частичная нота,
+      // а не «Cancellation» — у черновика флажок наследовался от инвойса (false).
+      credit_partial: !whole,
       status: "issued",
       issued_on: businessToday,
       due_on: null,
@@ -177,12 +189,40 @@ export default function CreditNoteScreen() {
     reason,
     value,
     whole,
+    priorVat,
     defaultNote,
     tenant.data,
     client,
     paperLanguage,
     businessToday,
   ]);
+
+  // ЗАПОЛНЕННАЯ ФОРМА НЕ ИСЧЕЗАЕТ МОЛЧА: сумму и причину свайп от края и
+  // «‹» стирали без вопроса. Спрашивает сама навигация,
+  // теми же словами, что черновик инвойса (`app/invoices/new.tsx`);
+  // выписанный документ уходит без вопроса.
+  const dirty = amountText !== null || reason.trim() !== "";
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  useBeforeUnloadWhileDirty(dirty);
+  usePreventRemove(dirty, ({ data }) => {
+    if (leavingRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    confirmThen(
+      "Черновик не сохранён",
+      {
+        message: "Уйти и потерять заполненное?",
+        confirmLabel: "Уйти",
+        destructive: true,
+      },
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
+    );
+  });
 
   if (!row) {
     return (
@@ -318,14 +358,7 @@ export default function CreditNoteScreen() {
           </SectionCard>
         </ScrollView>
 
-        <View
-          className="px-4 pb-7 pt-3"
-          style={{
-            backgroundColor: t.surface,
-            borderTopWidth: 1,
-            borderTopColor: t.separator,
-          }}
-        >
+        <PageFooter standalone bar>
           <GradientButton
             label={valid ? `Выписать кредит-ноту · ${amount}` : "Выписать кредит-ноту"}
             disabled={!series.data || !valid}
@@ -333,13 +366,13 @@ export default function CreditNoteScreen() {
           />
           {series.error ? (
             <Text
-              className="mt-2 text-center text-sm"
+              className="text-center text-sm"
               style={{ color: t.danger }}
             >
               {tDynamic((series.error as Error).message)}
             </Text>
           ) : null}
-        </View>
+        </PageFooter>
       </KeyboardLift>
 
       <InvoicePreviewSheet
@@ -355,8 +388,9 @@ export default function CreditNoteScreen() {
         onClose={() => setPreviewOpen(false)}
         // Выписанная нота открывается своей страницей, когда лист уехал.
         onExited={() => {
-          if (issued.current)
-            router.replace(`/invoices/${issued.current}` as Href);
+          if (!issued.current) return;
+          leavingRef.current = true;
+          router.replace(`/invoices/${issued.current}` as Href);
         }}
       />
     </Screen>

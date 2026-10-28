@@ -54,7 +54,7 @@ type RpcWithClientMembers = {
  *  карточки сейчас не загрузились» — у всех клиентов разом. Отсутствующая функция — это не сбой сети, а выключенная
  *  возможность: блока нет, как у сотрудника без права. После наката ответ
  *  становится обычным, и блок включается сам, без выпуска приложения. */
-export class LinksNotOnServer extends Error {}
+class LinksNotOnServer extends Error {}
 
 const MISSING_FUNCTION = new Set(["PGRST202", "42883"]);
 
@@ -116,7 +116,7 @@ function linkItemsOf(
   return items;
 }
 
-export interface ClientMembers {
+interface ClientMembers {
   data: readonly ClientLinkItem[];
   isLoading: boolean;
   isError: boolean;
@@ -168,7 +168,7 @@ export function useClientMembers(groupId: string | null): ClientMembers {
 }
 
 /** Строка «чей он»: одна связь — одна строка. */
-export type MemberOfItem = { key: string; line: string; groupId: string };
+type MemberOfItem = { key: string; line: string; groupId: string };
 
 const NO_MEMBER_OF: readonly MemberOfItem[] = [];
 

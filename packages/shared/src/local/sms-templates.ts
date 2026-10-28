@@ -13,23 +13,6 @@
 //   [Компания]          — tenant brand name
 //   [СсылкаНаОтмену]    — short URL to the public cancel page
 
-export type TemplateKind =
-  | "new_appointment"
-  | "reminder"
-  | "after_24h_short"
-  | "after_24h_long"
-  | "cancellation"
-  | "waitlist"
-  | "debt";
-
-export interface SmsTemplate {
-  id: string;
-  kind: TemplateKind;
-  name: string;
-  body: string;
-  enabled: boolean;
-}
-
 export const AVAILABLE_TOKENS = [
   { token: "[Имя]", label: "Имя клиента" },
   { token: "[День]", label: "День недели" },
@@ -72,7 +55,7 @@ const TOKEN_ALIASES: Record<string, string> = {
 
 /** Каноническое (английское) имя токена: «Имя» → «Name», «Name» → «Name».
  *  Незнакомый токен возвращается как есть. */
-export function canonicalTokenKey(key: string): string {
+function canonicalTokenKey(key: string): string {
   return TOKEN_ALIASES[key] ?? key;
 }
 

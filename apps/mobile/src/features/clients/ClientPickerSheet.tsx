@@ -16,10 +16,7 @@ import {
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { visitMark, type VisitMark } from "@/features/clients/visit-mark";
 import { PhoneVisitLine, visitMarkWords } from "@/features/clients/VisitDate";
-import {
-  buildQuickClientDraft,
-  findQuickClientDuplicate,
-} from "@/features/appointments/booking-prefill";
+import { buildQuickClientDraft } from "@/features/appointments/booking-prefill";
 import { useClients } from "@/features/clients/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -145,10 +142,6 @@ export function ClientPickerSheet({
   );
 
   const quickDraft = useMemo(() => buildQuickClientDraft(q, country), [q, country]);
-  const duplicate = useMemo(
-    () => findQuickClientDuplicate(pool, quickDraft.phone_e164, country),
-    [pool, quickDraft.phone_e164, country],
-  );
 
   // ПРИ ПУСТОМ ПОИСКЕ ВИДНЫ ВСЕ, А НЕ ТОЛЬКО НЕДАВНИЕ: «недавние» — это те, у
   // кого УЖЕ были записи, а у новорождённого клиента их нет по определению,
@@ -193,22 +186,16 @@ export function ClientPickerSheet({
   };
 
   /** Набранное в поиске и есть будущий клиент — уносим его в карточку.
-   *  Найденный по номеру дубль — не создание, а выбор: два клиента на одном
-   *  номере невозможны. */
+   *  Найденный по номеру дубль стоит ПЕРВОЙ строкой списка (совпадение номера
+   *  — первая ступень поиска), и выбирают его тапом, как любого клиента:
+   *  кнопка футера только создаёт (словарь 5.2 — «Выбрать» в этой роли не
+   *  бывает). Черновик с тем же номером сам покажет «номер уже есть». */
   const typedName = q.trim();
   const clientsInPlan = usePlanAllows("clients");
-  const createLabel = duplicate
-    ? `Выбрать «${duplicate.full_name || duplicate.phone || typedName}»`
-    : typedName
-      ? `Создать «${typedName}»`
-      : "Создать клиента";
+  const createLabel = typedName ? `Создать «${typedName}»` : "Создать клиента";
 
   const create = () => {
     if (!onCreate) return;
-    if (duplicate) {
-      pick(duplicate);
-      return;
-    }
     const typed = q.trim();
     const prefill = !typed
       ? {}
@@ -250,7 +237,7 @@ export function ClientPickerSheet({
                 шторку тоже. Кнопка серая, тап — плашка про тариф; найденного по
                 номеру выбрать можно — это не создание. */}
             {onCreate ? (
-              <TariffLocked locked={!duplicate && !clientsInPlan} beforeNudge={close}>
+              <TariffLocked locked={!clientsInPlan} beforeNudge={close}>
                 <Button label={createLabel} onPress={create} />
               </TariffLocked>
             ) : null}

@@ -21,7 +21,7 @@ import { clientKeys } from "@/lib/client-query-keys";
 // компании, чья карточка открыта (`useScopeCompany`). Запрос в компанию,
 // открытую в календаре, при команде партнёра отвечал бы «Клиент не найден».
 
-export const locationRequestsKey = (tenantId: string | null, clientId: string) =>
+const locationRequestsKey = (tenantId: string | null, clientId: string) =>
   ["location-requests", tenantId, clientId] as const;
 
 /** Ссылки клиента: живая — чтобы показать «Ждём адрес», использованная —
@@ -113,7 +113,7 @@ export function useCancelLocationRequest() {
 /** PostgREST отдаёт отказ RLS английской строкой — переводим частый случай. */
 function friendlyRequestError(message: string): string {
   if (/row-level security|permission denied|42501/i.test(message)) {
-    return "Ссылку выписывает владелец или диспетчер.";
+    return "Это может только владелец";
   }
   return message;
 }

@@ -1,9 +1,16 @@
-import { Linking, Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import type { MapService } from "@babun/shared/common/utils/map-links";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { pluralize } from "@babun/shared/common/utils/pluralize";
+import { TYPE } from "@/components/ui/tokens";
 import type { ThemeColors } from "@/theme/colors";
 import { AgendaRow } from "./AgendaRow";
-import { dayRouteAddresses, dayRouteUrl } from "./day-route";
+import { useEnabledMapServices } from "@/features/clients/map-services";
+import { openDirect } from "@/features/clients/route-menu";
+import { RouteSheet } from "@/features/clients/RouteSheet";
+import { haptics } from "@/lib/haptics";
+import { dayRouteAddresses, dayRouteTeamId, dayRouteUrlFor } from "./day-route";
 import type { AgendaSection } from "./types";
 
 export function DaySection({
@@ -39,7 +46,23 @@ export function DaySection({
 }) {
   // Маршрут — `day-route.ts` (only field visits, the grid's address rule).
   const addresses = dayRouteAddresses(section.data, addressFor);
-  const mapsUrl = dayRouteUrl(addresses);
+  // «МАРШРУТ →» — В КАРТАХ КОМАНДЫ, как «Маршрут» у объекта: одна включённая
+  // карта открывается сразу, несколько — тот же лист выбора карт.
+  const routeTeamId = dayRouteTeamId(section.data);
+  const maps = useEnabledMapServices(routeTeamId);
+  const [chooseMap, setChooseMap] = useState(false);
+  const openRoute = (service: MapService) => {
+    const url = dayRouteUrlFor(service, addresses);
+    if (url) openDirect(url);
+  };
+  const onRoute = () => {
+    if (maps.length === 1) {
+      openRoute(maps[0]);
+      return;
+    }
+    haptics.tap();
+    setChooseMap(true);
+  };
 
   return (
     <View>
@@ -52,15 +75,12 @@ export function DaySection({
           className="flex-row items-center"
           style={{ gap: 6, flexShrink: 1, minWidth: 0 }}
         >
+          {/* Капс-подпись caption 11/700 — как `DayDivider` у остальных лент
+              (метка и «Маршрут →» в той же строке, поэтому разметка своя). */}
           <Text
             accessibilityRole="header"
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              letterSpacing: 0.6,
-              textTransform: "uppercase",
-              color: t.sub,
-            }}
+            maxFontSizeMultiplier={1.3}
+            style={{ ...TYPE.caption, textTransform: "uppercase", color: t.sub }}
           >
             {header}
           </Text>
@@ -103,9 +123,9 @@ export function DaySection({
             </View>
           ) : null}
         </View>
-        {mapsUrl ? (
+        {addresses.length > 0 ? (
           <Pressable
-            onPress={() => Linking.openURL(mapsUrl)}
+            onPress={onRoute}
             hitSlop={8}
             className="active:opacity-60"
             accessibilityRole="link"
@@ -157,6 +177,15 @@ export function DaySection({
           </View>
         ))}
       </View>
+      {addresses.length > 0 ? (
+        <RouteSheet
+          visible={chooseMap}
+          target={addresses[0]}
+          teamId={routeTeamId}
+          open={openRoute}
+          onClose={() => setChooseMap(false)}
+        />
+      ) : null}
     </View>
   );
 }

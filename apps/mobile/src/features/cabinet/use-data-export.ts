@@ -185,7 +185,7 @@ function readTransactions(
 
 // ─── Счётчики для подписей строк ────────────────────────────────────────────
 
-export type ExportCounts = Record<ExportKind, number>;
+type ExportCounts = Record<ExportKind, number>;
 
 async function countOf(
   label: string,

@@ -1,23 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Keyboard, Platform, Pressable, Text, View } from "react-native";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
-import { X } from "lucide-react-native";
+import { Keyboard, Platform, View } from "react-native";
 import { useThemeColors } from "@/theme/colors";
-import { useReduceMotion } from "@/lib/reduce-motion";
-import { chooseOption } from "@/lib/choose";
+import { haptics } from "@/lib/haptics";
 import { topSheet, useSheetStackVersion } from "@/components/ui/sheet-overlay";
-import { finishTour, nextStep, tourTarget, useTour } from "./tour-store";
+import { caretOffset, placeBubble, spotFor, type Rect } from "./tour-geometry";
+import { goToStep, nextStep, tourScreenShown, tourTarget, useTour } from "./tour-store";
+import { TourBubble } from "./TourBubble";
+import { TourSpotlight } from "./TourSpotlight";
 
 // СЛОЙ ПОДСКАЗКИ ОДНОГО ОКНА. Экран темнеет, светлой остаётся подсвеченная
-// цель, под ней (или над ней, если внизу нет места) — пузырь: «Шаг N из M»,
-// одна фраза, крестик, «Пропустить», точки шагов, «Дальше».
+// цель, рядом — пузырь со стрелкой к ней (`TourBubble`).
 //
 // Слой забирает касания всего окна, кроме цели шага «нажмите» и «заполните»:
 // туда касание проходит насквозь, как в игре — нажать можно только то, что
@@ -26,14 +18,11 @@ import { finishTour, nextStep, tourTarget, useTour } from "./tour-store";
 // Слой стоит в каждом окне: в корне приложения (над таб-баром) и в каждой
 // шторке. Рисует его только окно, где сейчас лежит цель шага.
 
-type Rect = { x: number; y: number; w: number; h: number };
-
-const GAP = 12;
 /** Куда докручивается цель в прокрутке: под шапку экрана. */
 const SCROLL_TOP = 150;
 /** Цель двигается вместе с экраном (клавиатура, анимация листа) — перемер. */
 const REMEASURE_MS = 400;
-/** Сколько ждать цель необязательного шага, прежде чем пропустить его. */
+/** Как часто проверять, на месте ли цель шага (пропуск и возврат). */
 const OPTIONAL_WAIT_MS = 1500;
 
 function measure(node: View): Promise<Rect> {
@@ -41,7 +30,6 @@ function measure(node: View): Promise<Rect> {
 }
 
 export function TourLayer({ host }: { host: string }) {
-  const t = useThemeColors();
   const tour = useTour();
   const { step, chapter } = tour;
   const target = step ? tourTarget(step.target) : undefined;
@@ -52,38 +40,61 @@ export function TourLayer({ host }: { host: string }) {
   const covered = host === "root" ? top !== null : top !== host;
   const mine = !!step && target?.host === host && !covered;
 
-  // Необязательный шаг без цели на экране пропускается — отвечает за это
-  // только корневой слой, чтобы шаг не пропускали два окна сразу.
+  // Смена шага — лёгкий отклик под пальцем; ввод закончен — клавиатура
+  // уходит: она закрывала низ окна, и пузырь следующего шага ложился поверх
+  // только что набранного. Следит корневой слой: он есть всегда, а слой
+  // шторки уходит вместе с ней.
+  const prevStep = useRef(step);
   useEffect(() => {
-    if (host !== "root" || !step?.optional) return;
-    const timer = setTimeout(() => {
-      if (!tourTarget(step.target)) nextStep();
+    if (host !== "root" || prevStep.current === step) return;
+    if (prevStep.current?.kind === "input") Keyboard.dismiss();
+    if (step && prevStep.current) haptics.step();
+    prevStep.current = step;
+  }, [host, step]);
+
+  // Цели нет, а экран открыт — строка закрыта правом: необязательный шаг
+  // пропускается. Экран закрыт (смахнули шторку, вышли из настроек) — шаг
+  // возвращает к тому, откуда экран открывается (`fallback`), а без него ждёт.
+  // Решает только корневой слой, чтобы шаг не двигали два окна сразу.
+  useEffect(() => {
+    if (host !== "root" || !step || (!step.optional && !step.fallback)) return;
+    const timer = setInterval(() => {
+      if (tourTarget(step.target)) return;
+      if (tourScreenShown(step.target)) {
+        if (step.optional) nextStep();
+        return;
+      }
+      if (step.fallback) goToStep(step.fallback);
     }, OPTIONAL_WAIT_MS);
-    return () => clearTimeout(timer);
+    return () => clearInterval(timer);
   }, [host, step]);
 
   if (!mine || !step || !chapter || !target) return null;
-  // Ключ — шаг: новый шаг меряет цель с нуля и заново докручивает к ней.
-  return <Overlay key={step.id} t={t} />;
+  return <Overlay />;
 }
 
-function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
+function Overlay() {
+  const t = useThemeColors();
   const { step, chapter, index, total } = useTour();
   const root = useRef<View>(null);
+  // Вырез держит прежнюю цель, пока новая меряется: без этого между шагами
+  // экран на миг темнел целиком.
   const [rect, setRect] = useState<Rect | null>(null);
+  const [measuredFor, setMeasuredFor] = useState<string | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [bubbleH, setBubbleH] = useState(150);
-  const scrolled = useRef(false);
+  const [keep, setKeep] = useState<Rect | null>(null);
+  const scrolledFor = useRef<string | null>(null);
   const keyboardH = useKeyboardHeight();
 
   const place = useCallback(async () => {
     const entry = step ? tourTarget(step.target) : undefined;
-    if (!entry || !root.current) return;
+    if (!step || !entry || !root.current) return;
     const origin = await measure(root.current);
     let box = await measure(entry.node);
-    // Цель в прокрутке и не на виду — докрутить один раз, потом мерить.
-    if (entry.scroll && !scrolled.current) {
-      scrolled.current = true;
+    // Цель в прокрутке и не на виду — докрутить один раз за шаг, потом мерить.
+    if (entry.scroll && scrolledFor.current !== step.id) {
+      scrolledFor.current = step.id;
       const delta = box.y - origin.y - SCROLL_TOP;
       if (Math.abs(delta) > 4) {
         entry.scroll.ref.current?.scrollTo({ y: Math.max(0, entry.scroll.y.current + delta), animated: true });
@@ -92,12 +103,20 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
       }
     }
     const next = { x: box.x - origin.x, y: box.y - origin.y, w: box.w, h: box.h };
+    const kept = step.keepVisible ? tourTarget(step.keepVisible) : undefined;
+    if (kept) {
+      const k = await measure(kept.node);
+      setKeep({ x: k.x - origin.x, y: k.y - origin.y, w: k.w, h: k.h });
+    } else {
+      setKeep(null);
+    }
     setRect((prev) =>
       prev && Math.abs(prev.x - next.x) < 1 && Math.abs(prev.y - next.y) < 1 &&
       Math.abs(prev.w - next.w) < 1 && Math.abs(prev.h - next.h) < 1
         ? prev
         : next,
     );
+    setMeasuredFor(step.id);
   }, [step]);
 
   useEffect(() => {
@@ -107,27 +126,11 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
   }, [place]);
 
   if (!step || !chapter) return null;
-  const scrim = { position: "absolute" as const, backgroundColor: `${t.ink}94` };
-  const passes = step.kind !== "info";
-  const last = index + 1 >= total;
-
-  const close = async () => {
-    const picked = await chooseOption("Завершить обучение?", [
-      { label: `Завершить обучение ${chapter.about}` },
-      { label: "Завершить всё обучение" },
-    ]);
-    if (picked === 0) finishTour("chapter");
-    if (picked === 1) finishTour("all");
-  };
-
-  let bubbleTop = 0;
-  if (rect) {
-    const below = rect.y + rect.h + GAP;
-    const above = rect.y - GAP - bubbleH;
-    const bottom = size.h - keyboardH;
-    // Внизу места нет — над целью; нет и там (цель во весь экран) — у нижнего края.
-    bubbleTop = below + bubbleH <= bottom - GAP ? below : above >= GAP ? above : bottom - bubbleH - 24;
-  }
+  const scrimColor = `${t.ink}94`;
+  const shape = tourTarget(step.target)?.shape ?? "card";
+  const ready = rect && measuredFor === step.id;
+  const geo = rect ? spotFor(rect, shape, size, t.radius.card) : null;
+  const bubble = geo ? placeBubble(geo.spot, keep, bubbleH, size, keyboardH) : null;
 
   return (
     <View
@@ -136,132 +139,35 @@ function Overlay({ t }: { t: ReturnType<typeof useThemeColors> }) {
       onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 1000, elevation: 1000 }}
     >
-      {rect ? (
-        <>
-          <View style={{ ...scrim, left: 0, right: 0, top: 0, height: Math.max(0, rect.y) }} />
-          <View style={{ ...scrim, left: 0, right: 0, top: rect.y + rect.h, bottom: 0 }} />
-          <View style={{ ...scrim, left: 0, width: Math.max(0, rect.x), top: rect.y, height: rect.h }} />
-          <View style={{ ...scrim, left: rect.x + rect.w, right: 0, top: rect.y, height: rect.h }} />
-          {/* Пояснение: цель видна, но не нажимается. */}
-          {passes ? null : (
-            <View style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h }} />
-          )}
-          {step.kind === "tap" ? <Pulse rect={rect} t={t} /> : null}
-          <View
-            accessibilityViewIsModal
-            onLayout={(e) => setBubbleH(e.nativeEvent.layout.height)}
-            style={{
-              position: "absolute",
-              top: bubbleTop,
-              left: 16,
-              right: 16,
-              backgroundColor: t.surface,
-              borderRadius: t.radius.card,
-              padding: 16,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: t.caption }}>
-                {`Шаг ${index + 1} из ${total}`}
-              </Text>
-              <Pressable
-                onPress={() => void close()}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Завершить обучение"
-              >
-                <X color={t.sub} size={18} strokeWidth={2.2} />
-              </Pressable>
-            </View>
-            <Text style={{ fontSize: 15, lineHeight: 21, color: t.body, marginTop: 4 }}>{step.text}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14, minHeight: 36 }}>
-              {step.required || last ? (
-                <View style={{ minWidth: 92 }} />
-              ) : (
-                <Pressable onPress={nextStep} hitSlop={12} accessibilityRole="button" style={{ minWidth: 92 }}>
-                  <Text style={{ fontSize: 15, fontWeight: "500", color: t.sub }}>Пропустить</Text>
-                </Pressable>
-              )}
-              <Dots index={index} total={total} t={t} />
-              {step.kind === "tap" ? (
-                <View style={{ minWidth: 92 }} />
-              ) : (
-                <Pressable
-                  onPress={nextStep}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({
-                    minWidth: 92,
-                    alignItems: "center",
-                    backgroundColor: t.accent,
-                    opacity: pressed ? 0.85 : 1,
-                    borderRadius: t.radius.pill,
-                    paddingHorizontal: 18,
-                    paddingVertical: 9,
-                  })}
-                >
-                  <Text style={{ color: t.onAccent, fontSize: 15, fontWeight: "600" }}>
-                    {last ? "Понятно" : "Дальше"}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-        </>
-      ) : (
-        // Цель меряется и докручивается — экран уже тёмный, пузырь встанет на место.
-        <View style={{ ...scrim, left: 0, right: 0, top: 0, bottom: 0 }} />
-      )}
-    </View>
-  );
-}
-
-function Dots({ index, total, t }: { index: number; total: number; t: ReturnType<typeof useThemeColors> }) {
-  // Глава длинная — точек не больше двенадцати: дальше они сливаются в полосу.
-  const shown = Math.min(total, 12);
-  const at = total <= 12 ? index : Math.round((index / (total - 1)) * (shown - 1));
-  return (
-    <View style={{ flex: 1, flexDirection: "row", justifyContent: "center", gap: 5 }}>
-      {Array.from({ length: shown }, (_, i) => (
-        <View
-          key={i}
-          style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i === at ? t.accent : t.separator }}
+      {geo ? (
+        <TourSpotlight
+          spot={geo.spot}
+          radius={geo.radius}
+          size={size}
+          color={scrimColor}
+          passes={ready ? step.kind !== "info" : false}
+          pulse={!!ready && step.kind === "tap"}
+          pulseKey={step.id}
+          accent={t.accent}
         />
-      ))}
+      ) : (
+        // Первая цель меряется и докручивается — экран уже тёмный.
+        <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: scrimColor }} />
+      )}
+      {ready && geo && bubble ? (
+        <TourBubble
+          key={step.id}
+          step={step}
+          chapter={chapter}
+          index={index}
+          total={total}
+          top={bubble.top}
+          side={bubble.side}
+          caretX={caretOffset(geo.spot, size)}
+          onHeight={setBubbleH}
+        />
+      ) : null}
     </View>
-  );
-}
-
-/** Рамка цели «нажмите сюда»: дышит, пока на неё не нажали. */
-function Pulse({ rect, t }: { rect: Rect; t: ReturnType<typeof useThemeColors> }) {
-  const reduced = useReduceMotion();
-  const phase = useSharedValue(0);
-  useEffect(() => {
-    if (reduced) return;
-    phase.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.out(Easing.quad) }), -1, false);
-    return () => cancelAnimation(phase);
-  }, [phase, reduced]);
-  const style = useAnimatedStyle(() => ({
-    opacity: reduced ? 1 : 1 - phase.value,
-    transform: [{ scale: reduced ? 1 : 1 + phase.value * 0.06 }],
-  }));
-  const pad = 4;
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        {
-          position: "absolute",
-          left: rect.x - pad,
-          top: rect.y - pad,
-          width: rect.w + pad * 2,
-          height: rect.h + pad * 2,
-          borderRadius: t.radius.card + pad,
-          borderWidth: 3,
-          borderColor: t.accent,
-        },
-        style,
-      ]}
-    />
   );
 }
 

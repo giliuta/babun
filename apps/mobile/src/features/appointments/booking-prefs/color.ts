@@ -1,6 +1,9 @@
-import type {
-  RecordColorPalette,
-  RecordColorRule,
+import {
+  RECORD_CANCELLED_KEY,
+  RECORD_PAID_KEY,
+  RECORD_PREPAID_KEY,
+  type RecordColorPalette,
+  type RecordColorRule,
 } from "@babun/shared/local/calendar-settings";
 import {
   COLOR_SITUATIONS,
@@ -45,15 +48,26 @@ export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
 // «владелец не выбирал»: только так «сбросить к заводскому» отличимо от
 // «владелец выбрал ровно этот серый».
 
-// ЗАВОДСКИЕ ЦВЕТА — ИЗ НАБОРА: «Красный», «Оранжевый» и «Синий» палитры.
-// Цвет вне набора дал бы в настройке «Свой · Свой · Свой», и выбрать
-// заводской заново было бы нельзя. Серого в наборе нет намеренно, он
-// остаётся заводским нейтральным сигналом. «Нет клиента» и «нет услуг» цвета
-// не имеют, «не оплачено» — красный (деньги, которые должны).
-const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
-  unpaid: "#FF2233",
-  noObject: "#DD6600",
+// ЗАВОДСКИЕ ЦВЕТА — ИЗ НАБОРА палитры. Цвет вне набора дал бы в настройке
+// «Свой · Свой · Свой», и выбрать заводской заново было бы нельзя. Красный
+// отдан ОТМЕНЕ — она должна бросаться в глаза; долг поэтому оранжевый, а
+// «нет объекта» чёрный, чтобы ни один из трёх не спутался с соседом.
+export const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
+  unpaid: "#DD6600",
+  noObject: "#000000",
 };
+
+export const CANCELLED_DEFAULT = "#FF2233";
+export const PAID_DEFAULT = "#009911";
+// Бирюзовый: «деньги уже пошли», но не зелёный «всё оплачено».
+export const PREPAID_DEFAULT = "#00BBDD";
+
+/** Ключ строки настройки «Цвет записи»: ситуация, отмена или деньги. */
+export type PaletteKey =
+  | ColorSituation
+  | typeof RECORD_CANCELLED_KEY
+  | typeof RECORD_PAID_KEY
+  | typeof RECORD_PREPAID_KEY;
 
 const FALLBACK_DEFAULT = "#3333FF";
 
@@ -76,6 +90,28 @@ export function useAutoColorRule(teamId: string | null | undefined): AutoColorRu
 
 export function useSituationPalette(teamId: string | null | undefined): SituationPalette {
   return paletteWithDefaults(useDesignBase(teamId).palette ?? undefined);
+}
+
+/** Цвет отменённой и оплаченной; `null` — случай не красит (отмена тогда
+ *  прежняя серая, оплаченная — в обычном цвете). */
+function storedOr(
+  stored: RecordColorPalette | null | undefined,
+  key: typeof RECORD_CANCELLED_KEY | typeof RECORD_PAID_KEY | typeof RECORD_PREPAID_KEY,
+  fallback: string,
+): string | null {
+  return stored && key in stored ? stored[key] ?? null : fallback;
+}
+
+export function useCancelledColor(teamId: string | null | undefined): string | null {
+  return storedOr(useDesignBase(teamId).palette, RECORD_CANCELLED_KEY, CANCELLED_DEFAULT);
+}
+
+export function usePaidColor(teamId: string | null | undefined): string | null {
+  return storedOr(useDesignBase(teamId).palette, RECORD_PAID_KEY, PAID_DEFAULT);
+}
+
+export function usePrepaidColor(teamId: string | null | undefined): string | null {
+  return storedOr(useDesignBase(teamId).palette, RECORD_PREPAID_KEY, PREPAID_DEFAULT);
 }
 
 export function useFallbackColor(teamId: string | null | undefined): string {
@@ -106,9 +142,32 @@ export function useSetSituationColor(teamId: string | null | undefined) {
     ...save,
     // Патч цвета ОДНОЙ ситуации переписывает палитру целиком — основа то, что
     // на экране (с заводскими), иначе первая правка стёрла бы соседние.
-    mutate: (input: { situation: ColorSituation; color: string | null }) => {
-      const current = paletteWithDefaults(base.palette ?? undefined);
-      patch({ palette: { ...current, [input.situation]: input.color } });
+    /** `remember` — цвет, который случай держал до выключения: пишется в
+     *  `<ключ>_was` и вернётся при включении. */
+    mutate: (input: { situation: PaletteKey; color: string | null; remember?: string | null }) => {
+      const stored = base.palette;
+      const remembered = Object.fromEntries(
+        Object.entries(stored ?? {}).filter(([key]) => key.endsWith("_was")),
+      ) as RecordColorPalette;
+      patch({
+        palette: {
+          ...remembered,
+          ...paletteWithDefaults(stored ?? undefined),
+          [RECORD_CANCELLED_KEY]: storedOr(stored, RECORD_CANCELLED_KEY, CANCELLED_DEFAULT),
+          [RECORD_PAID_KEY]: storedOr(stored, RECORD_PAID_KEY, PAID_DEFAULT),
+          [RECORD_PREPAID_KEY]: storedOr(stored, RECORD_PREPAID_KEY, PREPAID_DEFAULT),
+          [input.situation]: input.color,
+          ...(input.remember !== undefined ? { [`${input.situation}_was` as const]: input.remember } : {}),
+        },
+      });
     },
   };
+}
+
+/** Цвет, который выключенный случай держал до выключения; `null` — не было. */
+export function useRememberedColor(
+  teamId: string | null | undefined,
+): (situation: PaletteKey) => string | null {
+  const palette = useDesignBase(teamId).palette;
+  return (situation) => palette?.[`${situation}_was` as const] ?? null;
 }

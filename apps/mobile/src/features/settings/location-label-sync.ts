@@ -37,7 +37,7 @@ export function locationLabelUpserts(
   );
 }
 
-export interface PositionedLocationLabel extends LocationLabel {
+interface PositionedLocationLabel extends LocationLabel {
   position: number;
 }
 

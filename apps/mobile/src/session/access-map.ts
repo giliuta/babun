@@ -34,7 +34,7 @@ export type AccessLevel =
   | "half"
   | "day";
 export type AccessArea = "calendar" | "finance" | "clients" | "company" | "owner";
-export type AccessScope = "calendar" | "company";
+type AccessScope = "calendar" | "company";
 
 const LEVELS: readonly AccessLevel[] = [
   "off",
@@ -213,7 +213,7 @@ export function levelOf(
   return stored && block.levels.includes(stored) ? stored : fallback;
 }
 
-export interface AccessSection {
+interface AccessSection {
   area: Exclude<AccessArea, "owner">;
   title: string;
   blocks: AccessBlock[];
@@ -244,19 +244,6 @@ export interface AccessChange {
   block: string;
   team_id: string | null;
   level: AccessLevel;
-}
-
-/** Одно изменение для `set_member_access`: у блока компании `team_id` пустой. */
-export function accessChange(
-  block: AccessBlock,
-  teamId: string,
-  level: AccessLevel,
-): AccessChange {
-  return {
-    block: block.key,
-    team_id: block.scope === "calendar" ? teamId : null,
-    level,
-  };
 }
 
 export type AccessRefusal =

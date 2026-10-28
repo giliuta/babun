@@ -49,6 +49,9 @@ describe("buildBookPatch — event", () => {
   test("an event is named by its type, else its old title, else «Событие»", () => {
     const ev = (over: Partial<BookPatchInput>) => buildBookPatch(input({ kind: "event", ...over }));
     assert.equal(ev({ eventTypeLabel: "Офис", eventTitle: "старое" }).comment, "Офис");
+    // Тип, узнанный по названию (регистр, пробелы), имени не меняет: иначе
+    // нетронутое событие считалось бы изменённым (CAL-23).
+    assert.equal(ev({ eventTypeLabel: "Уборка", eventTitle: "уборка " }).comment, "уборка");
     assert.equal(ev({ eventTitle: "  старое  " }).comment, "старое");
     assert.equal(ev({}).comment, "Событие");
   });
@@ -85,6 +88,11 @@ describe("buildBookPatch — work", () => {
   test("no catalog duration → the slot length is stored", () => {
     assert.equal(buildBookPatch(input()).total_duration, 90);
     assert.equal(buildBookPatch(input({ computedDuration: 45 })).total_duration, 45);
+    // Конец упёрся в 23:59 — длительность не длиннее слота.
+    assert.equal(
+      buildBookPatch(input({ computedDuration: 120, timeStart: "22:30", timeEnd: "23:59" })).total_duration,
+      89,
+    );
   });
 
   test("the note and the address are trimmed", () => {
@@ -112,6 +120,16 @@ describe("buildBookPatch — work", () => {
     assert.equal(zeroRate.vat_rate, null);
     const custom = buildBookPatch(input({ recordVatMode: "exclusive", customTotal: true }));
     assert.equal("vat_mode" in custom, false);
+  });
+
+  test("a custom total drops the discount: it takes nothing off a typed sum", () => {
+    const discount = { type: "fixed" as const, value: 10 };
+    const custom = buildBookPatch(input({ customTotal: true, globalDiscount: discount, discountAmount: 10 }));
+    assert.equal(custom.global_discount, null);
+    assert.equal(custom.discount_amount, 0);
+    const computed = buildBookPatch(input({ globalDiscount: discount, discountAmount: 10 }));
+    assert.deepEqual(computed.global_discount, discount);
+    assert.equal(computed.discount_amount, 10);
   });
 
   test("the SMS reminder needs a phone, or a hidden-contacts client", () => {

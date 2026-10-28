@@ -1,6 +1,9 @@
 // Local-calendar date math for the client roll-up.
 
-/** Today as YYYY-MM-DD, in local time. */
+/** Today as YYYY-MM-DD by the DEVICE clock — only a default for tests and
+ *  callers without the company clock. The app passes the business date (the
+ *  calendar's timezone): a phone in another zone would otherwise show a debt
+ *  the team does not have yet, or miss one that has already come. */
 export function todayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -24,14 +27,14 @@ export function isoToDate(iso: string): Date | null {
   return d;
 }
 
-export function birthdayInDays(birthday: string): number | null {
+export function birthdayInDays(birthday: string, today: string = todayKey()): number | null {
   if (!birthday) return null;
   const [, mm, dd] = birthday.split("-").map(Number);
   if (!mm || !dd) return null;
-  const today = new Date();
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  let target = new Date(today.getFullYear(), mm - 1, dd);
-  if (target < t0) target = new Date(today.getFullYear() + 1, mm - 1, dd);
+  const t0 = parseKey(today);
+  if (!t0) return null;
+  let target = new Date(t0.getFullYear(), mm - 1, dd);
+  if (target < t0) target = new Date(t0.getFullYear() + 1, mm - 1, dd);
   return daysBetween(t0, target);
 }
 

@@ -69,7 +69,7 @@ export function SmsRecordBlock({
   clientId: string | null;
 }) {
   const log = useAppointmentSms(appointmentId);
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
   // Только нынешнему клиенту записи; у старых строк без клиента — как было.
   const messages = (log.data?.messages ?? []).filter((m) => !m.clientId || m.clientId === clientId);

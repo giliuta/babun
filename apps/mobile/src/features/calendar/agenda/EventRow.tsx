@@ -1,7 +1,8 @@
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ThemeColors } from "@/theme/colors";
-import { recordComment } from "@/features/calendar/record-title";
+import { LIST_ROW } from "@/components/ui/tokens";
+import { eventTitleIsNote, recordComment } from "@/features/calendar/record-title";
 
 // Событие — свой шаблон (web design-keeper #6): title из comment, знак
 // записи слева, превью заметок — иначе событие выглядело как «битая запись»
@@ -23,7 +24,11 @@ export function EventRow({
 }) {
   const title = recordComment(apt) || "Событие";
   const address = apt.address?.trim();
-  const notes = apt.event_notes?.trim();
+  // ЗАГОЛОВОК ВЗЯТ ИЗ ЗАМЕТКИ — второй строкой её не повторяем (как в
+  // сетке): печатаем только то, что идёт после первой строки.
+  const notes = eventTitleIsNote(apt)
+    ? (apt.event_notes ?? "").trim().split("\n").slice(1).join(" ").trim()
+    : apt.event_notes?.trim();
   return (
     <Pressable
       onPress={onPress}
@@ -37,7 +42,7 @@ export function EventRow({
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        minHeight: 64,
+        minHeight: LIST_ROW.minHeight,
         backgroundColor: rowFill,
       }}
     >
@@ -83,14 +88,14 @@ export function EventRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={1}
-          style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+          style={{ ...LIST_ROW.name, color: t.ink }}
         >
           {title}
         </Text>
         {address ? (
           <Text
             numberOfLines={1}
-            style={{ marginTop: 2, fontSize: 12, color: t.sub }}
+            style={{ marginTop: 2, ...LIST_ROW.sub, color: t.sub }}
           >
             {address}
           </Text>
@@ -98,7 +103,7 @@ export function EventRow({
         {notes ? (
           <Text
             numberOfLines={1}
-            style={{ marginTop: 2, fontSize: 12, color: t.sub }}
+            style={{ marginTop: 2, ...LIST_ROW.sub, color: t.sub }}
           >
             {notes}
           </Text>

@@ -104,7 +104,10 @@ export function draftDirty({
       clientPicked ||
       serviceIdsCount > 0 ||
       comment.trim().length > 0 ||
-      address.trim().length > 0 ||
+      // Адрес — ввод, когда он вписан без объекта или объект сменили. Адрес
+      // объекта, приехавшего параметром с карточки клиента, — ещё не ввод:
+      // «назад» без единого касания спрашивал «Сохранить запись?».
+      (address.trim().length > 0 && (locationId == null || locationPicked)) ||
       customTotal ||
       // Скидкой считается ВПИСАННОЕ, а не выбранная валюта: переключить
       // «€ | %» и ничего не набрать — не значит тронуть запись.
@@ -117,6 +120,5 @@ export function draftDirty({
       colorOverride != null ||
       cityTouched ||
       dateTouched ||
-      durationTouched ||
-      notesDirty;
+      durationTouched;
 }

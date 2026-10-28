@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 import { useThemeColors } from "@/theme/colors";
+import { capsText } from "./caps-text";
 
 // Корешок метки: компактный тег на тонированной подложке цвета метки.
 // Единый визуальный язык меток библиотеки Кабинета: дни календаря
@@ -40,14 +41,13 @@ export function LabelTag({
           fontSize: lg ? 10 : 9,
           fontWeight: "700",
           letterSpacing: 0.5,
-          textTransform: "uppercase",
           // Arbitrary user tints are not guaranteed to contrast with their
           // translucent background. Keep the tint as the background and use
           // the semantic foreground for readable text.
           color: t.ink,
         }}
       >
-        {text}
+        {capsText(text)}
       </Text>
     </View>
   );

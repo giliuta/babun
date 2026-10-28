@@ -10,9 +10,9 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 //
 // Ничего не удаляем: строки остаются в журнале, меняется только место показа.
 
-export type PaymentEventTone = "in" | "out";
+type PaymentEventTone = "in" | "out";
 
-export interface PaymentEvent {
+interface PaymentEvent {
   id: string;
   /** Что это было, словами: «Оплата», «Предоплата», «Оплата снята», «Возврат». */
   title: string;

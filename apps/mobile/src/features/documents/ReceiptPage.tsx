@@ -27,6 +27,7 @@ import { useReceipt } from "@/features/finances/receipts-queries";
 import { shareHtmlAsPdf } from "@/lib/share-pdf";
 import { useIssuedReceiptDoc } from "./use-issued-receipt-doc";
 import { usePageAction } from "@/lib/use-page-action";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // СТРАНИЦА ЧЕКА — КАК СТРАНИЦА ИНВОЙСА: конструкция, превью, «сохранить» — и
 // чек можно отправлять. Выписанный чек живёт здесь, а не в листе: бумага, что
@@ -156,7 +157,7 @@ export function ReceiptPage({ id }: { id: string }) {
                 accessibilityLabel="Поделиться PDF"
                 className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
               >
-                {busy ? <Spinner size={18} label="Готовим PDF" /> : <Share2 color={t.body} size={ICON.sm} />}
+                {busy ? <Spinner size={ICON.header} label="Готовим PDF" /> : <Share2 color={t.body} size={ICON.header} />}
               </Pressable>
             )}
             {hasMenu ? (
@@ -167,7 +168,7 @@ export function ReceiptPage({ id }: { id: string }) {
                 accessibilityLabel="Ещё действия"
                 className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
               >
-                <MoreHorizontal color={t.body} size={ICON.sm} />
+                <MoreHorizontal color={t.body} size={ICON.header} />
               </Pressable>
             ) : null}
           </View>
@@ -213,10 +214,7 @@ export function ReceiptPage({ id }: { id: string }) {
           документа — выписать его,
           и у погашенного чека тоже. */}
       {!docWrite || (dead && refunds.uncovered <= 0) ? null : (
-        <View
-          className="px-4 pb-7 pt-3"
-          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
-        >
+        <PageFooter standalone bar>
           {refunds.uncovered > 0 ? (
             <GradientButton
               label={`Выписать кредит-ноту · ${formatInvoiceMoney(refunds.uncovered, receipt.currency)}`}
@@ -225,7 +223,7 @@ export function ReceiptPage({ id }: { id: string }) {
           ) : (
             <GradientButton label="Поделиться PDF" loading={busy} onPress={() => void sharePdf()} />
           )}
-        </View>
+        </PageFooter>
       )}
       <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
     </Screen>

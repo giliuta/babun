@@ -171,16 +171,22 @@ export function issuedDocument({
           prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
           prefixed(dict.bank, seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
         ]),
-    settlement: [
-      {
-        label: dict.paid,
-        value: paperMoney(settlement.paid, invoice.currency, dict.locale),
-      },
-      {
-        label: dict.remaining,
-        value: paperMoney(settlement.remaining, invoice.currency, dict.locale),
-      },
-    ],
+    // ПОЛУЧЕНО И К ОПЛАТЕ — НА САМОЙ БУМАГЕ. Предоплата записи наличными до
+    // инвойса — строки истории у неё нет (это деньги записи), и бумага на €300
+    // молчала, что €260 уже получено: клиент видел долг на всю сумму.
+    settlement:
+      creditNote || settlement.paid <= 0
+        ? []
+        : [
+            {
+              label: dict.paid,
+              value: paperMoney(settlement.paid, invoice.currency, dict.locale),
+            },
+            {
+              label: dict.remaining,
+              value: paperMoney(settlement.remaining, invoice.currency, dict.locale),
+            },
+          ],
     payments: payments.map((payment) => {
       const account = payment.account_id ? accountNames?.get(payment.account_id) : undefined;
       const method = methodLabel(dict, payment.payment_method);

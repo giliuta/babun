@@ -19,7 +19,7 @@ import type { ThemeColors } from "@/theme/colors";
 // списка; «Объединить» и «Разделить» — только у страницы, где видно, с кем
 // сливать и что выносить.
 
-export interface ClientMenuHandlers {
+interface ClientMenuHandlers {
   onBook?: () => void;
   onRemind?: () => void;
   onShare?: () => void;

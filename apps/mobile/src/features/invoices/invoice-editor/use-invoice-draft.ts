@@ -11,6 +11,7 @@ import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { addDaysYmd, type EditableInvoiceLine } from "@/lib/paper/format";
+import { paperLineTitle } from "../generator-settings";
 import {
   appointmentVatOf,
   existingDiscountOf,
@@ -18,6 +19,7 @@ import {
   initialInvoiceVatMode,
   rolledIssueDates,
 } from "./invoice-rules";
+import type { StoredInvoiceDraft } from "./stored-draft";
 import type { InvoiceEditorProps } from "./types";
 
 /** The invoice form's own state: how it is born (from an issued document, a
@@ -115,7 +117,11 @@ export function useInvoiceDraft({
             total_amount: inputFromGross(appointment.total_amount, "exclusive", vat.rate),
           }
         : appointment;
-    return generateInvoiceFromAppointment(base, generator, serviceName);
+    return generateInvoiceFromAppointment(
+      base,
+      { ...generator, defaultLineTitle: paperLineTitle(generator.defaultLineTitle, language) },
+      serviceName,
+    );
   };
   // Черновик по записи, с которой пришли. Считается ОДИН РАЗ при рождении
   // формы: пересчёт на каждый рендер стирал бы то, что человек уже правит.
@@ -174,7 +180,7 @@ export function useInvoiceDraft({
     if (rolled.issuedOn === issuedOn) return;
     setIssuedOn(rolled.issuedOn);
     setDueOnState(rolled.dueOn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только смена дня бизнеса; даты и datesAt — из этого же рендера
   }, [businessToday]);
   const [clientId, setClientId] = useState<string | null>(
     existing ? existing.client_id : seed?.clientId ?? prefill?.clientId ?? null,
@@ -247,7 +253,7 @@ export function useInvoiceDraft({
     if (teamId != null) return;
     const first = teams[0]?.id;
     if (first) changeTeam(first);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- changeTeam пересоздаётся каждый рендер; ждём только команды
   }, [teams, teamId]);
   // Приписка компании подставляется в НОВЫЙ документ; выставленный хранит
   // свою и не переписывается вслед за настройкой.
@@ -290,7 +296,7 @@ export function useInvoiceDraft({
     if (prefill?.amount && prefill.amount > 0) {
       return [
         newLine(
-          prefill.title?.trim() || generator.defaultLineTitle,
+          prefill.title?.trim() || paperLineTitle(generator.defaultLineTitle, language),
           "1",
           String(prefill.amount),
         ),
@@ -308,6 +314,19 @@ export function useInvoiceDraft({
   const [discountValue, setDiscountValue] = useState<string>(
     existingDiscount > 0 ? String(existingDiscount) : "",
   );
+  // СМЕНА ЯЗЫКА БУМАГИ ПЕРЕВОДИТ И СТРОКУ ПО УМОЛЧАНИЮ. Строка «Services»
+  // рождается вместе с формой, когда язык ещё английский; выбрали греческий —
+  // она становится «Υπηρεσίες». Строку, которую человек переписал, не трогаем.
+  const changeLanguage = (next: InvoiceLanguage) => {
+    const was = paperLineTitle(generator.defaultLineTitle, language);
+    const now = paperLineTitle(generator.defaultLineTitle, next);
+    if (was !== now) {
+      setLines((current) =>
+        current.map((line) => (line.title === was ? { ...line, title: now } : line)),
+      );
+    }
+    setLanguage(next);
+  };
   const [error, setError] = useState<string | null>(null);
   /** Какими реквизитами подписан счёт, если их выбрали руками. `null` —
    *  основные (`pickedCompany`): документ не должен требовать выбора там, где
@@ -319,9 +338,55 @@ export function useInvoiceDraft({
   /** ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ: сначала превью инвойса, потом «Сохранить». */
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  /** Набранное — снимком для черновика, переживающего выгрузку (`stored-draft.ts`). */
+  const snapshot: StoredInvoiceDraft = {
+    language,
+    clientId,
+    locationId,
+    clientRequisitesId,
+    teamId,
+    vatMode,
+    vatTouched: vatTouched.current,
+    rateOverride,
+    notes,
+    lines: lines.map(({ id: _id, ...line }) => line),
+    discountKind,
+    discountValue,
+    companyId,
+  };
+  /** Поднять снимок в нетронутую форму. Строки получают новые `id`: счётчик
+   *  формы начат заново, и старые совпали бы с теми, что она заведёт. */
+  const restore = (stored: StoredInvoiceDraft) => {
+    setLanguage(stored.language);
+    setClientId(stored.clientId);
+    setLocationId(stored.locationId);
+    setClientRequisitesId(stored.clientRequisitesId);
+    // Команды могло не стать, пока приложение спало, — тогда остаётся своя.
+    if (stored.teamId && teams.some((team) => team.id === stored.teamId)) setTeamId(stored.teamId);
+    setVatMode(stored.vatMode);
+    vatTouched.current = stored.vatTouched;
+    setRateOverride(stored.rateOverride);
+    setNotes(stored.notes);
+    setLines(
+      stored.lines.map((line) =>
+        newLine(
+          line.title,
+          line.qty,
+          line.unitPrice,
+          line.description ?? null,
+          line.unit ?? null,
+          line.serviceId ?? null,
+        ),
+      ),
+    );
+    setDiscountKind(stored.discountKind);
+    setDiscountValue(stored.discountValue);
+    setCompanyId(stored.companyId);
+  };
+
   return {
     language,
-    setLanguage,
+    setLanguage: changeLanguage,
     languageOpen,
     setLanguageOpen,
     newLine,
@@ -364,5 +429,7 @@ export function useInvoiceDraft({
     accountId,
     previewOpen,
     setPreviewOpen,
+    snapshot,
+    restore,
   };
 }

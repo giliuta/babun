@@ -117,7 +117,7 @@ const BONES: Record<"day" | "week", { col: number; top: `${number}%`; height: `$
   ],
 };
 
-export type SkeletonMode = "day" | "week" | "month" | "agenda";
+type SkeletonMode = "day" | "week" | "month" | "agenda";
 
 export function CalendarSkeleton({ mode = "week" }: { mode?: SkeletonMode }) {
   const t = useThemeColors();

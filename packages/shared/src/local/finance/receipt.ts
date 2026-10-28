@@ -12,7 +12,7 @@
 // Выписывается НЕ САМ, а кнопкой (`issue_receipt`), и несёт
 // СВОЙ перечень работ (`lines`) — снимком, как и реквизиты сторон.
 
-export type ReceiptStatus = "issued" | "void";
+type ReceiptStatus = "issued" | "void";
 
 export interface Receipt {
   id: string;

@@ -14,7 +14,7 @@ type ChangeEvent = {
   nativeEvent: { timestamp: number; utcOffset: number };
 };
 
-export interface DateTimeInputProps {
+interface DateTimeInputProps {
   value: Date;
   /** ТОЛЬКО «date» и «time» — ровно то, что двойник умеет нарисовать.
    *

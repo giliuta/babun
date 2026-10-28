@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { useToast } from "@/components/ui/Toast";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -6,12 +7,14 @@ import { localeInfo } from "@babun/shared/i18n/locales";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
 import { PaperLanguageSheet } from "./PaperLanguageSheet";
-import { type EditableInvoiceLine, formatInvoiceMoney } from "@/lib/paper/format";
+import { type EditableInvoiceLine, formatInvoiceMoney, parseDecimal } from "@/lib/paper/format";
 import { InvoiceEditorFooter } from "./invoice-editor/InvoiceEditorFooter";
 import { invoiceReason } from "./invoice-editor/invoice-rules";
 import type { InvoiceEditorProps } from "./invoice-editor/types";
 import { useInvoiceDraft } from "./invoice-editor/use-invoice-draft";
 import { useInvoicePaper } from "./invoice-editor/use-invoice-paper";
+import { storedInvoiceDraftKey, useStoredInvoiceDraft } from "./invoice-editor/stored-draft";
+import { useTenantId } from "@/lib/tenant";
 
 export type {
   InvoiceEditorProps,
@@ -49,6 +52,23 @@ export function InvoiceEditor({
     accountId, previewOpen, setPreviewOpen,
   } = draft;
   const paper = useInvoicePaper({ draft, clients, existing, tenant, businessToday, onDirtyChange });
+  // Язык бумаги — не поле формы, и снимок `paper.dirty` его не видит.
+  const bornLanguage = useRef(language).current;
+  const unchanged = !!existing && !paper.dirty && language === bornLanguage;
+  // Новый инвойс «с нуля» переживает выгрузку приложения (`stored-draft.ts`).
+  const tenantId = useTenantId();
+  const fromScratch =
+    !existing &&
+    !prefill?.appointmentId &&
+    !prefill?.transactionId &&
+    !prefill?.clientId &&
+    !prefill?.amount;
+  useStoredInvoiceDraft({
+    key: fromScratch && tenantId ? storedInvoiceDraftKey(tenantId, prefill?.teamId) : null,
+    snapshot: draft.snapshot,
+    dirty: paper.dirty,
+    restore: draft.restore,
+  });
   const {
     companies, owner, currency, changeClient, parsedLines, rate, discountAmount,
     withDiscount, totals, pickedCompany, issuedYear, series, paperDoc,
@@ -57,13 +77,25 @@ export function InvoiceEditor({
   /** УБРАННУЮ ПОЗИЦИЮ ВОЗВРАЩАЮТ ОДНИМ ТАПОМ. Свайп по строке — движение
    *  быстрое, и промах пальца не должен стоить строки счёта: снимок списка
    *  уходит в тост, «Отменить» его возвращает. Восстанавливается ВЕСЬ список,
-   *  а не одна строка: порядок позиций в документе — тоже данные. */
+   *  а не одна строка: порядок позиций в документе — тоже данные.
+   *
+   *  Снимок — из самого обновления, а не из отрисовки: закрытие «Итого»
+   *  убирает пустые строки пачкой, и у каждого тоста был один устаревший
+   *  снимок. Пустую свою строку (без услуги, названия и цены) возвращать
+   *  нечем — она уходит без тоста. */
   const removeLine = (line: EditableInvoiceLine) => {
-    const before = lines;
-    setLines((current) => current.filter((item) => item.id !== line.id));
+    let before: EditableInvoiceLine[] | null = null;
+    setLines((current) => {
+      before = current;
+      return current.filter((item) => item.id !== line.id);
+    });
+    const empty = !line.serviceId && !line.title.trim() && !(parseDecimal(line.unitPrice) ?? 0);
+    if (empty) return;
     toast(`«${line.title.trim() || "Позиция"}» убрана`, "info", {
       label: "Вернуть",
-      onPress: () => setLines(before),
+      onPress: () => {
+        if (before) setLines(before);
+      },
     });
   };
 
@@ -211,6 +243,7 @@ export function InvoiceEditor({
               setLines((current) => [...current, newLine("", "1", "")])
             }
             onRemoveLine={removeLine}
+            onLinesRestore={setLines}
             vatMode={vatMode}
             vatRate={Math.max(0, rate)}
             onVatModeChange={(next) => {
@@ -238,6 +271,7 @@ export function InvoiceEditor({
                 reason={reason}
                 actionLabel={actionLabel}
                 submitting={submitting}
+                unchanged={unchanged}
                 onPreview={() => setPreviewOpen(true)}
               />
             }

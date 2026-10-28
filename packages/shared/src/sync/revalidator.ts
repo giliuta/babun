@@ -15,7 +15,7 @@
 import type { CachedTable } from "../db/cache/index";
 import { emitRevalidated } from "./revalidate-events";
 
-export interface Revalidator<Client> {
+interface Revalidator<Client> {
   revalidate(client: Client, tenantId: string): Promise<void>;
   markStale(tenantId: string): void;
 }

@@ -40,7 +40,7 @@ export function useTeamNotifyVersion(): number {
   return useSyncExternalStore(subscribe, teamPrefsVersion, teamPrefsVersion);
 }
 
-export const teamNotifyKey = (userId: string | null) => ["team-notify-prefs", userId] as const;
+const teamNotifyKey = (userId: string | null) => ["team-notify-prefs", userId] as const;
 
 /** Все строки человека — копия обновляется при каждом чтении. */
 export function useTeamNotifyPrefs() {

@@ -14,9 +14,9 @@
 //
 // Порядка-поля у шаблона нет: список статический, порядок задаёт сам массив.
 
-export type Lang = "ru" | "en" | "el";
+type Lang = "ru" | "en" | "el";
 
-export interface QuickReply {
+interface QuickReply {
   id: string;
   emoji: string;
   title: string;

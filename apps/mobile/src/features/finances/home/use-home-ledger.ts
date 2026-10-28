@@ -22,7 +22,7 @@ const NO_TEAM_CHIP = {
   color: null as string | null,
 } as Team;
 
-export interface HomeLedgerInput {
+interface HomeLedgerInput {
   refs: HomeReferences;
   period: Period;
   scope: string | null;

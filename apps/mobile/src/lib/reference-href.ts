@@ -48,7 +48,7 @@ export function useReferenceHref() {
 }
 
 /** Страницы карточки клиента, у которых есть второй адрес в `app/(shared)`. */
-export type ClientSubPage = "visits" | "objects" | "attachments" | "requisites" | "sms" | "people";
+type ClientSubPage = "visits" | "objects" | "attachments" | "requisites" | "sms" | "people";
 
 /** Экран во вкладке «Клиенты» — нижний край держит таб-бар; над табами —
  *  свой (иначе кнопка внизу легла бы на полоску «домой»). */

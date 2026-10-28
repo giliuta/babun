@@ -237,11 +237,12 @@ describe("receiptLinesFromAppointment — строки из снимка усл�
     assert.equal(receiptLinesFromAppointment(apt).discountAmount, undefined);
   });
 
-  it("без снимка имени берётся дефолтная строка генератора — как у счёта", () => {
-    const apt = appointment({ total_amount: 50, services: [] });
+  it("без услуг — дефолтная строка на языке чека, заметка записи не печатается", () => {
+    const apt = appointment({ total_amount: 50, comment: "Код домофона 1234", services: [] });
     assert.deepEqual(receiptLinesFromAppointment(apt).lines, [
-      { name: "Услуги", qty: 1, unit: null, unitPrice: 50, sum: 50 },
+      { name: "Services", qty: 1, unit: null, unitPrice: 50, sum: 50 },
     ]);
+    assert.equal(receiptLinesFromAppointment(apt, "el").lines[0]?.name, "Υπηρεσίες");
   });
 });
 

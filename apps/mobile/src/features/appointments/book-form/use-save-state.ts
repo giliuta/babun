@@ -6,7 +6,7 @@ import { reconcileBookingSelection } from "@/features/appointments/booking-selec
 import type { GateRef } from "./reference-gate";
 import { saveVerdict } from "./save-verdict";
 
-export interface SaveStateInput {
+interface SaveStateInput {
   kind: "work" | "event";
   isEdit: boolean;
   teamId: string | null;
@@ -130,7 +130,7 @@ export function useSaveState({
     if (!canSave && !bookingBusy && !referencesPending) {
       AccessibilityInfo.announceForAccessibility(missingHint);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- объявляем только новую подсказку, а не каждую смену флагов
   }, [missingHint]);
   useEffect(() => {
     if (workWarning) AccessibilityInfo.announceForAccessibility(workWarning);

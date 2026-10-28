@@ -8,7 +8,7 @@
 // Строки скрытия хранит сервер (`user_hidden_calendars`), а действует только
 // то, что прошло это правило.
 
-export interface CalendarRef {
+interface CalendarRef {
   tenantId: string;
   teamId: string;
 }

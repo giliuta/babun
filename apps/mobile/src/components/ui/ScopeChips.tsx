@@ -23,7 +23,7 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Родом из TeamChips календаря (web-parity TeamTabStrip).
 
-export type ScopeChip = {
+type ScopeChip = {
   id: string;
   name: string;
   color?: string | null;

@@ -26,7 +26,7 @@ export interface ClientRowRights {
   book: boolean;
 }
 
-export interface ClientRowActionsInput {
+interface ClientRowActionsInput {
   client: { blocks?: Readonly<Record<string, string>> | null };
   /** Клиент компании-работодателя (`guestOf` списка). */
   guest: boolean;
@@ -38,7 +38,7 @@ export interface ClientRowActionsInput {
   teamCreate?: boolean;
 }
 
-export interface ClientRowActions {
+interface ClientRowActions {
   /** Долгое нажатие отмечает строку (режим выбора). */
   select: boolean;
   /** Долгое нажатие открывает меню клиента. */

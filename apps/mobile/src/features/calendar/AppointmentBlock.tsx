@@ -22,7 +22,6 @@ import {
   moneyWords,
   OffLabelDot,
   ResizeHandles,
-  StatusRow,
 } from "./appointment-block/BlockDecor";
 import { blockLayout } from "./appointment-block/block-layout";
 import type { AppointmentBlockProps } from "./appointment-block/block-props";
@@ -103,10 +102,8 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     bw,
     markSize,
     topHandle,
-    bottomHandle,
     deckBadgeLow,
     money,
-    showStatus,
     fadeRows,
     textW,
   } = layout;
@@ -133,7 +130,11 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // углового знака нет при ширине < 40. Цвет канта занят категорией, толщина —
   // просрочкой; свободен ровно стиль линии. Зачёркивание имени, которым отмена
   // говорила до сих пор, живёт только там, где имя влезает.
-  const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
+  // ОТМЕНА В СВОЁМ ЦВЕТЕ (настройка «Цвет записи» → «Отменена») — плотный
+  // блок с зачёркнутым именем, как все; разомкнутый кант и серость остаются
+  // отмене, у которой цвет выключен.
+  const greyCancel = cancelled && !colors.cancelPaint;
+  const edgeStyle = greyCancel ? CANCELLED_BORDER : "solid";
 
   const gesture = useBlockGesture({
     drag,
@@ -175,10 +176,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // затемнённый ровно до читаемого белого имени; сквозь него больше не
   // просвечивают ни часовые линии, ни линия «сейчас». Выполненная носит ту же
   // заливку и белую галку; отменённая по-прежнему теряет цвет.
-  const fillIdle = cancelled ? fillRgba(t.ink, 0.0784) : colors.solid;
-  const fillPressed = cancelled ? fillRgba(t.ink, 0.2) : colors.pressed;
-  const nameColor = cancelled ? t.ink : BLOCK_TEXT;
-  const subColor = cancelled ? t.body : BLOCK_TEXT;
+  const fillIdle = greyCancel ? fillRgba(t.ink, 0.0784) : colors.solid;
+  const fillPressed = greyCancel ? fillRgba(t.ink, 0.2) : colors.pressed;
+  const nameColor = greyCancel ? t.ink : BLOCK_TEXT;
+  const subColor = greyCancel ? t.body : BLOCK_TEXT;
   // У ОТМЕНЁННОЙ ЗАЛИВКА НЕ АНИМИРУЕТСЯ. Разомкнутый кант выбивает вью из
   // быстрого пути отрисовки, и смена фона заставляла бы iOS перерисовывать
   // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
@@ -192,7 +193,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       { translateY: ty.value },
       { scale: (1 + active.value * 0.03) * (1 - press.value * 0.03) },
     ],
-    backgroundColor: cancelled
+    backgroundColor: greyCancel
       ? fillIdle
       : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
   }));
@@ -294,7 +295,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
             inset={pad - (bw - 1)}
             fillStyle={fillStyle}
           />
-          {cancelled ? null : <BlockGlass />}
+          {greyCancel ? null : <BlockGlass />}
           {liveStart ? <LiveTimeBadge liveStart={liveStart} /> : null}
           {deckMore > 0 ? (
             <DeckBadge
@@ -302,15 +303,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               deckBadgeLow={deckBadgeLow}
               color={colors.solid}
               clash={(clashMore ?? 0) > 0}
-            />
-          ) : null}
-          {showStatus && textW >= 24 ? (
-            <StatusRow
-              money={money}
-              completed={completed}
-              width={width}
-              left={pad - (bw - 1)}
-              bottom={3 + bottomHandle}
             />
           ) : null}
 

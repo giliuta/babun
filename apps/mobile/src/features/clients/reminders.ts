@@ -112,6 +112,15 @@ function forgetWanted(clientId: string): void {
   writeWanted(next);
 }
 
+/** Клиента удалили: снять уведомление И забыть обещание. Одной отмены мало —
+ *  смена времени в Кабинет → Уведомления пересобирает напоминания по
+ *  обещаниям (`reconcileClientReminders`), и пуш снова вставал на удалённую
+ *  карточку. */
+export async function dropClientReminder(clientId: string): Promise<void> {
+  forgetWanted(clientId);
+  await cancelClientReminder(clientId);
+}
+
 type ReminderClient = Pick<Client, "id" | "full_name" | "phone" | "reminder_at" | "deleted_at" | "team_id">;
 
 async function scheduleClientReminder(

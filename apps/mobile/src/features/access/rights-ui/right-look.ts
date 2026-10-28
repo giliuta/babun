@@ -49,7 +49,6 @@ import {
   Wallet,
   FileText,
   NotebookPen,
-  PiggyBank,
   BadgeCheck,
   Receipt,
   type LucideIcon,
@@ -110,9 +109,8 @@ const LOOK: Record<string, RightLook> = {
   "finance.expense": { icon: TrendingDown, tile: SETTINGS_TILE.red },
   "finance.accounts": { icon: Landmark, tile: SETTINGS_TILE.indigo },
   "finance.debts": { icon: HandCoins, tile: SETTINGS_TILE.orange },
-  // Плитки «Документы» и «Прибыль».
+  // Плитка «Документы».
   "finance.documents": { icon: FileText, tile: SETTINGS_TILE.blue },
-  "finance.profit": { icon: PiggyBank, tile: SETTINGS_TILE.purple },
   "finance.window": { icon: CalendarClock, tile: SETTINGS_TILE.teal },
   // Строки шестерёнки финансов — её значками.
   "finance.settings_accounts": { icon: Wallet, tile: SETTINGS_TILE.blue },

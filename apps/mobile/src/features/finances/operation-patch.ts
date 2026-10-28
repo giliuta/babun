@@ -64,11 +64,11 @@ export function operationPatchBaseline(
  *  колонки у операции она не занимает вовсе. Ключ, которого в черновике нет
  *  (условные `...(attachClient ? {client_id} : {})` и подобные), — это
  *  «форма его не спрашивала», а не «сотри значение». */
-export type OperationFormDraft = Partial<OperationPatchBaseline> & {
+type OperationFormDraft = Partial<OperationPatchBaseline> & {
   business_today?: string;
 };
 
-export type OperationPatch = Partial<OperationPatchBaseline> & {
+type OperationPatch = Partial<OperationPatchBaseline> & {
   business_today?: string;
 };
 

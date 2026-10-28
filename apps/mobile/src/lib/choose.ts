@@ -29,7 +29,7 @@ export function afterChoiceSheet(): Promise<void> {
 //
 // Возвращает индекс выбранного пункта или null («Отмена» / закрытие).
 
-export interface Choice {
+interface Choice {
   label: string;
   /** Красный пункт: удаление, снятие, отмена записи. */
   destructive?: boolean;
@@ -92,18 +92,4 @@ export function chooseOption(
       { text: "Отмена", style: "cancel", onPress: () => resolve(null) },
     ]);
   });
-}
-
-/** Частый случай: выбор ОДНОГО значения из списка подписей. */
-export async function chooseValue<T>(
-  title: string,
-  items: readonly { value: T; label: string }[],
-  opts?: { clearLabel?: string },
-): Promise<{ value: T | null } | null> {
-  const choices: Choice[] = items.map((i) => ({ label: i.label }));
-  if (opts?.clearLabel) choices.push({ label: opts.clearLabel });
-  const index = await chooseOption(title, choices);
-  if (index === null) return null;
-  if (index < items.length) return { value: items[index].value };
-  return { value: null };
 }

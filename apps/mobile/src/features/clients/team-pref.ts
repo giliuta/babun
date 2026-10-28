@@ -16,6 +16,8 @@ export function useClientsTeam(tenantId: string | null) {
     enabled: !!tenantId,
     queryFn: (): ClientsTeamChoice =>
       readTenantPref<string>(BASE, tenantId as string) ?? ALL_TEAMS,
+    // Чтение локальное (MMKV) — не ждёт сети, иначе без неё чип не выбран.
+    networkMode: "always",
     staleTime: Infinity,
   });
 }

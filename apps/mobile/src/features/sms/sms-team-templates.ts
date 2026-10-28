@@ -159,7 +159,7 @@ export interface TemplateDraft {
 }
 
 /** Цвет нового шаблона — первый цвет палитры, как у нового типа события. */
-export const DEFAULT_TEMPLATE_COLOR = "#3333FF";
+const DEFAULT_TEMPLATE_COLOR = "#3333FF";
 
 export function draftOf(t: SmsTeamTemplate): TemplateDraft {
   return {
@@ -248,51 +248,6 @@ export function draftPayload(d: TemplateDraft): Record<string, unknown> {
     icon: d.icon,
     enabled: d.enabled,
   };
-}
-
-/** Поля, которых у записи может не быть. Шаблон с таким пустым полем не
- *  уходит (SMS «ждём вас  в » клиенту не пишут) — владелец узнаёт об этом
- *  при настройке, а не из истории «не доставлено». */
-const MAYBE_EMPTY: Record<string, string> = {
-  Address: "адреса",
-  Service: "услуги",
-  Price: "цены",
-  Amount: "долга",
-};
-
-/** «Уйдёт не всем: если у записи нет адреса или услуги…»; `null` — поля
- *  есть у каждой записи. */
-export function emptyFieldsWarning(body: string): string | null {
-  const missing = templateTokenKeys(body)
-    .map((key) => MAYBE_EMPTY[key])
-    .filter((x): x is string => !!x);
-  if (missing.length === 0) return null;
-  const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(", ")} или ${missing[missing.length - 1]}`;
-  return `Если у записи нет ${list}, SMS не уйдёт`;
-}
-
-/** Поля записи: у SMS без записи (карточка клиента, рассылка) их берут из
- *  ближайшей будущей записи клиента, а нет её — шаблон не предлагается. */
-const VISIT_FIELDS = new Set(["Day", "Date", "Time", "Master", "Service", "Address", "Price"]);
-
-/** Когда ссылка «Подтвердить / отменить» уже ни к чему: визит отменён или
- *  прошёл. */
-const AFTER_VISIT: ReadonlySet<SmsWhen> = new Set(["cancelled", "after", "repeat"]);
-
-/** Что владелец должен знать о шаблоне, чтобы он уходил как задумано, —
- *  с учётом «когда отправлять»; пусто — ничего. */
-export function templateWarnings(d: Pick<TemplateDraft, "body" | "trigger">): string[] {
-  const keys = templateTokenKeys(d.body);
-  const out: string[] = [];
-  const empty = emptyFieldsWarning(d.body);
-  if (empty) out.push(empty);
-  if (d.trigger === "manual" && keys.some((key) => VISIT_FIELDS.has(key))) {
-    out.push("Без записи шаблон предложится, только если у клиента есть будущая запись");
-  }
-  if (AFTER_VISIT.has(d.trigger) && keys.includes("Link")) {
-    out.push("Ссылка «Подтвердить / отменить» нужна до визита, а не после");
-  }
-  return out;
 }
 
 /** Шаблоны списком «без повторов»: одинаковый текст у двух команд — одна

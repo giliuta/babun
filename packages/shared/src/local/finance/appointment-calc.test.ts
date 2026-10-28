@@ -174,7 +174,7 @@ describe("appointmentOverpaidCents", () => {
 // транзакции на боевой базе, и ответы совпадают строка в строку. Меняешь
 // правило здесь — меняй и там, и прогоняй оба. Поля справочника — как в
 // базе: `cost_per_unit`, `cost_tiers`, `material_costs` не бывают NULL.
-export const MIRROR_CATALOG = [
+const MIRROR_CATALOG = [
   { id: "svc-a", name: "Чистка", cost_per_unit: 10, cost_tiers: [], material_costs: [] },
   {
     id: "svc-b",
@@ -207,7 +207,7 @@ export const MIRROR_CATALOG = [
   },
 ] as unknown as MaterialCatalogService[];
 
-export const MIRROR_CASES: {
+const MIRROR_CASES: {
   services: unknown;
   service_ids: unknown;
   expect: string;

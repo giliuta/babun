@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { financesFrom, resolveReturnTo, returnToParam } from "./return-to";
+import { resolveReturnTo, returnToParam } from "./return-to";
 
 const ACCOUNT = "7f0e2c1a-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
 const INVOICE = "0b9d5a52-6c3e-4f7a-9d1e-2a8c4e6f0b13";
@@ -83,16 +83,6 @@ describe("returnToParam", () => {
 describe("команда чипа в дороге назад (30.09)", () => {
   const TEAM = "team-mp8qhxe3-55axz";
 
-  test("метка несёт разрез, счёт и команду; «Все» — корень", () => {
-    assert.equal(financesFrom("all", { team: TEAM }), `finances@${TEAM}`);
-    assert.equal(financesFrom("debt", { team: TEAM }), `finances:debt@${TEAM}`);
-    assert.equal(
-      financesFrom("accounts", { account: ACCOUNT, team: TEAM }),
-      `finances:accounts:${ACCOUNT}@${TEAM}`,
-    );
-    assert.equal(financesFrom(null, {}), "finances");
-  });
-
   test("возврат встаёт на ту же команду", () => {
     assert.equal(resolveReturnTo(`finances@${TEAM}`), `/finances?team=${TEAM}`);
     assert.equal(resolveReturnTo(`finances:income@${TEAM}`), `/finances?view=income&team=${TEAM}`);
@@ -107,13 +97,6 @@ describe("команда чипа в дороге назад (30.09)", () => {
     assert.equal(resolveReturnTo("finances:debt@a&view=x"), "/finances?view=debt");
     assert.equal(resolveReturnTo("finances@"), "/finances");
     assert.equal(resolveReturnTo("finances:../cabinet@team_x"), "/finances?team=team_x");
-  });
-
-  test("круг: метка вкладки — тот же адрес вкладки", () => {
-    for (const view of ["all", "income", "expense", "debt", "documents", "accounts"]) {
-      const back = resolveReturnTo(financesFrom(view, { team: TEAM }));
-      assert.ok(back?.includes(`team=${TEAM}`), `${view}: ${back}`);
-    }
   });
 });
 

@@ -113,7 +113,7 @@ export function RefundForm({
       </View>
       <RowGroup>
         <ActionRow
-          label="Вернуть"
+          label="Оформить возврат"
           tone="danger"
           dimmed={!refundValid || busy}
           onPress={onRefund}

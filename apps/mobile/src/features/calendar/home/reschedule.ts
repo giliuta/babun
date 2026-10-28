@@ -14,6 +14,7 @@ import { serverReason } from "@/features/calendar/server-reason";
 import { SERVICES_HOLD_TEAM, SETTLED_STAYS, settledVisit } from "./appointment-rules";
 import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
 import { startOfDay } from "./dates";
+import { settleGate } from "./settle-gate";
 import { scheduleWarning } from "./work-band";
 import type { CalendarGrid } from "./use-calendar-grid";
 import type { CalendarRights } from "./use-calendar-rights";
@@ -30,7 +31,11 @@ type CreateRescheduleDeps =
   & Pick<CalendarGrid, "workBandFor" | "bufferMinutes">
   & Pick<CalendarView, "mode" | "setDay">
   & Pick<GridModes, "editingApt" | "setEditingApt">
-  & Pick<RecordNaming, "appointmentTimeZone">;
+  & Pick<RecordNaming, "appointmentTimeZone">
+  & {
+    /** Уйдёт ли клиенту SMS «При переносе» (`reschedule-sms.ts`). */
+    smsOnMove: (apt: Appointment, teamId: string | null, date: string, timeStart: string) => boolean;
+  };
 
 /** Drag and stretch on the grid: move a record in time, across days or to
  *  another own team, warn softly and offer an undo. */
@@ -38,7 +43,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
   const {
     isCrew, toast, workInPlan, nudgeTariff, canMoveAppointment, visibleAppts,
     workBandFor, bufferMinutes, mode, weekYmds, setDay, editingApt, setEditingApt,
-    updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery,
+    updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery, smsOnMove,
   } = deps;
   const reschedule = (
     apt: Appointment,
@@ -145,6 +150,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       setDay(startOfDay(parseYMD(date)));
     }
     if (editingApt?.id === apt.id) setEditingApt(moved);
+    const gate = settleGate();
     updateAppt.mutate(
       { id: apt.id, patch },
       {
@@ -152,6 +158,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
           // Физический «удар» на успешное приземление drag-переноса —
           // блок лёг на слот, рука это чувствует.
           haptics.impact();
+          gate.settle(true);
           if (isCalendarEvent(apt)) {
             if (visibilityTenantId) {
               void syncEventAppointmentReminders(moved, appointmentTimeZone(apt), visibilityTenantId);
@@ -159,39 +166,59 @@ export function createReschedule(deps: CreateRescheduleDeps) {
           } else {
             void cancelAppointmentReminders(apt.id);
           }
-          // Растяжка (начало на месте) называет новое время целиком, перенос —
-          // куда встала запись. «Отменить» возвращает прежние границы: жест
-          // легко сделать случайно, а искать старое время по памяти нельзя.
-          const teamName = teamMoves
-            ? teams.find((tm) => tm.id === teamId)?.name
-            : null;
-          const what =
-            dateMoves || teamMoves
-              ? `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(date)}, ${newStart}`
-              : apt.time_start === newStart
-                ? `Время: ${newStart}–${newEnd}`
-                : `Перенесено на ${newStart}`;
-          const prev = {
-            time_start: apt.time_start,
-            time_end: apt.time_end,
-            ...(dateMoves ? { date: apt.date } : {}),
-            ...(teamMoves ? { team_id: apt.team_id } : {}),
-          };
-          toast(warn ? `${what}. ${warn}` : what, "success", {
-            label: "Отменить",
-            onPress: () =>
-              updateAppt.mutate(
-                { id: apt.id, patch: prev },
-                {
-                  onError: (e) =>
-                    toast(serverReason(e) ?? "Не удалось вернуть время", "error"),
-                },
-              ),
-          });
         },
-        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести"),
+        onError: (e) => {
+          gate.settle(false);
+          toast(serverReason(e) ?? "Не удалось перенести", "error");
+        },
       },
     );
+    // Растяжка (начало на месте) называет новое время целиком, перенос —
+    // куда встала запись. «Отменить» возвращает прежние границы: жест
+    // легко сделать случайно, а искать старое время по памяти нельзя.
+    const teamName = teamMoves ? teams.find((tm) => tm.id === teamId)?.name : null;
+    const what =
+      dateMoves || teamMoves
+        ? `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(date)}, ${newStart}`
+        : apt.time_start === newStart
+          ? `Время: ${newStart}–${newEnd}`
+          : `Перенесено на ${newStart}`;
+    // КЛИЕНТУ УЙДЁТ SMS — СЛОВАМИ В ТОМ ЖЕ ТОСТЕ. Сервер ставит шаблон «При
+    // переносе» сам, и молча это было письмом от имени человека, который
+    // просто подвинул блок. «Отменить» снимает и сообщение: перенос ждёт в
+    // очереди дольше, чем живёт тост.
+    const sms = smsOnMove(apt, teamId, date, newStart) ? "Клиенту уйдёт SMS" : null;
+    const prev = {
+      time_start: apt.time_start,
+      time_end: apt.time_end,
+      ...(dateMoves ? { date: apt.date } : {}),
+      ...(teamMoves ? { team_id: apt.team_id } : {}),
+    };
+    toast([what, sms, warn].filter(Boolean).join(". "), "success", {
+      label: "Отменить",
+      onPress: () =>
+        void gate.settled.then((ok) => {
+          if (!ok) return;
+          if (editingApt?.id === apt.id) setEditingApt({ ...apt });
+          // ВИД ВОЗВРАЩАЕТСЯ ЗА ЗАПИСЬЮ: перенос на другой день увёл календарь
+          // на новый день, и после отката запись «пропадала» с экрана.
+          if (dateMoves) setDay(startOfDay(parseYMD(apt.date)));
+          updateAppt.mutate(
+            { id: apt.id, patch: prev },
+            {
+              // Напоминания события переставлены прямым ходом — откат
+              // возвращает их к прежнему времени, иначе пуш придёт по новому.
+              onSuccess: () => {
+                if (isCalendarEvent(apt) && visibilityTenantId) {
+                  void syncEventAppointmentReminders(apt, appointmentTimeZone(apt), visibilityTenantId);
+                }
+              },
+              onError: (e) =>
+                toast(serverReason(e) ?? "Не удалось вернуть время", "error"),
+            },
+          );
+        }),
+    });
   };
 
   return reschedule;

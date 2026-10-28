@@ -1,4 +1,4 @@
-import { Linking } from "react-native";
+import { openChannel } from "@/features/clients/PhoneChannelButton";
 import type { CountryCode } from "libphonenumber-js";
 import { withHomeCode } from "@/features/clients/use-phone-country";
 import { dialPrefix, formatPhoneForDisplay } from "@/lib/phone";
@@ -24,6 +24,7 @@ export function ContactFieldRows({
   noCopy,
   compact,
   inline,
+  live = false,
 }: {
   client: ContactHolder;
   update: (patch: Partial<ContactHolder>) => Promise<boolean> | void;
@@ -39,6 +40,10 @@ export function ContactFieldRows({
   noCopy: boolean;
   compact: boolean;
   inline: boolean;
+  /** Черновик: строка пишется на каждый символ, как имя и номер. Иначе
+   *  набранное жило только до ухода с поля, и «Назад» с открытой клавиатурой
+   *  уходил молча — черновик ещё «пустой». */
+  live?: boolean;
 }) {
   return (
     <>
@@ -73,6 +78,7 @@ export function ContactFieldRows({
               autoCapitalize={f.autoCapitalize}
               tabular={f.id === "whatsapp"}
               readOnly={readOnly}
+              live={live}
               autoFocus={addingField === f.id}
               onType={(v) => setTyping({ id: f.id, value: wa ? withHomeCode(v, country) : v })}
               onSave={(v) => update(f.patch(wa ? withHomeCode(v, country) : v))}
@@ -88,7 +94,7 @@ export function ContactFieldRows({
                     label={`${f.label} · открыть`}
                     onPress={() => {
                       haptics.tap();
-                      void Linking.openURL(url);
+                      openChannel(url, f.label);
                     }}
                   />
                 ) : null
@@ -110,6 +116,7 @@ export function ContactFieldRows({
             autoCapitalize={f.autoCapitalize}
             tabular={f.id === "whatsapp"}
             readOnly={readOnly}
+            live={live}
             autoFocus={addingField === f.id}
             onType={(v) => setTyping({ id: f.id, value: v })}
             onSave={(v) => update(f.patch(v))}
@@ -125,7 +132,7 @@ export function ContactFieldRows({
                   label={`${f.label} · открыть`}
                   onPress={() => {
                     haptics.tap();
-                    void Linking.openURL(url);
+                    openChannel(url, f.label);
                   }}
                 />
               ) : null

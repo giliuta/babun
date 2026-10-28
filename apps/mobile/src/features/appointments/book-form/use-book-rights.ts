@@ -6,11 +6,12 @@ import { visibleLocationRequests } from "@/features/clients/location-request-lin
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { useCurrentRole } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
+import { useMirror } from "@/session/mirror-state";
 import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
-import { bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";
+import { bookIsReadOnly, bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";
 import { EMPTY_REQUESTS } from "./book-constants";
 
-export interface BookRightsInput {
+interface BookRightsInput {
   client: Client | null;
   kind: "work" | "event";
   isEdit: boolean;
@@ -48,24 +49,28 @@ export function useBookRights({
   // проверяет то же самое поле за полем, поэтому погашенная дверь здесь —
   // не украшение, а честный ответ заранее.
   const isMemberView = viewerRole === "master";
+  // ЧЬЁ СОБЫТИЕ — ГЛАЗАМИ ТОГО, КОГО ПОКАЗЫВАЕМ: в зеркале автор сверяется с
+  // сотрудником, а не с вошедшим владельцем (как в сетке календаря).
+  const mirror = useMirror();
   const sessionUserId = useSession().session?.user.id ?? null;
+  const actorId = mirror ? mirror.userId : sessionUserId;
   const rightsTeamId = isEdit ? (editing?.team_id ?? null) : teamId;
   const recordRights = useRecordBlocks(rightsTeamId);
   const eventRights = useEventRights(rightsTeamId);
   const calendarRights = useCalendarActions(rightsTeamId);
+  const ownEvent = !isEdit || (!!actorId && (editing?.created_by ?? null) === actorId);
   const rights = bookRights({
     isMember: isMemberView,
     kind,
     isEdit,
     record: recordRights,
     event: eventRights,
-    eventWritable:
-      calendarRights.events === "write" &&
-      (!isEdit || (editing?.created_by ?? null) === sessionUserId),
+    eventWritable: calendarRights.events === "write" && ownEvent,
   });
-  // Без тарифа запись клиента только смотрят: объект, услуги, клиент,
-  // время — без дверей (`readOnlyBookRights`).
-  const can = kind === "work" && !workInPlan ? readOnlyBookRights(rights) : rights;
+  // Без тарифа запись клиента и чужое событие только смотрят: блоки на
+  // месте, дверей нет (`bookIsReadOnly`).
+  const readOnly = bookIsReadOnly({ isMember: isMemberView, kind, workInPlan, ownEvent });
+  const can = readOnly ? readOnlyBookRights(rights) : rights;
   return {
     pendingRequests,
     requestActions,

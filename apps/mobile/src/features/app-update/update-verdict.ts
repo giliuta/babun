@@ -5,7 +5,7 @@
 // и минимальную допустимую. Установленная ниже минимальной — дальше не
 // пускаем («force»); ниже последней — плашка с кнопкой в магазин («soft»).
 
-export type UpdateVerdict = "force" | "soft" | "none";
+type UpdateVerdict = "force" | "soft" | "none";
 
 /** Сравнение «1.0.10» и «1.0.9» по числам, а не по буквам. */
 export function compareVersions(a: string, b: string): number {

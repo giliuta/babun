@@ -5,8 +5,6 @@ import {
   blankDraft,
   draftPayload,
   draftProblem,
-  emptyFieldsWarning,
-  templateWarnings,
   orderTemplates,
   parseTeamTemplates,
   uniqueByBody,
@@ -117,32 +115,6 @@ describe("шаблоны SMS команды", () => {
       [null, "18:00", null, "t1", false],
     );
     assert.equal(draftPayload(ready({ id: "x" })).id, "x");
-  });
-
-  test("предупреждение о полях, которых у записи может не быть", () => {
-    assert.equal(emptyFieldsWarning("[Имя], завтра в [Время]"), null);
-    assert.equal(emptyFieldsWarning("Адрес: [Адрес]"), "Если у записи нет адреса, SMS не уйдёт");
-    assert.equal(
-      emptyFieldsWarning("[Услуга] по [Адрес], [Цена]"),
-      "Если у записи нет услуги, адреса или цены, SMS не уйдёт",
-    );
-    assert.equal(emptyFieldsWarning("[Address]"), "Если у записи нет адреса, SMS не уйдёт");
-  });
-
-  test("предупреждения учитывают «когда отправлять»", () => {
-    assert.deepEqual(templateWarnings({ body: "[Имя], спасибо!", trigger: "manual" }), []);
-    assert.deepEqual(templateWarnings({ body: "[Имя], ждём [Дата] в [Время]", trigger: "manual" }), [
-      "Без записи шаблон предложится, только если у клиента есть будущая запись",
-    ]);
-    assert.deepEqual(templateWarnings({ body: "[Имя], ждём [Дата] в [Время]", trigger: "before" }), [], "у записи дата есть всегда");
-    assert.deepEqual(templateWarnings({ body: "Адрес: [Адрес]", trigger: "manual" }), [
-      "Если у записи нет адреса, SMS не уйдёт",
-      "Без записи шаблон предложится, только если у клиента есть будущая запись",
-    ]);
-    assert.deepEqual(templateWarnings({ body: "Подтвердите: [Ссылка]", trigger: "before" }), []);
-    assert.deepEqual(templateWarnings({ body: "Запись отменена. [Ссылка]", trigger: "cancelled" }), [
-      "Ссылка «Подтвердить / отменить» нужна до визита, а не после",
-    ]);
   });
 
   test("одинаковые тексты двух команд — одна строка", () => {

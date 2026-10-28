@@ -3,6 +3,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import type { CardAccess } from "@/features/clients/card-access";
 import type { ClientsScope } from "@/session/clients-company";
@@ -28,9 +29,10 @@ export function useCardSms({
   // Долг — тем же правилом, что «Финансы»: работа под инвойсом должна
   // остаток инвойса, а инвойс без записи — сам.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const stats = useMemo(
-    () => (c ? buildStats(c, appointments, invoicing) : undefined),
-    [c, appointments, invoicing],
+    () => (c ? buildStats(c, appointments, invoicing, today) : undefined),
+    [c, appointments, invoicing, today],
   );
 
   // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись

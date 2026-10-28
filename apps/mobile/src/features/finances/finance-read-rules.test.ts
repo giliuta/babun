@@ -186,14 +186,14 @@ describe("аналитика — стороны денег порознь", () =
     assert.equal(moneyPanelOpen("profit", sides), false);
   });
 
-  test("обе стороны, но «Прибыль: Скрыта» — прибыли нет (04.10)", () => {
+  test("обе стороны — прибыль видна: своего права у неё нет", () => {
     const both = { "finance.income": "read", "finance.expense": "read" } as const;
-    const hidden = moneySides({ role: "master", map: map({ [A]: { ...both, "finance.profit": "off" } }) });
-    assert.deepEqual(hidden, { income: true, expense: true, profit: false });
-    assert.equal(moneyPanelOpen("profit", hidden), false);
-    const shown = moneySides({ role: "master", map: map({ [A]: { ...both, "finance.profit": "read" } }) });
-    assert.equal(shown.profit, true);
+    const shown = moneySides({ role: "master", map: map({ [A]: both }) });
+    assert.deepEqual(shown, { income: true, expense: true, profit: true });
     assert.equal(moneyPanelOpen("profit", shown), true);
+    const oneSide = moneySides({ role: "master", map: map({ [A]: { "finance.income": "read" } }) });
+    assert.equal(oneSide.profit, false);
+    assert.equal(moneyPanelOpen("profit", oneSide), false);
   });
 
   test("расход без дохода: закрыты доход, средний чек и прибыль", () => {

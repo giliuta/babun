@@ -5,6 +5,10 @@ import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { referenceKeys } from "@/features/reference/query-keys";
 import { invalidateKeys, useMemberRefusal } from "./shared";
+import { useTenantId } from "@/lib/tenant";
+import { sendOrQueue } from "@/lib/member-queue/runtime";
+import { errorMessage as messageOf } from "@/lib/member-queue/plan";
+
 
 /** КОПИЯ ЗАПИСИ СОТРУДНИКОМ — ТОЛЬКО В ЕЁ ЖЕ КОМАНДУ (доступ в одну команду не даёт копировать в
  *  другую). Команды в вызове нет: сервер ставит копию туда же, где
@@ -13,6 +17,7 @@ import { invalidateKeys, useMemberRefusal } from "./shared";
  *  приходят пустыми, и копия с телефона вышла бы без клиента и с нулями. */
 export function useMemberCopyAppointment() {
   const qc = useQueryClient();
+  const tenantId = useTenantId();
   const refusal = useMemberRefusal();
   return useMutation({
     ...NEVER_PAUSE,
@@ -25,16 +30,34 @@ export function useMemberCopyAppointment() {
        *  вставшую копию, а не заведёт вторую. */
       id: string;
     }) => {
-      const { data, error } = await supabase.rpc("member_appointment_copy", {
+      const args = {
         p_source: input.sourceId,
         p_date: input.date,
         p_time_start: input.timeStart,
         p_time_end: input.timeEnd,
         p_id: input.id,
-      });
-      if (error) throw refusal("createAppointment", error.message);
-      const id = (data as { id?: unknown } | null)?.id;
-      return typeof id === "string" ? id : null;
+      };
+      // Без сети копия ждёт в очереди телефона (`lib/member-queue`); на сетку
+      // она встанет, когда сервер её сделает — поля копирует он.
+      try {
+        const sent = await sendOrQueue({
+          tenantId: tenantId as string,
+          recordId: input.id,
+          kind: "copy",
+          args,
+          label: "Копия записи",
+          send: async () => {
+            const { data, error } = await supabase.rpc("member_appointment_copy", args);
+            if (error) throw error;
+            return data;
+          },
+        });
+        if (sent.queued) return input.id;
+        const id = (sent.data as { id?: unknown } | null)?.id;
+        return typeof id === "string" ? id : null;
+      } catch (error) {
+        throw refusal("createAppointment", messageOf(error));
+      }
     },
     onSuccess: () => {
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });

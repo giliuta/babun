@@ -7,7 +7,7 @@ import type { Team } from "@/features/reference/queries";
 import { draftSlot } from "@/features/appointments/draft-slot";
 import { scheduleWarning } from "./schedule-warning";
 
-export interface SlotWarningsInput {
+interface SlotWarningsInput {
   allAppts: Appointment[];
   editId: string | null;
   /** Жанр формы: событие сверяется и с событиями своей команды. */

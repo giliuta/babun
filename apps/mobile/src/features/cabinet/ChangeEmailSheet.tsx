@@ -8,6 +8,7 @@ import { mapAuthError } from "@/components/auth/authErrors";
 import { changeEmailRefusal } from "@/features/cabinet/change-email";
 import { SIGNUP_LINK_REDIRECT } from "@/components/auth/EmailCodeCard";
 import { useToast } from "@/components/ui/Toast";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { useThemeColors } from "@/theme/colors";
 import { supabase } from "@/lib/supabase";
 
@@ -96,6 +97,19 @@ export function ChangeEmailSheet({
     onClose();
   }
 
+  // СЛУЧАЙНЫЙ СВАЙП НЕ СТИРАЕТ ШАГ: набранную почту, а на шаге «код» —
+  // запрошенный код (после закрытия его пришлось бы запрашивать заново и
+  // ждать письма). Сначала вопрос.
+  const guard = useGuardedClose({
+    dirty: step === "code" || email.trim() !== "",
+    busy,
+    onClose,
+    message:
+      step === "code"
+        ? "Код уже отправлен — после закрытия его придётся запросить заново."
+        : "Набранная почта не сохранится.",
+  });
+
   const footer =
     step === "email" ? (
       <GradientButton
@@ -115,8 +129,9 @@ export function ChangeEmailSheet({
 
   return (
     <BottomSheet
-      visible={visible}
-      onClose={onClose}
+      visible={visible && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title="Новая почта"
       subtitle={step === "code" ? `Код отправлен на ${next}` : currentEmail}
       footer={footer}
@@ -133,6 +148,9 @@ export function ChangeEmailSheet({
             if (error) setError(null);
           }}
           autoCapitalize="none"
+          // Адрес — данные, а не проза: без русских подсказок над клавиатурой.
+          autoCorrect={false}
+          spellCheck={false}
           autoComplete="email"
           keyboardType="email-address"
           inputMode="email"

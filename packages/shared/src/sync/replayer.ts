@@ -31,7 +31,7 @@
 // table-rules + replay-clients (everything table-specific), tenant-refresh,
 // guards, options and relay. This file keeps the single-flight scheduling.
 
-import { drain } from "./replayer/drain";
+import { __resetTransientStreaksForTests, drain } from "./replayer/drain";
 import { isReadOnlyView } from "./replayer/guards";
 import type { ReplayerOptions } from "./replayer/options";
 
@@ -58,7 +58,7 @@ let pendingFollowup = false;
 // перечитывал бы календарь поверх неё. Поэтому обрыв попытку не тратит: строка ждёт, остальные уходят, а слив повторяется сам через
 // TRANSIENT_RETRY_MS (и сразу — при возврате сети). В счёт идут только ответы
 // сервера, которые повтором не лечатся: RLS, ограничения, 4xx.
-export const TRANSIENT_RETRY_MS = 30_000;
+const TRANSIENT_RETRY_MS = 30_000;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleTransientRetry(opts: ReplayerOptions): void {
@@ -75,6 +75,7 @@ function scheduleTransientRetry(opts: ReplayerOptions): void {
  *  (на CI-раннере Linux это воспроизводилось стабильно: очередь не сливалась,
  *  к серверу никто не обращался). Снимаем засов перед каждым тестом. */
 export function __resetReplayerForTests(): void {
+  __resetTransientStreaksForTests();
   draining = false;
   pendingFollowup = false;
   replayerDefaults = {};

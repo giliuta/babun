@@ -77,7 +77,7 @@ export interface WarmTarget {
   to?: string;
 }
 
-export interface CompanyGateInput {
+interface CompanyGateInput {
   tenantId: string;
   role: UserRole;
 }

@@ -34,7 +34,7 @@ describe("итог цикла по командам", () => {
   test("обрыв — честное «создано не везде» и подсказка повторить", () => {
     const s = fanoutSummary({ created: 1, skipped: 1, total: 4, failed: true });
     assert.equal(s?.title, "Создано не везде");
-    assert.match(s?.message ?? "", /создана в 1 команде, ещё 2 не получилось/);
+    assert.match(s?.message ?? "", /создана в 1 команде, ещё в 2 командах не получилось/);
     assert.match(s?.message ?? "", /не задвоится/);
   });
 

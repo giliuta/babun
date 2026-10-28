@@ -31,6 +31,7 @@ const EXEMPT: Record<string, string> = {
   service_variants: "команда через services",
   appointment_photos: "команда через appointments",
   appointment_links: "ссылка «Подтвердить / Отменить» — команда через appointments",
+  invitation_email_log: "журнал писем-приглашений — лимиты по адресу, отправителю и аккаунту, закрыт RLS",
   // Едино на компанию (клиенты — у команды полем `team_id`, см. NULLABLE_OK):
   client_tag_assignments: "команда через client_tags (теги — у команды с 30.09)",
   client_attachments: "файлы клиента — у клиента",
@@ -51,6 +52,9 @@ const EXEMPT: Record<string, string> = {
   // человека и клиента; клиент у команды своим полем, журнал его переживает.
   client_contact_views: "журнал открытий номера — у сотрудника и клиента",
   client_contact_alerts: "тревоги владельцу — у сотрудника",
+  client_phone_lookups: "предел поиска клиента по номеру — 100 номеров в сутки на человека в компании, закрыт RLS",
+  client_list_disclosures: "журнал выдачи списка клиентов — у сотрудника в компании, закрыт RLS",
+  push_held: "отложенные тихими часами пуши — очередь человека, закрыта RLS; что в ней, решили права на календарь при постановке",
 };
 
 /** НАРУШЕНИЯ, КОТОРЫЕ ЕЩЁ НЕ ИСПРАВЛЕНЫ. Только сокращается. */
@@ -124,7 +128,7 @@ function stripDollarBodies(sql: string): string {
   return unwrapped.replace(/\$([a-z_]*)\$[\s\S]*?\$\1\$/gi, "''");
 }
 
-export function parseSchema(files: { name: string; sql: string }[]): Schema {
+function parseSchema(files: { name: string; sql: string }[]): Schema {
   const schema: Schema = new Map();
   for (const { sql: raw } of files) {
     const sql = stripDollarBodies(stripComments(raw));

@@ -29,7 +29,7 @@ export type CompanyDraft = Omit<
   "tenant_id"
 >;
 
-export const companiesQueryKey = (tenantId: string | null) => ["companies", tenantId];
+const companiesQueryKey = (tenantId: string | null) => ["companies", tenantId];
 
 export function useCompanies() {
   // Наборы АККАУНТА СТРАНИЦЫ: в блоке пригласившего аккаунта в
@@ -53,7 +53,7 @@ export function useCompanies() {
 
 /** Юрлицо, которое подставляют документы: помеченное умолчанием, а если
  *  такого нет — первое живое. Пустой список означает «справочник ещё не
- *  завели», и документ печатает реквизиты арендатора, как до 20.09. */
+ *  завели», и документ печатает реквизиты самого аккаунта. */
 export function defaultCompany(companies: readonly Company[]): Company | null {
   const live = companies.filter((c) => !c.archived_at);
   return live.find((c) => c.is_default) ?? live[0] ?? null;

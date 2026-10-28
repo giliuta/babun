@@ -59,7 +59,7 @@ function word(dictionary: Readonly<Record<string, string>>, key: string): string
  *  что набрано в карточке или в записи. Порядок — как писали, каждая
  *  заметка своей строкой; текст импорта, если он не повторён заметкой, —
  *  первым. */
-export function clientNotesText(c: Pick<ClientExportRow, "comment" | "notes">): string {
+function clientNotesText(c: Pick<ClientExportRow, "comment" | "notes">): string {
   const list = Array.isArray(c.notes) ? (c.notes as unknown[]) : [];
   const texts = list
     .map((n) => (n && typeof n === "object" ? (n as { text?: unknown; created_at?: unknown }) : {}))

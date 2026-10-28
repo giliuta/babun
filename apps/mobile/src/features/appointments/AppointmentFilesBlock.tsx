@@ -60,7 +60,7 @@ import { useFilePickers } from "./use-file-pickers";
 
 const EMPTY_PHOTOS: AppointmentPhotoRecord[] = [];
 
-export interface AppointmentFilesBlockProps {
+interface AppointmentFilesBlockProps {
   /** null — запись ещё не создана: файлы копятся в `pending`. */
   appointmentId: string | null;
   clientId: string | null;
@@ -140,6 +140,11 @@ export function AppointmentFilesBlock({
     upload.mutate(input, {
       onSuccess: (items) => {
         haptics.success();
+        // Пустой ответ — нет связи: файлы ждут в очереди телефона.
+        if (items.length === 0) {
+          toast("Нет связи — фото уйдут, когда она появится", "info");
+          return;
+        }
         const videos = items.filter((item) => isVideoPath(item.storage_path)).length;
         toast(
           items.length === 1 ? (videos ? "Видео добавлено" : "Фото добавлено") : `Добавлено файлов: ${items.length}`,

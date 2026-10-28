@@ -5,6 +5,7 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { FieldRow } from "@/components/ui/card-rows";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
+import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
@@ -29,6 +30,7 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
     requestActions,
     eventPickPool,
     openEventObjectAdd,
+    teamId,
   } = form;
   return (
     <>
@@ -114,7 +116,9 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
                 />
               ))}
               {/* Вольный адрес прежнего события — только пока объекта
-                  нет: у нового события поля не будет вовсе. */}
+                  нет: у нового события поля не будет вовсе. Маршрут по нему —
+                  та же кнопка, что у строки объекта: адрес без объекта всё
+                  равно место, куда едут. */}
               {eventAddress.trim() ? (
                 <FieldRow
                   label="Адрес"
@@ -124,6 +128,8 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
                   stacked
                   multiline
                   live
+                  readOnly={!can.editObject}
+                  trailing={<ObjectRouteButton address={eventAddress} teamId={teamId} />}
                   onSave={setEventAddress}
                 />
               ) : null}
@@ -132,39 +138,34 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
                   живёт в футере листа выбора — там, куда идут, когда
                   нужного объекта нет. Пустой справочник — единственный
                   случай, когда выбирать нечего и дверь сразу ведёт к
-                  добавлению. */}
-              <View
-                style={{
-                  borderTopWidth: eventAddress.trim() ? 1 : 0,
-                  borderTopColor: t.separator,
-                }}
-              >
-                {!clientId ? (
-                  <ChooseRow
-                    icon={MapPin}
-                    label="Выбрать объект"
-                    hint="Сначала выберите клиента"
-                    onPress={openEventObjectAdd}
-                  />
-                ) : eventPickPool.length > 0 ? (
-                  <ChooseRow
-                    icon={MapPin}
-                    label="Выбрать объект"
-                    hint="Открывает объекты клиента"
-                    onPress={() => {
-                      setObjectPicker(true);
-                      haptics.tap();
-                    }}
-                  />
-                ) : (
-                  <ChooseRow
-                    icon={MapPin}
-                    label="Добавить объект"
-                    hint="Заводит первый объект"
-                    onPress={openEventObjectAdd}
-                  />
-                )}
-              </View>
+                  добавлению. Без права менять объект двери нет вовсе. */}
+              {can.editObject ? (
+                <View
+                  style={{
+                    borderTopWidth: eventAddress.trim() ? 1 : 0,
+                    borderTopColor: t.separator,
+                  }}
+                >
+                  {eventPickPool.length > 0 ? (
+                    <ChooseRow
+                      icon={MapPin}
+                      label="Выбрать объект"
+                      hint={clientId ? "Открывает объекты клиента" : "Открывает объекты всех клиентов"}
+                      onPress={() => {
+                        setObjectPicker(true);
+                        haptics.tap();
+                      }}
+                    />
+                  ) : (
+                    <ChooseRow
+                      icon={MapPin}
+                      label="Добавить объект"
+                      hint="Заводит первый объект"
+                      onPress={openEventObjectAdd}
+                    />
+                  )}
+                </View>
+              ) : null}
             </>
           )}
         </SectionCard>

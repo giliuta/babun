@@ -1,5 +1,6 @@
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { CalendarOfferSheet } from "@/features/tariffs/CalendarOfferSheet";
+import { useLiveCalendarCount } from "@/features/tariffs/use-live-calendars";
 import { CALENDAR_PRICE, euro } from "@/session/calendar-price";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
@@ -33,11 +34,14 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
     scheduleOpen,
     setScheduleOpen,
   } = screen;
+  // Предложение «Новый календарь» называет сумму — значит, считает те же
+  // платные календари (с работой), что «Тариф» и Stripe, а не все живые.
+  const paidCalendars = useLiveCalendarCount();
   return (
     <>
       <CalendarOfferSheet
         visible={offerOpen}
-        calendars={teams.length}
+        calendars={paidCalendars ?? 0}
         onClose={() => setOfferOpen(false)}
         onUnlocked={() => setCreateOpen(true)}
       />

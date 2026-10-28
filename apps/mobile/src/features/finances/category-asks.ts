@@ -13,7 +13,7 @@ import type {
 } from "@babun/shared/db/repositories/finance-categories";
 
 /** Что спрашивает форма операции у этой категории. Нет категории — ничего. */
-export interface CategoryAsks {
+interface CategoryAsks {
   employee: boolean;
   client: boolean;
   receipt: boolean;
@@ -88,7 +88,7 @@ export function withPayee(title: string, payee: string | null | undefined): stri
   return name ? `${title} · ${name}` : title;
 }
 
-export interface PayeeCandidate {
+interface PayeeCandidate {
   id: string;
   full_name: string;
   team_id: string | null;
@@ -121,28 +121,4 @@ export function payeeName(
 ): string | null {
   if (!masterId || !people) return null;
   return people.find((p) => p.id === masterId)?.full_name ?? null;
-}
-
-/** Подпись строки «Категории операций» в настройках: сколько своих категорий
- *  каждого вида — «Расход 3 · доход 1». Готовых нет,
- *  поэтому пустой справочник называет себя словами, а не прячется
- *  за общей фразой. Служебные и скрытые не считаются. */
-export function categoriesDoorLine(categories: readonly FinanceCategory[]): string {
-  // «Топливо» у двух команд — одна категория для строки-двери: считаем
-  // имена, а не копии команд.
-  const count = (type: FinanceCategoryKind) =>
-    new Set(
-      categories
-        .filter((c) => !c.is_system && !c.hidden && c.type === type)
-        .map((c) => c.name.trim().toLocaleLowerCase("ru")),
-    ).size;
-  const parts = [
-    ["Расход", count("expense")],
-    ["доход", count("income")],
-    ["долги", count("debt")],
-  ] as const;
-  const shown = parts.filter(([, n]) => n > 0).map(([label, n]) => `${label} ${n}`);
-  if (shown.length === 0) return "Пока нет — создайте свои";
-  const line = shown.join(" · ");
-  return line.charAt(0).toUpperCase() + line.slice(1);
 }

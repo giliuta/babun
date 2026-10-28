@@ -150,12 +150,13 @@ describe("библиотека блоков указывает на живой �
     assert.match(card, /position: "absolute"/, "команда блока вернулась в поток");
     assert.match(card, /right: 16/);
     // В плотной шапке (форма в шторке) подпись на 4 выше — и команда тоже.
-    assert.match(card, /top: dense \? 2 : 6/);
+    assert.match(card, /top: dense \? 3 : 7/);
+    assert.match(card, /size=\{ICON\.command\}/, "команда блока больше не ICON.command");
     assert.match(card, /gap: 16/);
     assert.match(card, /className="p-4 pt-2"/, "внутренние отступы тела блока поехали");
 
     const tokens = readFileSync(resolve(APP, "src/components/ui/tokens.ts"), "utf8");
-    assert.match(tokens, /ICON = \{ lg: 24, md: 22, sm: 18, xs: 14 \}/, "размеры иконок поехали");
+    assert.match(tokens, /ICON = \{\s*lg: 24,\s*md: 22,\s*sm: 18,\s*xs: 14,/, "размеры иконок поехали");
     assert.match(tokens, /GUTTER = 16/, "гуттер больше не 16");
 
     const circle = readFileSync(resolve(APP, "src/components/ui/IconCircle.tsx"), "utf8");

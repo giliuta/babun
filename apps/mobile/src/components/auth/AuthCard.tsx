@@ -25,6 +25,7 @@ import { BrandMark } from "@/components/brand/BrandMark";
 import { useAuthTheme } from "@/components/auth/theme";
 import { AuthLanguageButton } from "@/components/auth/AuthLanguageButton";
 import { useReduceMotion } from "@/lib/reduce-motion";
+import { PASSWORD_KEYBOARD } from "@/lib/keyboard";
 
 // «Halo Cobalt» auth surfaces — one fixed-light styling dialect, formal «вы»,
 // §5 focus ring via useAuthTheme(). apps/mobile/docs/DESIGN-SYSTEM.md.
@@ -50,7 +51,7 @@ function AmbientHalo() {
 
 // Brand tile — the Babun mark on its «Рассвет» plate with the Halo Cobalt
 // brand shadow. The mark itself lives in src/components/brand/BrandMark.tsx.
-export function AuthBrandMark({ size = 64 }: { size?: number }) {
+function AuthBrandMark({ size = 64 }: { size?: number }) {
   const t = useAuthTheme();
   return <BrandMark size={size} variant="tile" shadow={t.brandShadow} />;
 }
@@ -151,7 +152,7 @@ export function InputCard({ children }: { children: ReactNode }) {
   return (
     <View
       style={{
-        borderRadius: 10,
+        borderRadius: t.radius.card,
         backgroundColor: t.surface,
         overflow: "hidden",
         boxShadow: t.cardShadow,
@@ -211,7 +212,7 @@ export const AuthField = forwardRef<
       <Animated.View
         pointerEvents="none"
         style={[
-          { position: "absolute", top: 3, bottom: 3, left: 3, right: 3, borderRadius: 10, borderWidth: 1.5, borderColor: t.accent },
+          { position: "absolute", top: 3, bottom: 3, left: 3, right: 3, borderRadius: t.radius.input, borderWidth: 1.5, borderColor: t.accent },
           ringStyle,
         ]}
       />
@@ -229,6 +230,9 @@ export const PasswordInput = forwardRef<TextInput, TextInputProps>(
         ref={ref}
         autoComplete="current-password"
         textContentType="password"
+        keyboardType={PASSWORD_KEYBOARD}
+        autoCapitalize="none"
+        autoCorrect={false}
         {...props}
         secureTextEntry={!show}
         trailing={

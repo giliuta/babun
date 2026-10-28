@@ -10,7 +10,7 @@ export function numberWithSeq(number: string, seq: number): string {
   return number.replace(/(\d+)$/, (tail) => String(seq).padStart(tail.length, "0"));
 }
 
-export interface SkippedNumbers {
+interface SkippedNumbers {
   /** Сколько номеров останется без документов. */
   count: number;
   /** Первый и последний из пропущенных, подписью серии. */

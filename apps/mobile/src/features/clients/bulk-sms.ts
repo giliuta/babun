@@ -28,6 +28,7 @@
 // OS comes in as an argument so the module stays free of react-native.
 
 import type { Client } from "@babun/shared/local/clients";
+import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { templateTokenKeys } from "@babun/shared/local/sms-templates";
 import { fillTemplate, fitsSmsLimit, MAX_SMS_PARTS, smsUrlWithBody, smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/lib/sms-name";
@@ -42,6 +43,47 @@ export function smsDigits(client: Client): string {
   const e164 = (client.phone_e164 ?? "").trim();
   if (e164) return e164.replace(/[^\d+]/g, "");
   return (client.phone ?? "").replace(/\D/g, "");
+}
+
+/** КОМУ РАССЫЛКА УЙДЁТ НА САМОМ ДЕЛЕ. Клиенту, который просил не писать
+ *  (`sms_opt_out`), и клиенту из чёрного списка сервис не пишет — сервер
+ *  молча пропускает их и в рассылке «Через сервис». Поэтому их нет ни в
+ *  «N получателей», ни в сумме вопроса «Отправить?», ни в рассылке «С
+ *  телефона»: иначе обещано больше, чем уйдёт, а с телефона ушло бы тем,
+ *  кто отказался. */
+export function bulkSmsAudience(recipients: readonly Client[]): {
+  reachable: Client[];
+  noPhone: number;
+  refused: number;
+} {
+  const reachable: Client[] = [];
+  let noPhone = 0;
+  let refused = 0;
+  for (const c of recipients) {
+    if (smsDigits(c).length === 0) noPhone += 1;
+    else if (c.sms_opt_out || c.blacklisted) refused += 1;
+    else reachable.push(c);
+  }
+  return { reachable, noPhone, refused };
+}
+
+/** Подпись шторки рассылки: сколько получат и кого пропустили. Отказ от
+ *  SMS и чёрный список — «без SMS»: строка одна, и третья причина целиком в
+ *  неё не входит. */
+export function bulkSmsAudienceLine(audience: {
+  reachable: readonly Client[];
+  noPhone: number;
+  refused: number;
+}): string {
+  const n = audience.reachable.length;
+  const { noPhone, refused } = audience;
+  const head = `${n} ${countWordRu(n, "получатель", "получателя", "получателей")}`;
+  if (refused > 0) {
+    return `${head}${noPhone > 0 ? ` · ${noPhone} без телефона` : ""} · ${refused} без SMS`;
+  }
+  return noPhone > 0
+    ? `${head} · ${noPhone} без телефона ${countWordRu(noPhone, "пропущен", "пропущены", "пропущены")}`
+    : head;
 }
 
 /** True when the template body carries a [Имя]/[Name] token — then a

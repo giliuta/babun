@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 import { AlertTriangle } from "lucide-react-native";
 import type { useThemeColors } from "@/theme/colors";
+import { tintOver } from "@/components/ui/color-contrast";
 
 export function ErrorNote({
   t,
@@ -12,7 +13,8 @@ export function ErrorNote({
   tone?: "danger" | "warning";
 }) {
   const color = tone === "danger" ? t.danger : t.warning;
-  const bg = tone === "danger" ? "rgba(240,71,60,0.10)" : "rgba(245,166,35,0.10)";
+  // Подложка — тот же смысловой цвет на 10 %, а не старые «сочные» литералы.
+  const bg = tintOver(color, t.surface, 0.1);
   return (
     <View
       className="flex-row items-start gap-2 rounded-[10px] px-3 py-2.5"

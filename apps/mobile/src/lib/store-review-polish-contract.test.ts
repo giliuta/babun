@@ -32,7 +32,10 @@ describe("импорт из контактов телефона", () => {
 
   test("«Добавить N» — в футере листа, над полосой home-индикатора", () => {
     const src = sheet();
-    assert.match(src, /footer=\{\s*<View[^>]*>\s*<Pressable\s+onPress=\{\(\) => void run\(\)\}/);
+    // Кнопка — канонический `Button` в футере (вне прокрутки листа). При
+    // отказе в доступе футер отдаёт место «Открыть настройки».
+    const footer = src.slice(src.indexOf("footer={"), src.indexOf("</BottomSheet>"));
+    assert.match(footer, /^footer=\{\s*<View[^>]*>[\s\S]*?<Button\b[^>]*?onPress=\{\(\) => void run\(\)\}[\s\S]*?<\/View>\s*\}\s*>/);
   });
 });
 
@@ -44,12 +47,6 @@ describe("заглушек «Скоро» нет", () => {
     );
     assert.doesNotMatch(src, /^\s*Онлайн-запись\s*$/m);
     assert.doesNotMatch(src, /^\s*Скоро\s*$/m);
-  });
-
-  test("документы клиента — без строки «Договоры · Скоро»", () => {
-    const src = read("../../app/documents/index.tsx");
-    assert.doesNotMatch(src, /label="Договоры"/);
-    assert.doesNotMatch(src, /placeholder="Скоро"/);
   });
 });
 

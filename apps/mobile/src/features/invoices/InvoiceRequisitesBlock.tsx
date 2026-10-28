@@ -21,6 +21,7 @@ import { notify } from "@/lib/notify";
 import { InvoiceNumberRow, type InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
 import { DocMetaRow } from "@/components/blocks/DocMetaRow";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "@/components/ui/tokens";
 
 // БЛОК «РЕКВИЗИТЫ» ИНВОЙСА — ЧЕМ ПОДПИСАН ДОКУМЕНТ.
 //
@@ -64,7 +65,11 @@ export function InvoiceRequisitesBlock({
 
   const rows = companies.data ?? [];
   const live = rows.filter((c) => !c.archived_at);
-  const company = live.find((c) => c.id === companyId) ?? defaultCompany(rows);
+  // Выбранный набор показывается, даже если его потом скрыли: документ уже
+  // выпущен от него (правка, кредит-нота, возврат по чеку), и подмена на набор
+  // по умолчанию печатала чужое имя рядом с номером из его серии. Выбирают —
+  // только из живых (`live`).
+  const company = rows.find((c) => c.id === companyId) ?? defaultCompany(rows);
   const empty = !company || !companyFilled(company);
 
   const edit = (target: Company | null) => {
@@ -123,7 +128,7 @@ export function InvoiceRequisitesBlock({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         }
         padded={false}

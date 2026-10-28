@@ -6,7 +6,7 @@ import type { InvoiceLedger } from "@babun/shared/local/finance/invoice-ledger";
 // чека и кредит-ноты, и ПОСЛЕДНИЙ в серии своих реквизитов и года — номер
 // возвращается в серию без дыры. Остальное отменяют кредит-нотой.
 
-export type InvoiceDeleteBlock = "not-invoice" | "settled" | "not-last" | null;
+type InvoiceDeleteBlock = "not-invoice" | "settled" | "not-last" | null;
 
 export function invoiceDeleteBlock(
   invoice: InvoiceLedger,

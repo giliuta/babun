@@ -1,5 +1,5 @@
-// СНЯТИЕ ДЕНЕГ С ЖУРНАЛА — удаление операции, отмена оплаты записи, отмена
-// перевода — не было покрыто ничем. Соседи по папке (счета, заявки, шаблоны,
+// СНЯТИЕ ДЕНЕГ С ЖУРНАЛА — удаление операции и отмена перевода — не было
+// покрыто ничем. Соседи по папке (счета, заявки, шаблоны,
 // категории) стерегутся в write-confirmation.test.ts, а деньги — нет.
 //
 // Проверяется ровно то, что НЕ продублировано на сервере:
@@ -11,14 +11,10 @@ import { describe, expect, it } from "bun:test";
 import {
   deleteTransaction,
   deleteTransfer,
-  resetAppointmentPayment,
-  setAppointmentPrepayment,
-  undoAppointmentPayment,
   updateTransaction,
 } from "./finance-transactions";
 
 const ROW_ID = "22222222-2222-4222-8222-222222222222";
-const APPOINTMENT_ID = "44444444-4444-4444-8444-444444444444";
 
 /** Запись прошла, но не задела ни одной строки: так выглядит отказ RLS. */
 function noRowWriteSupabase() {
@@ -155,43 +151,6 @@ describe("удаление денежной строки подтверждае�
 });
 
 describe("отмена денег через серверные RPC", () => {
-  it("отменяет оплату записи по её id", async () => {
-    const calls: Record<string, unknown>[] = [];
-    await undoAppointmentPayment(rpcSupabase({ error: null }, calls), APPOINTMENT_ID);
-
-    expect(calls).toEqual([
-      { name: "undo_appointment_payment", p_appointment_id: APPOINTMENT_ID },
-    ]);
-  });
-
-  it("сбрасывает все чеки записи по её id", async () => {
-    const calls: Record<string, unknown>[] = [];
-    await resetAppointmentPayment(rpcSupabase({ error: null }, calls), APPOINTMENT_ID);
-
-    expect(calls).toEqual([
-      { name: "reset_appointment_payment", p_appointment_id: APPOINTMENT_ID },
-    ]);
-  });
-
-  it("передаёт предоплату суммой и способом оплаты", async () => {
-    const calls: Record<string, unknown>[] = [];
-    await setAppointmentPrepayment(
-      rpcSupabase({ error: null }, calls),
-      APPOINTMENT_ID,
-      50,
-      "card",
-    );
-
-    expect(calls).toEqual([
-      {
-        name: "set_appointment_prepayment",
-        p_appointment_id: APPOINTMENT_ID,
-        p_amount: 50,
-        p_payment_method: "card",
-      },
-    ]);
-  });
-
   it("отменяет перевод по группе, а не по отдельной ноге", async () => {
     const calls: Record<string, unknown>[] = [];
     await deleteTransfer(rpcSupabase({ error: null }, calls), "group-1");
@@ -205,15 +164,6 @@ describe("отмена денег через серверные RPC", () => {
     const denied = rpcSupabase({ error: { message: "Счёт закрыт" } });
 
     await expect(
-      undoAppointmentPayment(denied, APPOINTMENT_ID),
-    ).rejects.toThrow("Счёт закрыт");
-    await expect(
-      resetAppointmentPayment(denied, APPOINTMENT_ID),
-    ).rejects.toThrow("Счёт закрыт");
-    await expect(
-      setAppointmentPrepayment(denied, APPOINTMENT_ID, 50, null),
-    ).rejects.toThrow("Счёт закрыт");
-    await expect(
       deleteTransfer(denied, "group-1"),
     ).rejects.toThrow("Счёт закрыт");
   });
@@ -221,12 +171,6 @@ describe("отмена денег через серверные RPC", () => {
   it("подставляет свою фразу, когда сервер отказал молча", async () => {
     const mute = rpcSupabase({ error: { message: "" } });
 
-    await expect(
-      undoAppointmentPayment(mute, APPOINTMENT_ID),
-    ).rejects.toThrow("Не удалось отменить оплату");
-    await expect(
-      setAppointmentPrepayment(mute, APPOINTMENT_ID, 50, null),
-    ).rejects.toThrow("Не удалось изменить предоплату");
     await expect(
       deleteTransfer(mute, "group-1"),
     ).rejects.toThrow("Не удалось отменить перевод");

@@ -21,7 +21,7 @@ import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { schedulePreview } from "@/features/reference/schedule-days";
 import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { calendarSettingsRows } from "@/features/calendar/settings-rows";
-import { readGridZoom, readViewportH, writeGridZoom, zoomToPct, type GridZoom } from "@/features/calendar/grid-memory";
+import { readOpeningZoom, readViewportH, writeGridZoom, zoomToPct, type GridZoom } from "@/features/calendar/grid-memory";
 import { useCurrentRole, usePlanAllows } from "@/session/tenant";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { useMemberUpdateTeam } from "@/features/calendar/mutations";
@@ -169,8 +169,8 @@ export function useCalendarSettingsScreen() {
     );
   };
 
-  // Масштаб сетки — с этого телефона; щипок меняет его же.
-  const [gridZoom, setGridZoom] = useState(readGridZoom);
+  // Масштаб при открытии — с этого телефона; щипок по сетке его не трогает.
+  const [gridZoom, setGridZoom] = useState(readOpeningZoom);
   const applyZoom = (zoom: GridZoom) => {
     writeGridZoom(zoom, true);
     setGridZoom(zoom);

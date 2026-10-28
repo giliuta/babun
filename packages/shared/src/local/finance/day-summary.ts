@@ -14,7 +14,7 @@ import { sumExtras } from "../day-extras";
 import { appointmentMaterialCost } from "./appointment-calc";
 
 // ─── Payment-method breakdown (for the detail popup) ────────────────
-export interface DayPaymentBreakdown {
+interface DayPaymentBreakdown {
   cash: number;
   card: number;
   transfer: number;
@@ -22,7 +22,7 @@ export interface DayPaymentBreakdown {
   other: number;
 }
 
-export interface DayFinanceTotals {
+interface DayFinanceTotals {
   /** Сколько можно заработать — сумма по не-отменённым записям. */
   planned: number;
   /** Фактически заработано (оплачено) + ручной доход. */

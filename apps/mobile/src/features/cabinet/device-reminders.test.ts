@@ -187,6 +187,15 @@ describe("разрешение и подписи", () => {
     assert.equal(devicePermissionFrom({ granted: true, status: "granted" }), "granted");
     assert.equal(devicePermissionFrom({ granted: false, status: "denied" }), "denied");
     assert.equal(
+      devicePermissionFrom({ granted: false, status: "denied", canAskAgain: false }),
+      "denied",
+    );
+    // Android после первого отказа разрешает спросить ещё раз.
+    assert.equal(
+      devicePermissionFrom({ granted: false, status: "denied", canAskAgain: true }),
+      "askable",
+    );
+    assert.equal(
       devicePermissionFrom({ granted: false, status: "undetermined" }),
       "undetermined",
     );
@@ -214,5 +223,9 @@ describe("разрешение и подписи", () => {
     assert.equal(permissionRow("denied").action, "settings");
     assert.equal(permissionRow("granted").action, "settings");
     assert.equal(permissionRow("unavailable").action, null);
+    assert.equal(permissionRow("askable").action, "request");
+    assert.equal(permissionRow("denied").sub, "Выключены на этом телефоне");
+    assert.equal(permissionRow("askable").sub, "Выключены на этом телефоне");
+    assert.equal(notificationsSummary("askable", 0), "Выключены");
   });
 });

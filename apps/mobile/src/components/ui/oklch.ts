@@ -6,7 +6,7 @@
 // H: опускаем только L, а тон и сочность держим, и янтарь остаётся оранжевым.
 // Цвет, не влезающий в sRGB, теряет сочность, а не тон и не светлоту.
 
-export type Oklch = [l: number, c: number, h: number];
+type Oklch = [l: number, c: number, h: number];
 
 const toLinear = (c: number) =>
   c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;

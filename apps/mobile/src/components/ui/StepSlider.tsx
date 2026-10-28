@@ -18,7 +18,7 @@ function tick(): void {
 }
 
 /** Значение под точкой `x` дорожки шириной `w`, со снапом к шагу. */
-export function sliderValueAt(x: number, w: number, min: number, max: number, step: number): number {
+function sliderValueAt(x: number, w: number, min: number, max: number, step: number): number {
   "worklet";
   if (w <= 0 || max <= min) return min;
   const ratio = Math.min(1, Math.max(0, x / w));

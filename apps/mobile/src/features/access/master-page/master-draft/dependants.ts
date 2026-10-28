@@ -54,9 +54,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "finance.accounts",
     "finance.debts",
     "finance.documents",
-    // «Прибыль» и шестерёнка финансов — деньги той же
-    // команды: скрыт календарь — свёрнуты и они.
-    "finance.profit",
+    // Шестерёнка финансов — деньги той же команды: скрыт календарь —
+    // свёрнута и она.
     "finance.window",
     "finance.settings_accounts",
     "finance.settings_trash",

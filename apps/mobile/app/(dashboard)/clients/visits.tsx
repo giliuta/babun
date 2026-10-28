@@ -19,7 +19,7 @@ import { useCalendarActionsReader } from "@/features/appointments/useRecordRight
 import { usePlanAllows } from "@/session/tenant";
 import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
-import { todayYMD } from "@/features/clients/filter";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
 import { useClient } from "@/features/clients/queries";
@@ -85,9 +85,9 @@ function ClientVisitsScreen() {
     [allTeams],
   );
 
-  // Локальная дата, а не UTC: `toISOString()` ночью на Кипре отдавал
-  // вчерашний день.
-  const today = todayYMD();
+  // День бизнеса (пояс календаря), а не телефона и не UTC: тем же днём,
+  // что сводка клиента, считается долг — тапнули по €240, список даёт €240.
+  const today = useBusinessToday();
   // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`): тапнули по
   // €240 — список обязан дать €240.
   // Работа под инвойсом должна остаток инвойса — тем же правилом, что
@@ -213,7 +213,10 @@ function ClientVisitsScreen() {
           ) : undefined
         }
       />
-      {!access.history.show ? null : isLoading ? (
+      {!access.history.show ? (
+        // Блок закрыт правом — словами, а не пустым экраном с одной шапкой.
+        <EmptyState fill title="Нет доступа" />
+      ) : isLoading ? (
         <EmptyState state="loading" fill title="Загрузка" />
       ) : rows.length === 0 ? (
         <EmptyState fill title={unpaidOnly ? "Неоплаченных записей нет" : "Записей пока нет"} />

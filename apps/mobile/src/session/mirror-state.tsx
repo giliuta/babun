@@ -36,7 +36,7 @@ import type { UserRole } from "@/session/role-policy";
 // запись в боевой базе. Засов стоит на отправке запроса и на входе в
 // офлайн-очередь (`@babun/shared/sync/write-guard`).
 
-export interface MirrorState {
+interface MirrorState {
   /** Кого показываем. Имя — для плашки. */
   name: string;
   /** Его id, если он уже в компании: «завёл сам — видит всегда» (набор

@@ -17,7 +17,7 @@ export type PlacedAppt = {
 };
 
 /** С какой разницы начал запись считается «начавшейся позже». */
-export const LATE_START_MIN = 30;
+const LATE_START_MIN = 30;
 
 export const toMin = (hm: string): number => {
   const [h, m] = (hm ?? "0:0").split(":").map(Number);
@@ -105,7 +105,7 @@ export function layoutDay(appts: Appointment[]): PlacedAppt[] {
  *  уже — «веером» (колонка Недели ~50pt не вмещает и двух имён рядом). */
 export const SIDE_BY_SIDE_MIN_W = 140;
 /** Уже этого блок «рядом» не ставится — только «веером» поверх. */
-export const MIN_BESIDE_W = 6;
+const MIN_BESIDE_W = 6;
 /** Ширина верхней карточки «веера», при которой на ней читается имя. */
 export const FAN_TOP_MIN_W = 36;
 /** Полоса нижней карточки «веера» — не уже этого: цвет соседки виден. */
@@ -179,7 +179,7 @@ export function blockFrame(
   };
 }
 
-export type Deck = { index: number; size: number; members: PlacedAppt[] };
+type Deck = { index: number; size: number; members: PlacedAppt[] };
 
 const touched = (p: PlacedAppt): number => {
   const at = Date.parse(p.apt.updated_at ?? "");

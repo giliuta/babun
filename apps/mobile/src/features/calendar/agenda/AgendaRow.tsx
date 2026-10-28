@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { COLOR_SITUATIONS } from "@/features/appointments/record-color";
 import {
   BLOCK_FILL,
   blockSolid,
@@ -9,6 +9,10 @@ import {
 } from "@/components/ui/color-contrast";
 import type { ThemeColors } from "@/theme/colors";
 import { EventRow } from "./EventRow";
+import { agendaMoney, agendaStatusWord } from "./agenda-money";
+import { LIST_ROW } from "@/components/ui/tokens";
+
+const DEBT_SITUATION = COLOR_SITUATIONS.find((s) => s.id === "unpaid")?.label;
 
 export function AgendaRow({
   apt,
@@ -43,10 +47,30 @@ export function AgendaRow({
   t: ThemeColors;
 }) {
   const cancelled = apt.status === "cancelled";
-  const statusWord = overdue ? "Не оплачена" : cancelled ? "Отменена" : null;
+  const debt = getDebtAmount(apt);
+  const money = showAmounts
+    ? agendaMoney({
+        total: apt.total_amount,
+        debt,
+        cancelled,
+        afterVisit: apt.status === "completed" || overdue,
+      })
+    : null;
+  // Долг, сказанный суммой справа, слева не повторяется ни словом «Не
+  // оплачена», ни ситуацией «Долг»; ситуация «Долг» — словом «Не оплачена».
+  const debtSaid = money?.debtSaid ?? false;
+  const shownSituation = debtSaid && situation === DEBT_SITUATION ? null : situation;
+  const statusWord = agendaStatusWord({
+    cancelled,
+    overdue,
+    debt,
+    debtSaid,
+    situationSaysDebt: shownSituation === DEBT_SITUATION,
+  });
   // ЦВЕТ ЗАПИСИ ЗАЛИВАЕТ ВСЮ СТРОКУ, а не квадратик слева. Рецепт тот же, что у блока в сетке: заливка BLOCK_FILL,
-  // выполненная тише, отменённая теряет цвет.
-  const rowFill = cancelled
+  // выполненная тише. Отменённая — в цвете отмены; без него (`hue` пустой)
+  // теряет цвет.
+  const rowFill = cancelled && !hue
     ? `${t.ink}14`
     : // Тон — тот же, что у плотного блока сетки (`blockSolid`), а не сырой
       // цвет палитры: у бледных цветов сырой и плотный расходились по тону,
@@ -70,8 +94,6 @@ export function AgendaRow({
     );
   }
 
-  const total = apt.total_amount;
-  const debt = getDebtAmount(apt);
   return (
     <Pressable
       onPress={onPress}
@@ -82,14 +104,14 @@ export function AgendaRow({
       accessibilityRole="button"
       // Озвучка называет ВСЁ, что напечатано в строке: статус, «не закрыта» и
       // имя дыры видны глазу и обязаны быть слышны.
-      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}${statusWord ? `, ${statusWord.toLowerCase()}` : ""}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}${statusWord ? `, ${statusWord.toLowerCase()}` : ""}${shownSituation ? `, ${shownSituation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}${money ? `, ${money.amount}${money.note ? `, ${money.note}` : ""}` : ""}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        minHeight: 64,
+        minHeight: LIST_ROW.minHeight,
         backgroundColor: rowFill,
       }}
     >
@@ -118,14 +140,14 @@ export function AgendaRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={1}
-          style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+          style={{ ...LIST_ROW.name, color: t.ink }}
         >
           {clientName || apt.comment || "Без клиента"}
         </Text>
         {serviceSummary ? (
           <Text
             numberOfLines={1}
-            style={{ marginTop: 2, fontSize: 12, color: t.sub }}
+            style={{ marginTop: 2, ...LIST_ROW.sub, color: t.sub }}
           >
             {serviceSummary}
           </Text>
@@ -161,12 +183,12 @@ export function AgendaRow({
               слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
               услуг» при дейтеранопии — 4.1), а в списке есть место для слова:
               лента служит сетке легендой. */}
-          {situation ? (
+          {shownSituation ? (
             <Text
               numberOfLines={1}
               style={{ flexShrink: 1, fontSize: 11, color: t.body }}
             >
-              {statusWord ? "· " : ""}{situation}
+              {statusWord ? "· " : ""}{shownSituation}
             </Text>
           ) : null}
           {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: «весь день Лимассол, а эта работа
@@ -191,40 +213,33 @@ export function AgendaRow({
           ) : null}
         </View>
       </View>
-      {showAmounts && total > 0 ? (
+      {money ? (
         <View style={{ alignItems: "flex-end" }}>
-          {/* ОТМЕНЁННАЯ — СУММА ЗАЧЁРКНУТА И БЕЗ «К ОПЛАТЕ»: отменённый визит в ленте с суммой
-              полным чёрным, а неоплаченный — ещё и с «€50 к оплате», хотя
-              денег по нему никто не ждёт. */}
+          {/* ОТМЕНЁННАЯ — СУММА ЗАЧЁРКНУТА И БЕЗ «К ОПЛАТЕ»: денег по ней
+              никто не ждёт. Долг — янтарём, как в финансах и в записи;
+              красный в продукте — только «не вышло». Правило слов —
+              `agenda-money.ts`. */}
           <Text
             style={{
               fontVariant: ["tabular-nums"],
               fontSize: 14,
               fontWeight: "600",
-              color: cancelled ? t.faint : t.ink,
+              color: cancelled ? t.faint : money.amountWarn ? t.warning : t.ink,
               textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
-            {formatEUR(total)}
+            {money.amount}
           </Text>
-          {debt > 0 && !cancelled ? (
+          {money.note ? (
             <Text
-              // ДОЛГ — ТОЛЬКО ПОСЛЕ ВИЗИТА (STORY-067): пока визит впереди,
-              // неоплаченная сумма — просто «к оплате», серым; выполненный или
-              // просроченный без денег — «долг», янтарём, как в финансах и в
-              // записи. Красный в
-              // продукте — только «не вышло».
               style={{
                 fontVariant: ["tabular-nums"],
                 marginTop: 2,
                 fontSize: 11,
-                color:
-                  apt.status === "completed" || overdue ? t.warning : t.sub,
+                color: money.noteWarn ? t.warning : t.sub,
               }}
             >
-              {apt.status === "completed" || overdue
-                ? `долг ${formatEUR(debt)}`
-                : `${formatEUR(debt)} к оплате`}
+              {money.note}
             </Text>
           ) : null}
         </View>

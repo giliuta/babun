@@ -44,7 +44,7 @@ export function zoneToApply(
 
 /** Группа, в которой лежит эта зона. Ищем по ГОРОДАМ, а не по представителю:
  *  сохранено может быть `Europe/Kyiv`, а группа названа `Europe/Helsinki`. */
-export function zoneGroupOf(zone: string): ZoneGroup {
+function zoneGroupOf(zone: string): ZoneGroup {
   return ZONE_GROUPS[zoneGroupIndexOf(zone)];
 }
 

@@ -22,11 +22,6 @@ export {
   type TransactionDraft,
 } from "./finance-transactions/writes";
 export {
-  resetAppointmentPayment,
-  setAppointmentPrepayment,
-  undoAppointmentPayment,
-} from "./finance-transactions/appointment-money";
-export {
   createTransfer,
   deleteTransfer,
   type TransferDraft,

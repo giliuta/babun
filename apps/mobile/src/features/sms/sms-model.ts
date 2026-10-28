@@ -5,7 +5,7 @@ import { parseTeamTemplates, type SmsTeamTemplate } from "./sms-team-templates";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 
 /** Счёт месяца по команде. */
-export interface SmsTeamStats {
+interface SmsTeamStats {
   teamId: string;
   count: number;
   segments: number;
@@ -48,7 +48,7 @@ export interface SmsAccount {
 }
 
 /** Автопополнение с сохранённой карты (волна 13). */
-export interface SmsAutotopup {
+interface SmsAutotopup {
   enabled: boolean;
   thresholdCents: number;
   amountCents: number;
@@ -58,7 +58,7 @@ export interface SmsAutotopup {
   error: string | null;
 }
 
-export interface SmsAlert {
+interface SmsAlert {
   kind: string;
   message: string;
   at: string;
@@ -201,7 +201,7 @@ export function parseSmsHistory(rows: unknown): SmsHistoryItem[] {
 
 /** SMS записи: сообщения и включённые шаблоны её команды — ими лист
  *  «Отправить SMS» предлагает текст. */
-export interface SmsRecordLog {
+interface SmsRecordLog {
   templates: SmsTeamTemplate[];
   messages: SmsHistoryItem[];
   /** Ответ клиента по ссылке «Подтвердить / Отменить» и когда он был. */
@@ -274,8 +274,8 @@ export function smsErrorText(error: unknown): string {
 /** Пополнение — любая сумма целыми евро от €5 до €500. Те же пределы
  *  у функции `sms-checkout` и у базы (`sms_topup_min_cents` /
  *  `sms_topup_max_cents`). Центы. */
-export const TOPUP_MIN_CENTS = 500;
-export const TOPUP_MAX_CENTS = 50000;
+const TOPUP_MIN_CENTS = 500;
+const TOPUP_MAX_CENTS = 50000;
 
 /** Текст поля «Сумма» → центы; `null` — пусто или не число. Запятая и точка
  *  равноправны, пробелы не мешают («1 000»). */
@@ -313,32 +313,4 @@ export function checkoutErrorText(code: string | null | undefined, offline = fal
     default:
       return "Попробуйте ещё раз";
   }
-}
-
-export type SmsSettingsPatch = Partial<{
-  enabled: boolean;
-  team_ids: string[];
-}>;
-
-/** Черновик ответа базы на правку — чтобы тумблер не ждал сеть. */
-export function applyPatch(account: SmsAccount, patch: SmsSettingsPatch): SmsAccount {
-  return {
-    ...account,
-    ...(patch.enabled !== undefined ? { enabled: patch.enabled } : null),
-    ...(patch.team_ids !== undefined ? { teamIds: patch.team_ids } : null),
-  };
-}
-
-/** Счёт команды за месяц; нет сообщений — нули. */
-export function teamStats(account: SmsAccount, teamId: string): SmsTeamStats {
-  return (
-    account.owner?.teams.find((s) => s.teamId === teamId) ?? {
-      teamId,
-      count: 0,
-      segments: 0,
-      cents: 0,
-      delivered: 0,
-      failed: 0,
-    }
-  );
 }

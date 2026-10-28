@@ -39,7 +39,7 @@ import { InvoiceTotalSheet } from "./invoice-blocks/InvoiceTotalSheet";
 // ЧЕГО У ИНВОЙСА НЕТ. Скидки (сервер не знает такого поля у счёта) и команды в
 // блоках: команду документ наследует от заявки или чипа и не спрашивает.
 
-export interface InvoiceBlocksTotals {
+interface InvoiceBlocksTotals {
   /** Что заплатит клиент — её показывает строка «Итого» блока услуг. */
   total: number;
 }
@@ -71,6 +71,7 @@ export function InvoiceBlocks({
   onAddLine,
   onAddCustomLine,
   onRemoveLine,
+  onLinesRestore,
   vatMode,
   vatRate,
   onVatModeChange,
@@ -120,6 +121,8 @@ export function InvoiceBlocks({
   /** Своя услуга — пустая строка, её заводит «＋ Добавить» в «Итого». */
   onAddCustomLine: () => void;
   onRemoveLine: (line: EditableInvoiceLine) => void;
+  /** «Итого» закрыли мимо «Применить» — строки, какими были при открытии. */
+  onLinesRestore: (lines: EditableInvoiceLine[]) => void;
   vatMode: InvoiceVatMode;
   vatRate: number;
   onVatModeChange: (mode: InvoiceVatMode) => void;
@@ -166,8 +169,8 @@ export function InvoiceBlocks({
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
   const statsById = useMemo(
-    () => buildStatsMap(clients, appointments.data ?? [], invoicing),
-    [clients, appointments.data, invoicing],
+    () => buildStatsMap(clients, appointments.data ?? [], invoicing, today),
+    [clients, appointments.data, invoicing, today],
   );
   const clientStats = client ? statsById.get(client.id) : undefined;
   // ПРАЙС — КОМАНДЫ, А НЕ ВСЕЙ КОМПАНИИ: услуги подтягиваются с команды. Правило
@@ -352,6 +355,7 @@ export function InvoiceBlocks({
         vatRate={vatRate}
         onVatModeChange={onVatModeChange}
         onVatRateChange={onVatRateChange}
+        onLinesRestore={onLinesRestore}
       />
     </>
   );

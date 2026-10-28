@@ -7,7 +7,7 @@ import { copyCalendarLevels, starterCalendarChanges, type MasterDraft } from "./
 import { memberRefusalText } from "./member-rights-writer";
 import type { PartnerManager } from "@/session/partner-manager";
 
-export interface CalendarTogglerDeps {
+interface CalendarTogglerDeps {
   manager: PartnerManager;
   teamsAllowed: ReadonlySet<string> | null;
   draft: MasterDraft;

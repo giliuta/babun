@@ -135,7 +135,7 @@ export const AUTO_REMINDER_HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
 
 // ── ЧТО ПРОИСХОДИТ В КОМАНДЕ ─────────────────────────────────────────────
 
-export type ActivityKind = "new" | "change" | "cancel" | "payment";
+type ActivityKind = "new" | "change" | "cancel" | "payment";
 
 const PAYMENT_FIELDS = new Set([
   "payments",

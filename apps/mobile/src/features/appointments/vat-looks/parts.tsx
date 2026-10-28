@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { formatEURExact } from "@babun/shared/common/utils/money";
+import { useMoney } from "@/features/settings/currency";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -74,13 +74,18 @@ export function Unit({ children }: { children: ReactNode }) {
 /** Сумма строки — в той же колонке, что «СУММА» у работ. */
 export function Sum({ value }: { value: number }) {
   const t = useThemeColors();
+  // Валюта компании, как у единицы скидки рядом (`useMoney().symbol`): «€»
+  // гвоздём у компании не в евро печатал суммы строк чужой валютой.
+  const { fmtExact } = useMoney();
   return (
     <Text
       style={{
         // Прижата к правому краю, как «К ОПЛАТЕ» строкой ниже: две итоговые
         // суммы шторки стоят одна под другой (итого чётко по колонкам).
         flex: 1,
-        minWidth: 96,
+        // 64, а не 96: на узкой карточке (17e, 350 pt) три колонки слева
+        // съедали место, и сумма срезалась до «€1 26».
+        minWidth: 64,
         textAlign: "right",
         fontSize: 15,
         fontWeight: "700",
@@ -88,7 +93,7 @@ export function Sum({ value }: { value: number }) {
         fontVariant: ["tabular-nums"],
       }}
     >
-      {formatEURExact(value)}
+      {fmtExact(value)}
     </Text>
   );
 }

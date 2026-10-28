@@ -59,7 +59,10 @@ function ClientRequisitesScreen() {
         <EmptyState state="loading" fill />
       ) : !client ? (
         <EmptyState fill title="Клиент не найден" />
-      ) : !access.requisites.show ? null : (
+      ) : !access.requisites.show ? (
+        // Блок закрыт правом — словами, а не пустым экраном с одной шапкой.
+        <EmptyState fill title="Нет доступа" />
+      ) : (
         <>
           {/* ПУСТО — ОДНИМ СЛОВОМ (пустые состояния — слова без кнопок): «Добавить» — внизу. Блок
               стоит и здесь: лист нового набора живёт в нём. */}

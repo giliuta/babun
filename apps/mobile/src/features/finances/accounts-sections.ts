@@ -13,9 +13,10 @@
 // счета с пустой командой — стоит отдельной группой «Без команды» (см.
 // `NO_TEAM`), пока владелец не раздаст их командам.
 //
-// Обязанность без исключений: деньги архивной и вовсе удалённой команды не
-// имеют права исчезнуть с экрана. Их держит своя группа на странице «Счета»
-// (`accountOrderGroups`).
+// Деньги архивного календаря живут в его архиве
+// (`archived-calendar-accounts.ts`), в живых финансах их нет. Открытые счета
+// команды, которой уже нет в справочнике, не пропадают: их держит своя группа
+// на странице «Счета» (`accountOrderGroups`).
 
 import type {
   AccountKind,
@@ -109,7 +110,7 @@ export function teamAccounts<T extends SectionAccount>(
 
 /** Группа страницы «Счета»: счета одной команды, которые двигаются ручкой
  *  между собой. */
-export interface AccountOrderGroup<T extends SectionAccount> {
+interface AccountOrderGroup<T extends SectionAccount> {
   /** id команды либо `NO_TEAM` — ключ списка и граница перетаскивания. */
   key: string;
   /** Заголовок над группой. `null` — у компании одна команда: называть её
@@ -260,7 +261,7 @@ function ymdToUtc(value: string): number | null {
 }
 
 /** Даты движений счёта, из которых выводится возраст остатка. */
-export interface AccountMovementDates {
+interface AccountMovementDates {
   last_outflow_on: string | null;
   first_tx_on: string | null;
 }

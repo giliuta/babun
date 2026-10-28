@@ -2,8 +2,11 @@ import { useMemo } from "react";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useCancelledColor,
   useEventBlocks,
   useFallbackColor,
+  usePaidColor,
+  usePrepaidColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
@@ -36,6 +39,9 @@ export function useBookBlocks(teamId: string | null) {
   const autoColorRule = useAutoColorRule(teamId);
   const situationPalette = useSituationPalette(teamId);
   const fallbackColor = useFallbackColor(teamId);
+  const cancelledColor = useCancelledColor(teamId);
+  const paidColor = usePaidColor(teamId);
+  const prepaidColor = usePrepaidColor(teamId);
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
       // Подсветка — только у включённых блоков.
@@ -62,5 +68,8 @@ export function useBookBlocks(teamId: string | null) {
     situationPalette,
     fallbackColor,
     activeSituations,
+    cancelledColor,
+    paidColor,
+    prepaidColor,
   };
 }

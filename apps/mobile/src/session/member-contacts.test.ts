@@ -9,19 +9,17 @@ describe("номер сотруднику — по одному", () => {
     assert.equal(contactsLocked({ phone: "", contacts_hidden: undefined }), false);
   });
 
-  test("строка сотрудника: null — открыть можно, day/right — нет", () => {
+  test("строка сотрудника: null — открыть можно, right — нет", () => {
     assert.equal(contactsHiddenOf({ contacts_hidden: null }), null);
-    assert.equal(contactsHiddenOf({ contacts_hidden: "day" }), "day");
     assert.equal(contactsHiddenOf({ contacts_hidden: "right" }), "right");
     // Открытый номер приходит в строке; пустой при `null` — клиент
     // без номера, а не замок с точками.
     assert.equal(contactsLocked({ phone: "", contacts_hidden: null }), false);
     assert.equal(contactsLocked({ phone: "", contacts_hidden: "right" }), true);
-    assert.equal(contactsLocked({ phone: "", contacts_hidden: "day" }), true);
   });
 
   test("отказы приходят ответом", () => {
-    for (const status of ["day", "right", "limit"] as const) {
+    for (const status of ["right", "limit"] as const) {
       assert.deepEqual(parseMemberContacts({ status }), { status });
     }
     assert.throws(() => parseMemberContacts({ status: "maybe" }));

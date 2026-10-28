@@ -12,7 +12,7 @@ import {
   PillButton,
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
-import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
+import { passwordAccepted, passwordHint } from "@/components/auth/password-rule";
 import { useAuthTheme } from "@/components/auth/theme";
 import { mayFinishHere, signupFinish } from "@/components/auth/signup-finish";
 import { useOwnAccountName, useRenameOwnAccount } from "@/features/cabinet/own-account-name";
@@ -32,8 +32,8 @@ import { useSession } from "@/providers/SessionProvider";
 // Имя пишется и человеку (`full_name`), и своему аккаунту — это то, что
 // регистрация раньше спрашивала полем «Имя или название компании».
 //
-// На iPhone новый аккаунт не заводится (`mayFinishHere`, App Review 3.1.1):
-// вместо формы — «аккаунта нет» и выход.
+// Где новый аккаунт заводить нельзя (`CAN_SIGN_UP_HERE` выключен и нет
+// приглашения — `mayFinishHere`), вместо формы — «аккаунта нет» и выход.
 export default function FinishSignupScreen() {
   const { session } = useSession();
   const user = session?.user ?? null;
@@ -77,7 +77,7 @@ export default function FinishSignupScreen() {
   const trimmed = name.trim();
   // Минимум пароля — как на регистрации и сбросе: иначе «Готово»
   // горело на одном символе, а отказ сервера приходил уже после нажатия.
-  const valid = trimmed.length > 0 && (!finish.needsPassword || password.length >= PASSWORD_MIN);
+  const valid = trimmed.length > 0 && (!finish.needsPassword || passwordAccepted(password));
 
   async function save() {
     if (!valid || saving || !user) return;
@@ -146,9 +146,9 @@ export default function FinishSignupScreen() {
         ) : null}
       </InputCard>
 
-      {finish.needsPassword && passwordTooShort(password) ? (
+      {finish.needsPassword && passwordHint(password) ? (
         <Text style={{ marginTop: 8, marginLeft: 4, fontSize: 13, color: t.sub }}>
-          Минимум 6 символов
+          {passwordHint(password)}
         </Text>
       ) : null}
 

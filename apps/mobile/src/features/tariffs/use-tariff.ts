@@ -8,7 +8,7 @@ import { useAccountProfile, useAccountScope } from "@/session/account-scope";
 import { useCurrentRole } from "@/session/tenant";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { TENANT_HEADER } from "@/lib/tenant-header";
-import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "@/session/tiers";
+import { tierOf, trialLeft, trialUsed, type BillingPeriod, type TariffState, type Tier } from "@/session/tiers";
 
 // ТАРИФ АККАУНТА — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ `tiers.ts`.
 //
@@ -160,10 +160,20 @@ export async function openTariffCheckout(
   /** Сколько календарей оплатить: предложение «Новый календарь» платит и
    *  за тот, что заводят (живые + 1); сервер не даст больше. */
   calendars?: number,
+  /** Помесячно или за год — выбор на странице «Тариф». Не назван — сервер
+   *  оставляет период живой подписки (новая оплата — помесячно): так
+   *  «Новый календарь» не переводит годовую подписку на месяц. */
+  period?: BillingPeriod,
 ): Promise<"opened" | "changed" | "same"> {
   const { web, back } = returnUrl();
   const { data, error } = await supabase.functions.invoke("tariff-checkout", {
-    body: { action: "checkout", tier, period: "month", return_url: back, ...(calendars ? { calendars } : null) },
+    body: {
+      action: "checkout",
+      tier,
+      return_url: back,
+      ...(period ? { period } : null),
+      ...(calendars ? { calendars } : null),
+    },
     ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
   });
   if (error) throw await checkoutRefusal(error);

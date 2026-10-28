@@ -4,7 +4,7 @@ import { lineTotal } from "@babun/shared/local/finance/appointment-calc";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { useInvoice } from "@/features/finances/invoices-queries";
-import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
 import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import { paymentReceiptDiscount, paymentReceiptLines } from "@/features/finances/receipt-for-payment";
@@ -14,12 +14,16 @@ import {
   useReceiptTransaction,
 } from "@/features/finances/receipts-queries";
 
-// ОТКУДА ЧЕК БЕРЁТ СЕБЯ: с нуля; на принятую оплату
-// (`transactionId` — значок чека в записи, «Выписать чек» инвойса); правка
-// выписанного (`receiptId` — «Изменить» в листе чека, тот же номер). В двух
-// последних случаях деньги уже в журнале: клиент, счёт и сумма — от оплаты.
+/** Слова бумаги чека: язык инвойса, чек без инвойса — по-английски. */
+const paperWords = (language: string | null | undefined) =>
+  invoiceDictionary(isUiLocale(language) ? language : "en");
 
-export type ReceiptSourceMode = "new" | "payment" | "edit";
+// ОТКУДА ЧЕК БЕРЁТ СЕБЯ: на принятую оплату (`transactionId` — значок чека в
+// записи, «Выписать чек» инвойса) или правка выписанного (`receiptId` —
+// «Изменить» в листе чека, тот же номер). Деньги уже в журнале: клиент, счёт
+// и сумма — от оплаты.
+
+type ReceiptSourceMode = "payment" | "edit";
 
 export function useReceiptSource(
   params: { transactionId?: string; receiptId?: string },
@@ -41,20 +45,19 @@ export function useReceiptSource(
   const tx = useReceiptTransaction(txId).data ?? null;
   const invoice = useInvoice(tx?.invoice_id ?? undefined);
   const appointment = useReceiptAppointment(tx && !tx.invoice_id ? tx.appointment_id : null);
-  const mode: ReceiptSourceMode = params.receiptId ? "edit" : params.transactionId ? "payment" : "new";
+  const mode: ReceiptSourceMode = params.receiptId ? "edit" : "payment";
   const ready =
-    mode === "new" ||
-    (!!tx &&
-      (mode !== "edit" || !!editing) &&
-      (!tx.invoice_id || !invoice.isLoading) &&
-      Boolean(tx.invoice_id || !tx.appointment_id || !appointment.isLoading));
+    !!tx &&
+    (mode !== "edit" || !!editing) &&
+    (!tx.invoice_id || !invoice.isLoading) &&
+    Boolean(tx.invoice_id || !tx.appointment_id || !appointment.isLoading);
   const invoiceRow = invoice.data ?? null;
   const invoiceNumber = invoiceRow?.number ?? null;
   const invoiceCompanyId = invoiceRow?.company_id ?? null;
 
   const seeded = useRef(false);
   useEffect(() => {
-    if (mode === "new" || !ready || !tx || seeded.current) return;
+    if (!ready || !tx || seeded.current) return;
     seeded.current = true;
     const base = {
       clientId: tx.client_id,
@@ -81,7 +84,9 @@ export function useReceiptSource(
       lines: paymentReceiptLines(
         tx,
         { invoiceLines: invoiceRow?.lines ?? null, appointment: appointment.data ?? null },
-        invoiceNumber ? `Оплата по инвойсу ${invoiceNumber}` : "Оплата",
+        // Строка чека — на языке бумаги: русское «Оплата» вшивалось в
+        // английский чек записи навсегда (чек неизменяем).
+        invoiceNumber ? `${paperWords(invoiceRow?.language).payment} · ${invoiceNumber}` : paperWords(invoiceRow?.language).payment,
       ),
       // Скидка инвойса — в «Итого» чека, а не потерянной строкой.
       ...paymentReceiptDiscount(invoiceRow?.lines ?? null),

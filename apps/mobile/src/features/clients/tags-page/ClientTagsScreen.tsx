@@ -9,6 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import {
@@ -17,6 +18,8 @@ import {
 } from "@/components/ui/AppearanceSheet";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
+import { isHumanText } from "@babun/shared/i18n/runtime";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -58,7 +61,7 @@ export function ClientTagsScreen() {
   // ТЕГИ КОМАНДЫ (закреплены за командой). Команда
   // едет адресом из настроек клиентов; без неё — первая команда.
   const { team } = useLocalSearchParams<{ team?: string }>();
-  const { data: ownTeams = [] } = useTeams();
+  const { data: ownTeams = [] } = useTeams({ display: true });
   const teamId =
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
@@ -117,6 +120,13 @@ export function ClientTagsScreen() {
   );
   const busy =
     createTag.isPending || updateTag.isPending || deleteTag.isPending;
+  // НОВЫЙ ТЕГ — ПОСЛЕДНИМ И СВОИМ ЦВЕТОМ: первый цвет палитры, которого нет у
+  // тегов команды (как у нового календаря), место — после последнего.
+  const newTagColor = useMemo(() => {
+    const used = new Set(tags.map((tag) => tag.color).filter(Boolean));
+    return (PRESET_COLOR_CYCLE.find((c) => !used.has(c.value)) ?? PRESET_COLOR_CYCLE[2]).value;
+  }, [tags]);
+  const newTagPosition = tags.reduce((max, tag) => Math.max(max, tag.position ?? 0), -1) + 1;
 
   const submit = async (draft: {
     name: string;
@@ -139,6 +149,7 @@ export function ClientTagsScreen() {
           color: draft.color,
           icon: draft.icon,
           teamId,
+          position: newTagPosition,
         });
         toast("Тег создан", "success");
       }
@@ -212,7 +223,7 @@ export function ClientTagsScreen() {
           state="error"
           fill
           subtitle={
-            tagsQuery.error instanceof Error
+            tagsQuery.error instanceof Error && isHumanText(tagsQuery.error.message)
               ? tagsQuery.error.message
               : undefined
           }
@@ -222,18 +233,9 @@ export function ClientTagsScreen() {
           }}
         />
       ) : tags.length === 0 ? (
-        <EmptyState
-          fill
-          title="Тегов пока нет"
-          action={
-            readOnly
-              ? undefined
-              : {
-                  label: "Добавить тег",
-                  onPress: () => setEditing({ mode: "create" }),
-                }
-          }
-        />
+        // Пустое состояние — только слова: «Добавить тег» внизу, там же, где
+        // у полного списка (AGENTS 7.1).
+        <EmptyState fill title="Тегов пока нет" />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -330,15 +332,14 @@ export function ClientTagsScreen() {
         </ScrollView>
       )}
 
-      {!readOnly && !tagsQuery.isLoading && !tagsQuery.isError && tags.length > 0 ? (
-        <View
-          style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
-        >
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА: пуст список или полон. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton
             label="Добавить тег"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <TagSheet
@@ -347,6 +348,7 @@ export function ClientTagsScreen() {
         onClose={() => setEditing(null)}
         onSubmit={submit}
         templates={tagTemplates}
+        newColor={newTagColor}
       />
     </Screen>
   );

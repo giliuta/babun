@@ -7,7 +7,7 @@
 
 /** Готовые подписи для тоста: рядом с ним контекста нет, счёт назван полностью
  *  («Наличные · Юра»), сумма — с валютой. */
-export interface TransferToastLabels {
+interface TransferToastLabels {
   amountText: string;
   fromLabel: string;
   toLabel: string;

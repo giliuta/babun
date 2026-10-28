@@ -11,6 +11,7 @@ import {
 import type { Service } from "@/features/services/queries";
 import { priceRowSub } from "./price-list-rules";
 import type { ServicesListState } from "./use-services-list";
+import { LIST_ROW } from "@/components/ui/tokens";
 
 /** Высота строки фиксирована: по ней перетаскивание считает, через сколько
  *  соседей перелетел палец. Две строки текста + воздух. */
@@ -124,18 +125,14 @@ export function ServicePriceRow({
             <Text
               maxFontSizeMultiplier={1.3}
               numberOfLines={1}
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: t.ink,
-              }}
+              style={{ ...LIST_ROW.name, color: t.ink }}
             >
               {svc.name}
             </Text>
             <Text
               maxFontSizeMultiplier={1.3}
               numberOfLines={1}
-              style={{ fontSize: 13, color: t.sub }}
+              style={{ ...LIST_ROW.sub, color: t.sub }}
             >
               {sub}
             </Text>
@@ -147,8 +144,7 @@ export function ServicePriceRow({
             // `tabular-nums` в NativeWind — no-op (ДС §2):
             // работает только это свойство.
             style={{
-              fontSize: 16,
-              fontWeight: "600",
+              ...LIST_ROW.name,
               color: t.ink,
               fontVariant: ["tabular-nums"],
             }}

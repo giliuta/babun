@@ -4,8 +4,8 @@
 import { timeToMinutes, type TeamSchedule } from "@babun/shared/local/schedule";
 import { allDays } from "@/features/reference/schedule-days";
 
-export type TimePair = { start: string; end: string };
-export type TimePatch = { hour?: number; minute?: number };
+type TimePair = { start: string; end: string };
+type TimePatch = { hour?: number; minute?: number };
 
 export const hm = (v: string) => {
   const [h, m] = v.split(":").map(Number);

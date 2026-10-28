@@ -16,9 +16,10 @@ import {
   useTrashAppointment,
 } from "@/features/calendar/mutations";
 import { useRestoreAppointment } from "@/features/calendar/deleted-appointments";
-import { holdsMoney } from "./appointment-rules";
+import { holdsMoney, keptForMoneyHistory } from "./appointment-rules";
+import { useInvoices } from "@/features/finances/invoices-queries";
 
-export interface RecordLifecycleInput {
+interface RecordLifecycleInput {
   toast: ReturnType<typeof useToast>;
   /** Статус записи сменился на сервере — отменой, возвратом или откатом из
    *  тоста. Странице записи это нужно, чтобы «Сохранить» не вернул старый. */
@@ -33,6 +34,12 @@ export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecyc
   const updateAppt = useQuietUpdateAppointment();
   const trashAppt = useTrashAppointment();
   const restoreAppt = useRestoreAppointment();
+  // Инвойс по записи — любой, и погашенный кредит-нотой тоже: сервер не
+  // удаляет запись, у которой он есть.
+  const invoices = useInvoices().data;
+  const invoicedIds = new Set((invoices ?? []).map((i) => i.appointment_id).filter(Boolean));
+  /** Можно ли удалить запись — правилом сервера (`keptForMoneyHistory`). */
+  const canDelete = (apt: Appointment) => !keptForMoneyHistory(apt, invoicedIds.has(apt.id));
 
   /** Отмена и возврат в план — одна дорога с откатом из тоста. Причины
    *  отмены нет: визит отменяется одним тапом, а прежняя причина у старой
@@ -121,7 +128,7 @@ export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecyc
         (apt.paid_amount ?? 0) > 0 ||
         apt.payments.length > 0 ||
         apt.payment != null);
-    if (hasRecordedPayment) {
+    if (hasRecordedPayment || !canDelete(apt)) {
       // Отменённая с возвратом — уже «отменена и возвращена»: совет «отмените
       // или оформите возврат» был тупиком.
       notify(
@@ -179,5 +186,5 @@ export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecyc
     });
   };
 
-  return { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed };
+  return { setCancelled, restoreCancelled, cancelVisit, deleteAppointmentConfirmed, canDelete };
 }

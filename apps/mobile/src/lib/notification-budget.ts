@@ -10,12 +10,12 @@ const ANDROID_BABUN_NOTIFICATION_BUDGET = 256;
 // native window are promoted on a later launch instead of being forgotten.
 export const PERSISTED_BABUN_NOTIFICATION_BUDGET = 2_048;
 
-export interface NotificationBudgetCandidate {
+interface NotificationBudgetCandidate {
   logicalId: string;
   fireAt: number;
 }
 
-export type NotificationOwnerDisposition =
+type NotificationOwnerDisposition =
   | "scheduled"
   | "deferred"
   | "capacity";

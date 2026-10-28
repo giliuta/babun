@@ -16,6 +16,7 @@ import {
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -26,10 +27,7 @@ import {
   isWayOffered,
   useEnabledWays,
 } from "@/features/clients/contact-ways";
-import {
-  mapServicesSummary,
-  useEnabledMapServices,
-} from "@/features/clients/map-services";
+import { mapServicesSummary, useTeamMapServices } from "@/features/clients/map-services";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
 import { useClientSources } from "@/features/clients/acquisition-sources";
@@ -52,14 +50,16 @@ import {
 } from "@/features/clients/settings-summary";
 import { anyClientSetting } from "@/features/clients/settings-levels";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
+import { CallerIdSettingsGroup } from "@/features/clients/caller-id/CallerIdSettingsGroup";
 import { SettingsGroup } from "./SettingsGroup";
 
 // «НАСТРОЙКИ КЛИЕНТОВ» — шестерёнка списка клиентов. Разложены ПО
-// ФУНКЦИЯМ КАРТОЧКИ:
-//   • Клиент — строка в списке, связь, заметка, личное;
-//   • Объекты — типы объектов и карты для маршрута (без своей страницы);
-//   • Карточка — метка и тег, люди, файлы, реквизиты;
-//   • Данные — импорт, выгрузка, архив и корзина (только своей базы).
+// ФУНКЦИЯМ КАРТОЧКИ, общей группы «Справочники» нет:
+//   • Клиент — блоки клиента (какие блоки на карточке), связь; карты для
+//     маршрута — здесь же, когда объекты выключены;
+//   • Объекты — типы объектов и карты для маршрута;
+//   • Карточка — теги и источники: значения блоков «Тег» и «Источник»;
+//   • Данные — контакты телефона, импорт, выгрузка, удалённые (своя база).
 // Сортировка ЗДЕСЬ НЕ живёт: она первая строка листа «Фильтры».
 
 // Подпись «Блоков клиентов» называет выключенные блоки словами их страницы.
@@ -121,9 +121,10 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
   const { data: appointmentsForStats = [] } = useAppointments();
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsMap = useMemo(
-    () => buildStatsMap(clients, appointmentsForStats, invoicing),
-    [clients, appointmentsForStats, invoicing],
+    () => buildStatsMap(clients, appointmentsForStats, invoicing, today),
+    [clients, appointmentsForStats, invoicing, today],
   );
   const tags = useMemo(() => tagsQuery.data ?? [], [tagsQuery.data]);
   // Теги — у команды: счётчик строки — теги выбранной команды.
@@ -147,7 +148,7 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
 
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд.
-  const mapServices = useEnabledMapServices(teamId);
+  const mapServices = useTeamMapServices(teamId);
   // Чем связываются с клиентом. Звонок в настройке не стоит (идёт как стандарт) — и в подписи его нет.
   const enabledWays = useEnabledWays(teamId);
   const waysSub = enabledWays
@@ -257,6 +258,8 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
             ]}
           />
 
+          <CallerIdSettingsGroup />
+
           {typesRow || mapsInObjects ? (
             <SettingsGroup
               title="Объекты"
@@ -285,12 +288,11 @@ export function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantPa
             />
           ) : null}
 
-          {/* ТЕГИ И ИСТОЧНИКИ — СПРАВОЧНИКИ КОМАНДЫ: какие есть. Включён ли
-              блок «Тег» на карточке — на странице «Блоки клиентов». Источники
-              — справочник команды с засеянными готовыми, со своим правом
-              «Источники» (как у каждой строки шестерёнки). */}
+          {/* КАРТОЧКА — ЗНАЧЕНИЯ ЕЁ БЛОКОВ: какие теги и источники есть у
+              команды. Включён ли блок на карточке — на странице «Блоки
+              клиентов». У каждой строки своё право («Теги», «Источники»). */}
           <SettingsGroup
-            title="Справочники"
+            title="Карточка"
             rows={[
               // Строка — своим правом «Теги» (по «Блокам клиентов» она
               // открывалась бы пустой страницей).

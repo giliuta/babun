@@ -11,7 +11,7 @@ import { SUPPORT_CONTACTS } from "@/features/cabinet/help";
 // Пока поле пусто, страница пишет «—»: такие страницы не выкладываются, пока
 // владелец не заполнил всё (сторож — legal-texts.test.ts, проверка `isReady`).
 
-export interface LegalOperator {
+interface LegalOperator {
   /** Человек или фирма, которая предоставляет сервис: «Babun Ltd». */
   name: string;
   /** Адрес для писем: город и страна как минимум. */
@@ -27,8 +27,3 @@ export const LEGAL_OPERATOR: LegalOperator = {
 
 /** Почта для вопросов о данных и удаления аккаунта — та же, что в «Помощи». */
 export const legalEmail = (): string => SUPPORT_CONTACTS.email.trim();
-
-/** Заполнено ли всё, без чего документы выкладывать нельзя. */
-export function isLegalReady(operator: LegalOperator = LEGAL_OPERATOR, email = legalEmail()): boolean {
-  return operator.name.trim() !== "" && operator.address.trim() !== "" && email !== "";
-}

@@ -11,8 +11,8 @@ import {
 
 // ПАМЯТЬ СЕТКИ: МАСШТАБ И ВРЕМЯ, НА КОТОРОМ КАЛЕНДАРЬ ОТКРЫТ.
 //
-// При заходе в приложение, смене вида и свайпе на день с другим графиком
-// календарь открывается там же, где человек был, а не прыгает к началу работы.
+// При смене вида и свайпе на день с другим графиком календарь остаётся там же,
+// где человек был, а не прыгает к началу работы.
 //
 // Масштаб хранится не в пикселях, а в том, КАК ЕГО ВИДИТ ЧЕЛОВЕК: «весь день на
 // экране» или «N часов на экране». Пиксели зависят от высоты экрана (Неделя и
@@ -24,14 +24,17 @@ import {
 // Время — абсолютное (часы от полуночи у верхнего края), а не offset: у команд
 // разные окна, и «я смотрел на 14:00» обязано пережить переход между ними.
 //
-// Всё — на устройстве и одно на все компании: это про глаза человека и его
-// экран, а не про данные фирмы (ключ `device:` переход переживает).
+// Масштаб — на устройстве и один на все компании: это про глаза человека и
+// его экран, а не про данные фирмы (ключ `device:` переход переживает).
+//
+// Время у верха живёт ТОЛЬКО ДО ВЫХОДА ИЗ ПРИЛОЖЕНИЯ. Новый запуск — новый
+// вопрос «что сейчас»: календарь открывается на линии «сейчас» или на начале
+// работы (`deriveOpenHour`), а не на часе, где его бросили вчера.
 
 /** «Весь день» или сколько часов помещается на экране. */
 export type GridZoom = "fit" | number;
 
 const ZOOM_KEY = devicePrefKey("calendar.zoom");
-const TOP_KEY = devicePrefKey("calendar.topHour");
 
 const usable = (vh: number) => Math.max(1, vh - PAD_TOP - PAD_BOTTOM);
 
@@ -94,16 +97,35 @@ function write<T>(key: string, value: T): void {
 
 const zoomListeners = new Set<(zoom: GridZoom) => void>();
 
-export function readGridZoom(): GridZoom | null {
+/** МАСШТАБ ПРИ ОТКРЫТИИ — НАСТРОЙКА, А НЕ ПОСЛЕДНИЙ ЩИПОК. Щипок писал тот
+ *  же ключ, и настройка «Масштаб при открытии» молча становилась тем, чем
+ *  кончился последний жест. Теперь щипок живёт до конца сессии (`noteGridZoom`),
+ *  а на диск масштаб пишет только выбор в настройках. */
+let sessionZoom: GridZoom | null = null;
+
+/** Масштаб, с которым сетка открывается: выбор в настройках. */
+export function readOpeningZoom(): GridZoom | null {
   const v = read<GridZoom>(ZOOM_KEY);
   return v === "fit" || (typeof v === "number" && v > 0) ? v : null;
 }
 
-/** Запись масштаба. `announce` — выбор в настройках: открытая сетка
- *  перестраивается сразу. Щипок сам себе не объявляет — он уже на экране. */
+/** Масштаб сетки сейчас: щипок этой сессии, иначе — при открытии. */
+export function readGridZoom(): GridZoom | null {
+  return sessionZoom ?? readOpeningZoom();
+}
+
+/** Выбор в настройках: пишется на диск, сбрасывает щипок сессии и (с
+ *  `announce`) перестраивает открытую сетку сразу. */
 export function writeGridZoom(zoom: GridZoom, announce = false): void {
   write(ZOOM_KEY, zoom);
+  sessionZoom = null;
   if (announce) for (const cb of zoomListeners) cb(zoom);
+}
+
+/** Щипок: масштаб держится до конца сессии, настройку не трогает. Сам себе
+ *  не объявляет — он уже на экране. */
+export function noteGridZoom(zoom: GridZoom): void {
+  sessionZoom = zoom;
 }
 
 export function subscribeGridZoom(cb: (zoom: GridZoom) => void): () => void {
@@ -113,12 +135,13 @@ export function subscribeGridZoom(cb: (zoom: GridZoom) => void): () => void {
   };
 }
 
+let runTopHour: number | null = null;
+
 export function readTopHour(): number | null {
-  const v = read<number>(TOP_KEY);
-  return typeof v === "number" && v >= 0 && v < 24 ? v : null;
+  return runTopHour;
 }
 export function writeTopHour(hour: number): void {
-  write(TOP_KEY, Math.round(hour * 100) / 100);
+  if (hour >= 0 && hour < 24) runTopHour = Math.round(hour * 100) / 100;
 }
 
 /** Последняя замеренная высота сетки — чтобы первый кадр открылся уже в

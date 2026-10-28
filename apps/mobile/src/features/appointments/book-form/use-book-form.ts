@@ -34,6 +34,14 @@ import { bookSaveActions } from "./book-save";
 import { bookChrome, bookTitle } from "./book-chrome";
 import { useRecordMenu } from "./use-record-menu";
 import { recordComment } from "@/features/calendar/record-title";
+import { useTenantId } from "@/lib/tenant";
+import { paramsWithDraft } from "./book-draft-store";
+import { applyBookSnapshot } from "./apply-book-snapshot";
+import {
+  usePersistBookDraft,
+  useRestoreEditDraft,
+  useRestoredBookDraft,
+} from "./use-book-draft-memory";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -56,13 +64,33 @@ export function useBookForm() {
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<BookParams>();
+  // ЧЕРНОВИК НОВОЙ ЗАПИСИ — С ТЕЛЕФОНА (`book-draft-store.ts`). Поднятый
+  // проходит через умолчания формы своими командой, клиентом, днём и часом;
+  // «что ввёл человек» по-прежнему сверяется с настоящими параметрами.
+  const tenantId = useTenantId();
+  const draftMemory = useRestoredBookDraft(
+    tenantId,
+    first(params.appointmentId) ?? null,
+    first(params.kind) === "event" ? "event" : "work",
+    first(params.copyOf) != null,
+  );
+  const formParams = useMemo(
+    () => paramsWithDraft(params, draftMemory.restored),
+    [params, draftMemory.restored],
+  );
   const [teamId, setTeamId] = useState<string | null>(
-    first(params.teamId) ?? null,
+    first(formParams.teamId) ?? null,
   );
   const look = useBookBlocks(teamId);
   const refs = useBookReferences(teamId);
   const { teams, masters, services, clients, allAppts, calendarSettings } = refs;
-  const draft = useBookDraft({ params, teamId, setTeamId, allAppts });
+  const draft = useBookDraft({
+    params: formParams,
+    teamId,
+    setTeamId,
+    allAppts,
+    restored: draftMemory.restored,
+  });
   const { isEdit, editing, kind, clientId, date, timeStart, timeEnd, serviceIds } = draft;
   const sheets = useBookSheets();
 
@@ -100,7 +128,7 @@ export function useBookForm() {
   useBookPrefill({
     ...refs,
     ...draft,
-    params,
+    params: formParams,
     team,
     teamId,
     setTeamId,
@@ -125,7 +153,11 @@ export function useBookForm() {
   });
   const slot = useSlotWarnings({
     allAppts,
-    editId: draft.editId,
+    // НОВАЯ ЗАПИСЬ СВЕРЯЕТСЯ ПОД СВОИМ БУДУЩИМ id. Создание кладёт её в список
+    // дня сразу, ещё под спиннером «Создать», — и под чужим id черновик
+    // находил в нём самого себя: на миг вспыхивало «Пересекается с событием
+    // этой команды».
+    editId: draft.editId ?? draft.newRecordIdRef.current,
     kind,
     teamId,
     date,
@@ -195,7 +227,9 @@ export function useBookForm() {
   useBookingChain({
     chainStep: picks.chainStep,
     setChainStep: picks.setChainStep,
-    isEdit,
+    // Поднятый черновик — запись на середине: цепочка «клиент → услуги» не
+    // начинается заново, и её лист не накрывает плашку «Удалить черновик».
+    isEdit: isEdit || draftMemory.restored != null,
     kind,
     referencesPending,
     clientId,
@@ -247,7 +281,66 @@ export function useBookForm() {
     },
     from: params.from,
     saveable: verdict.canSave && !verdict.workLocked,
+    missingHint: verdict.canSave ? undefined : verdict.missingHint,
     navigation,
+    router,
+    onDiscardDraft: draftMemory.forget,
+  });
+  const editOpened = useRestoreEditDraft({
+    memory: draftMemory,
+    tenantId,
+    editing: draft.editing,
+    hydrated: draft.hydrated,
+    apply: (snap) => applyBookSnapshot(draft, setTeamId, snap),
+    toast,
+    router,
+  });
+  usePersistBookDraft({
+    memory: draftMemory,
+    tenantId,
+    isEdit,
+    edit: editOpened,
+    dirty: guard.dirty,
+    snapshot: {
+      kind,
+      teamId,
+      clientId,
+      locationId: draft.locationId,
+      address: draft.address,
+      date,
+      timeStart,
+      timeEnd,
+      durationTouched: draft.durationTouched,
+      durationByHand: draft.durationByHand,
+      serviceIds,
+      overrides: draft.overrides,
+      masterId: draft.masterId,
+      customTotal: draft.customTotal,
+      totalDraft: draft.totalDraft,
+      discountType: draft.discountType,
+      discountValue: draft.discountValue,
+      recordVatMode: draft.recordVatMode,
+      recordVatRate: draft.recordVatRate,
+      status: draft.status,
+      // Набранное прямо сейчас, а не осевшее на blur: последние буквы заметки
+      // иначе не попадали в снимок.
+      comment: draft.commentNow.current,
+      eventTitle: draft.eventTitle,
+      eventColor: draft.eventColor,
+      eventTypeId: draft.eventTypeId,
+      eventNotes: draft.eventNotes,
+      eventAddress: draft.eventAddress,
+      eventUrl: draft.eventUrl,
+      eventReminderOffset: draft.eventReminderOffset,
+      repeat: draft.repeat,
+      allDay: draft.allDay,
+      reminderOn: draft.reminderOn,
+      colorOverride: draft.colorOverride,
+      city: draft.city,
+      newRecordId: draft.newRecordIdRef.current,
+      cityTouched: draft.cityTouched,
+    },
+    toast,
     router,
   });
   const actions = bookSaveActions({
@@ -267,6 +360,7 @@ export function useBookForm() {
     client,
     setReminderSheetOpen: sheets.setReminderSheetOpen,
     leaveBook: guard.leaveBook,
+    onSaved: draftMemory.forget,
   });
   // «Сохранить» из вопроса при выходе — та же кнопка, что внизу формы.
   guard.saveRef.current = actions.save;
@@ -283,6 +377,7 @@ export function useBookForm() {
     setStatus: draft.setStatus,
     editBaselineRef: guard.editBaselineRef,
     leaveBook: guard.leaveBook,
+    leaveThen: guard.leaveThen,
     toast,
     router,
   });
@@ -303,8 +398,12 @@ export function useBookForm() {
     customTotal: draft.customTotal,
     effectiveTotal: totals.effectiveTotal,
     todayYmd: label.todayYmd,
+    nowMinutes: label.nowMinutes,
     situationPalette: look.situationPalette,
     activeSituations: look.activeSituations,
+    cancelledColor: look.cancelledColor,
+    paidColor: look.paidColor,
+    prepaidColor: look.prepaidColor,
     fallbackColor: look.fallbackColor,
     accent: t.accent,
     canvas: t.canvas,

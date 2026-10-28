@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -66,6 +67,14 @@ export function InvoiceNumberRow({
   useEffect(() => {
     if (open) setDraft("");
   }, [open]);
+
+  // Набранный номер не пропадает от свайпа и скрима — сначала вопрос.
+  const guard = useGuardedClose({
+    dirty: draft !== "",
+    busy: save.isPending,
+    onClose: () => setOpen(false),
+    message: "Набранный номер не сохранится.",
+  });
 
   const typed = /^\d{1,6}$/.test(draft) ? Number(draft) : null;
   const valid = typed != null && typed >= 1;
@@ -151,10 +160,11 @@ export function InvoiceNumberRow({
       )}
 
       <BottomSheet
-        visible={open}
+        visible={open && !guard.hidden}
         title={target.docType === "receipt" ? "Номер чека" : "Номер инвойса"}
         avoidKeyboard
-        onClose={() => setOpen(false)}
+        onClose={guard.close}
+        onExited={guard.onExited}
         // Кнопка — прямо в подвале: отступ от краёв лист даёт сам, и лишняя
         // обёртка с 16pt делала кнопку уже поля над ней.
         footer={

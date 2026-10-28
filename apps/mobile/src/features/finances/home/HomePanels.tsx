@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 import { GUTTER } from "@/components/ui/tokens";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { useThemeColors } from "@/theme/colors";
 import { AccountsPanel } from "../AccountsPanel";
 import { DebtorsList } from "../DebtorsList";
@@ -153,6 +154,7 @@ export function HomePanels({ home }: { home: FinanceHome }) {
     );
   }
   return (
+    <TourTarget id="finances.feed" shape="strip" flex>
     <View style={{ flex: 1 }}>
       {/* ПОИСК ЗА ВСЁ ВРЕМЯ — СЛОВАМИ, а не молчаливым нулём: период
           честно пуст, но операция может стоять за его границей. */}
@@ -195,5 +197,6 @@ export function HomePanels({ home }: { home: FinanceHome }) {
         onDeleteRow={deleteRow}
       />
     </View>
+    </TourTarget>
   );
 }

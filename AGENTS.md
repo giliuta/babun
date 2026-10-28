@@ -274,6 +274,15 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    у клиента), вторую и третью строки, число справа, свой орган вместо галки
    (степпер количества), погашенную строку.
 
+   **ИСКЛЮЧЕНИЕ ОДНО — НАБОР-БАРАБАН С ДВУХЧАСТНОЙ СТРОКОЙ** (часовой пояс
+   `calendar/TimezoneSheet.tsx`, валюта `settings/CurrencySheet.tsx`): один
+   вопрос, длинный упорядоченный набор, и у строки два куска — имя слева,
+   значение справа. Такую строку держит закон DESIGN-SYSTEM «строка выбора
+   из двух частей» (LOCKED 2026-08-27): выбранная 17/600 и полоса `canvas`
+   вместо галки, прочие 15/400, значение 14/500 моноширинным. Это не повод
+   для своей строки в остальных шторках. Поле поиска у них пока своё (44pt,
+   17pt) — его сводят к `SelectSearch`; высоту общего поля решает владелец.
+
    **ОДИНОЧНЫЙ ВЫБОР — БЕЗ КНОПКИ:** тап выбирает и закрывает, тап по уже
    выбранному снимает там, где значение можно не иметь. Кнопка в футере
    появляется только у МНОГОВЫБОРНОЙ шторки («Применить») либо когда из
@@ -350,7 +359,12 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 6. **РЯД — ТОЛЬКО `card-rows` И `SectionCard`.** `FieldRow`, `ChoiceRow`,
    `NavRow`, `ChooseRow`, `ActionRow`, `SwipeRow`, `ReorderList`. Подпись
    ВНУТРИ карточки — `SectionCard`; подпись НАД карточкой — `RowGroup`. В
-   одном сценарии смешивать нельзя.
+   одном сценарии смешивать нельзя. Строка ЛЮБОГО списка (клиенты, «Список»
+   календаря, люди, прайс, события, шторка выбора, лента финансов) — роль
+   `LIST_ROW` из `ui/tokens.ts`: имя 15/600, подпись 13, высота 52 (владелец
+   2026-10-27 выбрал глазами: «ставь везде»; сторож
+   `lib/list-row-scale.test.ts`). Строка-дверь настроек `SettingsRow` — своя
+   роль, 17/500.
 7. **КНОПКА ОДНА.** `GradientButton` (главная) и `Button variant="secondary"`
    (второй вид) — оба `t.radius.card`. Своя `Pressable` в роли кнопки — только
    если это ряд списка, и тогда это `card-rows`. Голый «+» и floating FAB
@@ -363,8 +377,11 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
     записано давно (анатомия `BottomSheet`: шапка → тело → футер вне
     прокрутки), а для СТРАНИЦЫ жило только примером — и разошлось. Закон
     один и тот же: у страницы-списка кнопка создания стоит внизу, во всю
-    ширину, `GradientButton` в `View` с полями `20 / 8 / 10`; образец —
-    футер списка клиентов («Создать клиента»). МЕСТО ДЕЙСТВИЯ НЕ ЗАВИСИТ ОТ
+    ширину, в `PageFooter` (`components/ui/PageFooter.tsx`: поля
+    `20 / 8 / 10`; страница без таб-бара — `standalone`, над бумагой
+    документа — `bar`). Пара листу — `SheetFooter`. Свой `View` с полями под
+    кнопкой не заводят: так выросли три геометрии, и кнопка прыгала между
+    вкладками. МЕСТО ДЕЙСТВИЯ НЕ ЗАВИСИТ ОТ
     СОДЕРЖИМОГО: список пуст или полон — кнопка на том же месте. Пустое
     состояние — это СЛОВА; `EmptyState action` остаётся за ошибкой
     («Повторить»), а не за созданием. Строка `AddRow` в конце списка — это
@@ -402,20 +419,29 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
     может трогать… и это в правила надо прописать: если я создаю новый блок,
     надо понимать, что он может делать».
 
-    Права в продукте выдаются НА КАЛЕНДАРЬ (`public.calendar_members.grants`),
-    а не на компанию: у одного человека в разных календарях галочки РАЗНЫЕ.
-    Роль в `tenant_members` остаётся смыслом компанейским — подписка, профиль
-    компании, выдача прав.
+    Права в продукте выдаются ЧЕЛОВЕКУ ПО БЛОКАМ. Реестр блоков —
+    `public.access_blocks` (ключ вида `calendar.records`, у каждого — свои
+    уровни `levels`, первое значение — умолчание; пишут его только миграции).
+    Уровень человека — строка `public.member_access`; нет строки — умолчание.
+    Блок с `scope = 'calendar'` ставится на КАЛЕНДАРЬ, и только на
+    прикреплённый (`member_calendars`): у одного человека в разных календарях
+    уровни РАЗНЫЕ. Блок с `scope = 'company'` — один на аккаунт. Роль в
+    `tenant_members` остаётся смыслом компанейским — подписка, профиль
+    компании, выдача прав. Старый словарь `calendar_members.grants` (`view`,
+    `edit_all`…) читает только `current_user_calendar_ids` — нового права там
+    не ищут и не заводят.
 
     Поэтому новый блок, экран или действие заводится вместе с ответом на три
     вопроса, и ответ пишется в том же коммите:
-    1. **Каким правом он закрыт** — из словаря `calendar_members.grants`
-       (`view · book · edit_all · clients · phones · finance · settings`). Нет
-       подходящего — значит словарь расширяется миграцией, а не блок остаётся
-       без права.
+    1. **Каким правом он закрыт** — какой блок `access_blocks` и какой уровень
+       (`off · read · write` или свои уровни блока) нужен. Нет подходящего —
+       значит реестр расширяется миграцией, а не блок остаётся без права.
+       Слова блоков на экране прав — `features/access/rights-ui/right-words.ts`.
     2. **Что видит человек без этого права** — блока нет вовсе, или он виден
        только для чтения. Третьего («видно, но при нажатии ошибка») не бывает.
-    3. **Где это проверяет СЕРВЕР** — политика RLS или безопасная функция.
+    3. **Где это проверяет СЕРВЕР** — политика RLS или безопасная функция
+       через `access_calendars_of(tenant, user, block, min)` (календарный блок)
+       или `access_company(block, min)` (блок аккаунта).
        Галочка, которую знает только экран, — ложное обещание безопасности:
        так уже было с тридцатью одной галочкой на экране мастера, которые
        писались в `masters.profile.permissions` и не значили ничего.
@@ -451,7 +477,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` (тело — `src/features/services/price-list/ServicesList.tsx`) | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
-| Типы объектов | `src/features/clients/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `cabinet/`, `clients/`, `(shared)/` |
+| Типы объектов | `src/features/clients/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `clients/`, `(shared)/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
 | Запись и событие (форма) | `app/book/index.tsx` (тело — `src/features/appointments/book-form/`, проводка — `use-book-form.ts`) | — |
 | Вид и состав записи и события («Записи») | `src/features/calendar/design/DesignScreen.tsx` | `app/(dashboard)/(home)/calendar/design.tsx` |
@@ -461,6 +487,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
 | Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `cabinet/requisites.tsx` (с 03.10 — Кабинет, строка «Реквизиты»: «единый блок на все компании»), `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
+| Онлайн-запись (страница заказчика `babun.app/b/<токен>` + шестерёнка календаря) | заказчик — `src/features/online-booking/OnlineBookingScreen.tsx` (форма — `BookingForm.tsx`, время — `BookingSlotPicker.tsx`); владелец — `OnlineBookingSettingsScreen.tsx` (выключатель, ссылка, услуги) и строка `OnlineBookingSettingsRow.tsx`; шапка бизнеса публичных страниц — `components/blocks/PublicBusinessHeader.tsx` (её же берёт `/r`) | `app/b/[token].tsx`, `app/(dashboard)/(home)/calendar/online-booking.tsx`. Право — только владелец компании календаря; сервер — `online_booking_settings` / `_set` / `_set_service`, страница без входа — `online_booking_page` / `_slots` / `_create` (anon, только токен) |
 
 **Реестр выбора — какой блок открывает какую шторку и что написано на кнопке.**
 «Добавь блок с услугой» значит именно эту строку: блок оттуда, шторка оттуда,
@@ -630,7 +657,8 @@ When element context arrives from the browser bridge:
 1. Always read the linked component file fully before editing
 2. Respect existing patterns:
    - Colours come from `apps/mobile/docs/DESIGN-SYSTEM.md` and the tokens in
-     `apps/mobile/global.css` (brand `#2c5be0`) — never hardcode a new hue
+     `apps/mobile/src/theme/colors.ts` (`useThemeColors()`, brand `#2c5be0`;
+     `global.css` only mirrors it for classes) — never hardcode a new hue
    - Components max 400 lines, split if needed
    - RU strings in UI, EN names; comments explain why, never history (rule 8)
    - TypeScript strict, no `any`

@@ -8,6 +8,7 @@ import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 import { isInvitationEmail } from "@/features/settings/invitation-flow";
+import { useAndroidBack } from "@/lib/android-back";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 
@@ -36,6 +37,7 @@ import {
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { useDraftTeamAccess } from "./draft-team-access";
+import { draftWithRole } from "./role-draft";
 import { useStepAllowed, useTeamsAllowed } from "@/session/use-partner-manager";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ. Как у клиента, создание и жизнь — одна карточка с режимом (AGENTS, Canon
@@ -45,7 +47,7 @@ import { useStepAllowed, useTeamsAllowed } from "@/session/use-partner-manager";
 //   • member — `access/[userId]`: человек уже в календаре.
 // Тело одно (`MasterCardView`); режим решает, откуда данные и куда правка.
 
-export type MasterCardProps =
+type MasterCardProps =
   | { mode: "draft"; teamId: string | null; cardId?: string | null; onBack: () => void }
   | { mode: "invite"; invitationId: string; onBack: () => void }
   | { mode: "member"; userId: string; teamId: string | null; onBack: () => void };
@@ -142,6 +144,9 @@ function MasterDraftCard({
     }
     confirmThen("Удалить черновик?", { confirmLabel: "Удалить", destructive: true }, close);
   };
+  // Системная «назад» Android — та же стрелка: иначе она уводила мимо вопроса,
+  // а черновик молча оставался в `draft-store` до следующего открытия.
+  useAndroidBack(true, leave);
 
   const openArea = (area: string) =>
     router.push(
@@ -155,6 +160,8 @@ function MasterDraftCard({
     initialTeam: teamId,
     rightsHref: `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
     onAdd: () => setCalendarsOpen(true),
+    onApplyRole: (role, team) =>
+      blocks && updateMasterDraft((currentDraft) => draftWithRole(currentDraft, blocks, role, team)),
   });
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и

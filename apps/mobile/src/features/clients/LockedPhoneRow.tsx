@@ -10,37 +10,33 @@ import { CONTACT_COLUMN } from "@/features/clients/contact-column";
 // Место номера в блоке «Клиент» не пропадает — пропадают цифры. Кнопка
 // звонка в хвосте та же, что у открытого номера: тап открывает номер (дверь
 // с журналом), и строка становится обычной — с цифрами и звонком. Кнопки
-// внутри содержимого нет: действие — прежний звонок.
-//   • `day`   — словами «Номер откроется в день записи», без кнопки;
-//   • `right` — строки нет вовсе: права на телефоны нет, и блок молчит.
+// внутри содержимого нет: действие — прежний звонок. `right` — строки нет
+// вовсе: права на телефоны нет, и блок молчит.
 
 export function LockedPhoneRow({ client }: { client: Client }) {
   const t = useThemeColors();
   const { open } = useOpenMemberContacts();
   if (client.contacts_hidden === "right") return null;
-  const day = client.contacts_hidden === "day";
   return (
     <FieldRow
       label="Телефон"
       column={CONTACT_COLUMN}
       separated
-      value={day ? "Откроется в день записи" : "•• ••• •••"}
+      value="•• ••• •••"
       placeholder="Телефон"
       readOnly
       noCopy
-      tabular={!day}
+      tabular
       valueColor={t.sub}
       onSave={() => undefined}
       trailing={
-        day ? null : (
-          <RowActionButton
-            icon={Phone}
-            color={t.accent}
-            label="Открыть номер"
-            hint="Каждое открытие видно владельцу"
-            onPress={() => void open(client)}
-          />
-        )
+        <RowActionButton
+          icon={Phone}
+          color={t.accent}
+          label="Открыть номер"
+          hint="Каждое открытие видно владельцу"
+          onPress={() => void open(client)}
+        />
       }
     />
   );

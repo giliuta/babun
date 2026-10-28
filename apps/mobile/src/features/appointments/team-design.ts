@@ -43,7 +43,7 @@ export type TeamBlockKey =
   | "client_tags";
 
 /** Упорядоченный набор «что предлагать»: включённые и полный порядок. */
-export interface TeamOrderedSet {
+interface TeamOrderedSet {
   enabled: string[];
   order: string[];
 }

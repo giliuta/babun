@@ -2,6 +2,7 @@ import { InputAccessoryView, Keyboard, Platform, Pressable, View } from "react-n
 import type { Href } from "expo-router";
 import { UserRound, Users } from "lucide-react-native";
 import { PickerSheet } from "@/components/ui/PickerSheet";
+import { TYPE } from "@/components/ui/tokens";
 import { ActionMenuSheet } from "@/components/blocks/ActionMenuSheet";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
@@ -262,7 +263,7 @@ export function BookEditSheets({ form }: { form: BookModel }) {
               accessibilityLabel="Скрыть клавиатуру"
               style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 10 }}
             >
-              <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>Готово</Text>
+              <Text style={{ ...TYPE.callout, color: t.accent }}>Готово</Text>
             </Pressable>
           </View>
         </InputAccessoryView>

@@ -11,7 +11,7 @@ import {
   rowAt,
   wrapIndex,
 } from "./wheel-geometry";
-import { createScrollSettle, offRow } from "./scroll-settle";
+import { createScrollSettle, createWheelStepper, offRow } from "./scroll-settle";
 
 export function WheelWithLines({ children }: { children: ReactNode }) {
   return (
@@ -106,12 +106,21 @@ export function LoopWheelColumn({
   // месяцем (31 → 28), центральная копия съезжает, и без перестановки под
   // линией стояло другое число, чем в значении.
   const settledMid = useRef(mid);
+  // Свежие значения для таймеров и слушателя колёсика, которые живут
+  // дольше одной отрисовки.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  // Строка ленты, что сейчас под линией, — по последней прокрутке. Подсветка
+  // (`live`) после докрута уходит в центральную копию, а лента может стоять
+  // в соседней: шагать колёсиком надо от того, что видно.
+  const rowRef = useRef(mid + value);
 
   useEffect(() => {
     if (settledRef.current === value && settledMid.current === mid) return;
     settledRef.current = value;
     settledMid.current = mid;
     setLive(mid + value);
+    rowRef.current = mid + value;
     const id = requestAnimationFrame(() =>
       ref.current?.scrollTo({ y: (mid + value) * ITEM_H, animated: false }),
     );
@@ -120,6 +129,39 @@ export function LoopWheelColumn({
 
   const norm = (i: number) => wrapIndex(i, len);
   const idxAt = rowAt;
+
+  // Цель колёсика: щелчки подряд считаются от неё, а не от строки под
+  // линией — та посреди доезда ещё старая, и второй щелчок пропадал бы.
+  // Сбрасывается, когда лента встала (`settle`).
+  const wheelTarget = useRef<number | null>(null);
+
+  // ОТКЛОНЁННОЕ ЗНАЧЕНИЕ БАРАБАН ВОЗВРАЩАЕТ ВИДИМО. Хозяин вправе не
+  // принять выбор (конец раньше начала, минуты у 24:00) — тогда `value` не
+  // меняется, эффект выше не срабатывает, и барабан стоял на отклонённой
+  // цифре, а поле рядом показывало прежнее время. Через миг после выбора
+  // сверяемся с `value` и, если его не приняли, доезжаем обратно — в той же
+  // копии ленты, кратчайшим путём.
+  const acceptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (acceptTimer.current) clearTimeout(acceptTimer.current);
+  }, []);
+  const expectAccepted = (picked: number, absolute: number) => {
+    if (acceptTimer.current) clearTimeout(acceptTimer.current);
+    acceptTimer.current = setTimeout(() => {
+      acceptTimer.current = null;
+      const kept = valueRef.current;
+      if (kept === picked) return;
+      let delta = kept - picked;
+      if (delta > len / 2) delta -= len;
+      if (delta < -len / 2) delta += len;
+      const back = absolute + delta;
+      settledRef.current = kept;
+      wheelTarget.current = null;
+      rowRef.current = back;
+      setLive(back);
+      ref.current?.scrollTo({ y: back * ITEM_H, animated: true });
+    }, 150);
+  };
 
   /**
    * Докрут: запомнить выбранное значение.
@@ -133,6 +175,8 @@ export function LoopWheelColumn({
   const settle = (y: number, recenter: boolean) => {
     const absolute = idxAt(y);
     const picked = norm(absolute);
+    wheelTarget.current = null;
+    rowRef.current = absolute;
     settledRef.current = picked;
     setLive(mid + picked);
     // Переставляем только когда лента уехала из запаса хода: цифра под линией
@@ -143,7 +187,10 @@ export function LoopWheelColumn({
       // Браузер не знает `snapToInterval`: ленту до строки доводим сами.
       ref.current?.scrollTo({ y: absolute * ITEM_H, animated: true });
     }
-    if (picked !== value) onChange(picked);
+    if (picked !== value) {
+      onChange(picked);
+      expectAccepted(picked, absolute);
+    }
   };
   // ВЕБ: конец прокрутки — по тишине (`scroll-settle.ts`). Таймер зовёт
   // САМЫЙ СВЕЖИЙ `settle`: через 120 мс у замыкания с прошлого рендера были
@@ -156,12 +203,45 @@ export function LoopWheelColumn({
   }
   useEffect(() => () => webSettle.current?.cancel(), []);
 
+  // ВЕБ: КОЛЁСИКО МЫШИ — СТРОКА ЗА ЩЕЛЧОК (`createWheelStepper`). Прокрутку
+  // браузера перехватываем и шагаем сами от строки под линией. Телефон
+  // крутится своей прокруткой — его это не касается.
+  const stepBy = (delta: number) => {
+    const absolute = (wheelTarget.current ?? rowRef.current) + delta;
+    wheelTarget.current = absolute;
+    const next = norm(absolute);
+    settledRef.current = next;
+    setLive(absolute);
+    ref.current?.scrollTo({ y: absolute * ITEM_H, animated: true });
+    if (next !== valueRef.current) {
+      onChange(next);
+      expectAccepted(next, absolute);
+    }
+  };
+  const stepRef = useRef(stepBy);
+  stepRef.current = stepBy;
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const node = (ref.current as unknown as { getScrollableNode?: () => HTMLElement | null } | null)
+      ?.getScrollableNode?.();
+    if (!node) return;
+    const step = createWheelStepper(ITEM_H);
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const d = step(e.deltaY, e.deltaMode);
+      if (d !== 0) stepRef.current(d);
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, []);
+
   const adjust = (delta: number) => {
     const next = norm(value + delta);
     settledRef.current = next;
     setLive(mid + next);
     ref.current?.scrollTo({ y: (mid + next) * ITEM_H, animated: true });
     onChange(next);
+    expectAccepted(next, mid + next);
   };
 
   return (
@@ -178,6 +258,7 @@ export function LoopWheelColumn({
       onScroll={(e) => {
         const y = e.nativeEvent.contentOffset.y;
         const i = idxAt(y);
+        rowRef.current = i;
         if (i !== live) setLive(i);
         webSettle.current?.scroll(y);
       }}

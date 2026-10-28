@@ -40,7 +40,7 @@ function isMissingProjectionRpc(error: {
   return error.code === "PGRST202" || /could not find the function/i.test(error.message ?? "");
 }
 
-export async function listMasterServices(
+async function listMasterServices(
   client: typeof supabase,
   tenantId: string,
 ): Promise<Service[]> {
@@ -62,7 +62,7 @@ export async function listMasterServices(
   );
 }
 
-export async function listDispatcherServices(
+async function listDispatcherServices(
   client: typeof supabase,
   tenantId: string,
 ): Promise<Service[]> {

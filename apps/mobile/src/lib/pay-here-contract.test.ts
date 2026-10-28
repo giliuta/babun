@@ -106,7 +106,6 @@ test("тариф без флага — только имя: ни отсчёта 
     assert.doesNotMatch(tariffStatus(state, null, false), /ещё|пробн/i);
   }
   assert.match(read("features/tariffs/TariffRow.tsx"), /tierLine\(state\.tier, state\.trial, CAN_PAY_HERE\)/);
-  assert.match(read("features/cabinet/CompanyScreen.tsx"), /tierLine\(tierOf\(tenant\.data\), trialLeft\(tenant\.data\), CAN_PAY_HERE\)/);
 });
 
 test("«Оплаты тарифа» (счета Stripe с оплатой) — только с флагом", () => {

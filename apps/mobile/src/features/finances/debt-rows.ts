@@ -202,7 +202,7 @@ export function mergeDebtRows(
 // раз: остаток инвойса, подпись «Инвойс INV-… · просрочен». Тап — инвойс,
 // на нём блоком — запись, за которую этот долг.
 
-export interface InvoiceDebtSource {
+interface InvoiceDebtSource {
   id: string;
   number: string;
   kind?: string | null;

@@ -5,6 +5,7 @@ import { useThemeColors } from "@/theme/colors";
 import { RecordMark } from "./RecordMark";
 import { AppearanceTile, appearanceRowFill } from "./AppearanceSheet";
 import { SwitchControl } from "./SwitchControl";
+import { ICON } from "./tokens";
 
 // СТРОКА-ДВЕРЬ С ПЛИТКОЙ — ОДНА НА ВЕСЬ ПРОДУКТ.
 //
@@ -40,7 +41,7 @@ type IconType = ComponentType<{
 /** Значок вида счёта БЕЗ плитки — тот же глиф, что в строке списка. Экспорт
  *  ради героя карточки счёта: значок там обязан быть тем же, что в строке,
  *  иначе один тап отделяет счёт от его же узнаваемого знака. */
-export const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
+const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
 
 export function SettingsRow({
   tile = "neutral",
@@ -349,9 +350,10 @@ export function SettingsRow({
       })}
     >
       {body}
-      {/* Шеврон — указатель, а не участник строки: −35% массы (18/2.2 → 16/1.75)
-          при том же контрасте. Он держится альфой чернил, а не размером. */}
-      <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />
+      {/* Шеврон — указатель, а не участник строки: держится альфой чернил
+          (`t.chevron`). Размер — роль `ICON.chevron`, как у всех строк-дверей:
+          своё 16/1.75 делало шеврон Кабинета мельче, чем в записи (№53). */}
+      <ChevronRight color={t.chevron} size={ICON.chevron} />
     </Pressable>
   );
 }

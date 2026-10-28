@@ -57,7 +57,6 @@ const TITLE: Record<string, string> = {
   // «Документы» вместо реестрового «Инвойсы и чеки»: так называется плитка
   // на странице финансов (права — по плиткам страницы).
   "finance.documents": "Документы",
-  "finance.profit": "Прибыль",
   // «Ограничения» финансов — то же слово, что у клиентов
   // и записей календаря.
   "finance.window": "Ограничения",
@@ -170,9 +169,7 @@ const STEP: Record<string, Words> = {
   "finance.expense": { off: "Скрыты", read: "Только видит", write: "Видит и добавляет", full: "Видит и правит всё" },
   "finance.accounts": { off: "Не видит", read: "Видит", write: "Управляет" },
   "finance.debts": { off: "Не видит", read: "Видит", write: "Принимает оплату" },
-  // Плитки «Документы» и «Прибыль» — у каждой своё право.
   "finance.documents": { off: "Скрыты", read: "Видит", write: "Выставляет" },
-  "finance.profit": { off: "Скрыта", read: "Видит" },
   "finance.window": {
     week: "Неделя",
     near: "2 недели",

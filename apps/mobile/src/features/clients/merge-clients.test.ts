@@ -346,7 +346,8 @@ describe("объекты и оплаченные визиты при слиян�
       "utf8",
     );
     assert.match(hook, /paidVisitsBlocker\(dupAppts\.data \?\? \[\]\)/);
-    assert.match(hook, /remap\.get\(a\.location_id\)/);
-    assert.match(hook, /location_id: location/);
+    // Переезд объекта считает телефон, применяет сервер (`merge_clients`).
+    assert.match(hook, /const \{ remap \} = mergeLocations\(fresh, dupRow\);/);
+    assert.match(hook, /duplicateId: dupRow\.id, patch, remap \}/);
   });
 });

@@ -41,7 +41,7 @@ import {
   type TemplateDraft,
 } from "./sms-team-templates";
 import { SmsTermSheet, type SmsTermKind } from "./SmsTermSheet";
-import { SmsTextBlock } from "./SmsTextField";
+import { SmsCounter, SmsTextBlock } from "./SmsTextField";
 
 // ШАБЛОН SMS — ШТОРКА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (выбор «когда отправлять»
 // открывает ещё одну шторку, как выбор типа объекта).
@@ -58,9 +58,10 @@ import { SmsTextBlock } from "./SmsTextField";
 //   • СРОК — строки со значением справа (`ValueRow`): «за сколько», «во
 //     сколько», «через сколько» и «окно отправки»; тап — барабан в своей
 //     шторке (`SmsTermSheet`). У ручного шаблона блока нет;
-//   • ТЕКСТ — поле, счёт знаков и SMS, дверь «Вставить поле» (своя шторка).
-//     Блока «Клиент увидит» и подсказок нет;
-//   • «Создать» / «Сохранить» — футер листа, одна кнопка.
+//   • ТЕКСТ — поле и дверь «Вставить поле» (своя шторка). Блока «Клиент
+//     увидит» и подсказок нет;
+//   • футер листа — счёт знаков и SMS (`SmsCounter`: виден, пока набирают) и
+//     одна кнопка «Создать шаблон» / «Сохранить».
 
 // Строки — только имя, значок и цвет: подсказок под именем нет.
 const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string }> = {
@@ -255,8 +256,9 @@ export function SmsTemplateSheet({
             borderTopColor: t.separator,
           }}
         >
+          <SmsCounter value={draft.body} />
           <GradientButton
-            label={template ? "Сохранить" : "Создать"}
+            label={template ? "Сохранить" : "Создать шаблон"}
             onPress={submit}
             disabled={!!problem || save.isPending}
             loading={save.isPending}

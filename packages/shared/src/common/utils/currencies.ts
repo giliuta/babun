@@ -177,7 +177,7 @@ export function currencyDef(code: string | null | undefined): CurrencyDef | unde
 
 /** Ходовые — в голове барабана, остальные по алфавиту имени: свою валюту
  *  ищут поиском, а первые строки должны быть теми, что выбирают чаще всего. */
-export const POPULAR_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "PLN", "UAH", "RUB", "TRY", "AED", "ILS"] as const;
+const POPULAR_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "PLN", "UAH", "RUB", "TRY", "AED", "ILS"] as const;
 
 export function currencyWheelOrder(): CurrencyDef[] {
   const head = POPULAR_CURRENCIES.map((code) => BY_CODE.get(code)).filter(

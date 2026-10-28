@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, type Href } from "expo-router";
 import { RotateCcw, Trash2 } from "lucide-react-native";
 import { isOnline } from "@babun/shared/sync";
+import { DayDivider } from "@/components/ui/DayDivider";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -62,7 +63,7 @@ export function DeletedOperationsScreen() {
   const t = useThemeColors();
   const toast = useToast();
   const { team } = useLocalSearchParams<{ team?: string }>();
-  const teamName = (useTeams().data ?? []).find((item) => item.id === team)?.name;
+  const teamName = (useTeams({ display: true }).data ?? []).find((item) => item.id === team)?.name;
   // ПРАВО СТРОКИ «Удалённые операции»: «Только видит» — список без
   // кромок и меню; «Возвращает» — вернуть и стереть СВОЁ (что удалил сам и
   // что сам заводил — сервер вставку чужой операции не пустит). Владелец —
@@ -111,7 +112,9 @@ export function DeletedOperationsScreen() {
           {
             id: item.id,
             createdBy: tx.created_by ?? null,
-            tone: tx.debt_id ? "debt" : tx.type === "expense" ? "expense" : "income",
+            // Тон — по виду денег, как в ленте: оплата долга — это приход
+            // или расход, а не сам долг (янтарь и «долг €X» в озвучке врали).
+            tone: tx.type === "expense" ? "expense" : "income",
             row: {
               ...row,
               key: item.id,
@@ -195,18 +198,19 @@ export function DeletedOperationsScreen() {
           <EmptyState state="loading" fill />
         )
       ) : rows.length === 0 ? (
-        <EmptyState fill title="Пусто" />
+        // Пустой ящик говорит, что в нём бывает, — как соседние пустые экраны
+        // (заголовок и пояснение), а не одним словом.
+        <EmptyState
+          fill
+          title="Удалённых операций нет"
+          subtitle="Удалённая операция лежит здесь, пока её не вернут или не удалят насовсем"
+        />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {days.map(([day, items]) => (
             <View key={day}>
               {/* День — подписью над плашками, как в ленте «Финансов». */}
-              <Text
-                className="px-4 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wider"
-                style={{ color: t.sub }}
-              >
-                {humanDayYear(day)}
-              </Text>
+              <DayDivider label={humanDayYear(day)} />
               <View style={{ paddingHorizontal: SELECT_SIDE, gap: 8 }}>
                 {items.map((item) =>
                   !actionable(item) ? (

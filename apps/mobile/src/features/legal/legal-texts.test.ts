@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 import { helpFaq, LEGAL_LINKS } from "../cabinet/help";
 import { fillLegal, LEGAL_TEXTS, LEGAL_TEXTS_APP, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
-import { isLegalReady } from "./operator";
 
 // ДОКУМЕНТЫ ДЛЯ МАГАЗИНОВ. Ссылки из карточек App Store и Google Play
 // обязаны открываться без входа и называть, кто обрабатывает данные; русский
@@ -52,8 +51,13 @@ describe("тексты", () => {
       assert.notEqual(app, LEGAL_TEXTS.terms[lang], `${lang}: замена не сработала`);
       assert.match(LEGAL_TEXTS.terms[lang], /Stripe/, `${lang}: на сайте условия полные`);
     }
-    assert.match(LEGAL_TEXTS_APP.terms.ru, /Платные тарифы и баланс SMS оплачиваются отдельно; подписка продлевается каждый месяц/);
-    assert.match(LEGAL_TEXTS_APP.terms.en, /Paid plans and SMS balance are billed separately; subscriptions renew monthly until cancelled\./);
+    assert.match(LEGAL_TEXTS_APP.terms.ru, /Подписка и баланс SMS оплачиваются отдельно; подписка продлевается в конце каждого оплаченного периода/);
+    assert.match(LEGAL_TEXTS_APP.terms.en, /Subscriptions and SMS balance are billed separately; a subscription renews at the end of each paid period until cancelled\./);
+    // Снятых тарифов в договоре нет: цена — за рабочий календарь.
+    for (const texts of [LEGAL_TEXTS, LEGAL_TEXTS_APP]) {
+      assert.doesNotMatch(texts.terms.ru, /Соло|«Про»|«Макс»/);
+      assert.doesNotMatch(texts.terms.en, /Solo|\bPro\b|\bMax\b/);
+    }
     for (const doc of ["privacy", "delete-account"] as const) {
       assert.equal(LEGAL_TEXTS_APP[doc], LEGAL_TEXTS[doc], `${doc}: в приложении тот же текст`);
     }
@@ -92,12 +96,6 @@ test("язык: явный параметр, иначе русский толь�
   assert.equal(legalLang(undefined, "ru"), "ru");
   assert.equal(legalLang(undefined, "el"), "en");
   assert.equal(legalLang("fr", "uk"), "en");
-});
-
-test("готовность: без имени, адреса и почты документы не выкладывают", () => {
-  assert.equal(isLegalReady({ name: "", address: "x" }, "a@b.c"), false);
-  assert.equal(isLegalReady({ name: "x", address: "x" }, ""), false);
-  assert.equal(isLegalReady({ name: "x", address: "x" }, "a@b.c"), true);
 });
 
 test("адреса без входа: файл маршрута и строка в корневом стеке", () => {

@@ -16,17 +16,3 @@ export function lastClientRecord(appointments: readonly Appointment[]): Appointm
     list.reduce<Appointment | null>((best, a) => (best === null || key(a) > key(best) ? a : best), null);
   return latest(work.filter((a) => a.status !== "cancelled")) ?? latest(work);
 }
-
-/** Услуги записи словами — новым составом, а без него — прежним списком. */
-export function recordServiceNames(
-  appointment: Pick<Appointment, "services" | "service_ids">,
-  serviceName: (id: string) => string | null | undefined,
-): string[] {
-  const names = (appointment.services ?? [])
-    .map((s) => serviceName(s.serviceId))
-    .filter((n): n is string => Boolean(n));
-  if (names.length > 0) return names;
-  return (appointment.service_ids ?? [])
-    .map((id) => serviceName(id))
-    .filter((n): n is string => Boolean(n));
-}

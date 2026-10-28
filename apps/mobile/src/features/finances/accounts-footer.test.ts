@@ -21,6 +21,13 @@ describe("accountsFooterAction", () => {
     );
   });
 
+  test("у команды только скрытые счета — не «Создать счёт»", () => {
+    assert.deepEqual(
+      accountsFooterAction({ selectedId: null, shown: [], company: [CASH, OTHER_TEAM], teamHidden: 1 }),
+      { kind: "transfer", fromId: null },
+    );
+  });
+
   test("единственный счёт компании — кнопка перевода, но переводить некуда", () => {
     assert.deepEqual(
       accountsFooterAction({ selectedId: "cash", shown: [CASH], company: [CASH] }),

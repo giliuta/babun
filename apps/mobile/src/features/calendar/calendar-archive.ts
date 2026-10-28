@@ -10,17 +10,17 @@
 
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 
-export interface ArchiveTeamRow {
+interface ArchiveTeamRow {
   id: string;
   name: string;
   color?: string | null;
   is_active: boolean;
   position?: number | null;
 }
-export interface ArchiveWorkRow {
+interface ArchiveWorkRow {
   team_id?: string | null;
 }
-export interface ArchiveAccountRow {
+interface ArchiveAccountRow {
   brigade_id?: string | null;
   balance?: number | null;
 }

@@ -40,7 +40,8 @@ const SAMPLE_EVENT_TYPE = {
   id: "preview-type",
   label: "Совещание",
   icon: "users",
-  color: "#6366F1",
+  // Цвет из палитры типов («Лиловый»): индиго #6366F1 в ней нет.
+  color: "#665599",
   defaultDuration: 60,
   allDay: false,
   order: 0,

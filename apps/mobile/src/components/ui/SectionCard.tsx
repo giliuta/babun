@@ -2,7 +2,8 @@ import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Card } from "./Card";
-import { GUTTER } from "./tokens";
+import { GUTTER, ICON } from "./tokens";
+import { capsText } from "./caps-text";
 import { useThemeColors } from "@/theme/colors";
 
 interface SectionCardAction {
@@ -88,11 +89,10 @@ export function SectionCard({
                 fontSize: 11,
                 fontWeight: "700",
                 letterSpacing: 0.6,
-                textTransform: "uppercase",
                 color: eyebrowColor ?? t.faint,
               }}
             >
-              {title}
+              {capsText(title)}
             </Text>
             {/* КОМАНДЫ — ОДНОЙ АБСОЛЮТНОЙ СТРОКОЙ У ПРАВОГО КРАЯ. В потоке
                 они меняли бы высоту шапки, и подпись блока с командой стояла
@@ -104,10 +104,10 @@ export function SectionCard({
                 style={{
                   position: "absolute",
                   right: 16,
-                  // Значок 20pt по центру подписи (11pt, строка ~13):
-                  // 10 сверху у шапки минус половина разницы высот; в плотной
-                  // шапке сверху 6 — значок на те же 4 выше.
-                  top: dense ? 2 : 6,
+                  // Значок `ICON.command` (18) по центру подписи (11pt, строка
+                  // ~13): 10 сверху у шапки минус половина разницы высот; в
+                  // плотной шапке сверху 6 — значок на те же 4 выше.
+                  top: dense ? 3 : 7,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 16,
@@ -123,7 +123,7 @@ export function SectionCard({
                     style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                   >
                     {item.icon ? (
-                      <item.icon color={item.accent ? t.accent : t.sub} size={20} strokeWidth={2} />
+                      <item.icon color={item.accent ? t.accent : t.sub} size={ICON.command} strokeWidth={2} />
                     ) : item.pill ? (
                       <View
                         style={{

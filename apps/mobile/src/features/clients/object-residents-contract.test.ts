@@ -30,7 +30,7 @@ describe("жилец заводится в листе виллы и нигде �
   // Жильцов в листе объекта нет: отдельная дверь «Добавить жильца» — перебор.
   // Двери нет нигде.
   test("двери «Добавить жильца» нет ни в листе объекта, ни под виллами", () => {
-    const sheet = read("ObjectEditSheet.tsx");
+    const sheet = read("ObjectSheet.tsx");
     const block = objectsBlock();
     assert.doesNotMatch(sheet, /addLabel="Добавить жильца"/, "в лист объекта вернулась дверь жильца");
     assert.doesNotMatch(sheet, /<ClientLinksBlock/, "в лист объекта вернулся блок «Жильцы»");
@@ -69,7 +69,7 @@ describe("жилец заводится в листе виллы и нигде �
   });
 
   test("отложенное действие листа идёт по уходу листа, а не по таймеру", () => {
-    const sheet = read("ObjectEditSheet.tsx");
+    const sheet = read("ObjectSheet.tsx");
     assert.match(
       sheet,
       /onExited=\{\(\) => \{[\s\S]{0,200}?afterExit\.current/,
@@ -131,11 +131,12 @@ describe("шторка связи — одна шторка клиента с г
 
 describe("лист «Новый объект» закрывается после добавления", () => {
   test("добавили — лист уходит всегда, а форма пустеет только после записи", () => {
-    const sheet = read("ObjectSheet.tsx");
+    // Запись нового объекта — режим «create» листа, в своём хуке.
+    const sheet = read("object-sheet/use-object-create.ts");
     // На карточке клиента лист раньше оставался открытым с пустой
     // формой (ради трёх вилл подряд), и «Добавить объект» выглядел так, будто
     // ничего не сохранилось. Закрытие безусловное — и после `onAdded`, и без.
-    const add = sheet.slice(sheet.indexOf("const add = async"), sheet.indexOf("return (\n    <BottomSheet"));
+    const add = sheet.slice(sheet.indexOf("const add = async"), sheet.indexOf("  return {\n    value: draft,"));
     assert.ok(add.length > 0, "не нашёл запись объекта в листе");
     assert.ok(!/if \(onAdded\) onClose\(\);/.test(add), "лист снова остаётся открытым на карточке клиента");
     assert.match(add, /\n      onClose\(\);\n      return true;/, "лист не закрывается после добавления");

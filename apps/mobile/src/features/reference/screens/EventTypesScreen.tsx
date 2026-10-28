@@ -9,6 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -44,7 +45,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
   // ТИПЫ КОМАНДЫ: команда едет адресом (`?team=`) из «Дизайна», пропом — из
   // формы события; без неё — первая команда.
   const params = useLocalSearchParams<{ team?: string }>();
-  const { data: teams = [] } = useTeams();
+  const { data: teams = [] } = useTeams({ display: true });
   const teamId =
     teamProp ?? teams.find((x) => x.id === params.team)?.id ?? teams[0]?.id ?? null;
   const teamName = teams.find((x) => x.id === teamId)?.name;
@@ -108,7 +109,6 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
           fill
           title="Типов событий пока нет"
           subtitle="Тип называет событие, красит его в календаре и подсказывает длительность."
-          action={readOnly ? undefined : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }}
         />
       ) : (
         <ScrollView
@@ -203,16 +203,17 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
         </ScrollView>
       )}
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: типы
-          заводят пачкой, и после первого не должно приходиться доскролливать
-          список ради второго. Тот же приём, что у меток и услуг. */}
-      {!readOnly && !typesQuery.isLoading && !typesQuery.isError && types.length > 0 ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА: пуст список или полон,
+          кнопка на одном месте (AGENTS 7.1); пустое состояние — только слова.
+          Типы заводят пачкой, и после первого не должно приходиться
+          доскролливать список ради второго. */}
+      {!readOnly ? (
+        <PageFooter>
           <GradientButton
             label="Добавить тип"
             onPress={() => setEditing({ mode: "create" })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <EventTypeSheet
@@ -231,7 +232,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
  *  кружок: это тот же `AppearanceTile`, что у тега, метки, услуги, категории и
  *  типа объекта. Свой набор значков у типа события остался — старые слаги
  *  живут картой совместимости, — поэтому набор передаётся плитке. */
-export function TypeMark({ color, icon }: { color: string; icon: string }) {
+function TypeMark({ color, icon }: { color: string; icon: string }) {
   return (
     <AppearanceTile
       color={color}

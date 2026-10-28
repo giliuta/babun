@@ -1,10 +1,10 @@
 import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import type { AppointmentService } from "@babun/shared/local/appointments";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { useClientInvoicing } from "@/features/finances/client-invoicing";
+import { useBusinessToday } from "@/features/settings/business-today";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
@@ -18,18 +18,13 @@ import { InvoiceObjectBlock } from "@/features/invoices/InvoiceObjectBlock";
 import { InvoiceClientRequisitesBlock } from "@/features/invoices/InvoiceClientRequisitesBlock";
 import type { InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
 import { durationLabel } from "@/lib/service-format";
-import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
 import { useAppointments } from "@/features/calendar/queries";
-import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useClients } from "@/features/clients/queries";
 import { accountIcon } from "@/features/finances/account-ui";
-import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useServices } from "@/features/services/queries";
-import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
-import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { useThemeColors } from "@/theme/colors";
 import { newLine, receiptTotals, recalc, type ReceiptDraftState } from "./receipt-draft";
 
@@ -58,14 +53,18 @@ export {
 // «тот же блок» пришлось бы кормить переводом туда-обратно, а перевод — то
 // самое место, где расходятся копейки.
 
-type OpenSheet = "client" | "services" | "total" | "when" | null;
+// ЧЕК — ВСЕГДА НА ПРИНЯТУЮ ОПЛАТУ (или правка выписанного): клиент, счёт и
+// сумма — проводки, их чек не меняет (`issue_receipt` снимает их с неё).
+// Правятся строки работ, дата и реквизиты; скидки и VAT в «Итого» нет —
+// налог уже посчитан в проводке.
+
+type OpenSheet = "services" | "total" | "when" | null;
 
 export function ReceiptComposer({
   draft,
   businessToday,
   onChange,
   footer,
-  forPayment = false,
   number,
   companyLocked = false,
 }: {
@@ -76,11 +75,6 @@ export function ReceiptComposer({
    *  выписанного — свои. */
   companyLocked?: boolean;
   draft: ReceiptDraftState;
-  /** ЧЕК НА УЖЕ ПРИНЯТУЮ ОПЛАТУ: клиент, дата, счёт и
-   *  сумма — проводки, их чек не меняет (`issue_receipt` снимает их с неё).
-   *  Правятся строки работ и реквизиты; скидки и VAT в «Итого» нет — налог
-   *  уже посчитан в проводке. */
-  forPayment?: boolean;
   /** Сегодня по часам бизнеса: дальше него чек не датируется — деньги не
    *  приходят из будущего. */
   businessToday: string;
@@ -91,47 +85,31 @@ export function ReceiptComposer({
   const t = useThemeColors();
   const clients = useClients();
   const services = useServices();
-  // Чек на оплату показывает счёт ПРОВОДКИ, даже скрытый или закрытый после
-  // оплаты: в живом списке его нет, и блок «Счёт» пустовал бы.
-  const accounts = useAccountsWithBalances(
-    forPayment ? { includeInactive: true, includeHidden: true, includeDeleted: true } : undefined,
-  );
+  // Чек показывает счёт ПРОВОДКИ, даже скрытый или закрытый после оплаты: в
+  // живом списке его нет, и блок «Счёт» пустовал бы.
+  const accounts = useAccountsWithBalances({
+    includeInactive: true,
+    includeHidden: true,
+    includeDeleted: true,
+  });
   const appointments = useAppointments();
   const tileWidth = useTileWidth();
-  const router = useRouter();
   const [sheet, setSheet] = useState<OpenSheet>(null);
-
-  // Созданный ради чека клиент возвращается в чек: тот же ящик, что у записи.
-  useFocusEffect(
-    useCallback(() => {
-      const created = takeCreatedClient();
-      if (created) onChange({ clientId: created });
-      // onChange меняется каждый рендер — брать его в зависимости значит
-      // звать эффект на каждый кадр; ящик и так опустошается чтением.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-  );
 
   const client = (clients.data ?? []).find((c) => c.id === draft.clientId) ?? null;
   // Вводная о человеке считается один раз на весь список, а не по клиенту на
   // строку — та же карта, что строит список выбора.
   // Работа под инвойсом должна остаток инвойса — как в списке клиентов.
   const invoicing = useClientInvoicing();
+  const today = useBusinessToday();
   const statsById = useMemo(
-    () => buildStatsMap(clients.data ?? [], appointments.data ?? [], invoicing),
-    [appointments.data, clients.data, invoicing],
+    () => buildStatsMap(clients.data ?? [], appointments.data ?? [], invoicing, today),
+    [appointments.data, clients.data, invoicing, today],
   );
   const catalog = useMemo(
     () => new Map((services.data ?? []).map((s) => [s.id, s])),
     [services.data],
   );
-  // Ставку пишут цифрами в «Итого» и она запоминается для следующих
-  // документов. Настройки ставки больше не решают, а
-  // САМ НАЛОГ по-прежнему включает только человек клавишей VAT.
-  // Не писали ставку на этом телефоне — ставка команды из настроек.
-  const teamVatRate = useTeamVatRate(draft.teamId);
-  const rememberedRate = useRememberedVatRate(teamVatRate);
-  const vatRate = draft.vatRate ?? rememberedRate.rate;
   const totals = receiptTotals(draft);
   // ПЕРЕВОД «РАБОТА → СТРОКА БЛОКА» — ОДИН НА ЭКРАН: его читают и блок
   // «Услуги», и шторка «Итого». Две копии разошлись бы на первой же правке.
@@ -150,9 +128,7 @@ export function ReceiptComposer({
       })),
     [catalog, draft.lines],
   );
-  const openAccounts = forPayment
-    ? (accounts.data ?? []).filter((a) => a.id === draft.accountId)
-    : accountsForTeam(accounts.data ?? [], draft.teamId);
+  const openAccounts = (accounts.data ?? []).filter((a) => a.id === draft.accountId);
 
   const setLines = (lines: AppointmentService[]) => onChange({ lines });
 
@@ -238,13 +214,7 @@ export function ReceiptComposer({
           onPress={() => setSheet("when")}
         />
 
-        <ClientBlock
-          client={client}
-          stats={client ? statsById.get(client.id) : undefined}
-          onPick={forPayment ? undefined : () => setSheet("client")}
-          onOpenCard={forPayment ? undefined : () => setSheet("client")}
-          onClear={client && !forPayment ? () => onChange({ clientId: null }) : undefined}
-        />
+        <ClientBlock client={client} stats={client ? statsById.get(client.id) : undefined} />
 
         <InvoiceObjectBlock
           client={client}
@@ -292,47 +262,19 @@ export function ReceiptComposer({
                   compact
                   state="idle"
                   selected={draft.accountId === a.id}
-                  onPress={forPayment ? () => {} : () => onChange({ accountId: a.id })}
+                  onPress={() => {}}
                   accessibilityLabel={`Счёт: ${a.name}`}
                 />
               ))}
             </View>
           ) : (
             <Text className="px-4 py-3 text-sm" style={{ color: t.faint }}>
-              {forPayment
-                ? "Счёт этой оплаты недоступен — на чек это не влияет: деньги уже записаны."
-                : draft.teamId
-                ? "У этой команды нет счёта — заведите его в «Счетах», иначе деньги некуда записать."
-                : "Кассы принадлежат командам. Выберите команду чипом на «Финансах» и откройте чек заново."}
+              Счёт этой оплаты недоступен — на чек это не влияет: деньги уже записаны.
             </Text>
           )}
         </SectionCard>
       </ScrollView>
       {footer}
-
-      {/* «ДОБАВИТЬ КЛИЕНТА» — ТА ЖЕ ДОРОГА, ЧТО ИЗ ЗАПИСИ (владелец
-          2026-09-20: «там нет кнопки добавить клиента… должна открываться так
-          же, как в записи, и потом оно сразу автоматически выбирается»).
-          Карточка нового клиента открывается ПОВЕРХ чека в том же корневом
-          стеке, набранное остаётся, а «Готово» отдаёт id сюда — и клиент
-          встаёт в чек сам (`pending-client.ts`). */}
-      <ClientPickerSheet
-        visible={sheet === "client"}
-        selectedId={draft.clientId}
-        onCreate={(prefill) => {
-          setSheet(null);
-          router.push({ pathname: "/client", params: { id: "new", ...prefill } });
-        }}
-        onSelect={(picked) => {
-          onChange({ clientId: picked.id });
-          setSheet(null);
-        }}
-        onDeselect={() => {
-          onChange({ clientId: null });
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-      />
 
       <ServicePicker
         visible={sheet === "services"}
@@ -353,30 +295,7 @@ export function ReceiptComposer({
         onAddLine={addCustomLine}
         onNameChange={renameLine}
         onRemoveLine={removeCustomLine}
-        discount={
-          forPayment
-            ? undefined
-            : {
-                kind: draft.discountType,
-                value: draft.discountValue,
-                onKindChange: (discountType) => onChange({ discountType }),
-                onValueChange: (discountValue) => onChange({ discountValue }),
-              }
-        }
         total={totals.total}
-        vat={
-          forPayment
-            ? undefined
-            : {
-                mode: draft.vatMode,
-                rate: vatRate,
-                onModeChange: (vatMode) => onChange({ vatMode }),
-                onRateChange: (vatRate) => {
-                  onChange({ vatRate });
-                  rememberedRate.remember(vatRate);
-                },
-              }
-        }
       />
 
       {/* ДАТА БЕЗ ЧАСОВ: обычный барабан даты, тот же, что у срока инвойса. Деньги приняты в

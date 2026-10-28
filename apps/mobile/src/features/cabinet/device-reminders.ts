@@ -60,7 +60,7 @@ export interface ReminderRow {
   source: ReminderSource;
 }
 
-export interface ReminderDay {
+interface ReminderDay {
   key: string;
   /** «Сегодня» · «Завтра» · «Пятница, 19 сентября». */
   title: string;
@@ -70,6 +70,8 @@ export interface ReminderDay {
 export type DevicePermission =
   | "granted"
   | "denied"
+  /** Отказали, но система разрешает спросить ещё раз (Android). */
+  | "askable"
   | "undetermined"
   | "unavailable";
 
@@ -179,11 +181,12 @@ export function reminderCount(days: readonly ReminderDay[]): number {
 
 /** Ответ `getPermissionsAsync`. `null` — нативного модуля в сборке нет. */
 export function devicePermissionFrom(
-  permission: { granted?: boolean; status?: string } | null | undefined,
+  permission: { granted?: boolean; status?: string; canAskAgain?: boolean } | null | undefined,
 ): DevicePermission {
   if (!permission) return "unavailable";
   if (permission.granted) return "granted";
-  return permission.status === "denied" ? "denied" : "undetermined";
+  if (permission.status !== "denied") return "undetermined";
+  return permission.canAskAgain ? "askable" : "denied";
 }
 
 /** Напоминания есть, а зазвонить им не дадут — единственное состояние, ради
@@ -192,7 +195,10 @@ export function remindersSilenced(
   permission: DevicePermission,
   count: number,
 ): boolean {
-  return count > 0 && (permission === "denied" || permission === "undetermined");
+  return (
+    count > 0 &&
+    (permission === "denied" || permission === "askable" || permission === "undetermined")
+  );
 }
 
 /** Подпись строки-двери в Кабинете: «Разрешены · 3 напоминания». */
@@ -204,29 +210,31 @@ export function notificationsSummary(
   const state =
     permission === "granted"
       ? "Разрешены"
-      : permission === "denied"
+      : permission === "denied" || permission === "askable"
         ? "Выключены"
         : "Не разрешены";
   if (count === 0) return state;
   return `${state} · ${count} ${countWordRu(count, "напоминание", "напоминания", "напоминаний")}`;
 }
 
-export interface PermissionRowView {
+interface PermissionRowView {
   sub: string;
-  /** `request` — системный вопрос iOS (задаётся один раз); `settings` —
-   *  настройки iPhone: после отказа приложение спросить уже не может. */
+  /** `request` — системный вопрос (iOS задаёт его один раз, Android — пока
+   *  разрешает); `settings` — настройки телефона: спросить уже нельзя. */
   action: "request" | "settings" | null;
 }
 
-export function permissionRow(permission: DevicePermission, android = false): PermissionRowView {
+export function permissionRow(permission: DevicePermission): PermissionRowView {
   switch (permission) {
     case "granted":
       return { sub: "Разрешены", action: "settings" };
+    // Отказ виден ТОЛЬКО здесь, на «Уведомлениях»: ни плашек на других
+    // экранах, ни кнопок внутри списка. Тап — снова системный вопрос, если
+    // телефон разрешает, иначе его настройки.
     case "denied":
-      return {
-        sub: android ? "Выключены в настройках телефона" : "Выключены в настройках iPhone",
-        action: "settings",
-      };
+      return { sub: "Выключены на этом телефоне", action: "settings" };
+    case "askable":
+      return { sub: "Выключены на этом телефоне", action: "request" };
     case "undetermined":
       return { sub: "Не разрешены", action: "request" };
     case "unavailable":

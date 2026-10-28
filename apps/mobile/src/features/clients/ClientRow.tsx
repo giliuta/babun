@@ -1,9 +1,6 @@
-import { memo, useRef } from "react";
+import { memo } from "react";
 import type React from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from "react-native-gesture-handler/ReanimatedSwipeable";
 import {
   Ban,
   Bell,
@@ -15,7 +12,8 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { haptics } from "@/lib/haptics";
-import { ICON } from "@/components/ui/tokens";
+import { LIST_ROW } from "@/components/ui/tokens";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useThemeColors } from "@/theme/colors";
 import { formatShortDateRu } from "@/features/clients/format";
 import { formatPhoneForDisplay } from "@/lib/phone";
@@ -35,7 +33,7 @@ import { visitMark } from "@/features/clients/visit-mark";
 // экраны отличаются только тем, ЧТО показывают и что делают жесты.
 
 /** Ширина места номера в строке: «+357 99 999 999» и «+7 916 123 45 67»
- *  шрифтом 14 с моноширинными цифрами — и запас до даты. */
+ *  шрифтом подписи (13) с моноширинными цифрами — и запас до даты. */
 const PHONE_COLUMN = 138;
 
 function ClientRowView({
@@ -49,7 +47,6 @@ function ClientRowView({
   onLongPress,
   onRemind,
   onDelete,
-  onSwipeOpen,
   trailing,
   source,
 }: {
@@ -71,8 +68,6 @@ function ClientRowView({
   onRemind?: () => void;
   /** Свайп влево: «Удалить» (спрашивает подтверждение сам). */
   onDelete?: () => void;
-  /** Открылся свайп этой строки — список закрывает предыдущий. */
-  onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
   trailing?: React.ReactNode;
   /** Компания клиента, если она не компания экрана (строка работодателя в
@@ -85,7 +80,6 @@ function ClientRowView({
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry(client.team_id ?? null);
-  const swipeRef = useRef<SwipeableMethods | null>(null);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
   // Instagram — тоже способ связи: кнопка есть и без номера.
   const hasInstagram = !!client.instagram_username?.trim();
@@ -147,7 +141,9 @@ function ClientRowView({
             : "Открыть карточку клиента"
         }
         accessibilityState={selectionMode ? { selected: picked } : undefined}
-        className={`min-h-[56px] flex-1 flex-row items-center py-2.5 pl-4 active:opacity-60 ${(phoneDigits || hasInstagram) && !selectionMode ? "" : "pr-4"}`}
+        className={`flex-1 flex-row items-center py-2.5 pl-4 active:opacity-60 ${(phoneDigits || hasInstagram) && !selectionMode ? "" : "pr-4"}`}
+        // Строка списка — одна роль на продукт (`LIST_ROW`): имя 15, подпись 13, 52.
+        style={{ minHeight: LIST_ROW.minHeight }}
       >
         {/* БЕЗ КРУЖКА С ИНИЦИАЛАМИ: компактнее. Инициалы по хешу имени не несли
             смысла и съедали 60pt слева у каждой строки. В режиме выбора слева
@@ -161,7 +157,7 @@ function ClientRowView({
               borderColor: t.separatorStrong,
             }}
           >
-            {picked ? <Check color="#fff" size={14} strokeWidth={3} /> : null}
+            {picked ? <Check color={t.onAccent} size={14} strokeWidth={3} /> : null}
           </View>
         ) : null}
         <View className="flex-1">
@@ -174,8 +170,8 @@ function ClientRowView({
             ) : null}
             <Text
               maxFontSizeMultiplier={1.3}
-              className="shrink text-base font-semibold"
-              style={{ color: t.ink }}
+              className="shrink"
+              style={{ ...LIST_ROW.name, color: t.ink }}
               numberOfLines={1}
             >
               {client.full_name || "Без имени"}
@@ -185,31 +181,31 @@ function ClientRowView({
               Номер — то, по чему ищут, в том же виде, что на карточке: в базе
               номера лежат как их когда-то ввели, и «+357 97469998» рядом с
               «+357 97 469998» читались как два разных человека. */}
-          {/* НОМЕР И ДАТА — КОЛОНКАМИ: свой столбик у имени, номера и визита,
-              чтобы дата не прыгала слева направо. У номера место одной ширины
-              под самый длинный номер («+357 99 999 999», «+7 916 123 45 67»),
-              дата начинается за ним в одной точке у каждой строки — даже у
-              клиента без номера. */}
+          {/* НОМЕР И ДАТА — КОЛОНКАМИ: у номера место одной ширины под самый
+              длинный номер («+357 99 999 999», «+7 916 123 45 67»), и дата
+              начинается за ним в одной точке у каждой строки с номером. У
+              клиента без номера колонки нет: подпись идёт от края, как у
+              соседних строк (шторка выбора, агенда), а не висит посреди. */}
           {phoneShown || mark ? (
             <View className="mt-0.5 flex-row items-center">
-              <View style={{ width: phoneColumn }}>
-                {phoneShown ? (
+              {phoneShown ? (
+                <View style={{ width: phoneColumn }}>
                   <Text
                     maxFontSizeMultiplier={1.3}
                     numberOfLines={1}
-                    style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
+                    style={{ ...LIST_ROW.sub, color: t.sub, fontVariant: ["tabular-nums"] }}
                   >
                     {formatPhoneForDisplay(client.phone, country)}
                   </Text>
-                ) : null}
-              </View>
+                </View>
+              ) : null}
               {mark ? (
                 <View className="shrink flex-row items-center gap-1">
                   <MarkIcon color={markColor} size={12} strokeWidth={2} />
                   <Text
                     maxFontSizeMultiplier={1.3}
                     numberOfLines={1}
-                    style={{ fontSize: 13, color: markColor, fontVariant: ["tabular-nums"] }}
+                    style={{ ...LIST_ROW.sub, color: markColor, fontVariant: ["tabular-nums"] }}
                   >
                     {formatShortDateRu(mark.date)}
                   </Text>
@@ -265,81 +261,38 @@ function ClientRowView({
   // телефона: ни один из глаголов номера не требует.
   // Без глаголов свайпа (корзина, нет прав) строка остаётся просто строкой.
   if (selectionMode || (!onRemind && !onDelete)) return row;
-  const closeSwipe = () => swipeRef.current?.close();
+  // Кромки — общий `SwipeRow`: тот же жест, ширина и подпись, что у всех
+  // строк продукта, и «открыт один ряд на экран» держит он сам.
   return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      friction={2}
-      rightThreshold={44}
-      leftThreshold={44}
-      overshootRight={false}
-      overshootLeft={false}
-      // Мёртвая зона у левого края: на всех остальных экранах эта же моторика
-      // означает системное «назад».
-      dragOffsetFromLeftEdge={30}
-      // Открытым может быть только ОДИН свайп: иначе на экране две-три
-      // раскрытые строки, и следующий тап попадает не туда, куда целились.
-      onSwipeableWillOpen={() => {
-        haptics.tap();
-        onSwipeOpen?.(swipeRef.current);
-      }}
-      renderLeftActions={
-        onRemind
-          ? () => (
-              <Pressable
-                onPress={() => {
-                  closeSwipe();
-                  haptics.tap();
-                  onRemind();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
-                className="w-[88px] items-center justify-center gap-1"
-                style={{ backgroundColor: t.warning }}
-              >
-                <Bell color="#fff" size={ICON.sm} />
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className="text-[11px] font-semibold"
-                  style={{ color: "#fff" }}
-                >
-                  Напомнить
-                </Text>
-              </Pressable>
-            )
+    <SwipeRow
+      label={onDelete ? "Удалить" : undefined}
+      color={t.danger}
+      icon={Trash2}
+      accessibilityLabel={`Удалить — ${client.full_name || client.phone}`}
+      // Удаление спрашивает подтверждение само — поэтому оно допустимо
+      // у пальца, а полного свайпа здесь нет вовсе.
+      onAction={
+        onDelete
+          ? () => {
+              haptics.warning();
+              onDelete();
+            }
           : undefined
       }
-      renderRightActions={
-        onDelete
-          ? () => (
-              // Удаление спрашивает подтверждение само — поэтому оно допустимо
-              // у пальца, а полного свайпа здесь нет вовсе.
-              <Pressable
-                onPress={() => {
-                  closeSwipe();
-                  haptics.warning();
-                  onDelete();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Удалить — ${client.full_name || client.phone}`}
-                className="w-[88px] items-center justify-center gap-1"
-                style={{ backgroundColor: t.danger }}
-              >
-                <Trash2 color="#fff" size={ICON.sm} />
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className="text-[11px] font-semibold"
-                  style={{ color: "#fff" }}
-                >
-                  Удалить
-                </Text>
-              </Pressable>
-            )
+      leading={
+        onRemind
+          ? {
+              label: "Напомнить",
+              color: t.warning,
+              icon: Bell,
+              accessibilityLabel: `Напомнить — ${client.full_name || client.phone}`,
+              onAction: onRemind,
+            }
           : undefined
       }
     >
       {row}
-    </ReanimatedSwipeable>
+    </SwipeRow>
   );
 }
 

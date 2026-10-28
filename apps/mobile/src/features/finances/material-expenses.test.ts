@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { isMaterialExpenseRow, materialExpenseRows } from "./material-expenses";
+import { materialExpenseRows } from "./material-expenses";
 
 const appt = (over: Partial<Appointment>): Appointment =>
   ({
@@ -33,7 +33,6 @@ describe("materialExpenseRows", () => {
     assert.equal(row.appointment_id, "a1");
     assert.equal(row.source, "auto");
     assert.ok(row.notes?.startsWith("Материалы"));
-    assert.ok(isMaterialExpenseRow(row));
   });
 
   test("вне периода, чужая команда, отменённая или без материалов — строки нет", () => {

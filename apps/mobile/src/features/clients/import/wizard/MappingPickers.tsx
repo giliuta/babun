@@ -1,15 +1,23 @@
 import { useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
-import { Check, ChevronDown } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { ChevronDown } from "lucide-react-native";
+import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
 import type { useThemeColors } from "@/theme/colors";
 import { FIELD_LABEL, FIELD_OPTIONS, type ImportableField } from "../csv-mapping";
 
+// ВЫБОР ПОЛЯ — КАНОНИЧЕСКОЙ ШТОРКОЙ (`ValuePickerSheet`), а не своим окном по
+// центру: тап выбирает и закрывает, выбранное отмечено, как у любого выбора
+// из справочника. Заголовок — сама колонка файла: человек видит, что
+// сопоставляет.
 export function FieldPicker({
   t,
+  column,
   value,
   onChange,
 }: {
   t: ReturnType<typeof useThemeColors>;
+  /** Название колонки файла — заголовок шторки. */
+  column: string;
   value: ImportableField;
   onChange: (f: ImportableField) => void;
 }) {
@@ -20,8 +28,8 @@ export function FieldPicker({
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Поле: ${FIELD_LABEL[value]}`}
-        className="min-h-11 flex-row items-center gap-1 rounded-[10px] px-3 py-2 active:opacity-70"
-        style={{ backgroundColor: t.fill }}
+        className="min-h-11 flex-row items-center gap-1 px-3 py-2 active:opacity-70"
+        style={{ backgroundColor: t.fill, borderRadius: t.radius.input }}
       >
         <Text
           className="max-w-[120px] text-[13px] font-medium"
@@ -32,59 +40,16 @@ export function FieldPicker({
         </Text>
         <ChevronDown color={t.faint} size={14} />
       </Pressable>
-      <Modal
+      <ValuePickerSheet
         visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <View
-          className="flex-1 items-center justify-center px-8"
-          style={{ backgroundColor: t.scrim }}
-        >
-          <Pressable
-            className="absolute inset-0"
-            onPress={() => setOpen(false)}
-            accessible={false}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          />
-          <View
-            className="w-full overflow-hidden rounded-[10px]"
-            style={{ backgroundColor: t.surface }}
-          >
-            {FIELD_OPTIONS.map((f, i) => {
-              const active = f === value;
-              return (
-                <Pressable
-                  key={f}
-                  onPress={() => {
-                    onChange(f);
-                    setOpen(false);
-                  }}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: active }}
-                  accessibilityLabel={FIELD_LABEL[f]}
-                  className="min-h-11 flex-row items-center gap-2 px-4 py-3 active:opacity-70"
-                  style={
-                    i < FIELD_OPTIONS.length - 1
-                      ? { borderBottomWidth: 1, borderBottomColor: t.separator }
-                      : undefined
-                  }
-                >
-                  <Text
-                    className="flex-1 text-[15px]"
-                    style={{ color: t.ink, fontWeight: active ? "700" : "400" }}
-                  >
-                    {FIELD_LABEL[f]}
-                  </Text>
-                  {active ? <Check color={t.accent} size={18} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </Modal>
+        title={column}
+        options={FIELD_OPTIONS.map((f) => ({ id: f, label: FIELD_LABEL[f] }))}
+        selectedId={value}
+        onPick={(id) => {
+          if (id) onChange(id as ImportableField);
+        }}
+        onClose={() => setOpen(false)}
+      />
     </>
   );
 }

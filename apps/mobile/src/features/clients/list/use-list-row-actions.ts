@@ -1,6 +1,5 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Share } from "react-native";
-import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
@@ -88,9 +87,6 @@ export function useListRowActions({
   // и основной объект, и последнюю команду — те же два поля, что подставляет
   // карточка, поэтому лишний заход в карточку ради «Записать» больше не
   // нужен. Чёрный список спрашивает через тот же общий гейт.
-  // Ссылка на открытую свайпом строку — чтобы закрыть её, когда открывают
-  // соседнюю.
-  const openSwipe = useRef<SwipeableMethods | null>(null);
   const guardedBook = useGuardedBookingNav();
   // Команда записи: под чипом — выбранная (её список и открыт); без чипа —
   // команда клиента, у клиента без неё — команда последнего визита.
@@ -220,7 +216,6 @@ export function useListRowActions({
     setRemindClient,
     openRemindMenu,
     clientsInPlan,
-    openSwipe,
     bookFor,
     rowActionsOf,
     menuActions,

@@ -5,7 +5,6 @@ import type { Client, Location } from "@babun/shared/local/clients";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
-import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { hasExactAddress } from "@/lib/paper/document";
@@ -140,6 +139,7 @@ export function InvoiceObjectBlock({
               ЭТОГО клиента: сменили клиента, и набранный адрес прежнего ушёл
               бы в объекты нового. */}
           <ObjectSheet
+            mode="create"
             key={client.id}
             visible={adding}
             writer={writer}
@@ -150,7 +150,8 @@ export function InvoiceObjectBlock({
             }}
             onClose={() => setAdding(false)}
           />
-          <ObjectEditSheet
+          <ObjectSheet
+            mode="edit"
             visible={editing}
             client={client}
             locationId={editing ? locationId : null}

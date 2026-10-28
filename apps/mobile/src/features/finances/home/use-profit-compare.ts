@@ -9,7 +9,7 @@ import { useTransactions } from "../queries";
 import type { LedgerFilter } from "./home-scope";
 import { previousProfit } from "./home-totals";
 
-export interface ProfitCompareInput {
+interface ProfitCompareInput {
   view: HomeView;
   period: Period;
   businessToday: string;

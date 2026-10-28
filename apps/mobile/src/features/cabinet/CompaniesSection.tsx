@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { InvitationsRow } from "@/features/access/InvitationsRow";
 
 // «ПРИГЛАШЕНИЯ» В КАБИНЕТЕ — И ТОЛЬКО ОНИ: добавление идёт просто в команды,
@@ -14,7 +15,9 @@ export function CompaniesSection() {
   return (
     <View>
       <SectionCard>
-        <InvitationsRow />
+        <TourTarget id="cabinet.invitations">
+          <InvitationsRow />
+        </TourTarget>
       </SectionCard>
     </View>
   );

@@ -39,7 +39,7 @@ function rowToDebt(r: Row): Debt {
   };
 }
 
-export interface DebtRangeOptions {
+interface DebtRangeOptions {
   /** Команда, если экран сужен до одной. */
   teamId?: string | null;
 }
@@ -154,7 +154,7 @@ function localTodayYmd(now = new Date()): string {
 /** Проверки повторяют CHECK-и таблицы, но говорят по-человечески: до базы
  *  доезжает `violates check constraint "debts_amount_check"`, и показать это
  *  владельцу нельзя. */
-export function assertDebtDraft(draft: NewDebt): void {
+function assertDebtDraft(draft: NewDebt): void {
   if (!draft.counterparty.trim()) {
     throw new Error("Укажите, кто должен");
   }

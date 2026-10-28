@@ -1,6 +1,7 @@
 import { useMemo, type Dispatch, type SetStateAction } from "react";
 import type { ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { pluralPhraseRu } from "@babun/shared/common/utils/plural-ru";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import type { useToast } from "@/components/ui/Toast";
@@ -90,7 +91,9 @@ export function useListBulk({
         exitSelection();
       }
     } catch (e) {
-      notify("Не удалось выгрузить", (e as Error).message);
+      // Словами, а не `error.message`: обрыв связи и отказ звучат по-людски.
+      const words = writeErrorWords(e, { failed: "Не удалось выгрузить", notDone: "CSV не выгружен" });
+      notify(words.title, words.subtitle);
     }
   };
 
@@ -99,7 +102,7 @@ export function useListBulk({
     if (n === 0) return;
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
     confirmThen(
-      `Удалить ${n} ${word}?`,
+      pluralPhraseRu(n, `Удалить ${n} клиента?`, `Удалить ${n} ${word}?`),
       {
         message: `Клиенты уйдут в «Удалённые клиенты». Кто без записей и денег — сотрётся через ${TRASH_DAYS} дней, у остальных история останется в отчётах. Вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке.`,
         confirmLabel: "Удалить",
@@ -111,10 +114,11 @@ export function useListBulk({
           // здесь остаётся только случай «не удалился никто».
           const { archived, failed } = await deleteWithUndo(selectedClients);
           if (archived === 0) {
-            notify(
-              "Не удалось удалить",
-              `Ни один из ${failed} клиентов не удалён. Проверьте соединение и попробуйте ещё раз.`,
-            );
+            // Один клиент — отказ уже сказан тостом (`deleteWithUndo`), второе
+            // окно поверх него было бы тем же словом дважды.
+            if (n > 1 && failed > 0) {
+              notify("Не удалось удалить", "Клиенты не удалены. Проверьте соединение и попробуйте ещё раз.");
+            }
             return;
           }
           exitSelection();

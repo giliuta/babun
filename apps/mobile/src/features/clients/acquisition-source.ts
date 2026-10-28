@@ -95,16 +95,6 @@ export function sourceDisplayName(source: Pick<ClientSource, "key" | "name">): s
   return source.key ? tDynamic(source.name) : source.name;
 }
 
-/** Подпись источника клиента; `null` — не указан. */
-export function sourceLabel(
-  value: string | null | undefined,
-  sources: ClientSource[],
-  teamId: string | null | undefined,
-): string | null {
-  const row = resolveSource(value, sources, teamId);
-  return row ? sourceDisplayName(row) : null;
-}
-
 /** «Кто привёл» — у строки, засеянной «Рекомендацией», как её ни назови. */
 export function isReferral(
   value: string | null | undefined,
@@ -139,7 +129,8 @@ export function sourceBucket(
 }
 
 /** Варианты фильтра: имена источников (под чипом — только его команды) в
- *  порядке справочника, «Неизвестно» — последним. */
+ *  порядке справочника, «Не указан» — последним: клиент без источника или с
+ *  удалённым источником, тем же словом, что в карточке. */
 export function sourceFilterOptions(
   sources: ClientSource[],
   teamId: string | null = null,
@@ -157,7 +148,7 @@ export function sourceFilterOptions(
     seen.add(value);
     out.push({ value, label: sourceDisplayName(s).trim(), color: "" });
   }
-  out.push({ value: "unknown", label: ACQUISITION_LABELS.unknown, color: "" });
+  out.push({ value: "unknown", label: "Не указан", color: "" });
   return out;
 }
 

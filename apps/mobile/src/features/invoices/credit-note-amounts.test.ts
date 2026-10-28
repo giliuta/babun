@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { creditNoteAmountForRefund, creditNoteLeftToPay } from "./credit-note-amounts";
+import {
+  creditNoteAmountForRefund,
+  creditNoteLeftToPay,
+  creditNoteVat,
+} from "./credit-note-amounts";
 
 // «ВЕРНУТЬ» ПЛАТЁЖ ЧАСТИЧНО ОПЛАЧЕННОГО ИНВОЙСА. Сервер
 // (`issue_partial_credit_note`) возвращает деньги только сверх нового «к
@@ -47,5 +51,39 @@ describe("сумма ноты для возврата платежа", () => {
     const screen = readFileSync(resolve(here, "../../../app/invoices/credit-note.tsx"), "utf8");
     assert.match(detail, /amount=\$\{creditNoteAmountForRefund\(refundable, settlement\)\}/);
     assert.match(screen, /к оплате \$\{formatInvoiceMoney\(creditNoteLeftToPay\(due, paid, value\)/);
+  });
+});
+
+describe("налог кредит-ноты — как у сервера", () => {
+  const vat = (patch: Partial<Parameters<typeof creditNoteVat>[0]>) =>
+    creditNoteVat({ vat: 10, total: 100, amount: 10, priorVat: 0, closes: false, ...patch });
+
+  test("доля считается в центах: половина от 2,01 — 1,01, как round() сервера", () => {
+    // Во float 2.01 * 0.5 = 1.00499… и превью печатало 1,00.
+    assert.equal(vat({ vat: 2.01, total: 1, amount: 0.5 }), 1.01);
+    assert.equal(vat({ vat: 1.61, total: 10, amount: 3.33 }), 0.54);
+  });
+
+  test("доля не больше остатка налога после прежних нот", () => {
+    assert.equal(vat({ priorVat: 9.99 }), 0.01);
+    assert.equal(vat({ priorVat: 10 }), 0);
+  });
+
+  test("закрывающая нота несёт весь остаток налога", () => {
+    assert.equal(vat({ amount: 66.67, priorVat: 3.33, closes: true }), 6.67);
+    assert.equal(vat({ amount: 100, closes: true }), 10);
+  });
+
+  test("без налога на бумаге — ноль", () => {
+    assert.equal(vat({ vat: 0, closes: true }), 0);
+    assert.equal(vat({ total: 0 }), 0);
+  });
+
+  test("превью ноты к инвойсу и к чеку считают этой функцией", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const note = readFileSync(resolve(here, "../../../app/invoices/credit-note.tsx"), "utf8");
+    const refund = readFileSync(resolve(here, "../../../app/documents/receipt-refund.tsx"), "utf8");
+    assert.match(note, /const vat = creditNoteVat\(/);
+    assert.equal((refund.match(/creditNoteVat\(/g) ?? []).length, 2);
   });
 });

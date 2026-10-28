@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { buildStats, nameInComment } from "./client-stats";
+import { buildStats, buildStatsMap, nameInComment } from "./client-stats";
 
 // Границы слова для привязки старых записей (client_id=null) к клиенту
 // по имени в комментарии. Оба аргумента уже нормализованы (lowercase,
@@ -73,5 +73,72 @@ describe("долг по незакрытой работе", () => {
       payments: [{ id: "p", method: "cash", amount: 100, paid_at: "2020-01-01" }],
     });
     assert.equal(buildStats(CLIENT, [paid]).debt, 0);
+  });
+});
+
+// «СЕГОДНЯ» — ДЕНЬ БИЗНЕСА, А НЕ ТЕЛЕФОНА: владелец в другом поясе
+// после своей полуночи видел бы долгом запись, у команды ещё сегодняшнюю.
+// Сводка считает от переданной даты (часовой пояс календаря).
+describe("сводка клиента считает от дня бизнеса", () => {
+  const CLIENT = { id: "c1", full_name: "Клиент", created_at: "2026-10-10T08:00:00Z", birthday: "1990-10-20" } as never;
+  const record = {
+    id: "a1",
+    client_id: "c1",
+    date: "2026-10-18",
+    time_start: "10:00",
+    status: "scheduled",
+    kind: "work",
+    total_amount: 100,
+    prepaid_amount: 0,
+    paid_amount: 0,
+    payments: [],
+  } as never;
+
+  test("запись дня бизнеса — ещё не долг, а впереди", () => {
+    const stats = buildStats(CLIENT, [record], undefined, "2026-10-18");
+    assert.equal(stats.debt, 0);
+    assert.equal(stats.nextAptDays, 0);
+    assert.equal(stats.expectedRevenue, 100);
+  });
+
+  test("на следующий день бизнеса та же запись — долг", () => {
+    const stats = buildStats(CLIENT, [record], undefined, "2026-10-19");
+    assert.equal(stats.debt, 100);
+    assert.equal(stats.unclosedVisits, 1);
+  });
+
+  test("дни с заведения и до дня рождения — от того же дня", () => {
+    const stats = buildStats(CLIENT, [], undefined, "2026-10-18");
+    assert.equal(stats.ageDays, 8);
+    assert.equal(stats.birthdayInDays, 2);
+  });
+
+  test("карта клиентов передаёт день каждому", () => {
+    const map = buildStatsMap([CLIENT], [record], undefined, "2026-10-19");
+    assert.equal(map.get("c1")?.debt, 100);
+  });
+});
+
+// Событие без клиента («Перезвонить Анне») — не визит Анны: подбор по имени
+// в заметке остаётся только для работ без клиента.
+describe("событие с именем клиента в заметке — не его визит", () => {
+  const ANNA = { id: "anna", full_name: "Анна", created_at: "2026-10-01T08:00:00Z" } as never;
+  const event = {
+    id: "e1",
+    client_id: null,
+    kind: "event",
+    comment: "Перезвонить Анне",
+    date: "2026-10-25",
+    time_start: "10:00",
+    status: "scheduled",
+    total_amount: 0,
+    paid_amount: 0,
+    payments: [],
+  } as never;
+  const named = { ...(event as object), kind: "event", comment: "Анна — ключи у соседа" } as never;
+
+  test("buildStats и buildStatsMap не берут событие", () => {
+    assert.equal(buildStats(ANNA, [named], undefined, "2026-10-19").nextApt, null);
+    assert.equal(buildStatsMap([ANNA], [named, event], undefined, "2026-10-19").get("anna")?.nextApt, null);
   });
 });

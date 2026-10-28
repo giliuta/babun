@@ -14,6 +14,9 @@ import { useCurrentRole } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { Screen } from "@/components/ui/Screen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // «УДАЛЁННЫЕ КЛИЕНТЫ» — как «Недавно удалённые» в Фото на iPhone.
 //
@@ -24,7 +27,9 @@ import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 // Срок — 30 дней, как у фотографий в iPhone.
 //
 // ОДНА ПОЛКА: понятия «в архив» нет, есть только «удалить». Клиент с записями, инвойсами или деньгами тоже здесь, но без счётчика и
-// без «Стереть навсегда»: его история в отчётах, база его не сотрёт.
+// без «Удалить насовсем»: его история в отчётах, база его не сотрёт.
+//
+// Слова и жесты — как у трёх других корзин: «Вернуть» / «Удалить насовсем».
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
@@ -41,10 +46,22 @@ function ClientTrashScreen() {
   const trashed = useTrashedClients();
   const restore = useRestoreClient();
   const erase = useDeleteClientForever();
-  // «Стереть навсегда» разрешено только владельцу (гейт в самой мутации).
+  // «Удалить насовсем» разрешено только владельцу (гейт в самой мутации).
   // Показывать его диспетчеру значит обещать действие, которое ответит
   // отказом, — предлагать нужно только то, что человек может сделать.
-  const isOwner = useCurrentRole().data === "owner";
+  const role = useCurrentRole().data;
+  const isOwner = role === "owner";
+
+  // ПОЛКА СВОЕЙ БАЗЫ — ТОЛЬКО ВЛАДЕЛЬЦУ (так же решает RLS). Партнёр по ссылке
+  // видел «Пусто» со словами «удалённые лежат здесь» — неправду о чужой базе.
+  if (role && !isOwner) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Удалённые клиенты" />
+        <EmptyState title="Раздел доступен только владельцу" />
+      </Screen>
+    );
+  }
 
   return (
     <HiddenClientsScreen
@@ -64,7 +81,7 @@ function ClientTrashScreen() {
       actions={(client) => [
         {
           id: "restore",
-          label: "Вернуть в список",
+          label: "Вернуть",
           icon: RotateCcw,
           run: async () => {
             await restore.mutateAsync(client);
@@ -74,13 +91,13 @@ function ClientTrashScreen() {
         ...(isOwner && client.purge_at
           ? [{
           id: "erase",
-          label: "Стереть навсегда",
+          label: "Удалить насовсем",
           icon: Trash2,
           danger: true,
           run: async () => {
-            const ok = await confirmAction("Стереть навсегда?", {
+            const ok = await confirmAction("Удалить насовсем?", {
               message: `${client.full_name || "Клиент"} исчезнет без возможности вернуть.`,
-              confirmLabel: "Стереть",
+              confirmLabel: "Удалить",
               destructive: true,
             });
             if (!ok) return;

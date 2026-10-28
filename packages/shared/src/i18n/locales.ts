@@ -13,7 +13,7 @@ export type UiLocale = "ru" | "en" | "bg" | "el" | "uk" | "de" | "es";
 /** How a count picks its noun form: Slavic one/few/many or one/other. */
 export type PluralRule = "slavic" | "one-other";
 
-export type UiLocaleInfo = {
+type UiLocaleInfo = {
   code: UiLocale;
   /** The language in its own words: «English», «Български». */
   name: string;

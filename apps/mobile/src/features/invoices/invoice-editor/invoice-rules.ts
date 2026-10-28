@@ -20,7 +20,7 @@ import {
 } from "@/lib/paper/format";
 import type { InvoicePrefill } from "./types";
 
-export interface AppointmentVat {
+interface AppointmentVat {
   mode: "inclusive" | "exclusive";
   rate: number;
 }

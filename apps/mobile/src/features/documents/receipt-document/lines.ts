@@ -8,6 +8,7 @@ import {
   INVOICE_GENERATOR_DEFAULTS,
   type ServiceNameLookup,
 } from "@babun/shared/local/finance/invoice-generator";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
 
 // Receipt line items: their input shape and the two sources that build
 // them (an issued invoice, an appointment snapshot).
@@ -91,10 +92,16 @@ const NO_CATALOG_FALLBACK: ServiceNameLookup = () => undefined;
  */
 export function receiptLinesFromAppointment(
   appointment: Appointment,
+  /** Язык бумаги чека: строка «одной строкой» печатается на нём. */
+  language: InvoiceLanguage = "en",
 ): ReceiptLineItemsInput {
   const draft = generateInvoiceFromAppointment(
     appointment,
-    { ...INVOICE_GENERATOR_DEFAULTS, lineSource: "services" },
+    {
+      ...INVOICE_GENERATOR_DEFAULTS,
+      lineSource: "services",
+      defaultLineTitle: invoiceDictionary(language).servicesLine,
+    },
     NO_CATALOG_FALLBACK,
   );
   return {

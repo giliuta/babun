@@ -1,5 +1,7 @@
 import { Pressable, Text, View } from "react-native";
+import { tintOver } from "@/components/ui/color-contrast";
 import type { CountryCode } from "libphonenumber-js";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { useThemeColors } from "@/theme/colors";
@@ -52,13 +54,14 @@ export function MappingStep({
   return (
     <View className="gap-4">
       <Text className="text-xs" style={{ color: t.sub }}>
-        {parsed.rows.length} строк · {parsed.headers.length} колонок
+        {formatCountRu(parsed.rows.length, ["строка", "строки", "строк"])} ·{" "}
+        {formatCountRu(parsed.headers.length, ["колонка", "колонки", "колонок"])}
       </Text>
 
       {resume ? (
         <View
           className="gap-2 rounded-[10px] p-4"
-          style={{ backgroundColor: "rgba(245,166,35,0.10)" }}
+          style={{ backgroundColor: tintOver(t.warning, t.surface, 0.1) }}
         >
           <Text className="text-[13px] font-semibold" style={{ color: t.warning }}>
             Прошлый импорт не завершён
@@ -121,6 +124,7 @@ export function MappingStep({
             </View>
             <FieldPicker
               t={t}
+              column={h || `Колонка ${idx + 1}`}
               value={mapping[idx] ?? "skip"}
               onChange={(f) => setCol(idx, f)}
             />
@@ -152,7 +156,7 @@ export function MappingStep({
               >
                 <Text
                   className="text-[13px] font-semibold"
-                  style={{ color: active ? "#fff" : t.body }}
+                  style={{ color: active ? t.onAccent : t.body }}
                 >
                   {c.label}
                 </Text>

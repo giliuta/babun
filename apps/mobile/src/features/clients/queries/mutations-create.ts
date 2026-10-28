@@ -60,7 +60,13 @@ export function useCreateClient() {
         scope.writeOpts,
       );
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: clientKeys.all() }),
+    // ПЕРЕЧИТКУ НЕ ЖДЁМ. Обещание из `onSuccess` держит `mutateAsync`, пока
+    // не перечитаются ВСЕ списки клиентов, — кнопка «Создать клиента» стояла
+    // серой 10+ секунд, и повторный тап заводил дубль. Строка уже лежит в
+    // кэше на диске, списки догонят сами.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientKeys.all() });
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

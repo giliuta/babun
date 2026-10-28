@@ -42,7 +42,7 @@ export {
   type ReceiptLineItemsInput,
 } from "./receipt-document/lines";
 
-export interface ReceiptDocumentLine {
+interface ReceiptDocumentLine {
   name: string;
   qty: string;
   unitPrice: string;
@@ -87,7 +87,7 @@ export interface ReceiptDocument {
  *  (`_issue_receipt_core`, миграция реквизитов). Читаем ВСЁ, что он кладёт:
  *  поле, которое лежит в документе и не печатается, — это поле, которого для
  *  клиента нет. */
-export interface ReceiptSellerSnapshot {
+interface ReceiptSellerSnapshot {
   name?: string | null;
   address?: string | null;
   vat_number?: string | null;

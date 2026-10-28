@@ -5,6 +5,7 @@ import { useNextInvoiceNumber } from "@/features/finances/invoices-queries";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -302,7 +303,7 @@ export function RequisitesScreen() {
                           прайсе услуг: нумерация живёт за реквизитами. У
                           скрытого набора номера нет — им не выставляют. Номер
                           серии читается в аккаунте, открытом на телефоне, —
-                          у чужого аккаунта (04.10) он был бы не его. */}
+                          у чужого аккаунта он был бы не его. */}
                       {company.archived_at || scope.foreign ? null : <NextNumber companyId={company.id} />}
                     </Pressable>
                     {readOnly ? null : handle}
@@ -317,9 +318,9 @@ export function RequisitesScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА (AGENTS.md 7.1): место
           кнопки не зависит от того, пуст список или полон. */}
       {!companies.isLoading && !companies.isError && !readOnly ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton label="Добавить реквизиты" onPress={() => show(null)} />
-        </View>
+        </PageFooter>
       ) : null}
 
       <CompanySheet

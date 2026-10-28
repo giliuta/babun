@@ -1,6 +1,6 @@
 import { Pressable, View } from "react-native";
 import { Bell, BellRing, ChevronLeft, MoreHorizontal } from "lucide-react-native";
-import { ICON } from "@/components/ui/tokens";
+import { ICON, TYPE } from "@/components/ui/tokens";
 import { Halo } from "@/components/ui/Halo";
 import { colorName } from "@babun/shared/common/utils/colors";
 import { selfReminderLabel } from "@/lib/reminder-time";
@@ -55,11 +55,11 @@ export function BookHeader({ form }: { form: BookModel }) {
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <ChevronLeft color={t.body} size={ICON.md} />
+          <ChevronLeft color={t.body} size={ICON.header} />
         </Pressable>
         <Text
           className="flex-1 text-center"
-          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          style={{ ...TYPE.headline, color: t.ink }}
         >
           {title}
         </Text>
@@ -155,7 +155,7 @@ export function BookHeader({ form }: { form: BookModel }) {
               accessibilityRole="button"
               accessibilityLabel={kind === "event" ? "Действия с событием" : "Действия с записью"}
             >
-              <MoreHorizontal size={22} strokeWidth={2} color={t.body} />
+              <MoreHorizontal size={ICON.header} strokeWidth={2} color={t.body} />
             </Pressable>
           ) : null}
         </View>

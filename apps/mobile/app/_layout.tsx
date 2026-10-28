@@ -16,18 +16,25 @@ import { MirrorBanner, MirrorInsetShim } from "@/components/blocks/MirrorBanner"
 import { useSession } from "@/providers/SessionProvider";
 import { ChoiceSheetHost } from "@/components/ui/ChoiceSheet";
 import { ToastProvider } from "@/components/ui/Toast";
+import { MemberQueueToasts } from "@/features/appointments/MemberQueueToasts";
 import { AppUpdateGate } from "@/features/app-update/AppUpdateGate";
 import {
   consumeLastAppointmentNotificationTarget,
+  consumeLastDayNotificationTarget,
   subscribeToAppointmentNotificationResponses,
   type AppointmentNotificationTarget,
+  type DayNotificationTarget,
 } from "@/features/calendar/reminders";
+import { runPushAction } from "@/features/calendar/push-actions";
 import {
   consumeLastClientNotificationTarget,
   subscribeToClientNotificationResponses,
   type ClientNotificationTarget,
 } from "@/features/clients/reminders";
 import { reconcileBabunNotifications } from "@/lib/notifications";
+import { getActiveTenantId } from "@/lib/active-tenant";
+import { switchTenant } from "@/session/switch-tenant";
+import { refreshAppointmentsForTap } from "@/lib/notification-tap";
 
 void SplashScreen.preventAutoHideAsync();
 // Свежее обновление по воздуху — с первого запуска, пока видна заставка.
@@ -79,13 +86,50 @@ function RootNavigator() {
       // dashboard then resolves the id through its role-scoped query and
       // shows a safe "not available" state for foreign/deleted records.
       if (!session || !active) return;
-      router.push({
-        pathname: "/",
-        params: {
-          appointmentId: target.appointmentId,
-          date: target.date,
-          ...(target.teamId ? { teamId: target.teamId } : {}),
-        },
+      // Пуш с сервера о записи из другого аккаунта человека: календарь
+      // ищет запись в активном аккаунте, поэтому сперва переход в её.
+      if (target.tenantId && target.tenantId !== getActiveTenantId()) {
+        void switchTenant(target.tenantId)
+          .then(() => openAppointment({ ...target, tenantId: undefined }))
+          .catch(() => {});
+        return;
+      }
+      if (target.action === "day") {
+        openDay(target);
+        return;
+      }
+      void refreshAppointmentsForTap().then(() => {
+        if (!active) return;
+        // Кнопка уведомления: позвонить или проложить маршрут сразу. Нет
+        // номера или адреса в загруженном — открывается сама запись.
+        if (target.action && runPushAction(target.action, target.appointmentId, target.teamId ?? null)) {
+          return;
+        }
+        router.push({
+          pathname: "/",
+          params: {
+            appointmentId: target.appointmentId,
+            date: target.date,
+            ...(target.teamId ? { teamId: target.teamId } : {}),
+          },
+        });
+      });
+    };
+    // «Открыть день»: отменённая или удалённая работа — её день в календаре.
+    const openDay = (target: DayNotificationTarget) => {
+      if (!session || !active) return;
+      if (target.tenantId && target.tenantId !== getActiveTenantId()) {
+        void switchTenant(target.tenantId)
+          .then(() => openDay({ ...target, tenantId: undefined }))
+          .catch(() => {});
+        return;
+      }
+      void refreshAppointmentsForTap().then(() => {
+        if (!active) return;
+        router.push({
+          pathname: "/",
+          params: { date: target.date, ...(target.teamId ? { teamId: target.teamId } : {}) },
+        });
       });
     };
     const openClient = (target: ClientNotificationTarget) => {
@@ -96,7 +140,7 @@ function RootNavigator() {
       });
     };
     const unsubscribeAppointment =
-      subscribeToAppointmentNotificationResponses(openAppointment);
+      subscribeToAppointmentNotificationResponses(openAppointment, openDay);
     const unsubscribeClient =
       subscribeToClientNotificationResponses(openClient);
     void (async () => {
@@ -104,6 +148,11 @@ function RootNavigator() {
         await consumeLastAppointmentNotificationTarget();
       if (appointmentTarget) {
         openAppointment(appointmentTarget);
+        return;
+      }
+      const dayTarget = await consumeLastDayNotificationTarget();
+      if (dayTarget) {
+        openDay(dayTarget);
         return;
       }
       const clientTarget = await consumeLastClientNotificationTarget();
@@ -160,6 +209,9 @@ function RootNavigator() {
       {/* «Подтвердить / Отменить» запись (STORY-089): клиент открывает
           babun.app/r/<токен> из SMS без входа — там же, где «l». */}
       <Stack.Screen name="r" />
+      {/* «Онлайн-запись» календаря: заказчик открывает babun.app/b/<токен>
+          без входа — там же, где «l» и «r». */}
+      <Stack.Screen name="b" />
       {/* «Оплата прошла» — возврат из Stripe после пополнения SMS из
           приложения (STORY-089): без входа, как «l» и «r». */}
       <Stack.Screen name="pay" />
@@ -184,6 +236,7 @@ export default function RootLayout() {
           включая границы разделов (`access/mirror/mirror-state.tsx`). */}
       <MirrorProvider>
       <ToastProvider>
+        <MemberQueueToasts />
         {/* Хост выбора «что сделать»: любой chooseOption() рисуется нижним
             листом, а не системным попапом посередине. */}
         <ChoiceSheetHost>

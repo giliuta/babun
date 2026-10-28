@@ -38,6 +38,19 @@ export function rowToClient(
   });
 }
 
+/** Строка файла уже есть в базе под тем же id (`importClientId` стабилен):
+ *  - `resume` — живая строка: повтор после обрыва, строка уже вставлена;
+ *  - `deleted` — строка лежит в «Удалённых клиентах»: тот же файл загрузили
+ *    после удаления. Засчитать её вставленной нельзя — мастер писал
+ *    «Импортировано N», а в списке не было никого;
+ *  - `missing` — конфликт ключа, а строки не видно: настоящая ошибка. */
+export function importIdCollision(
+  existing: { deleted_at?: string | null } | null,
+): "resume" | "deleted" | "missing" {
+  if (!existing) return "missing";
+  return existing.deleted_at ? "deleted" : "resume";
+}
+
 function hash32(value: string, seed: number): number {
   let hash = seed >>> 0;
   for (let index = 0; index < value.length; index++) {

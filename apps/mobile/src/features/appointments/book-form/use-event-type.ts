@@ -5,7 +5,7 @@ import { addMinutesHM } from "@/features/appointments/helpers";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
-export interface EventTypeInput {
+interface EventTypeInput {
   eventTypesData: ReturnType<typeof usePersonalEventTypes>["data"];
   kind: "work" | "event";
   eventTypeId: string | null;

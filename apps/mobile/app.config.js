@@ -1,8 +1,9 @@
-// Варианты сборки: dev-клиент живёт ПОД СВОИМ bundle id, чтобы установка
-// боевого Babun из TestFlight (com.babun.crm) не перезаписывала стройку
-// и обе иконки жили на телефоне рядом.
+// Варианты сборки: dev-клиент живёт ПОД СВОИМ id (iOS bundle id и Android
+// package), чтобы установка боевого Babun из TestFlight или Google Play
+// (com.babun.crm) не перезаписывала стройку, обе иконки жили на телефоне
+// рядом, а ссылки babun.app открывал только боевой.
 //   APP_VARIANT=development → «Babun Dev», com.babun.crm.dev, scheme babundev
-//   без переменной         → боевой Babun как в app.json (релиз/TestFlight)
+//   без переменной         → боевой Babun как в app.json (релиз/магазины)
 const IS_DEV = process.env.APP_VARIANT === "development";
 // ВХОД ЧЕРЕЗ GOOGLE РОДНЫМ ОКНОМ (13.10): клиентские id Google — публичные,
 // живут в google-oauth.json (его же читает приложение). Плагин нужен iOS:
@@ -22,6 +23,17 @@ const GOOGLE_IOS_SCHEME = GOOGLE_OAUTH.ios
 // домен не берёт.
 const APP_LINK_PATHS = ["/invite", "/reset-password", "/login"];
 
+// ПУШ НА ANDROID ИДЁТ ЧЕРЕЗ FCM: сборке нужен файл проекта Firebase
+// `google-services.json`. На EAS он приходит переменной-файлом
+// `GOOGLE_SERVICES_JSON`, локально — файлом рядом с этим. Нет файла — сборка
+// идёт как раньше, а пуши о делах команды на Android не приходят (опрос
+// журнала при открытом приложении остаётся).
+const GOOGLE_SERVICES_FILE =
+  process.env.GOOGLE_SERVICES_JSON ??
+  (require("fs").existsSync(require("path").join(__dirname, "google-services.json"))
+    ? "./google-services.json"
+    : undefined);
+
 // ТЕКСТ КАМЕРЫ — ОДИН (выпуск в App Store, 06.10). Ключ в Info.plist один
 // (NSCameraUsageDescription), а пишут его два плагина: expo-image-picker из
 // app.json и сканер ниже. Свой текст у сканера молча перетирал бы общий
@@ -37,6 +49,12 @@ function imagePickerCameraText(plugins) {
     throw new Error("app.json: expo-image-picker.cameraPermission is required");
   }
   return text;
+}
+
+// Bundle id iOS у варианта сборки: от него же — id расширения определителя
+// номера и его App Group.
+function iosBundleId(config) {
+  return IS_DEV ? "com.babun.crm.dev" : config.ios?.bundleIdentifier;
 }
 
 module.exports = ({ config }) => ({
@@ -70,6 +88,9 @@ module.exports = ({ config }) => ({
     ...(GOOGLE_IOS_SCHEME && !IS_DEV
       ? [["@react-native-google-signin/google-signin", { iosUrlScheme: GOOGLE_IOS_SCHEME }]]
       : []),
+    // Определитель номера: расширение Call Directory и общая с ним App Group
+    // (`plugins/with-call-directory.js`).
+    "./plugins/with-call-directory.js",
   ],
   // КАРТА НА ANDROID (выпуск в Google Play, 04.10): там у react-native-maps
   // один провайдер — Google, и без ключа карта точки объекта пустая. Ключ —
@@ -79,6 +100,11 @@ module.exports = ({ config }) => ({
   // MapPicker на провайдер Google без его SDK в сборке.
   android: {
     ...config.android,
+    // Проект Firebase знает только боевой package: файл с ним в dev-сборке
+    // уронил бы gradle («No matching client»). Dev-клиент Android живёт без
+    // FCM — как без Google-входа на iOS.
+    ...(IS_DEV ? { package: "com.babun.crm.dev" } : null),
+    ...(GOOGLE_SERVICES_FILE && !IS_DEV ? { googleServicesFile: GOOGLE_SERVICES_FILE } : null),
     ...(IS_DEV
       ? null
       : {
@@ -102,8 +128,29 @@ module.exports = ({ config }) => ({
   ios: {
     ...config.ios,
     ...(IS_DEV ? null : { associatedDomains: ["applinks:babun.app"] }),
-    bundleIdentifier: IS_DEV
-      ? "com.babun.crm.dev"
-      : config.ios?.bundleIdentifier,
+    bundleIdentifier: iosBundleId(config),
+  },
+  // EAS подписывает каждую цель отдельным профилем: расширение определителя
+  // номера объявляется здесь, иначе сборка не найдёт для него сертификат.
+  extra: {
+    ...config.extra,
+    eas: {
+      ...config.extra?.eas,
+      build: {
+        experimental: {
+          ios: {
+            appExtensions: [
+              {
+                targetName: "BabunCallDirectory",
+                bundleIdentifier: `${iosBundleId(config)}.CallDirectory`,
+                entitlements: {
+                  "com.apple.security.application-groups": [`group.${iosBundleId(config)}`],
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
   },
 });

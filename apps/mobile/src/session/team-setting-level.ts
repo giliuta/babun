@@ -12,7 +12,7 @@ import { useCurrentRole } from "@/session/tenant";
 // Это только вид. Правку пускает сервер — политикой или дверью по праву той
 // же строки.
 
-export type TeamSettingLevel = "hidden" | "read" | "write";
+type TeamSettingLevel = "hidden" | "read" | "write";
 
 export function useTeamSettingLevel(blockKey: string, teamId: string | null | undefined): TeamSettingLevel {
   const role = useCurrentRole().data;

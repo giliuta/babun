@@ -18,13 +18,13 @@
 // не тихо создаст данные в чужой компании. Сторож в тесте следит, чтобы
 // каждая вызываемая приложением функция была здесь названа.
 
-/** Функции, которые только читают: `provolatile = 's'` на 20.09.2026. */
+/** Функции, которые только читают: `provolatile = 's'` в базе. */
 export const READ_RPCS: ReadonlySet<string> = new Set([
   // Право компании (директор «Партнёры: Управляет»): `stable`.
   "access_company",
   "account_balances",
   "appointment_link_lookup",
-  // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
+  // Оплаты тарифа в Кабинете (20261004085616): `stable`.
   "cabinet_tariff_payments",
   "current_tenant_profile_safe",
   "current_user_role",
@@ -41,9 +41,17 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "list_master_clients_safe",
   "list_master_services_safe",
   "list_member_access",
+  // VOLATILE, но пишет только не-владельцу: каждая выдача списка партнёру —
+  // строка журнала `client_list_disclosures`. «Его глазами» идёт токеном
+  // владельца, ему функция ничего не пишет — для засова это чтение.
   "list_member_clients",
   // «История записей» клиента сотруднику (015): `stable`.
   "member_client_history",
+  // «Номер уже есть» партнёру из записи. VOLATILE: не-владельцу пишет
+  // предел перебора (`client_phone_lookups`, разных номеров в сутки — повтор
+  // того же номера предел не тратит). Владельцу, а значит и «его глазами»,
+  // не пишет ничего — для засова это чтение.
+  "member_find_client_by_phone",
   "list_members",
   "list_my_calendars",
   "list_operational_masters_safe",
@@ -54,6 +62,10 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "my_invitations",
   // STORY-102: пройденные главы обучения, `stable`.
   "my_onboarding",
+  // Онлайн-запись (20261027141700): страница заказчика и шестерёнка владельца — `stable`.
+  "online_booking_page",
+  "online_booking_settings",
+  "online_booking_slots",
   // STORY-101: предпросмотр номера из серии юрлица, `stable`
   // (миграция 20261001001000).
   "peek_document_number",
@@ -106,6 +118,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "issue_receipt_credit_note",
   // Частичная кредит-нота к инвойсу (миграция 20261004133917).
   "issue_partial_credit_note",
+  "register_push_device",
   "location_request_create",
   "location_request_submit",
   "member_appointment_copy",
@@ -119,6 +132,10 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "member_rename_day_label",
   // STORY-102: отметить главу обучения пройденной.
   "onboarding_done",
+  // Онлайн-запись (20261027141700): заявка заказчика и выключатели владельца — `volatile`.
+  "online_booking_create",
+  "online_booking_set",
+  "online_booking_set_service",
   "patch_master_profile",
   "record_account_transfer",
   "record_appointment_payment",
@@ -126,14 +143,19 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   // Возврат клиенту переплаты по записи (миграция 20261004024913).
   "refund_appointment_overpayment",
   "refund_invoice_payment",
+  // Возврат переплаты и новый итог записи одной транзакцией (миграция
+  // 20261027225240): `volatile`.
+  "refund_overpayment_and_save",
   "replace_day_extras",
-  "reset_appointment_payment",
   "restore_deleted_operation",
   "restore_deleted_appointment",
-  "set_appointment_prepayment",
   "set_client_sms_opt_out",
   "set_client_team",
+  // Теги, команда и источник выбранным одной пачкой (миграция 20261028153000).
+  "bulk_edit_clients",
   "member_trash_client",
+  // «Объединить с дублем» одной транзакцией (parked 20261027234500_merge_clients).
+  "merge_clients",
   "set_default_company",
   // STORY-101: старт серии документов юрлица (миграция 20261001001000).
   "set_document_series_start",
@@ -154,6 +176,9 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "sms_set_team_template_enabled",
   "start_trial",
   "undo_appointment_payment",
+  // Телефон в получателях пушей и выход из них (миграция 20261027162300).
+  "unregister_push_device",
+  "reset_push_badge",
   "update_client_with_tags",
   "update_invoice_draft",
   "update_master_appointment_safe",

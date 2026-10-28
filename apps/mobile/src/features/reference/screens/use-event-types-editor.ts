@@ -17,7 +17,7 @@ import type { EventTypeDraft } from "./EventTypeSheet";
 // где типы стоят прямо среди настроек. Вынесено из EventTypesScreen, чтобы у страниц не было двух
 // копий проверки дублей и записи.
 
-export type EventTypeEditing =
+type EventTypeEditing =
   | { mode: "create" }
   | { mode: "edit"; type: PersonalEventType };
 

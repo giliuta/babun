@@ -54,7 +54,7 @@ export function AppearanceField({
       >
         <AppearanceTile color={color} icon={icon} icons={icons} />
         <View style={{ flex: 1 }} />
-        <ChevronRight color={t.chevron} size={ICON.sm} />
+        <ChevronRight color={t.chevron} size={ICON.chevron} />
       </Pressable>
       <AppearanceSheet
         visible={open}
@@ -228,9 +228,9 @@ export function NameColorField({
    *  здесь (приглашение по существующей карточке — её правят в самой
    *  карточке). Имя при этом правится как обычно. */
   colorReadOnly?: boolean;
-  /** Имена для обучения: поле имени и плитку цвета можно подсветить
-   *  отдельно («придумайте имя», «выберите цвет»). */
-  tourIds?: { name?: string; color?: string };
+  /** Имя для обучения: плитку цвета можно подсветить отдельно от строки
+   *  («выберите цвет»). Строку целиком подсвечивает обёртка снаружи. */
+  tourIds?: { color?: string };
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -275,7 +275,6 @@ export function NameColorField({
         {/* ОБРАЗЕЦ СЛЕВА — ТАМ ЖЕ, ГДЕ В СПИСКЕ: в списке плитка слева, и в
             настройках слева, чтобы глазу было проще. Плитка показывает ответ
             целиком: цвет заливкой, значок внутри неё. */}
-        <MaybeTour id={tourIds?.color}>
         <Pressable
           onPress={colorReadOnly ? undefined : () => setOpen(true)}
           disabled={colorReadOnly}
@@ -289,16 +288,16 @@ export function NameColorField({
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <AppearanceTile
-            color={color}
-            icon={icon}
-            icons={icons}
-            fallback={fallback}
-            size={28}
-          />
+          <MaybeTour id={tourIds?.color}>
+            <AppearanceTile
+              color={color}
+              icon={icon}
+              icons={icons}
+              fallback={fallback}
+              size={28}
+            />
+          </MaybeTour>
         </Pressable>
-        </MaybeTour>
-        <MaybeTour id={tourIds?.name} flex>
         <TextInput
           ref={inputRef}
           value={name}
@@ -328,7 +327,6 @@ export function NameColorField({
             color: t.ink,
           }}
         />
-        </MaybeTour>
         {trailing ? <View style={{ paddingRight: 16 }}>{trailing}</View> : null}
       </View>
 
@@ -349,9 +347,9 @@ export function NameColorField({
 
 /** Обёртка обучения только там, где её попросили: лишний View в каждой
  *  строке формы не нужен. */
-function MaybeTour({ id, flex, children }: { id?: string; flex?: boolean; children: ReactNode }) {
+function MaybeTour({ id, children }: { id?: string; children: ReactNode }) {
   return id ? (
-    <TourTarget id={id} flex={flex}>
+    <TourTarget id={id} shape="control">
       {children}
     </TourTarget>
   ) : (

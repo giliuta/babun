@@ -187,7 +187,7 @@ export function ClientLabelTags({
             accessibilityLabel="Настроить метки"
             className="h-11 w-11 items-center justify-center active:opacity-60"
           >
-            <Settings2 color={t.sub} size={ICON.sm} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         }
         onClose={() => setLabelOpen(false)}

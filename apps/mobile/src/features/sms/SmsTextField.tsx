@@ -121,7 +121,7 @@ function sampleVars(company: string) {
 }
 
 /** Текст с подставленным примером и его счёт частей. */
-export function useSmsPreview(value: string) {
+function useSmsPreview(value: string) {
   // Имя своей компании — пример «Компания» читался как пустое поле.
   const company = useTenant().data?.name?.trim() || "Ваша компания";
   const sample = useMemo(() => sampleVars(company), [company]);
@@ -129,9 +129,34 @@ export function useSmsPreview(value: string) {
   return { sample, preview, encoding: analyzeSmsEncoding(preview) };
 }
 
+/** СЧЁТ «N ЗНАКОВ · M SMS» — В ФУТЕРЕ ЛИСТА, НАД КНОПКОЙ. Под полем он уходил
+ *  под футер, пока открыта клавиатура, и переход на вторую, платную SMS
+ *  набирали вслепую. */
+export function SmsCounter({ value }: { value: string }) {
+  const t = useThemeColors();
+  const { preview, encoding } = useSmsPreview(value);
+  return (
+    <Text
+      maxFontSizeMultiplier={1.2}
+      accessibilityLiveRegion="polite"
+      style={{
+        marginBottom: 8,
+        textAlign: "center",
+        fontSize: 13,
+        color: encoding.segments > 1 ? t.warning : t.sub,
+        fontVariant: ["tabular-nums"],
+      }}
+    >
+      {preview
+        ? `${formatCountRu(encoding.length, ["знак", "знака", "знаков"])} · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
+        : "До 70 знаков — 1 SMS"}
+    </Text>
+  );
+}
+
 export function SmsTextBlock({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   const t = useThemeColors();
-  const { sample, preview, encoding } = useSmsPreview(value);
+  const { sample } = useSmsPreview(value);
   // Где стоит курсор. `null` — человек его ещё не ставил: поле встаёт в конец.
   const [cursor, setCursor] = useState<number | null>(null);
   const [insertOpen, setInsertOpen] = useState(false);
@@ -185,20 +210,6 @@ export function SmsTextBlock({ value, onChange }: { value: string; onChange: (ne
             }}
           />
         </View>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{
-            marginHorizontal: 16,
-            marginTop: 6,
-            fontSize: 13,
-            color: encoding.segments > 1 ? t.warning : t.sub,
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {preview
-            ? `${formatCountRu(encoding.length, ["знак", "знака", "знаков"])} · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
-            : "До 70 знаков — 1 SMS"}
-        </Text>
         <ChooseRow
           icon={Braces}
           label="Вставить поле"

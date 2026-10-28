@@ -2,9 +2,11 @@ import { Pressable, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { BarChart3, Search, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
+import { TourTarget } from "@/components/tour/TourTarget";
 import type { FinancePageAccess } from "../finance-page-access";
 import type { HomeView } from "../FinanceOverview";
 import type { Period } from "@/lib/period";
+import { ICON } from "@/components/ui/tokens";
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
@@ -61,6 +63,7 @@ export function FinancesHeader({
         borderBottomColor: t.separator,
       }}
     >
+      <TourTarget id="finances.gear" shape="control">
       <Pressable
         onPress={openFinanceSettings}
         // ДВЕРЬ ОТКРЫТА ВСЕМ: человек может зайти, а блоков внутри шестерёнки может и не
@@ -79,9 +82,11 @@ export function FinancesHeader({
           backgroundColor: pressed ? t.pressed : "transparent",
         })}
       >
-        <Settings color={t.sub} size={21} strokeWidth={2} />
+        <Settings color={t.sub} size={ICON.header} strokeWidth={2} />
       </Pressable>
+      </TourTarget>
 
+      <TourTarget id="finances.search" shape="control" flex>
       <View
         style={{
           height: 36,
@@ -144,10 +149,12 @@ export function FinancesHeader({
           }}
         />
       </View>
+      </TourTarget>
 
       {/* Аналитика — как в Клиентах: значок стоит всегда (тап открывает её, даже если
           данных там нет). Что человек увидит
           внутри, решают его же права на записи и деньги. */}
+      <TourTarget id="finances.stats" shape="control">
       <Pressable
         onPress={() =>
           // Аналитика открывается на том же периоде, что был под значком, и
@@ -173,8 +180,9 @@ export function FinancesHeader({
           backgroundColor: pressed ? t.pressed : "transparent",
         })}
       >
-        <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+        <BarChart3 color={t.sub} size={ICON.header} strokeWidth={2} />
       </Pressable>
+      </TourTarget>
     </View>
   );
 }

@@ -1,8 +1,11 @@
+import { Platform } from "react-native";
 import { Compass, Map, MapPin, Navigation } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import type { MapService } from "@babun/shared/common/utils/map-links";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
 import { teamOrderedSet } from "@/features/clients/team-ordered-set";
+import { queryClient } from "@/lib/query-client";
+import { teamDesignQueryKey, type TeamDesign } from "@/features/appointments/team-design";
 
 // КАРТЫ ДЛЯ МАРШРУТА — какие сервисы вообще предлагать: тому, кто пользуется
 // только Google Картами, незачем каждый раз выбирать Яндекс; это настройка
@@ -12,7 +15,7 @@ import { teamOrderedSet } from "@/features/clients/team-ordered-set";
 // «Маршрут» открывает её сразу. Лист появляется только там, где выбор
 // действительно есть (см. features/clients/route-menu.ts).
 
-export interface MapServiceDef {
+interface MapServiceDef {
   id: MapService;
   label: string;
   /** Значок в листе — тот же приём, что у способов связи. */
@@ -42,7 +45,22 @@ const prefs = createEnabledPrefs<MapService>({
 // запасной, пока команда на сервере не настраивала.
 const teamSet = teamOrderedSet(prefs, "mapServices");
 
-export const useEnabledMapServices = teamSet.use;
+/** Apple Карты есть только на технике Apple: на Android их ссылка уходит в
+ *  браузер, а не в приложение карт. Набор команды общий для всех телефонов,
+ *  поэтому Apple в нём остаётся (её выбрали люди с iPhone) — Android просто
+ *  её не предлагает, а если в наборе была только она, маршрут ведёт Google. */
+const OFFERED_HERE = (id: MapService) => Platform.OS !== "android" || id !== "apple";
+
+export function useEnabledMapServices(teamId: string | null = null): MapService[] {
+  const enabled = teamSet.use(teamId);
+  const here = enabled.filter(OFFERED_HERE);
+  return here.length > 0 || enabled.length === 0 ? here : ["google"];
+}
+/** Набор команды как есть — для настроек «Карт для маршрута» и их подписи.
+ *  Галки там правят общий набор: на Android Apple стоит выключенной только
+ *  если её правда сняли, иначе тап по ней снимал бы её у людей с iPhone. */
+export const useTeamMapServices = (teamId: string | null = null): MapService[] =>
+  teamSet.use(teamId);
 export const useMapServicesOrder = teamSet.useOrder;
 export const useToggleMapService = teamSet.useToggle;
 export const useReorderMapServices = teamSet.useReorder;
@@ -59,4 +77,14 @@ export function mapServicesSummary(enabled: MapService[]): string {
     .map((id) => mapServiceDef(id)?.label)
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Карты команды ВНЕ экрана — для кнопки «Маршрут» в уведомлении, где
+ *  хуков нет: набор команды с сервера (кэш «Дизайна»), иначе телефона. */
+export function readMapServicesNow(tenantId: string | null, teamId: string | null): MapService[] {
+  const designs = queryClient.getQueryData<Record<string, TeamDesign>>(teamDesignQueryKey(tenantId));
+  const server = teamId && designs?.[teamId] ? prefs.fromServer(designs[teamId].mapServices) : null;
+  if (server) return server.enabled;
+  const enabled = prefs.read(tenantId, teamId);
+  return prefs.readOrder(tenantId, teamId).filter((id) => enabled.includes(id));
 }

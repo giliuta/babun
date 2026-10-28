@@ -1,7 +1,7 @@
 import type { WorkBand } from "./types";
 
 /** Where the grey off-hours wash stops and starts inside the visible window. */
-export type WorkWash = {
+type WorkWash = {
   /** The band in force (its breaks are drawn too); null — a day off. */
   band: WorkBand | null;
   workStart: number;

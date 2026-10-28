@@ -9,6 +9,7 @@ import {
   SelectRow,
 } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
+import { ICON } from "./tokens";
 
 // ВЫБОР ОДНОГО ЗНАЧЕНИЯ ИЗ ДЛИННОГО СПИСКА.
 //
@@ -16,9 +17,8 @@ import { useThemeColors } from "@/theme/colors";
 //   PickerSheet — «что сделать» (5-6 крупных плиток, без галочки);
 //   ToggleListScreen — страница-набор, где галочек много.
 // А тут значений бывает двадцать (категории расходов), выбирается ровно одно,
-// и у списка есть СВОЯ страница, где эти значения заводят. Раньше такое
-// рисовали центральной карточкой (OptionSheet) — против закона «всё приезжает
-// снизу одним движением».
+// и у списка есть СВОЯ страница, где эти значения заводят. Центральной
+// карточки для такого выбора нет: всё приезжает снизу одним движением.
 //
 // Шестерёнка ведёт на страницу списка: рука уже здесь, в момент, когда нужной
 // строки не нашлось. Это единственный вход в настройку изнутри выбора.
@@ -29,7 +29,7 @@ import { useThemeColors } from "@/theme/colors";
 // Обе роли обязаны выглядеть одинаково, поэтому вёрстка строки живёт в одном
 // месте, а лист — это она же плюс шапка.
 
-export interface ValueOption {
+interface ValueOption {
   id: string;
   label: string;
   /** Вторая строка — чем этот вариант отличается. */
@@ -176,7 +176,7 @@ export function ValuePickerSheet({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={ICON.command} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }

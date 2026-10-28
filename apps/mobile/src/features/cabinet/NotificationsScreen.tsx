@@ -35,13 +35,12 @@ import {
 } from "@/features/calendar/reminders";
 import { reconcileClientReminders } from "@/features/clients/reminders";
 import { chooseOption } from "@/lib/choose";
-import {
-  getNotificationsModule,
-  reconcileBabunNotifications,
-} from "@/lib/notifications";
+import { reconcileBabunNotifications } from "@/lib/notifications";
 import { useThemeColors } from "@/theme/colors";
 
 import { useDevicePermission, useDeviceReminders } from "./device-notifications";
+import { registerThisDevice } from "@/lib/push-device";
+import { PushScheduleCard } from "./PushScheduleCard";
 import {
   CLIENT_TIME_OPTIONS,
   RECORD_REMINDER_OPTIONS,
@@ -99,7 +98,7 @@ export function NotificationsScreen() {
   const permissionQuery = useDevicePermission();
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
-  const permissionView = permission ? permissionRow(permission, Platform.OS === "android") : null;
+  const permissionView = permission ? permissionRow(permission) : null;
   const [picker, setPicker] = useState<"records" | "clients" | null>(null);
   const { data: teams = [] } = useTeams();
   const isOwner = useDataRole().data === "owner";
@@ -121,12 +120,10 @@ export function NotificationsScreen() {
   // Правило выбрано, а iPhone ещё не спрашивали — спросить сейчас: это явное
   // действие человека, иначе напоминание молча не зазвонит.
   const askIfUndetermined = async () => {
-    if (permission !== "undetermined") return;
-    try {
-      await getNotificationsModule()?.requestPermissionsAsync();
-    } catch {
-      // Метода нет в этой сборке — перечитка покажет «недоступны».
-    }
+    if (permission !== "undetermined" && permission !== "askable") return;
+    // Тот же вопрос, что при входе: разрешили — телефон сразу встаёт и в
+    // получатели пушей о делах команды.
+    await registerThisDevice({ askOnce: true });
     void permissionQuery.refetch();
   };
 
@@ -138,6 +135,8 @@ export function NotificationsScreen() {
       seenPermission.current !== "granted"
     ) {
       void reconcileBabunNotifications().catch(() => {});
+      // Включили в настройках телефона и вернулись — токен для пушей.
+      void registerThisDevice();
     }
     if (permission) seenPermission.current = permission;
   }, [permission]);
@@ -147,11 +146,9 @@ export function NotificationsScreen() {
       void Linking.openSettings();
       return;
     }
-    try {
-      await getNotificationsModule()?.requestPermissionsAsync();
-    } catch {
-      // Метода нет в этой сборке — перечитка покажет «недоступны».
-    }
+    // Тот же вопрос, что при входе: разрешили — телефон сразу встаёт и в
+    // получатели пушей о делах команды.
+    await registerThisDevice({ askOnce: true });
     void permissionQuery.refetch();
   };
 
@@ -222,6 +219,8 @@ export function NotificationsScreen() {
           />
         </SectionCard>
 
+        <PushScheduleCard />
+
         {/* НАСТРОЙКИ — У КАЖДОЙ КОМАНДЫ. Одна команда —
             ленты нет. */}
         {teams.length > 1 ? (
@@ -259,39 +258,42 @@ export function NotificationsScreen() {
               />
             </SectionCard>
 
-            {/* ЧТО ДЕЛАЮТ ДРУГИЕ В КОМАНДЕ — из истории изменений; свои
-                действия не присылаются. Историю читает владелец аккаунта. */}
-            {isOwner ? (
-              <SectionCard title="Что происходит в команде">
-                <SettingsRow
-                  tile={SETTINGS_TILE.green}
-                  icon={CalendarPlus}
-                  title="Новые записи"
-                  toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
-                />
-                <Divider inset={56} />
-                <SettingsRow
-                  tile={SETTINGS_TILE.blue}
-                  icon={RefreshCw}
-                  title="Переносы и изменения"
-                  toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
-                />
-                <Divider inset={56} />
-                <SettingsRow
-                  tile={SETTINGS_TILE.red}
-                  icon={CalendarX}
-                  title="Отмены"
-                  toggle={{ value: prefs.notifyCancel, onChange: (v) => setPrefs({ notifyCancel: v }) }}
-                />
-                <Divider inset={56} />
-                <SettingsRow
-                  tile={SETTINGS_TILE.teal}
-                  icon={Wallet}
-                  title="Оплаты"
-                  toggle={{ value: prefs.notifyPayment, onChange: (v) => setPrefs({ notifyPayment: v }) }}
-                />
-              </SectionCard>
-            ) : null}
+            {/* ЧТО ДЕЛАЮТ ДРУГИЕ В КОМАНДЕ — пуш с сервера каждому, кто видит
+                календарь (мастеру — «Вам назначена работа»); свои действия не
+                присылаются. Оплаты — только владельцу: деньги команды. */}
+            <SectionCard title="Что происходит в команде">
+              <SettingsRow
+                tile={SETTINGS_TILE.green}
+                icon={CalendarPlus}
+                title="Новые записи"
+                toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={RefreshCw}
+                title="Переносы и изменения"
+                toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.red}
+                icon={CalendarX}
+                title="Отмены"
+                toggle={{ value: prefs.notifyCancel, onChange: (v) => setPrefs({ notifyCancel: v }) }}
+              />
+              {isOwner ? (
+                <>
+                  <Divider inset={56} />
+                  <SettingsRow
+                    tile={SETTINGS_TILE.teal}
+                    icon={Wallet}
+                    title="Оплаты"
+                    toggle={{ value: prefs.notifyPayment, onChange: (v) => setPrefs({ notifyPayment: v }) }}
+                  />
+                </>
+              ) : null}
+            </SectionCard>
 
             {isOwner ? (
               <SectionCard title="Финансы">

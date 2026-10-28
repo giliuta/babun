@@ -46,7 +46,7 @@ export interface FinanceRouteParams {
   account?: RouteParam;
 }
 
-export interface FinanceRoute {
+interface FinanceRoute {
   view: HomeView;
   /** Команда чипа. `null` — адрес её не называет, экран выберет сам. */
   team: string | null;
@@ -78,7 +78,7 @@ export function financeRoute(params: FinanceRouteParams): FinanceRoute | null {
 }
 
 /** Что экран знает о командах, выбирая команду по умолчанию. */
-export interface ScopeFallbackInput {
+interface ScopeFallbackInput {
   /** Активные команды в порядке чипов. */
   teamIds: readonly string[];
   /** Счета доехали — только тогда известно, остались ли бесхозные. */

@@ -15,7 +15,7 @@ import { myMembershipsQueryKey } from "./my-memberships-key";
 // `tenant_members_select_owner_or_self` отдаёт человеку все его строки при любом
 // заголовке компании. Поэтому ключ компанию не называет и переход переживает.
 
-export async function fetchMyMemberships(
+async function fetchMyMemberships(
   client: typeof supabase,
   userId: string,
 ): Promise<MembershipRow[]> {

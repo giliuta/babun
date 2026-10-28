@@ -19,16 +19,19 @@
 // ВМЕСТЕ с производным phone_e164 — иначе ключ дедупа
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Check } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import {
   formatPhoneAsYouType,
+  isBareDialCode,
   tryToE164,
 } from "@/lib/phone";
 import { useDefaultCountry } from "@/features/reference/default-country";
 import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { TourTarget } from "@/components/tour/TourTarget";
+import { setTourReady } from "@/components/tour/tour-store";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { useCopyValue } from "@/lib/copy-value";
@@ -98,6 +101,11 @@ export default function ClientHeader({
 }: ClientHeaderProps) {
   const t = useThemeColors();
   const toast = useToast();
+  // Обучение ждёт имени: «Дальше» на шаге «имя клиента» горит, когда оно есть.
+  const draftNamed = !!draft && !!client.full_name?.trim();
+  useEffect(() => {
+    if (draft) setTourReady("client-name", draftNamed);
+  }, [draft, draftNamed]);
   const country = useDefaultCountry(client.team_id ?? null);
   const copy = useCopyValue();
   // Номер сотруднику ещё не открыт: на месте цифр — замок, правки
@@ -116,7 +124,9 @@ export default function ClientHeader({
     // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс), но НЕОБЯЗАТЕЛЕН:
     // стёртый номер сохраняется пустым. Неразбираемое значение не пишем.
     onSave: (next) => {
-      if (!next) {
+      // Один код страны («+30» — стёрли номер до чужого кода) — тоже пустой
+      // номер, а не «не распознан».
+      if (!next || isBareDialCode(next)) {
         update({ phone: "", phone_e164: null });
         return;
       }
@@ -143,6 +153,7 @@ export default function ClientHeader({
         {/* Имя — ОБЯЗАТЕЛЬНОЕ: безымянного клиента не найти ни поиском, ни
           глазами, и в SMS-шаблон нечего подставить. Человек это или компания —
           не различаем: одно поле на обоих. */}
+        <TourTarget id="client.name">
         <FieldRow
           noCopy={noCopy}
           // Карточку только видят (право «Карточки клиентов: Видит») — имя
@@ -155,6 +166,8 @@ export default function ClientHeader({
           big
           value={client.full_name}
           placeholder="Имя или компания"
+          // Имя и название компании — с заглавной у каждого слова.
+          autoCapitalize="words"
           live={!!draft}
           // Вставку «Мария +357 99…» черновик делит: номер уезжает в телефон,
           // и поле должно сразу показать, что в имени осталось только имя.
@@ -182,6 +195,7 @@ export default function ClientHeader({
             ) : null
           }
         />
+        </TourTarget>
 
         {memberOf ?? null}
 
@@ -194,6 +208,7 @@ export default function ClientHeader({
         {locked ? (
           <LockedPhoneRow client={client} />
         ) : (
+        <TourTarget id="client.phone">
         <FieldRow
           // СТРОКА «ТЕЛЕФОН»: подпись слева
           // колонкой — «Телефон | +357 97 469 998». Флагов нет
@@ -240,6 +255,7 @@ export default function ClientHeader({
             )
           }
         />
+        </TourTarget>
         )}
 
         {/* Слот черновика: дедуп «Похоже, такой уже есть» / ошибка создания.

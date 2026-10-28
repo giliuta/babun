@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef } from "react";
 // наша собственная запись; (2) записи выстроены в цепочку, вторая уходит
 // после ответа на первую.
 
-export interface JsonArrayWriter<T> {
+interface JsonArrayWriter<T> {
   /** Свежайший массив: серверный, либо наш ещё не подтверждённый. */
   current: () => T[];
   /** Записать новый массив (встанет в очередь). */

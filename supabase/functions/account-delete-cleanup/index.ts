@@ -1,6 +1,7 @@
 // deno-lint-ignore no-import-prefix -- Supabase Edge Functions resolve this URL import at deploy time.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { cancelSoleOwnedSubscriptions } from "../_shared/subscriptions.ts";
+import { ownedTenants, purgeGoneTenantsStorage } from "../_shared/tenant-storage.ts";
 
 type CleanupStatus =
   | "requested"
@@ -200,6 +201,8 @@ async function processClaim(
 ): Promise<ProcessResult> {
   let status = claim.status;
   let deletedTenantCount = claim.deletedTenantCount;
+  // Снимается до каскада, файлы сносятся после удаления входа (ниже).
+  let ownedTenantIds: string[] = [];
 
   // A batch is claimed at once but processed sequentially. Renew and verify
   // this row's lease immediately before touching Auth so a later row whose
@@ -263,6 +266,8 @@ async function processClaim(
     }
     status = "soft_deleted";
 
+    // Компании владельца — до каскада: после него членства уже нет.
+    ownedTenantIds = await ownedTenants(service, claim.userId);
     const { data, error } = await service.rpc(
       "delete_sole_owned_tenants_for_account",
       { p_user_id: claim.userId },
@@ -298,6 +303,10 @@ async function processClaim(
       "AUTH_HARD_DELETE_FAILED",
     );
   }
+  // Файлы ушедших компаний — только после окончательного удаления входа:
+  // сорвись оно раньше, человек остался бы с аккаунтом, но без файлов. Сбой
+  // здесь не держит удаление — остаток подберёт `storage-janitor`.
+  await purgeGoneTenantsStorage(service, ownedTenantIds);
 
   return (await deleteClaim(service, claim)) ? "completed" : "lease_lost";
 }

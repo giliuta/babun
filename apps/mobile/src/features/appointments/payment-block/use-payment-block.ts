@@ -1,5 +1,5 @@
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { usePaymentRights } from "../usePaymentRights";
@@ -11,9 +11,12 @@ import {
   appointmentPayableInvoice,
   liveAppointmentInvoices,
 } from "@/features/finances/appointment-invoices";
+import { isPastRecord } from "@/features/finances/day-ledger";
 import { usePlanAllows, useTenant } from "@/session/tenant";
 import { useBusinessNow } from "../business-now";
 import { useTeamPaymentAccounts } from "../payment-accounts";
+import { useAccountsWithBalances } from "@/features/finances/accounts";
+import { noAccountsReason, strayPaymentAccounts } from "./stray-accounts";
 import {
   amountCentsFromInput,
   amountProblem,
@@ -116,7 +119,14 @@ export function usePaymentBlock({
   // человек дописал услуги, «Итого» стало €280, а блок ещё жил числом 160 и
   // объявлял запись оплаченной. Правило и его причина — в `paymentMath`.
   const { outstanding: recordOutstanding, overpaid } = paymentMath(appointment, totalDraft);
-  const outstanding = invoicePay.open ? invoicePay.remainingCents : recordOutstanding;
+  // ЗАПИСЬ, ЗАКРЫТАЯ СВОИМИ ДЕНЬГАМИ, ДОЛГОМ ИНВОЙСА НЕ СТАНОВИТСЯ. Оплата
+  // инвойса зачитывается в запись только в пределах её остатка (сервер,
+  // `settle_appointment_from_invoice_payment`), и сетка с деньгами дня зовут
+  // такую запись оплаченной. Страница же брала остаток инвойса целиком: при
+  // предоплате €260 и инвойсе €300 — «Долг €300» и плитки, просящие ещё
+  // €300. Долг по самой бумаге остаётся на странице инвойса.
+  const invoiceOwes = invoicePay.open && recordOutstanding > 0;
+  const outstanding = invoiceOwes ? invoicePay.remainingCents : recordOutstanding;
   // Итог формы разошёлся с сохранённым: долг уже настоящий, а вот принять по
   // нему деньги сервер откажется — он считает остаток по своей строке. Пока
   // запись не сохранена, плитки стоят погашенными и говорят почему.
@@ -136,7 +146,17 @@ export function usePaymentBlock({
     return map;
   }, [rows]);
   const unattributed = rows.filter((row) => !row.accountId);
+  // Все счета компании, со скрытыми и удалёнными: имя плитки, на которую уже
+  // легли деньги, и причина пустого блока (`stray-accounts.ts`).
+  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
+  const strayAccounts = useMemo(
+    () => strayPaymentAccounts(accounts, rowsByAccount, allAccountsQuery.data ?? []),
+    [accounts, rowsByAccount, allAccountsQuery.data],
+  );
+  const emptyReason = noAccountsReason({ canTakeMoney, teamId, all: allAccountsQuery.data ?? [] });
   const busy = record.isPending || cancel.isPending;
+  // Замок плитки — ref, а не `busy` из рендера (`tile-lock.ts`).
+  const tileLock = useRef(false);
   const amountMode = partText != null;
   // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.
   // Запись, уже отмеченная выполненной или начатой, платит оплатой и до
@@ -164,10 +184,14 @@ export function usePaymentBlock({
   const moneyRight = invoicePay.open ? docWrite : canTakeMoney;
   const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && moneyRight && bookingInPlan;
 
+  // ВИЗИТ СОСТОЯЛСЯ — ПО ЧАСАМ, КАК В КАЛЕНДАРЕ И ФИНАНСАХ (`isPastRecord`).
+  // Статуса «выполнена» в интерфейсе больше нет, и прошедшая неоплаченная
+  // запись горела в календаре долгом, а здесь писала «К оплате».
+  const now = businessNow();
   const caption = blockCaption({
     hasTeam: Boolean(teamId),
     hasAppointment: Boolean(appointment),
-    visitCompleted: appointment?.status === "completed",
+    visitCompleted: appointment !== null && isPastRecord(appointment, now.ymd, now.hm),
     outstanding,
     rowsCount: rows.length,
     amountMode,
@@ -255,7 +279,10 @@ export function usePaymentBlock({
     billUnsaved,
     rowsByAccount,
     unattributed,
+    strayAccounts,
+    emptyReason,
     busy,
+    tileLock,
     amountMode,
     kindForTap,
     amountCents,

@@ -37,8 +37,8 @@ import {
   pinchRelease,
   releaseScrollsFirst,
   settleStep,
-  wheelZoomFactor,
 } from "./zoom-math";
+import { useWebPinch } from "./zoom/use-web-pinch";
 import {
   hourHForZoom,
   readGridZoom,
@@ -47,7 +47,7 @@ import {
   scrollYForTopHour,
   subscribeGridZoom,
   topHourForScrollY,
-  writeGridZoom,
+  noteGridZoom,
   writeTopHour,
   writeViewportH,
   zoomForHourH,
@@ -115,10 +115,10 @@ export function ZoomableTimeGrid({
   onZoom?: (next: number) => void;
   startHour: number;
   endHour: number;
-  /** Час первого открытия — начало графика команды. Только пока своего
-   *  места нет: дальше сетка открывается там, где её оставили
-   *  (`grid-memory.ts`), и смена этого числа (свайп на день с другим
-   *  графиком) прокрутку больше не дёргает. */
+  /** Час открытия (`deriveOpenHour`: «сейчас» или начало работы). Только
+   *  пока своего места в этом запуске нет: дальше сетка открывается там, где
+   *  её оставили (`grid-memory.ts`), и смена этого числа (свайп на день с
+   *  другим графиком, тиканье «сейчас») прокрутку не дёргает. */
   scrollToHour?: number;
   /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
    *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
@@ -256,7 +256,7 @@ export function ZoomableTimeGrid({
       scrollYForTopHour(top, startHour, endHour, h, vh),
     );
     if (h !== layoutH.value) onZoom?.(h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только смена окна часов; shared values стабильны, onZoom — из этого же рендера
   }, [startHour, endHour]);
 
   // Выбор в настройке «Масштаб» — сразу на открытой сетке.
@@ -272,7 +272,7 @@ export function ZoomableTimeGrid({
         );
         restore(vh, zoom, top);
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- подписка одна на маунт; окно часов читается из latest.current
     [],
   );
 
@@ -280,7 +280,7 @@ export function ZoomableTimeGrid({
   const commitZoom = (h: number) => {
     const { startHour: s0, endHour: e0, onZoom: commit } = latest.current;
     const vh = viewportH.value;
-    if (vh > 0) writeGridZoom(zoomForHourH(h, e0 - s0, vh));
+    if (vh > 0) noteGridZoom(zoomForHourH(h, e0 - s0, vh));
     saveTop(scrollY.value, h);
     commit?.(h);
   };
@@ -463,83 +463,22 @@ export function ZoomableTimeGrid({
     ],
   }));
 
-  // ВЕБ: ЩИПОК ДОЛЖЕН УВЕЛИЧИВАТЬ КАЛЕНДАРЬ, А НЕ СТРАНИЦУ.
-  // Браузер отдаёт щипок не жестом касаний, а своими событиями: тачпад в
-  // Chrome/Edge/Firefox — колесом с `ctrlKey`, Safari (Mac и iPhone) —
-  // `gesturestart/change/end`. Над сеткой они гасятся (`preventDefault`, иначе
-  // браузер масштабирует страницу) и идут в ту же математику кадра, что и
-  // пинч на телефоне: время под курсором стоит на месте. Вне сетки обычное
-  // увеличение страницы браузером остаётся.
+  // ВЕБ: щипок тачпада и Safari над сеткой увеличивает календарь, а не
+  // страницу — `zoom/use-web-pinch.ts`.
   const outerRef = useRef<View>(null);
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const el = outerRef.current as unknown as HTMLElement | null;
-    if (!el || typeof el.addEventListener !== "function") return;
-    type SafariGesture = Event & { scale: number; clientY: number };
-    let base = hourHSv.value;
-    let anchor = 0;
-    let focal = 0;
-    let commitTimer: ReturnType<typeof setTimeout> | null = null;
-    const span = endHour - startHour;
-    const begin = (clientY: number) => {
-      focal = clientY - el.getBoundingClientRect().top;
-      base = hourHSv.value;
-      anchor = pinchAnchor(scrollY.value, focal, base);
-    };
-    const frame = (scale: number) => {
-      const f = pinchFrame({ baseH: base, anchor, scale, scale0: 1, focalY: focal, span, vh: viewportH.value });
-      hourHSv.value = f.h;
-      layoutH.value = f.h;
-      scrollRef.current?.scrollTo({ y: f.offset, animated: false });
-    };
-    // Холодные слои (тапы по слотам, текст карточек) узнают высоту один раз,
-    // когда щипок затих, — как на телефоне при отпускании.
-    const commit = () => {
-      commitTimer = null;
-      const snapped = Math.max(minHourH(span, viewportH.value), Math.round(hourHSv.value));
-      hourHSv.value = snapped;
-      layoutH.value = snapped;
-      commitZoom(snapped);
-    };
-    const scheduleCommit = () => {
-      if (commitTimer) clearTimeout(commitTimer);
-      commitTimer = setTimeout(commit, 160);
-    };
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return; // обычная прокрутка — как была
-      e.preventDefault();
-      begin(e.clientY);
-      frame(wheelZoomFactor(e.deltaY));
-      scheduleCommit();
-    };
-    const onGestureStart = (e: Event) => {
-      e.preventDefault();
-      begin((e as SafariGesture).clientY);
-    };
-    const onGestureChange = (e: Event) => {
-      e.preventDefault();
-      // Касания на iPhone уже ведёт пинч RNGH — второго писателя не нужно.
-      if (active.value) return;
-      frame((e as SafariGesture).scale);
-    };
-    const onGestureEnd = (e: Event) => {
-      e.preventDefault();
-      if (!active.value) commit();
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("gesturestart", onGestureStart, { passive: false });
-    el.addEventListener("gesturechange", onGestureChange, { passive: false });
-    el.addEventListener("gestureend", onGestureEnd, { passive: false });
-    return () => {
-      if (commitTimer) clearTimeout(commitTimer);
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("gesturestart", onGestureStart);
-      el.removeEventListener("gesturechange", onGestureChange);
-      el.removeEventListener("gestureend", onGestureEnd);
-    };
-    // Shared values и ref стабильны; пересборка — только при смене окна часов.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startHour, endHour, onZoom]);
+  useWebPinch({
+    outerRef,
+    scrollRef,
+    hourHSv,
+    layoutH,
+    scrollY,
+    viewportH,
+    active,
+    startHour,
+    endHour,
+    onZoom,
+    commitZoom,
+  });
 
   // Один палец вбок = живой пейджинг периода (pan из pager.tsx, maxPointers 1
   // + failOffsetY — вертикаль уходит скроллу); два пальца = пинч. Race:

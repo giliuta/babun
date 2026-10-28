@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import {
   clientReminderFireDate,
@@ -59,5 +61,15 @@ describe("client reminders", () => {
       }),
       null,
     );
+  });
+});
+
+describe("удалённый клиент не получает напоминания", () => {
+  test("удаление снимает и забывает обещание, а не только уведомление", () => {
+    const trash = readFileSync(join(__dirname, "queries/archive-trash.ts"), "utf8");
+    const own = readFileSync(join(__dirname, "reminders.ts"), "utf8");
+    assert.doesNotMatch(trash, /cancelClientReminder/);
+    assert.match(trash, /dropClientReminder/);
+    assert.match(own, /export async function dropClientReminder[\s\S]{0,120}forgetWanted\(clientId\)/);
   });
 });

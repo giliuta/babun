@@ -1,10 +1,7 @@
 import { useMemo, useRef } from "react";
 import type { Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
-import {
-  createBlankAppointment,
-  duplicateAppointment,
-} from "@babun/shared/local/appointments";
+import { createBlankAppointment } from "@babun/shared/local/appointments";
 import { randomUuid } from "@babun/shared/sync";
 import { haptics } from "@/lib/haptics";
 import { addMinutesHM, humanDayTitle } from "@/features/appointments/helpers";
@@ -157,12 +154,15 @@ export function useQuickEvents(deps: UseQuickEventsDeps) {
     });
   };
 
+  // КОПИЯ СОБЫТИЯ НА ВЕСЬ ДЕНЬ — ФОРМОЙ НОВОГО, А НЕ ГОТОВОЙ ЗАПИСЬЮ. Копия
+  // создавалась до формы, и кто вышел из неё, не меняя дня, оставлял дубль
+  // без «Отменить» (CAL-33). Теперь событие появится только на «Создать».
   const copyInPlace = (apt: Appointment) => {
-    const copy = { ...duplicateAppointment(apt), id: randomUuid() };
-    createAppt.mutate(copy, {
-      onSuccess: () => router.push(`/book?appointmentId=${copy.id}` as Href),
-      onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
-    });
+    const source = (apt as { virtualParentId?: string }).virtualParentId ?? apt.id;
+    router.push({
+      pathname: "/book",
+      params: { copyOf: source, kind: "event", date: apt.date, ...(apt.team_id ? { teamId: apt.team_id } : {}) },
+    } as Href);
   };
 
   return {

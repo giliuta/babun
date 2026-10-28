@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { tourEvent } from "@/components/tour/tour-store";
 import { useCreateClient, useUpdateClientById } from "@/features/clients/queries";
 import { splitSourceStep, type SplitRef } from "@/features/clients/split-client";
 import { notify } from "@/lib/notify";
@@ -33,6 +34,8 @@ import {
 import { useDraftDuplicate } from "@/features/clients/useClientDraft/duplicate";
 import type { ClientDraftOptions } from "@/features/clients/useClientDraft/options";
 import { useNewClientTeam } from "@/features/clients/useClientDraft/team";
+import { storedDraftKey, useStoredClientDraft } from "@/features/clients/useClientDraft/stored";
+import { useBusinessToday } from "@/features/settings/business-today";
 
 // The draft gate and route params are a pure core in `./useClientDraft/core`
 // (a guard test loads it standalone); dedupe and team pick are hooks there.
@@ -70,9 +73,11 @@ export function useClientDraft(
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
   const country = useDefaultCountry(newClientTeam);
   const dial = countryDialCode(country);
+  const businessToday = useBusinessToday();
   const [draft, setDraft] = useState<Client>(() =>
     createBlankClient({
       full_name: name?.trim() ?? "",
+      first_contact_date: businessToday,
       // КОМАНДА — С ПЕРВОГО КАДРА, если она уже известна. Поле номера,
       // открытое сразу с фокусом (имя пришло из записи), берёт код страны на
       // первом кадре и потом его не меняет: команда, дописанная эффектом
@@ -118,11 +123,13 @@ export function useClientDraft(
   const [createError, setCreateError] = useState<string | null>(null);
   const e164 = active ? tryToE164(draft.phone.trim(), country) : null;
   const { duplicate, setDuplicate, findDuplicate, checkedFor } = useDraftDuplicate({
+    selfId: draft.id,
     active,
     e164,
     tenantId,
     scopeKind: scope?.kind,
     draftClient,
+    bookingTeam: forBooking ? (team ?? null) : null, // из записи дубль — тот, кого ищут
   });
   // Засов «идёт создание» — синхронный, в отличие от create.isPending.
   const savingRef = useRef(false);
@@ -169,6 +176,16 @@ export function useClientDraft(
     () => active && draftHasInput(draft, dial),
     [active, draft, dial],
   );
+  // Снимок в памяти телефона — только у обычного «Создать клиента»
+  // (`useClientDraft/stored.ts`).
+  const plainNew = !forBooking && !name?.trim() && !phone?.trim() && !link && !split;
+  const forgetDraft = useStoredClientDraft({
+    key: active && plainNew && tenantId ? storedDraftKey(tenantId, team) : null,
+    draft,
+    dirty: isDirty,
+    hasInput: () => draftHasInput(draftRef.current, dial),
+    restore: setDraft,
+  });
 
   // Телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
   // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —
@@ -291,7 +308,9 @@ export function useClientDraft(
         reg_number: d.reg_number?.trim() || null,
         billing_address: d.billing_address?.trim() || null,
       });
+      forgetDraft();
       haptics.success();
+      tourEvent("client-created");
       // Связь уехала вместе с клиентом, но блок людей карточки-группы кормит
       // СВОЙ ключ (`client-members`), а создание сбрасывает только список:
       // без этого Иван не появился бы у Натальи до следующего чтения.
@@ -392,6 +411,8 @@ export function useClientDraft(
     /** В поле номера набрано что-то сверх кода страны. */
     phoneTyped,
     isSaving: create.isPending,
+    /** «Удалить черновик» — снимок в памяти телефона тоже уходит. */
+    forgetDraft,
     onPhoneChange,
     onNameChange,
     save,

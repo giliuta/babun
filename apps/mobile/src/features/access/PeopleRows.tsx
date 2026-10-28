@@ -8,6 +8,7 @@ import { readableForeground } from "@/theme/readable-color";
 
 import { waitSubtitle } from "./invitation-wait";
 import type { CalendarMember } from "@/session/access-queries";
+import { LIST_ROW } from "@/components/ui/tokens";
 
 // СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах»: кто уже с доступом и кто
 // ещё не ответил на приглашение. Ритм тот же, что у карточки мастера на экране:
@@ -45,10 +46,10 @@ export function MemberRow({
         </Text>
       </View>
       <View className="flex-1">
-        <Text style={{ fontSize: 16, fontWeight: "600", color: t.ink }} numberOfLines={1}>
+        <Text style={{ ...LIST_ROW.name, color: t.ink }} numberOfLines={1}>
           {member.name}
         </Text>
-        <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
+        <Text style={{ ...LIST_ROW.sub, color: t.sub }} numberOfLines={1}>
           {sub || member.email}
         </Text>
       </View>
@@ -82,10 +83,10 @@ export function PendingInvitationRow({
       </View>
       <View className="flex-1">
         {/* Имя из приглашения; без имени строку по-прежнему называет почта. */}
-        <Text style={{ fontSize: 16, fontWeight: "600", color: t.ink }} numberOfLines={1}>
+        <Text style={{ ...LIST_ROW.name, color: t.ink }} numberOfLines={1}>
           {invitation.full_name || invitation.email}
         </Text>
-        <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
+        <Text style={{ ...LIST_ROW.sub, color: t.sub }} numberOfLines={1}>
           {/* СРОК НАЗЫВАЕТСЯ СРАЗУ. Приглашение живёт семь дней и молчало об
               этом: «Ждёт ответа» стояло и в первый день, и в седьмой
               (`invitation-wait.ts`). */}

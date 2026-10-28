@@ -58,9 +58,9 @@ export interface ReplayerOptions {
   /** Called after the drain completes (success or error) so the UI
    *  can refresh its in-memory state from the cache + Supabase. */
   onChanged?: () => void;
-  /** Called on conflict detection (0 rows affected). UI surfaces:
-   *  «Запись была обновлена на другом устройстве. Применены ваши
-   *  изменения.» */
+  /** Called when a queued edit gave way to the server (0 rows affected,
+   *  the server row is fresher). UI shows the message as a toast:
+   *  `serverNewerMessage` or `GUARDED_CONFLICT_MESSAGE`. */
   onConflict?: Toast;
   /** Called when an op fails MAX_ATTEMPTS times. UI surfaces a
    *  retry-able warning in the sidebar / SyncQueuePanel. */

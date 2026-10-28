@@ -10,7 +10,7 @@
 //
 // Лист без React и без сети: правило проверяется тестом.
 
-export interface CardLike {
+interface CardLike {
   id: string;
   team_id: string | null;
   user_id: string | null;
@@ -28,7 +28,7 @@ const stringIds = (value: unknown): string[] =>
 
 /** Старый состав бригады: карточки, записанные в календарь списками
  *  ведущих и помощников, а не своим `team_id`. */
-export const brigadeOf = (team: TeamLike): Set<string> =>
+const brigadeOf = (team: TeamLike): Set<string> =>
   new Set([
     ...stringIds(team.lead_ids),
     ...stringIds(team.helper_ids),

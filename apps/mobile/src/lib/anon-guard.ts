@@ -20,7 +20,7 @@
  *  мимо: им токен и обновляют. */
 const DATA_PATH = /\/(rest|functions|storage)\/v1\//;
 
-export interface AnonGuardInput {
+interface AnonGuardInput {
   url: string;
   /** Заголовок `Authorization`, который поставил supabase-js. */
   authorization: string | null;

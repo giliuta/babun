@@ -16,9 +16,10 @@
 //     doesn't show as zero-visit ghosts.
 //   * Birthday is normalized to "MM-DD" — year is irrelevant for the
 //     "ДР на неделе" calculation.
-//   * Date math uses local time (Cyprus calendar), not UTC, so a
-//     visit at 18:00 Limassol counts as today even if UTC has rolled
-//     over.
+//   * Date math runs on calendar days, not UTC instants, against the
+//     BUSINESS today (`today`, the calendar's timezone) the caller passes:
+//     a visit at 18:00 Limassol counts as today even if UTC has rolled
+//     over, and an owner abroad sees the team's debt, not his phone's.
 
 import type { Appointment } from "../appointments";
 import { getPaidAmount, getDebtAmount } from "../appointments";
@@ -77,7 +78,7 @@ export function isVisit(a: Pick<Appointment, "status">): boolean {
  *
  *  Выполненная — недоплата; отменённая — ничего; прошедшая, по которой
  *  бригада не отчиталась, — тоже долг (см. ниже);
- *  будущая — ещё не долг. `today` — локальный YYYY-MM-DD. */
+ *  будущая — ещё не долг. `today` — YYYY-MM-DD по часам бизнеса. */
 export function appointmentDebt(
   a: Appointment,
   today: string,
@@ -111,10 +112,12 @@ export function buildStats(
     Partial<Pick<Client, "locations">>,
   apts: Appointment[],
   invoicing?: ClientInvoicing,
+  /** Business today, YYYY-MM-DD — the calendar's timezone, not the phone's. */
+  today: string = todayKey(),
 ): ClientStats {
   const invoiceDebt = invoicing?.unlinkedByClient.get(client.id) ?? 0;
   if (apts.length === 0) {
-    return computeNonAptFields(client, {
+    return computeNonAptFields(client, today, {
       ...EMPTY_STATS,
       debt: Math.round(invoiceDebt * 100) / 100,
     });
@@ -133,14 +136,13 @@ export function buildStats(
   const visitDates: string[] = [];
   let unclosedVisits = 0;
   let lastUnclosedDate = "";
-  const today = todayKey();
 
   for (const a of apts) {
     // Match by id; fall back to comment-name match for seed records
     // that pre-date client_id linkage.
     const matchById = a.client_id === cid;
     const matchByName =
-      a.client_id == null && nameInComment(normName(a.comment), cname);
+      a.client_id == null && a.kind !== "event" && nameInComment(normName(a.comment), cname);
     if (!matchById && !matchByName) continue;
 
     // ДОЛГ ВОЗНИКАЕТ И БЕЗ ОТМЕТКИ БРИГАДЫ: прошло время записи — она
@@ -194,7 +196,7 @@ export function buildStats(
   // Дни считаются между КАЛЕНДАРНЫМИ днями (полночь↔полночь), а не от
   // «сейчас»: иначе визит вчера утром к вечеру округлялся до «2 дня
   // назад», и «Давно не были» давал разный список утром и вечером.
-  const todayD = parseKey(todayKey())!;
+  const todayD = parseKey(today)!;
   const lastVisitDays = lastVisitDate
     ? daysBetween(parseKey(lastVisitDate)!, todayD)
     : null;
@@ -203,7 +205,7 @@ export function buildStats(
     : null;
   const medianGapDays = medianGap(visitDates);
 
-  return computeNonAptFields(client, {
+  return computeNonAptFields(client, today, {
     visits,
     totalSpent: Math.round(totalSpent),
     // Долг — в центах, а не до евро: €0,40 иначе пропадал вместе с клиентом
@@ -225,11 +227,13 @@ export function buildStats(
 
 function computeNonAptFields(
   client: Pick<Client, "created_at" | "birthday">,
+  today: string,
   base: ClientStats,
 ): ClientStats {
   const created = isoToDate(client.created_at);
+  const todayD = parseKey(today);
   const ageDays =
-    created
+    created && todayD
       ? Math.max(
           0,
           daysBetween(
@@ -238,18 +242,14 @@ function computeNonAptFields(
               created.getMonth(),
               created.getDate(),
             ),
-            new Date(
-              new Date().getFullYear(),
-              new Date().getMonth(),
-              new Date().getDate(),
-            ),
+            todayD,
           ),
         )
       : 0;
   return {
     ...base,
     ageDays,
-    birthdayInDays: birthdayInDays(client.birthday),
+    birthdayInDays: birthdayInDays(client.birthday, today),
   };
 }
 
@@ -265,6 +265,8 @@ export function buildStatsMap(
   clients: Client[],
   apts: Appointment[],
   invoicing?: ClientInvoicing,
+  /** Business today, YYYY-MM-DD — see `buildStats`. */
+  today: string = todayKey(),
 ): Map<string, ClientStats> {
   // First pass: index appointments.
   const byId = new Map<string, Appointment[]>();
@@ -274,7 +276,10 @@ export function buildStatsMap(
       const arr = byId.get(a.client_id);
       if (arr) arr.push(a);
       else byId.set(a.client_id, [a]);
-    } else {
+    } else if (a.kind !== "event") {
+      // СОБЫТИЕ — НЕ ВИЗИТ КЛИЕНТА. Без клиента в базе живут только личные
+      // события («Перезвонить Анне»), и подбор по имени в заметке делал их
+      // визитами Анны: дата, команда, «останется в отчётах» при удалении.
       const key = normName(a.comment);
       if (key) {
         const arr = orphanByName.get(key);
@@ -300,7 +305,7 @@ export function buildStatsMap(
     } else {
       combined = own;
     }
-    out.set(c.id, buildStats(c, combined, invoicing));
+    out.set(c.id, buildStats(c, combined, invoicing, today));
   }
   return out;
 }

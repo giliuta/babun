@@ -3,9 +3,12 @@ import { describe, test } from "node:test";
 import {
   appointmentSituation,
   autoBaseColor,
+  colorSetByMoney,
   recordFilled,
   recordFilledFor,
   resolveRecordColor,
+  fullyPaid,
+  partlyPaid,
   resolveRecordSituation,
   serviceBaseColor,
 } from "./record-color";
@@ -19,16 +22,55 @@ const COBALT = "#2F6BFF";
 const EMPTY = { client: true, object: false, services: true, paid: false };
 
 describe("resolveRecordColor", () => {
-  test("выбранный рукой цвет сильнее всех правил", () => {
+  test("выбранный рукой цвет сильнее «нет объекта» и обычного цвета", () => {
     assert.equal(
       resolveRecordColor({
         override: "#AF52DE",
-        filled: EMPTY,
+        filled: { ...FULL, object: false },
         base: "#34C759",
         palette: PALETTE,
         fallback: COBALT,
       }),
       "#AF52DE",
+    );
+  });
+
+  test("долг сильнее руки: перекрашенная запись не прячет долг", () => {
+    assert.equal(
+      resolveRecordColor({ override: "#AF52DE", filled: EMPTY, palette: PALETTE, fallback: COBALT }),
+      PALETTE.unpaid,
+    );
+  });
+
+  test("оплаченная запись — в цвете «Оплачено», сильнее руки и «нет объекта»", () => {
+    assert.equal(
+      resolveRecordColor({
+        override: "#AF52DE",
+        paid: "#19C321",
+        filled: { ...FULL, object: false },
+        palette: PALETTE,
+        fallback: COBALT,
+      }),
+      "#19C321",
+    );
+  });
+
+  test("предоплата красит запись до визита, после визита сильнее долг", () => {
+    const before = resolveRecordColor({ prepaid: "#00BBDD", filled: FULL, palette: PALETTE, fallback: COBALT });
+    assert.equal(before, "#00BBDD");
+    const after = resolveRecordColor({ prepaid: "#00BBDD", filled: EMPTY, palette: PALETTE, fallback: COBALT });
+    assert.equal(after, PALETTE.unpaid);
+  });
+
+  test("выключенный долг не красит — запись в обычном цвете", () => {
+    assert.equal(
+      resolveRecordColor({
+        filled: { ...FULL, paid: false },
+        base: "#34C759",
+        palette: { ...PALETTE, unpaid: null },
+        fallback: COBALT,
+      }),
+      "#34C759",
     );
   });
 
@@ -147,10 +189,14 @@ describe("resolveRecordSituation", () => {
     );
   });
 
-  test("у записи с выбранным рукой цветом ситуации нет", () => {
+  test("рука прячет «нет объекта», но не долг", () => {
+    assert.equal(
+      resolveRecordSituation({ override: "#AF52DE", filled: { ...FULL, object: false }, palette: PALETTE }),
+      null,
+    );
     assert.equal(
       resolveRecordSituation({ override: "#AF52DE", filled: EMPTY, palette: PALETTE }),
-      null,
+      "unpaid",
     );
   });
 });
@@ -254,5 +300,82 @@ describe("оплата, которую смотрящий не видит", () =
       appointmentSituation(past, { palette: PALETTE, todayYmd: "2026-10-03", paymentHidden: true }),
       null,
     );
+  });
+});
+
+describe("fullyPaid", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 100, payments: [] as { amount: number }[] };
+  test("оплачено всё — оплачена, каким бы способом ни платили", () => {
+    assert.equal(fullyPaid({ ...work, payments: [{ amount: 30 }, { amount: 70 }] }), true);
+  });
+  test("оплачено не всё — это долг, а не оплата", () => {
+    assert.equal(fullyPaid({ ...work, payments: [{ amount: 60 }] }), false);
+  });
+  test("отмена, событие и запись без суммы — не оплата", () => {
+    const paid = { ...work, payments: [{ amount: 100 }] };
+    assert.equal(fullyPaid({ ...paid, status: "cancelled" }), false);
+    assert.equal(fullyPaid({ ...paid, kind: "event" }), false);
+    assert.equal(fullyPaid({ ...work, total_amount: 0 }), false);
+  });
+});
+
+describe("partlyPaid", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 100, payments: [] as { amount: number }[] };
+  test("аванс меньше суммы — предоплата", () => {
+    assert.equal(partlyPaid({ ...work, prepaid_amount: 30 }), true);
+    assert.equal(partlyPaid({ ...work, payments: [{ amount: 40 }] }), true);
+  });
+  test("ничего не внесено или внесено всё — не предоплата", () => {
+    assert.equal(partlyPaid(work), false);
+    assert.equal(partlyPaid({ ...work, payments: [{ amount: 100 }] }), false);
+  });
+  test("отмена — не предоплата", () => {
+    assert.equal(partlyPaid({ ...work, status: "cancelled", prepaid_amount: 30 }), false);
+  });
+});
+
+describe("деньги — до цента", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 11.9, prepaid_amount: 4.76 };
+  test("аванс и платёж, которые во float не сходятся, — всё равно оплачено", () => {
+    const apt = { ...work, payments: [{ amount: 7.14 }] };
+    assert.equal(fullyPaid(apt), true);
+    assert.equal(partlyPaid(apt), false);
+    assert.equal(recordFilled({ ...apt, date: "2026-10-01" }, "2026-10-27").paid, true);
+  });
+});
+
+describe("предоплата — только пока визит впереди", () => {
+  test("после визита с выключенным «Долгом» часть оплаты не красится предоплатой", () => {
+    assert.equal(
+      resolveRecordColor({
+        prepaid: "#22B8CF",
+        filled: { ...FULL, paid: false },
+        base: "#34C759",
+        palette: { ...PALETTE, unpaid: null },
+        fallback: COBALT,
+      }),
+      "#34C759",
+    );
+  });
+  test("до визита внесённая часть — предоплата", () => {
+    assert.equal(
+      resolveRecordColor({ prepaid: "#22B8CF", filled: FULL, base: "#34C759", palette: PALETTE, fallback: COBALT }),
+      "#22B8CF",
+    );
+  });
+});
+
+describe("colorSetByMoney — цвет задают деньги", () => {
+  const work = { kind: "work", status: "scheduled", total_amount: 100, date: "2026-10-20", payments: [] as { amount: number }[] };
+  test("оплачена, внесена часть, долг после визита — да", () => {
+    assert.equal(colorSetByMoney({ ...work, payments: [{ amount: 100 }] }, "2026-10-27"), true);
+    assert.equal(colorSetByMoney({ ...work, date: "2026-11-02", prepaid_amount: 30 }, "2026-10-27"), true);
+    assert.equal(colorSetByMoney(work, "2026-10-27"), true);
+  });
+  test("будущая без денег, событие, отмена и скрытая оплата — нет", () => {
+    assert.equal(colorSetByMoney({ ...work, date: "2026-11-02" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney({ ...work, kind: "event" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney({ ...work, status: "cancelled" }, "2026-10-27"), false);
+    assert.equal(colorSetByMoney(work, "2026-10-27", true), false);
   });
 });

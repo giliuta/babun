@@ -34,7 +34,7 @@ export function useCalendarView(deps: UseCalendarViewDeps) {
               tenantPrefKey("calendar.view", tenantId),
             )?.mode
           : undefined) ??
-        // Первое поколение: голый ключ до правки 12.09.
+        // Первое поколение: голый ключ, без компании.
         storage.get<{ mode?: CalMode }>(CAL_VIEW_LEGACY_KEY)?.mode;
     } catch {
       // MMKV умеет бросить, пока Keychain заперт на прогреве iOS. Вид —

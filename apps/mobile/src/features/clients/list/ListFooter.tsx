@@ -1,5 +1,10 @@
+import { useMemo } from "react";
 import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
+import { buildQuickClientDraft } from "@/features/appointments/booking-prefill";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { BulkActionBar } from "@/features/clients/BulkActionBar";
 import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
 import { withNewClientTeam } from "@/features/clients/team-scope";
@@ -18,11 +23,29 @@ export function ListFooter({ list }: { list: ClientsList }) {
     setSmsOpen,
     onExport,
     onBulkDelete,
+    canTags,
+    canTeam,
+    canSource,
+    openTags,
+    openTeam,
+    openSource,
+    bulkBusy,
     clientsInPlan,
     chipGuest,
     createHere,
     teamChoice,
+    query,
   } = list;
+  // НАБРАННОЕ В ПОИСКЕ — БУДУЩИЙ КЛИЕНТ, как в шторке клиента записи: искали,
+  // не нашли — кнопка зовёт набранное и уносит его в карточку (имя или номер).
+  const country = useDefaultCountry();
+  const typed = query.trim();
+  const quick = useMemo(() => buildQuickClientDraft(typed, country), [typed, country]);
+  const prefill = !typed
+    ? {}
+    : quick.kind === "phone"
+      ? { phone: quick.phone }
+      : { name: quick.full_name };
   return (
     <>
       {/* В режиме выбора — нижняя панель массовых действий; вне выбора —
@@ -40,12 +63,21 @@ export function ListFooter({ list }: { list: ClientsList }) {
           count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
+          onTags={canTags ? openTags : undefined}
+          onTeam={canTeam ? openTeam : undefined}
+          onSource={canSource ? openSource : undefined}
+          busy={bulkBusy}
           onDelete={caps.manage ? onBulkDelete : undefined}
         />
       ) : (
         // КНОПКА НА СВОЁМ МЕСТЕ И СЕРАЯ, как в «Финансах»: визуал страницы
         // сохраняется целиком, отключается только то, что не работает. Исчезающий футер менял
         // рост страницы вместе с правами.
+        // НАД КЛАВИАТУРОЙ: искали и не нашли — следующий шаг «Создать», и
+        // клавиатура поиска не имеет права его закрывать.
+        // Отступы — на внутреннем View: KeyboardLift пишет подъём в свой
+        // paddingBottom и затёр бы наш.
+        <KeyboardLift>
         <View
           style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
         >
@@ -53,23 +85,28 @@ export function ListFooter({ list }: { list: ClientsList }) {
               серым): тап поднимает плашку «Нужно изменить
               тариф». Партнёр без своего тарифа видит общий список, но своего
               клиента не заведёт — сервер отбил бы его на сохранении. */}
-          <TariffLocked locked={!clientsInPlan}>
+          <TourTarget id="clients.create" shape="control">
+          {/* Под чипом команды работодателя клиент заводится в ЕГО базу и
+              считается по ЕГО тарифу (квоту проверяет запись) — свой тариф
+              партнёра кнопку там не запирает. */}
+          <TariffLocked locked={!chipGuest && !clientsInPlan}>
             <GradientButton
-              label="Создать клиента"
-              onPress={() =>
-                router.push(
-                  withNewClientTeam(
-                    chipGuest
-                      ? clientCardHref("new", chipGuest.scope.tenantId)
-                      : ownClientCardHref("new", scope),
-                    teamChoice,
-                  ),
-                )
-              }
+              label={typed ? `Создать «${typed}»` : "Создать клиента"}
+              onPress={() => {
+                const href = withNewClientTeam(
+                  chipGuest
+                    ? clientCardHref("new", chipGuest.scope.tenantId)
+                    : ownClientCardHref("new", scope),
+                  teamChoice,
+                );
+                router.push({ ...href, params: { ...href.params, ...prefill } });
+              }}
               disabled={!createHere}
             />
           </TariffLocked>
+          </TourTarget>
         </View>
+        </KeyboardLift>
       )}
     </>
   );

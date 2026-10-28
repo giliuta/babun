@@ -136,7 +136,7 @@ export function useSmsHistoryPages(teamId: string | null) {
  *  Статус меняет сервер по отчёту оператора (секунды), а блок читается при
  *  открытии — и «Отправляется» висело бы, хотя SMS давно «Доставлено».
  *  Сверяем только свежие (10 мин): старые без отчёта не крутят сеть. */
-export function smsInFlightInterval(messages: readonly SmsHistoryItem[] | undefined, now = Date.now()): number | false {
+function smsInFlightInterval(messages: readonly SmsHistoryItem[] | undefined, now = Date.now()): number | false {
   const fresh = (messages ?? []).some(
     (m) =>
       (m.status === "queued" || m.status === "sending" || m.status === "sent") &&

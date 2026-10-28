@@ -29,7 +29,7 @@ import type { PendingPayment } from "@/features/appointments/PaymentBlock";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import type { PendingFile } from "@/features/appointments/pending-files";
 import { useTenantId } from "@/lib/tenant";
-import { useRecordPayment, useRefundOverpayment } from "@/features/appointments/payment-mutations";
+import { useRecordPayment, useRefundOverpaymentAndSave } from "@/features/appointments/payment-mutations";
 import {
   addMinutesHM,
   formatYMD,
@@ -37,6 +37,7 @@ import {
 } from "@/features/appointments/helpers";
 import type { BookReferences } from "./use-book-references";
 import { first } from "./book-math";
+import type { BookDraftSnapshot } from "./book-draft-store";
 
 // A type alias, not an interface: route params need an index-compatible shape.
 export type BookParams = {
@@ -52,17 +53,26 @@ export type BookParams = {
   /** Откуда пришли открывать запись: «finances», «finances:<разрез>»,
    *  «invoice:<id>». Словарь дорог — `resolveReturnTo`. */
   from?: string;
+  /** Метка «начать заново»: «Удалить черновик» меняет её, и форма
+   *  собирается с чистого листа (ключ `BookForm`). */
+  fresh?: string;
+  /** Копия события на весь день: НОВАЯ запись с полями этой. Создаётся
+   *  только на «Создать» — вышел без него, и дубля в дне нет (CAL-33). */
+  copyOf?: string;
 };
 
-export interface BookDraftInput {
+interface BookDraftInput {
   params: BookParams;
   teamId: string | null;
   setTeamId: Dispatch<SetStateAction<string | null>>;
   allAppts: BookReferences["allAppts"];
+  /** Черновик новой записи, поднятый с телефона (`book-draft-store.ts`).
+   *  Команда, клиент, день и час приходят с ним через `params`. */
+  restored?: BookDraftSnapshot | null;
 }
 
 /** Every field of the record / event being written, plus the edit target. */
-export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftInput) {
+export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = null }: BookDraftInput) {
   // ── ПРАВКА СУЩЕСТВУЮЩЕЙ ЗАПИСИ (STORY-064) ──
   // Одна страница создаёт и правит. Запись берём из того же списка, что
   // рисует календарь: кеш уже тёплый, отдельный запрос завёл бы вторую
@@ -80,9 +90,10 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   );
   const updateMut = useUpdateAppointment();
 
-  // ── роли на этой странице пока нет: скидка открыта всем, кто дошёл до
-  //    формы; owner-only гейт не расширен на правку — иначе правило существовало
-  //    бы в одной дороге из двух. ──
+  // ── СКИДКА — ЧАСТЬ БЛОКА «СУММА»: её ставят только в шторке «Итого», а
+  //    шторку открывает `can.editTotal` (`bookRights`) — сотруднику только с
+  //    «Сумма и услуги записи: Меняет». Сервер проверяет то же поле за полем
+  //    (`member_check_appointment_field` → `record.amount`). ──
 
   // ── состояние ──
   const initialKind = first(params.kind) === "event" ? "event" : "work";
@@ -93,37 +104,39 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   const [date, setDate] = useState<string>(
     first(params.date) ?? formatYMD(getCurrentCyprusTime()),
   );
-  const dateTouchedRef = useRef(false);
+  // Поднятый черновик — уже рука человека: день и конец его, умолчания
+  // молчат.
+  const dateTouchedRef = useRef(restored != null);
   const [timeStart, setTimeStart] = useState<string>(
     first(params.time_start) ?? "10:00",
   );
   const [timeEnd, setTimeEnd] = useState<string>(() =>
-    addMinutesHM(first(params.time_start) ?? "10:00", 60),
+    restored?.timeEnd ?? addMinutesHM(first(params.time_start) ?? "10:00", 60),
   );
-  const [durationTouched, setDurationTouched] = useState(false);
+  const [durationTouched, setDurationTouched] = useState(restored?.durationTouched ?? false);
   // ДЛИТЕЛЬНОСТЬ, ВЫБРАННАЯ РУКАМИ, СИЛЬНЕЕ ДЛИТЕЛЬНОСТИ ТИПА (тип события — стандарт, но выбранное время,
   // скажем тридцать минут, главнее).
   // Отдельный флаг от `durationTouched`: тот взводит и сам выбор типа —
   // иначе второй тип уже не смог бы поставить свою длительность.
-  const [durationByHand, setDurationByHand] = useState(false);
-  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [durationByHand, setDurationByHand] = useState(restored?.durationByHand ?? false);
+  const [serviceIds, setServiceIds] = useState<string[]>(restored?.serviceIds ?? []);
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>(
-    {},
+    restored?.overrides ?? {},
   );
   const teamScheduleQuery = useTeamSchedule(teamId ?? undefined);
   // Метки принадлежат команде — те же, что предлагаются её дню.
   const { data: teamCities = [] } = useCities({ teamId });
-  const [masterId, setMasterId] = useState<string | null>(null);
+  const [masterId, setMasterId] = useState<string | null>(restored?.masterId ?? null);
   const [locationId, setLocationId] = useState<string | null>(
     first(params.locationId) ?? null,
   );
-  const [address, setAddress] = useState("");
-  const [customTotal, setCustomTotal] = useState(false);
-  const [totalDraft, setTotalDraft] = useState("");
+  const [address, setAddress] = useState(restored?.address ?? "");
+  const [customTotal, setCustomTotal] = useState(restored?.customTotal ?? false);
+  const [totalDraft, setTotalDraft] = useState(restored?.totalDraft ?? "");
   const [discountType, setDiscountType] = useState<Discount["type"] | null>(
-    null,
+    restored?.discountType ?? null,
   );
-  const [discountValue, setDiscountValue] = useState("");
+  const [discountValue, setDiscountValue] = useState(restored?.discountValue ?? "");
   // VAT ЗАПИСИ — В «ИТОГО», КАК У ЧЕКА И ИНВОЙСА (скидка, потом VAT; к счёту привязывается — деньги
   // заходят туда плюсом VAT). Режим — клавишей VAT, ставка — цифрами,
   // написанная запоминается для следующих документов. «К оплате» записи
@@ -132,59 +145,65 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
   // Не писали ставку на этом телефоне — ставка команды из настроек.
   const teamVatRate = useTeamVatRate(teamId);
   const rememberedVatRate = useRememberedVatRate(teamVatRate);
-  const [recordVatMode, setRecordVatMode] = useState<TxVatMode>("none");
-  const [recordVatRate, setRecordVatRate] = useState<number | null>(null);
+  const [recordVatMode, setRecordVatMode] = useState<TxVatMode>(restored?.recordVatMode ?? "none");
+  const [recordVatRate, setRecordVatRate] = useState<number | null>(restored?.recordVatRate ?? null);
   // Причина скидки осталась только у старых записей — программы лояльности
   // нет, и её больше никто не выставляет сам.
   const [discountReason, setDiscountReason] = useState<string | null>(null);
-  const [status, setStatus] = useState<AppointmentStatus>("scheduled");
-  const [comment, setComment] = useState("");
+  const [status, setStatus] = useState<AppointmentStatus>(restored?.status ?? "scheduled");
+  const [comment, setComment] = useState(restored?.comment ?? "");
   // Заметка, как набрана СЕЙЧАС: поле отдаёт её сюда на каждую букву без
   // перерисовки формы, состояние догоняет после паузы (`LocalDraftNoteField`).
   // Сохранение читает отсюда — нажатое посреди набора «Создать» не теряет
   // последние буквы.
-  const commentNow = useRef("");
+  const commentNow = useRef(restored?.comment ?? "");
   useEffect(() => {
     commentNow.current = comment;
   }, [comment]);
   // Название события — отдельное состояние от заметки команде: раньше общий
   // `comment` перетекал между режимами Клиент/Событие.
-  const [eventTitle, setEventTitle] = useState("");
-  const [eventColor, setEventColor] = useState<string | null>(null);
-  const [eventTypeId, setEventTypeId] = useState<string | null>(null);
-  const [eventNotes, setEventNotes] = useState("");
-  const [eventAddress, setEventAddress] = useState("");
-  const [eventUrl, setEventUrl] = useState("");
+  const [eventTitle, setEventTitle] = useState(restored?.eventTitle ?? "");
+  const [eventColor, setEventColor] = useState<string | null>(restored?.eventColor ?? null);
+  const [eventTypeId, setEventTypeId] = useState<string | null>(restored?.eventTypeId ?? null);
+  const [eventNotes, setEventNotes] = useState(restored?.eventNotes ?? "");
+  const [eventAddress, setEventAddress] = useState(restored?.eventAddress ?? "");
+  const [eventUrl, setEventUrl] = useState(restored?.eventUrl ?? "");
   const [eventReminderOffset, setEventReminderOffset] = useState<number | null>(
-    null,
+    restored?.eventReminderOffset ?? null,
   );
-  const [repeat, setRepeat] = useState<PersonalEventRepeat>({ kind: "none" });
-  const [allDay, setAllDay] = useState(false);
+  const [repeat, setRepeat] = useState<PersonalEventRepeat>(restored?.repeat ?? { kind: "none" });
+  const [allDay, setAllDay] = useState(restored?.allDay ?? false);
   // Деньги новой записи: счёт выбран, запишется после «Создать запись».
   // У существующей записи блок пишет оплату сам и сразу (STORY-065).
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const businessNow = useBusinessNow(teamId);
   // Номер новой записи — один на всю жизнь формы (см. `booking.save`).
-  const newRecordIdRef = useRef(randomUuid());
+  const newRecordIdRef = useRef(restored?.newRecordId ?? randomUuid());
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();
   const queryClientForFiles = useQueryClient();
   const recordPayment = useRecordPayment();
-  const refundOverpayment = useRefundOverpayment(editId);
+  const refundOverpayment = useRefundOverpaymentAndSave(editId);
   // Номер попытки возврата переплаты — один на это нажатие «Сохранить» и
   // его повторы после обрыва: сервер второго возврата не запишет.
   const overpayRequestRef = useRef<string | null>(null);
-  const [reminderOn, setReminderOn] = useState(false);
-  const [colorOverride, setColorOverride] = useState<string | null>(null);
+  // Оплата новой записи — один номер попытки на жизнь формы, как и номер
+  // самой записи: повтор «Создать» сервер второй проводкой не запишет.
+  const paymentRequestIdRef = useRef(randomUuid());
+  // «Уже сохраняю» — синхронно, в отличие от isPending мутаций: второй тап в
+  // том же кадре видел старый рендер и уходил вторым сохранением.
+  const savingRef = useRef(false);
+  const [reminderOn, setReminderOn] = useState(restored?.reminderOn ?? false);
+  const [colorOverride, setColorOverride] = useState<string | null>(restored?.colorOverride ?? null);
   // МЕТКА ЭТОЙ ЗАПИСИ. Новая запись берёт метку дня СРАЗУ (подставляется автоматически по дню, а
   // потом вручную можно выбрать другую именно на запись), и
   // с этого момента она принадлежит записи: диспетчер переставит метку дня —
   // уже назначенные работы своей метки не потеряют. `null` остаётся только у
   // записей, созданных до этого правила: они по-прежнему читаются как «как у
   // дня». Флаг `cityTouched` держит руку человека сильнее любого автомата.
-  const [city, setCity] = useState<string | null>(null);
-  const [cityTouched, setCityTouched] = useState(false);
+  const [city, setCity] = useState<string | null>(restored?.city ?? null);
+  const [cityTouched, setCityTouched] = useState(restored?.cityTouched ?? false);
   const updateClient = useUpdateClientById();
 
   // ФЛАГ ГОТОВНОСТИ, А НЕ REF. Эффекты «авто-конец» и «сумма по услугам»
@@ -260,6 +279,12 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
       setCity(editing.city ?? null);
       if (editing.kind === "work") {
         setComment(editing.comment ?? "");
+        // Ссылка — сразу, а не эффектом следующего кадра: снимок «как было»
+        // (`use-leave-guard`) снимается в этом же коммите и читает заметку
+        // отсюда. С пустой ссылкой любая запись с заметкой считалась
+        // изменённой, и «Назад» спрашивал «Сохранить изменения?» у того, кто
+        // ничего не трогал.
+        commentNow.current = editing.comment ?? "";
       } else {
         setEventTitle(editing.comment ?? "");
         setEventColor(editing.color_override ?? null);
@@ -365,6 +390,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts }: BookDraftI
     recordPayment,
     refundOverpayment,
     overpayRequestRef,
+    paymentRequestIdRef,
+    savingRef,
     reminderOn,
     colorOverride,
     setColorOverride,

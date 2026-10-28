@@ -88,8 +88,9 @@ describe("календарь под нагрузкой", () => {
 describe("повторный аудит календаря 03.10", () => {
   test("личное событие остаётся личным при переносе и копии", () => {
     const src = screen();
-    assert.match(src, /const toTeam = isCrew \|\| isPersonalEvent\(apt\) \? apt\.team_id :/);
-    assert.match(src, /team_id: isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\),/);
+    assert.match(src, /return isCrew \|\| isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\);/);
+    assert.match(src, /const toTeam = placementTeam\(apt, activeTeamId, isCrew\);/);
+    assert.match(src, /team_id: placementTeam\(apt, activeTeamId, false\),/);
   });
 
   test("отмена визита — одним тапом, без причины; с деньгами — вопрос и без «Отменить» в тосте", () => {
@@ -135,7 +136,10 @@ describe("повторный аудит календаря 03.10", () => {
   test("оплаченная — только в своём дне: и пальцем, и кубиком", () => {
     const src = screen();
     assert.match(src, /if \(\(dateMoves \|\| teamMoves\) && settledVisit\(apt\)\) \{/);
-    assert.match(src, /if \(\(teamChanges \|\| dateYmd !== apt\.date\) && settledVisit\(apt\)\) \{\s*toast\(SETTLED_STAYS, "info"\);\s*return false;/);
+    assert.match(src, /if \(kind === "move" && \(teamChanges \|\| dateYmd !== apt\.date\) && settledVisit\(apt\)\) \{\s*return SETTLED_STAYS;/);
+    assert.match(src, /const refused = refusal\(apt, "move", dateYmd\);\s*if \(refused\) \{\s*toast\(refused, "info"\);\s*return false;/);
+    // Кубик, по которому тап откажет, не горит вовсе.
+    assert.match(src, /if \(moving && placementRefusal\(moving, movingKind, dateYmd, moveTeam, services\)\) \{\s*return \[\];/);
   });
 
   test("один тап по кубику — одна копия", () => {
@@ -391,14 +395,15 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("удалённая запись уходит с сетки вместе с тостом, а не после перечитывания", () => {
     const src = readModuleSource(resolve(here, "mutations.ts"));
-    const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
+    const del = src.slice(src.indexOf("export function useDeleteAppointment"));
     assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
 
-  test("у отменённой записи нет «Цвета» — он ничего не меняет на сетке", () => {
+  test("у отменённой записи и у той, чей цвет задают деньги, нет «Цвета»", () => {
     const src = screen();
-    assert.match(src, /if \(\(!event \|\| mutable\) && apt\.status !== "cancelled"\)\s*items\.push\(\{ label: "Цвет"/);
-    assert.match(src, /apt\.status !== "cancelled" &&\s*\(event \? ownEvent && eventRightsIn/);
+    assert.match(src, /const moneyColored = colorSetByMoney\(apt, todayYmd, paymentHiddenFor\(apt\)\);/);
+    assert.match(src, /if \(\(!event \|\| mutable\) && apt\.status !== "cancelled" && !moneyColored\)\s*items\.push\(\{ label: "Цвет"/);
+    assert.match(src, /apt\.status !== "cancelled" &&\s*!moneyColored &&\s*\(event \? ownEvent && eventRightsIn/);
   });
 
   test("ручки растяжки не ложатся на текст карточки", () => {
@@ -416,7 +421,7 @@ describe("повторный аудит календаря 03.10", () => {
   test("«Список»: у отменённой сумма зачёркнута и без «к оплате»", () => {
     const agenda = agendaList();
     assert.match(agenda, /textDecorationLine: cancelled \? "line-through" : "none",/);
-    assert.match(agenda, /\{debt > 0 && !cancelled \? \(/);
+    assert.match(agenda, /if \(cancelled \|\| !\(debt > 0\)\) return plain;/);
   });
 
   test("SMS за месяц — в частях, как баланс и тариф («€1,20 · 10 SMS» при €0,12)", () => {
@@ -462,7 +467,7 @@ describe("повторный аудит календаря 03.10", () => {
   test("в календаре и листах записи — «запись», не «заявка»", () => {
     const src = screen();
     assert.doesNotMatch(src, /"Открыть заявку"|исчезнут из заявки/);
-    for (const file of ["../appointments/BookingSheets.tsx", "../appointments/CrewWorkRecord.tsx", "../appointments/CrewAppointmentSheet.tsx", "../../components/blocks/ActionMenuSheet.tsx"]) {
+    for (const file of ["../appointments/BookingSheets.tsx", "../../components/blocks/ActionMenuSheet.tsx"]) {
       const body = readFileSync(resolve(here, file), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
       assert.doesNotMatch(body, /"[^"]*[Зз]аявк[^"]*"/, file);
     }

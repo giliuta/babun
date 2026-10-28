@@ -11,7 +11,7 @@ function phoneDigits(phone: string | null | undefined): string {
  *  цифры, звонилке и SMS обязателен ведущий «+»: без него «+357 99 …»
  *  превращается в местный номер 35799… и уходит не туда. Плюс сохраняем
  *  ТОЛЬКО ведущий — внутри номера он мусор. */
-export function dialableDigits(phone: string | null | undefined): string {
+function dialableDigits(phone: string | null | undefined): string {
   const raw = (phone ?? "").trim();
   const digits = phoneDigits(raw);
   if (digits.length < 3) return "";

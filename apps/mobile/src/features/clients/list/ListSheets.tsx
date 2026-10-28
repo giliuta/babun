@@ -9,6 +9,7 @@ import { clientsInsightsHref, type ClientsScope } from "@/session/clients-compan
 import { ClientsScopeProvider } from "@/session/company-scope";
 import { teamForNewClient } from "@/features/clients/team-scope";
 import type { ClientsList } from "./use-clients-list";
+import { BulkEditSheets } from "./BulkEditSheets";
 
 /** Поддерево в компании строки. Источник у вкладки есть всегда (ворота
  *  открывают экран только с ним), так что обёртка не пропадает и лист не
@@ -17,7 +18,8 @@ function RowScope({ scope, children }: { scope: ClientsScope | null; children: R
   return scope ? <ClientsScopeProvider scope={scope}>{children}</ClientsScopeProvider> : <>{children}</>;
 }
 
-/** Sheets of the list: remind, the row menu, filters, imports, bulk SMS. */
+/** Sheets of the list: remind, the row menu, filters, imports, bulk SMS,
+ *  bulk tags / team / source. */
 export function ListSheets({ list }: { list: ClientsList }) {
   const {
     router,
@@ -140,6 +142,7 @@ export function ListSheets({ list }: { list: ClientsList }) {
           exitSelection();
         }}
       />
+      <BulkEditSheets list={list} />
     </>
   );
 }

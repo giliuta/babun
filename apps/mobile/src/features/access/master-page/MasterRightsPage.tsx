@@ -30,7 +30,7 @@ import { rightsAreaOf } from "./rights-rows";
 //   • invite — в приглашение (`update_invitation`), сразу, с откатом при отказе;
 //   • member — в права сотрудника (`set_member_access`), сразу, с откатом.
 
-export type MasterRightsPageProps = (
+type MasterRightsPageProps = (
   | { mode: "draft"; area?: string; onBack: () => void }
   | { mode: "invite"; invitationId: string; area?: string; onBack: () => void }
   | { mode: "member"; userId: string; teamId: string | null; area?: string; onBack: () => void }

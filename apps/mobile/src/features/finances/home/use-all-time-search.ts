@@ -6,7 +6,7 @@ import { useAllTimeNoteSearch } from "../queries";
 import type { RecordRow, RecordRowRefs } from "../record-rows";
 import { buildAllTimeRows } from "./feed-rows";
 
-export interface AllTimeSearchInput {
+interface AllTimeSearchInput {
   view: HomeView;
   query: string;
   blockRows: RecordRow[];
@@ -90,7 +90,7 @@ export function useAllTimeSearch(input: AllTimeSearchInput) {
  *  в «Appointments». Свой ключ переводится сборкой, а сравнение с сырым
  *  ключом плагин не трогает: на русском перевод совпадает с ключом, и экран
  *  показывает прежнее «Записи». */
-export function feedEntriesWord(): string {
+function feedEntriesWord(): string {
   const word = "Записи ленты финансов";
   return word === /* i18n-ignore */ "Записи ленты финансов" ? "Записи" : word;
 }

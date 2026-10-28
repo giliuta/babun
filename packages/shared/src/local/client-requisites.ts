@@ -38,7 +38,7 @@ const clean = (v: unknown): string | null => {
 const upper = (v: unknown): string | null => clean(v)?.toUpperCase() ?? null;
 
 /** Пустой набор — не набор: печатать с него нечего. */
-export function isBlankRequisites(fields: Partial<RequisitesFields>): boolean {
+function isBlankRequisites(fields: Partial<RequisitesFields>): boolean {
   return REQUISITES_KEYS.every((k) => clean(fields[k]) === null);
 }
 
@@ -88,7 +88,7 @@ export function clientRequisitesOf(
 
 type RequisitesKey = (typeof REQUISITES_KEYS)[number];
 
-export function defaultRequisites(
+function defaultRequisites(
   sets: readonly ClientRequisites[],
 ): ClientRequisites | null {
   return sets.find((s) => s.is_default) ?? sets[0] ?? null;
@@ -203,10 +203,4 @@ export function invoiceRequisites(
   const id = resolveInvoiceRequisitesId(sets, chosenId);
   if (id === NO_CLIENT_REQUISITES) return null;
   return (id ? sets.find((s) => s.id === id) : null) ?? defaultRequisites(sets);
-}
-
-/** Строке выбора в инвойсе есть что решать, только когда наборов больше
- *  одного; один или ни одного — строки нет. */
-export function invoiceNeedsRequisitesChoice(sets: readonly ClientRequisites[]): boolean {
-  return sets.length > 1;
 }

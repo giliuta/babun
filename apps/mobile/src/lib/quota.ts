@@ -3,7 +3,7 @@ import type { Database } from "@babun/shared/db/database.types";
 import type { QuotaGate } from "@babun/shared/sync";
 
 type DbSupabase = SupabaseClient<Database>;
-export type MobileQuotaKind = "clients" | "appointments_month";
+type MobileQuotaKind = "clients" | "appointments_month";
 
 const QUOTA_RPC = {
   clients: "tenant_quota_clients",
@@ -87,33 +87,6 @@ async function fetchCount(
   return count ?? 0;
 }
 
-/** Сколько использовано и какой лимит — для строки тарифа в Кабинете. Те же
- *  чтения, что у проверки перед созданием: цифры на экране и отказ сервера
- *  не могут разойтись. */
-export async function fetchQuotaUsage(
-  client: DbSupabase,
-  tenantId: string,
-  kind: MobileQuotaKind,
-): Promise<{ limit: number; current: number }> {
-  const [limit, current] = await Promise.all([
-    fetchQuota(client, tenantId, kind),
-    fetchCount(client, tenantId, kind),
-  ]);
-  return { limit, current };
-}
-
-export async function fetchRemainingQuota(
-  client: DbSupabase,
-  tenantId: string,
-  kind: MobileQuotaKind,
-): Promise<number> {
-  const [limit, current] = await Promise.all([
-    fetchQuota(client, tenantId, kind),
-    fetchCount(client, tenantId, kind),
-  ]);
-  return Math.max(0, limit - current);
-}
-
 export async function assertQuotaAvailable(
   client: DbSupabase,
   tenantId: string,
@@ -133,7 +106,7 @@ export async function assertQuotaAvailable(
   }
 }
 
-export type CreateQuotaPreflightResult = "checked" | "deferred-offline";
+type CreateQuotaPreflightResult = "checked" | "deferred-offline";
 
 /** Best-effort online preflight for a single interactive create.
  *

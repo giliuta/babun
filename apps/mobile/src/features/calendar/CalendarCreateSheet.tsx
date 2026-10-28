@@ -15,6 +15,7 @@ import {
 } from "@/features/reference/queries";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 import { TourTarget } from "@/components/tour/TourTarget";
+import { setTourReady } from "@/components/tour/tour-store";
 
 // СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ НА ВЕСЬ ПРОДУКТ.
 //
@@ -79,14 +80,18 @@ export function CalendarCreateSheet({
 
   // Лист всегда в дереве и лишь гасится пропом `visible` (канон §5), поэтому
   // черновик надо сбрасывать явно — иначе имя прошлого календаря встретит
-  // человека при следующем открытии.
-  useEffect(() => {
+  // человека при следующем открытии. Сброс — ТОЛЬКО В МОМЕНТ ОТКРЫТИЯ: пока
+  // лист открыт, `nextColor` меняется, если другой телефон завёл календарь,
+  // и сброс по нему стирал набираемое имя.
+  const [wasVisible, setWasVisible] = useState(false);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (visible) {
       setName("");
       setColor(nextColor);
       setFailure(null);
     }
-  }, [visible, nextColor]);
+  }
 
   // Кнопка гаснет по двум причинам, но ОБЪЯСНЯЕТСЯ только одна.
   //
@@ -96,6 +101,11 @@ export function CalendarCreateSheet({
   // ПРЯМО НАД кнопкой, оно пустое и в фокусе, курсор в нём мигает. Подпись
   // повторяла словами то, что и так видно, и висела всё время, пока человек
   // не начал печатать, — то есть с первой секунды открытия листа.
+  // Обучение ждёт имени: «Дальше» на шаге «придумайте имя» горит, когда оно есть.
+  useEffect(() => {
+    setTourReady("calendar-name", name.trim().length > 0);
+  }, [name]);
+
   const offline = !online;
   const canSave = !offline && name.trim().length > 0 && !pending;
   const footerNote =
@@ -154,7 +164,7 @@ export function CalendarCreateSheet({
               {footerNote}
             </Text>
           ) : null}
-          <TourTarget id="calendar.create-submit">
+          <TourTarget id="calendar-sheet.submit" shape="control">
             <GradientButton
               label="Создать календарь"
               onPress={submit}
@@ -170,14 +180,16 @@ export function CalendarCreateSheet({
           настройках один, и созданный календарь выглядел бы иначе, чем тот же
           календарь минутой позже.
 
-          ПОДСКАЗКИ «Бригада 2» БОЛЬШЕ НЕТ. Она предлагала назвать календарь
-          бригадой — словом из другой части продукта, — и на пустом поле
-          читалась как уже введённое имя. */}
+          ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ПРЕДЛАГАЕТ ИМЯ. «Бригада 2» предлагала
+          назвать календарь словом из другой части продукта и на пустом поле
+          читалась как уже введённое имя; «Название календаря» — нет. */}
       <View style={{ paddingBottom: 8 }}>
         <SectionCard>
+          <TourTarget id="calendar-sheet.name">
           <NameColorField
             bare
             label={null}
+            placeholder="Название календаря"
             name={name}
             onNameChange={(v) => {
               setName(v);
@@ -186,8 +198,9 @@ export function CalendarCreateSheet({
             color={color}
             onColorChange={(hex) => setColor(hex)}
             autoFocus
-            tourIds={{ name: "calendar.create-name", color: "calendar.create-color" }}
+            tourIds={{ color: "calendar-sheet.color" }}
           />
+          </TourTarget>
         </SectionCard>
       </View>
     </BottomSheet>

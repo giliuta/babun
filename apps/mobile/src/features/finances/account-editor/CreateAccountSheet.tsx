@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Banknote, Users, Wallet } from "lucide-react-native";
-import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { moneyInputProblem, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,8 +12,11 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
+import { setTourReady, tourEvent } from "@/components/tour/tour-store";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { GUTTER } from "@/components/ui/tokens";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
+import { SIGNED_NUMBER_KEYBOARD } from "@/lib/keyboard";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -66,13 +69,17 @@ export function CreateAccountSheet({
   const online = useIsOnline();
   const insert = useInsertAccount();
   // Активные команды — из них выбирается владелец счёта.
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams({ display: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const teamsLoaded = teamsQuery.data !== undefined;
   // Дубль имени — и среди скрытых: имя в команде одно на всех.
   const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
 
   const [name, setName] = useState("");
+  // Обучение ждёт имени счёта: «Дальше» горит, когда оно есть.
+  useEffect(() => {
+    setTourReady("account-name", name.trim().length > 0);
+  }, [name]);
   /** Владелец счёта — ровно одна команда. */
   const [teamId, setTeamId] = useState<string | null>(null);
   const [opening, setOpening] = useState("");
@@ -149,7 +156,13 @@ export function CreateAccountSheet({
       return;
     }
     if (openingCents == null) {
-      notify("Проверьте сумму", "Сумма на счёте — число, максимум два знака после запятой. Например: 1250,50");
+      // Причина — та, что на самом деле: «два знака» на огромной целой сумме
+      // не говорили, что исправить.
+      notify(
+        "Проверьте сумму",
+        moneyInputProblem(opening, { allowNegative: true, allowZero: true })
+          ?? "Сумма на счёте — число, максимум два знака после запятой. Например: 1250,50",
+      );
       return;
     }
     if (duplicate) {
@@ -169,6 +182,7 @@ export function CreateAccountSheet({
         show_in_payments: inPayments,
       });
       haptics.success();
+      tourEvent("account-created");
       onCreated?.(created.id);
       onClose();
     } catch (e) {
@@ -225,12 +239,14 @@ export function CreateAccountSheet({
         // Лист без полей (`padded={false}`): отступ у кнопки свой — тот же,
         // что у «Применить» в листе правки.
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
-          <GradientButton
-            label="Добавить счёт"
-            onPress={() => void submit()}
-            disabled={!online || !teamsLoaded || insert.isPending}
-            loading={insert.isPending}
-          />
+          <TourTarget id="account.create-submit" shape="control">
+            <GradientButton
+              label="Добавить счёт"
+              onPress={() => void submit()}
+              disabled={!online || !teamsLoaded || insert.isPending}
+              loading={insert.isPending}
+            />
+          </TourTarget>
         </View>
       }
     >
@@ -241,6 +257,7 @@ export function CreateAccountSheet({
       >
         {/* ИМЯ, ЦВЕТ И ЗНАЧОК — одна строка, как первым блоком правки. */}
         <SectionCard dense>
+          <TourTarget id="account.create-name">
           <NameColorField
             bare
             label={null}
@@ -255,12 +272,15 @@ export function CreateAccountSheet({
             // Снятие делает сама решётка: повторный тап отдаёт `null`.
             onIconChange={(slug) => setIcon(slug)}
             fallback={accountIcon({ icon, kind: kindForIcon(icon, "cash") })}
+            tourIds={{ color: "account.create-look" }}
           />
+          </TourTarget>
         </SectionCard>
 
         {/* СКОЛЬКО ЛЕЖИТ СЕЙЧАС — та же плашка «На счёте», что у правки;
             сумма вводится справа. Пусто — ноль. */}
         <SectionCard dense>
+          <TourTarget id="account.create-opening">
           <View style={blockBody}>
             <SelectRow
               icon={Wallet}
@@ -277,6 +297,7 @@ export function CreateAccountSheet({
               }
             />
           </View>
+          </TourTarget>
         </SectionCard>
 
         {showTeams ? (
@@ -349,7 +370,13 @@ function AmountInput({
         onChangeText={onChange}
         placeholder="0"
         placeholderTextColor={t.placeholder}
-        keyboardType="numbers-and-punctuation"
+        // Цифры со знаком «−» (остаток бывает в минусе), поэтому не decimal-pad;
+        // полоса текстовых подсказок над такой клавиатурой — лишняя.
+        keyboardType={SIGNED_NUMBER_KEYBOARD}
+        autoCorrect={false}
+        spellCheck={false}
+        autoComplete="off"
+        textContentType="none"
         returnKeyType="done"
         selectionColor={t.accent}
         accessibilityLabel="Сколько сейчас на счёте"

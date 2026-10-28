@@ -12,7 +12,7 @@ import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 // заставляет считать в уме. Последний день называется словом — в него ещё
 // можно успеть, и это единственное, что владельцу надо решить.
 
-export type InvitationWait =
+type InvitationWait =
   | { kind: "days"; days: number; text: string }
   | { kind: "last-day"; text: string }
   | { kind: "expired"; text: string };

@@ -94,7 +94,7 @@ export function propertyTypeLabel(value: string): string {
 
 // ── Facets / tokens ────────────────────────────────────────────────
 
-export type FacetKey = "team" | "city" | "tag";
+type FacetKey = "team" | "city" | "tag";
 
 /** Значение внутри фасет-попапа (Команда / Метка / Тег). */
 export interface FacetOption {

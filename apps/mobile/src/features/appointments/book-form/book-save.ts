@@ -1,11 +1,12 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
+import { isOnline } from "@babun/shared/sync";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { formatEURExact } from "@babun/shared/common/utils/money";
-import { setSelfReminder } from "@/features/calendar/reminders";
+import { getSelfReminder, setSelfReminder } from "@/features/calendar/reminders";
 import type { SelfReminder } from "@/lib/reminder-time";
 import { serverReason } from "@/features/calendar/server-reason";
 import type { Team } from "@/features/reference/queries";
@@ -20,7 +21,7 @@ import { reminderToast as reminderToastWith } from "./reminder-toast";
 import type { BookDraft } from "./use-book-draft";
 import type { BookReferences } from "./use-book-references";
 
-export interface BookSaveInput {
+interface BookSaveInput {
   canSave: boolean;
   bookingBusy: boolean;
   missingHint: string;
@@ -34,6 +35,8 @@ export interface BookSaveInput {
   buildPatch: () => Partial<Appointment>;
   effectiveTotal: number;
   overpayRequestRef: MutableRefObject<string | null>;
+  paymentRequestIdRef: MutableRefObject<string>;
+  savingRef: MutableRefObject<boolean>;
   refundOverpayment: BookDraft["refundOverpayment"];
   updateMut: BookDraft["updateMut"];
   booking: BookReferences["booking"];
@@ -56,6 +59,9 @@ export interface BookSaveInput {
   tenantIdForFiles: BookDraft["tenantIdForFiles"];
   queryClientForFiles: BookDraft["queryClientForFiles"];
   leaveBook: () => void;
+  /** Запись создана или правка сохранена — черновик на телефоне больше не
+   *  нужен. */
+  onSaved?: () => void;
 }
 
 /** «Сохранить» / «Создать» and the self-reminder bell (no hooks inside). */
@@ -73,6 +79,8 @@ export function bookSaveActions({
   buildPatch,
   effectiveTotal,
   overpayRequestRef,
+  paymentRequestIdRef,
+  savingRef,
   refundOverpayment,
   updateMut,
   booking,
@@ -95,17 +103,26 @@ export function bookSaveActions({
   tenantIdForFiles,
   queryClientForFiles,
   leaveBook,
+  onSaved,
 }: BookSaveInput) {
   const reminderToast = (
     res: Awaited<ReturnType<typeof setSelfReminder>>,
     rule: SelfReminder | null,
-  ) => reminderToastWith(toast, res, rule, Platform.OS === "android");
+  ) =>
+    reminderToastWith(toast, res, rule, Platform.OS === "android", () => {
+      void Linking.openSettings();
+    });
 
   const pickSelfReminder = (rule: SelfReminder | null) => {
-    setSelfReminderRule(rule);
     setReminderSheetOpen(false);
     // У сохранённой записи пуш ставится сразу — это не поле записи, его не
     // надо «сохранять»; у новой — после создания, когда появится id.
+    //
+    // КОЛОКОЛЬЧИК — ПО ОТВЕТУ, А НЕ ДО НЕГО (CAL-40). Он загорался в момент
+    // выбора, а при запрещённых уведомлениях правило не хранится
+    // (`setSelfReminder`): тост красный, колокольчик синий, и человек думал,
+    // что напоминание стоит. Теперь колокольчик показывает то, что лежит на
+    // телефоне после ответа.
     if (isEdit && editing && tenantIdForFiles) {
       void setSelfReminder(
         { ...editing, date, time_start: timeStart },
@@ -113,15 +130,30 @@ export function bookSaveActions({
         team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         tenantIdForFiles,
         client?.full_name,
-      ).then((res) => reminderToast(res, rule));
+      ).then((res) => {
+        setSelfReminderRule(getSelfReminder(editing.id));
+        reminderToast(res, rule);
+      });
+      return;
     }
+    setSelfReminderRule(rule);
   };
 
   const save = async () => {
+    if (savingRef.current) return;
     if (!canSave || bookingBusy) {
       toast(missingHint, "info");
       return;
     }
+    // ОПЛАТА НОВОЙ ЗАПИСИ — ТОЛЬКО ПРИ СВЯЗИ. Без сети запись уходит в очередь,
+    // а оплата следом падала: записи на сервере ещё нет, и набранные деньги
+    // пропадали с уведомлением «оплата не записана».
+    if (!isEdit && pendingPayment && kind === "work" && !isOnline()) {
+      haptics.warning();
+      toast("Оплата записывается только при связи — создайте запись без оплаты или дождитесь сети", "info");
+      return;
+    }
+    savingRef.current = true;
     // Тап по кнопке фокус у поля не отбирает — заметки клиента и объекта
     // дописываем сами, иначе набранное осталось бы в черновике поля.
     clientNote.commit();
@@ -153,8 +185,16 @@ export function bookSaveActions({
         // сумма больше итога заявки»), и форма упиралась в отказ без выхода:
         // «Снять» — это «деньги не поступили», а вернуть часть было нечем.
         // Поэтому «Сохранить» спрашивает и возвращает разницу возвратом
-        // клиенту (`refund_appointment_overpayment`), а потом сохраняет итог.
+        // клиенту.
+        //
+        // ВОЗВРАТ И ИТОГ — ОДНИМ ВЫЗОВОМ (`refund_overpayment_and_save`). Было
+        // два: возврат, потом сохранение. Сорвалось второе (сеть, «запись
+        // изменилась», права) — деньги клиенту уже вернули, а итог прежний,
+        // и у записи вырастал долг на сумму возврата. Теперь отказ
+        // сохранения откатывает и возврат. Сверка `updated_at` — по записи,
+        // из которой посчитана сумма в вопросе: изменилась — отказ до денег.
         const refund = overpaymentToRefund(editing ?? null, effectiveTotal);
+        const expectedUpdatedAt = editing?.updated_at ?? null;
         if (refund && "total_amount" in patch) {
           const ok = await confirmAction(`Вернуть клиенту ${formatEURExact(refund.amountCents / 100)}?`, {
             message: `Итог ${formatEURExact(effectiveTotal)}, а получено ${formatEURExact(refund.receivedCents / 100)}. Разница вернётся клиенту с последних платежей — в финансах будет возврат.`,
@@ -166,12 +206,15 @@ export function bookSaveActions({
             appointmentId: editId,
             amount: refund.amountCents / 100,
             requestId: overpayRequestRef.current,
+            patch,
+            kind: editing?.kind,
+            expectedUpdatedAt,
           });
-        }
-        if (Object.keys(patch).length > 0) {
+        } else if (Object.keys(patch).length > 0) {
           await updateMut.mutateAsync({ id: editId, patch });
         }
         overpayRequestRef.current = null;
+        onSaved?.();
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
@@ -188,6 +231,7 @@ export function bookSaveActions({
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
+        onSaved?.();
         if (selfReminder && tenantIdForFiles) {
           void setSelfReminder(
             created,
@@ -220,7 +264,7 @@ export function bookSaveActions({
                 appointmentId: created.id,
                 accountId: pendingPayment.accountId,
                 amount: send.amount,
-                requestId: randomUuid(),
+                requestId: paymentRequestIdRef.current,
                 kind: send.kind,
                 closeVisit: send.closeVisit,
               })
@@ -252,6 +296,8 @@ export function bookSaveActions({
       haptics.error();
       // Причина сервера словами, без «updateAppointment:».
       notify("Не удалось сохранить", serverReason(e) ?? (e as Error).message);
+    } finally {
+      savingRef.current = false;
     }
   };
 

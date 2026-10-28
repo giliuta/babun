@@ -15,7 +15,7 @@ import { useClientSettingLevelsOf } from "./use-client-settings";
  *  «Тег» (`tags`) или «Источник» (`sources`): адрес подстраницы с командой и
  *  компанией, `null` — двери нет (чужая команда, скрытая строка). */
 export function useClientSettingsDoor(
-  row: "ways" | "maps" | "tags" | "sources",
+  row: "ways" | "maps" | "tags" | "sources" | "objects",
   teamId: string | null,
 ): Href | null {
   const refs = useReferenceHref();
@@ -30,7 +30,13 @@ export function useClientSettingsDoor(
   // команда клиента — тоже своя.
   const { data: teams } = useTeams({ includeInactive: true });
   const door = clientSettingsDoor({
-    pathname: { ways: refs.channels, maps: refs.maps, tags: refs.tags, sources: refs.sources }[row],
+    pathname: {
+      ways: refs.channels,
+      maps: refs.maps,
+      tags: refs.tags,
+      sources: refs.sources,
+      objects: refs.objectTypes,
+    }[row],
     teamId,
     tenantId: scope?.tenantId ?? activeTenantId,
     level,

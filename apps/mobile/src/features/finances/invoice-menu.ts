@@ -27,7 +27,7 @@ import {
 // денег, чека и кредит-ноты нет; удалить — только последний в серии; отменить
 // — кредит-нотой, и только когда денег по нему у нас не осталось.
 
-export interface MenuAction {
+interface MenuAction {
   key: "edit" | "cancel" | "delete" | "delete-note";
   label: string;
   destructive?: boolean;
@@ -37,7 +37,7 @@ export interface MenuAction {
   run: () => void;
 }
 
-export interface InvoiceMenuContext {
+interface InvoiceMenuContext {
   /** Все инвойсы — серия (последний ли) и кредит-ноты. */
   all: readonly InvoiceLedger[];
   payments: readonly InvoicePaymentLedger[];
@@ -146,7 +146,10 @@ export function useInvoiceMenu() {
       // «Кредит-нота», а не «Отменить инвойс»: рядом с «Отмена» шторки два
       // «отменить» путались.
       { key: "cancel" as const, label: "Кредит-нота", icon: Undo2, color: SETTINGS_TILE.orange, run: cancel },
-      ...(untouched
+      // Не последний в серии — удалить нельзя, и это известно заранее: пункт
+      // не показываем, как и свайп «Документов». Отказ
+      // внутри `confirmDelete` остаётся на случай устаревшего списка.
+      ...(untouched && invoiceDeleteBlock(invoice, ctx.all, false) !== "not-last"
         ? [{ key: "delete" as const, label: "Удалить инвойс", destructive: true, run: del }]
         : []),
       ...undo,

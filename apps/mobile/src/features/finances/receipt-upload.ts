@@ -26,7 +26,7 @@ const ALLOWED = new Set([
   "application/pdf",
 ]);
 
-export interface PickedReceipt {
+interface PickedReceipt {
   uri: string;
   name?: string | null;
   mimeType?: string | null;

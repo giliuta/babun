@@ -124,6 +124,21 @@ const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"))
 const DELETE_RIGHT = "20261003004100_clients_delete_right_no_archive.sql";
 const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"));
 
+// ИСТОРИЮ КЛИЕНТА ЗНАЕТ ОДНА ФУНКЦИЯ: срок стирания снимается тем же
+// `client_has_history`, что держит стирание, — записи, инвойсы, операции и
+// долги. Правило DELETE_RIGHT то же, видов истории не меньше.
+const TRASH_HISTORY = "20261027225305_trash_knows_client_history.sql";
+const trashHistory = norm(readFileSync(join(MIGRATIONS_DIR, TRASH_HISTORY), "utf8"));
+
+// ВЫДАЧА СПИСКА КЛИЕНТОВ — В ЖУРНАЛ: `list_member_clients` — обёртка с
+// журналом, а тело TAG_ORDER живёт как `list_member_clients_rows` без правок.
+const DISCLOSURES = "20261027225327_client_list_disclosure_journal.sql";
+
+// МЁРТВЫЕ ВЕТКИ: «правка клиента целиком» — только владелец (у блока «Клиенты»
+// нет ступени «Меняет»), ветка «номер в день записи» снята со всех дверей.
+const DEAD_BRANCHES = "20261028101000_dead_rights_branches_removed.sql";
+const disclosures = norm(readFileSync(join(MIGRATIONS_DIR, DISCLOSURES), "utf8"));
+
 // НОМЕР — СРАЗУ: «Клиент: Видит» отдаёт контакты целиком,
 // без двери и точек; «Скрыт» — без контактов.
 const PHONE_OPEN = "20261003010500_clients_phone_open_with_client_block.sql";
@@ -149,26 +164,55 @@ const smsSend = norm(readFileSync(join(MIGRATIONS_DIR, SMS_SEND), "utf8"));
 const GAPS = "20261003133700_clients_rights_gaps.sql";
 const gaps = norm(readFileSync(join(MIGRATIONS_DIR, GAPS), "utf8"));
 
+// КЛИЕНТ ЛЮБОЙ КОМАНДЫ В ЗАПИСИ ПАРТНЁРА: создание и правка записи
+// пускают любого живого клиента компании (`member_client_bookable`), клиент
+// своей записи виден по имени, «Номер уже есть» — дверью по полному номеру.
+// Копия записи — тем же правилом; SMS остаётся на `member_client_in_team`.
+const ANY_TEAM_CLIENT = "20261021113100_partner_books_any_team_client.sql";
+const anyTeamClient = norm(readFileSync(join(MIGRATIONS_DIR, ANY_TEAM_CLIENT), "utf8"));
+
+// ПОРЯДОК ТЕГОВ: запись и списки клиента переписаны по живым телам ради
+// места тега в наборе; правила доступа в них те же, что в GAPS и CARD_BLOCKS
+// — это держит сверка тел «только место тега» ниже.
+const TAG_ORDER = "20261021113300_client_tag_order.sql";
+
+// СКИДКА НОВОЙ ЗАПИСИ — ПО ПРАВУ «СУММА»: создание записи партнёром переписано
+// по живому телу ANY_TEAM_CLIENT ради одной проверки денег; клиент любой
+// команды остаётся за `member_client_bookable` — это держит сверка ниже.
+const CREATE_AMOUNT = "20261027150000_member_create_amount_needs_right.sql";
+const createAmount = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_AMOUNT), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
-    for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
-      assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
-    }
+    assert.equal(lastDefiner("access_client_ids"), PER_TEAM, "access_client_ids переопределён позже");
+    // Мёртвую ветку «сотрудник меняет клиента» снимает DEAD_BRANCHES: пока она
+    // в `parked/`, последний определитель в `migrations/` — PER_TEAM.
+    assert.ok(
+      [PER_TEAM, DEAD_BRANCHES].includes(lastDefiner("current_user_can_edit_client")),
+      "current_user_can_edit_client переопределён позже",
+    );
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
-    for (const fn of ["member_trash_client", "client_history_never_purges"]) {
-      assert.equal(lastDefiner(fn), DELETE_RIGHT, `${fn} переопределён позже`);
+    assert.equal(lastDefiner("member_trash_client"), DELETE_RIGHT, "member_trash_client переопределён позже");
+    assert.equal(lastDefiner("client_history_never_purges"), TRASH_HISTORY, "client_history_never_purges переопределён позже");
+    assert.equal(lastDefiner("client_has_history"), TRASH_HISTORY, "client_has_history переопределён позже");
+    assert.equal(lastDefiner("list_member_clients"), DISCLOSURES, "list_member_clients переопределён позже");
+    assert.equal(lastDefiner("list_member_clients_rows"), "", "тело TAG_ORDER под именем list_member_clients_rows переписано");
+    for (const fn of [
+      "list_master_clients_safe",
+      "member_appointment_copy",
+      "member_appointment_update",
+      "member_client_bookable",
+      "member_find_client_by_phone",
+    ]) {
+      assert.equal(lastDefiner(fn), ANY_TEAM_CLIENT, `${fn} переопределён позже`);
     }
-    for (const fn of ["list_master_clients_safe"]) {
-      assert.equal(lastDefiner(fn), PHONE_OPEN, `${fn} переопределён позже`);
-    }
+    assert.equal(lastDefiner("member_appointment_create"), CREATE_AMOUNT, "создание записи переопределено позже");
     for (const fn of [
       "access_client_ids_in",
       "access_client_blocks",
       "client_masked_for_member",
-      "create_client_with_tags",
-      "update_client_with_tags",
       "member_client_history",
     ]) {
       assert.equal(lastDefiner(fn), GAPS, `${fn} переопределён позже`);
@@ -185,19 +229,58 @@ describe("сервер: клиенты по уровням", () => {
       "list_master_appointments_safe",
       "receipts_client_snapshot_no_phone",
       "member_client_in_team",
-      "member_appointment_update",
     ]) {
       assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
     }
     assert.equal(lastDefiner("sms_message_json"), SMS_JSON, "sms_message_json переопределён позже");
     assert.equal(lastDefiner("sms_send_manual"), SMS_SEND, "sms_send_manual переопределён позже");
-    for (const fn of [
-      "list_member_clients",
-      "list_client_members",
-      "client_seen_by_caller",
-      "member_client_contacts",
-    ]) {
+    for (const fn of ["client_seen_by_caller", "member_client_contacts"]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
+    }
+    for (const fn of [
+      "create_client_with_tags",
+      "update_client_with_tags",
+      "list_client_members",
+    ]) {
+      assert.equal(lastDefiner(fn), TAG_ORDER, `${fn} переопределён позже`);
+    }
+  });
+
+  // Порядок тегов переписал запись и списки клиента целиком. Без этой сверки
+  // перенос сторожа на TAG_ORDER мог бы унести с собой любое правило доступа:
+  // тела обязаны совпасть с прежними до буквы, кроме места тега в наборе.
+  test("порядок тегов меняет в записи и списках клиента только место тега", () => {
+    const fnBody = (file: string, fn: string) => {
+      const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8")).toLowerCase();
+      const start = sql.search(new RegExp(String.raw`create or replace function public\.${fn}\s*\(`));
+      assert.ok(start >= 0, `${file}: нет ${fn}`);
+      return sql.slice(start, sql.indexOf("$function$;", start));
+    };
+    const placeHunks: [string, string][] = [
+      [
+        "insert into public.client_tag_assignments ( tenant_id, client_id, tag_id, position ) select active_tenant_id, saved_row.id, supplied.tag_id, (supplied.ord - 1)::integer from unnest(normalized_tag_ids) with ordinality supplied(tag_id, ord);",
+        "insert into public.client_tag_assignments ( tenant_id, client_id, tag_id ) select active_tenant_id, saved_row.id, supplied.tag_id from unnest(normalized_tag_ids) supplied(tag_id);",
+      ],
+      [
+        "insert into public.client_tag_assignments ( tenant_id, client_id, tag_id, position ) select active_tenant_id, p_client_id, supplied.tag_id, (supplied.ord - 1)::integer from unnest(result_tag_ids) with ordinality supplied(tag_id, ord);",
+        "insert into public.client_tag_assignments ( tenant_id, client_id, tag_id ) select active_tenant_id, p_client_id, supplied.tag_id from unnest(result_tag_ids) supplied(tag_id);",
+      ],
+      [
+        "array_agg(assignment.tag_id order by assignment.position, assignment.tag_id)",
+        "array_agg(assignment.tag_id order by assignment.tag_id)",
+      ],
+      ["jsonb_agg(ta.tag_id order by ta.position, ta.tag_id)", "jsonb_agg(ta.tag_id order by ta.tag_id)"],
+    ];
+    for (const [fn, before] of [
+      ["create_client_with_tags", GAPS],
+      ["update_client_with_tags", GAPS],
+      ["list_member_clients", CARD_BLOCKS],
+      ["list_client_members", CARD_BLOCKS],
+    ] as const) {
+      const now = fnBody(TAG_ORDER, fn);
+      assert.ok(now.includes("position"), `${fn}: место тега не учитывается`);
+      const reverted = placeHunks.reduce((sql, [placed, plain]) => sql.split(placed).join(plain), now);
+      assert.equal(reverted, fnBody(before, fn), `${fn}: кроме места тега изменилось что-то ещё`);
     }
   });
 
@@ -316,6 +399,31 @@ describe("сервер: клиенты по уровням", () => {
     );
     assert.ok(deleteRight.includes("before insert or update of purge_at on public.clients for each row execute function public.client_history_never_purges();"));
     assert.ok(deleteRight.includes("revoke all on function public.client_history_never_purges() from public, anon, authenticated;"));
+    // Живое тело — TRASH_HISTORY: то же правило через `client_has_history`.
+    assert.ok(
+      trashHistory.includes(
+        "if new.purge_at is not null and public.client_has_history(new.id, false) then new.purge_at := null;",
+      ),
+      "клиенту с историей снова ставится срок стирания",
+    );
+    for (const kind of [
+      "exists (select 1 from public.appointments a where a.client_id = p_client)",
+      "or exists (select 1 from public.invoices i where i.client_id = p_client)",
+      "or exists (select 1 from public.finance_transactions f where f.client_id = p_client)",
+      "or exists (select 1 from public.debts d where d.client_id = p_client)",
+    ]) {
+      assert.ok(trashHistory.includes(kind), `история клиента потеряла: ${kind}`);
+    }
+  });
+
+  test("выдача списка клиентов сотруднику пишется в журнал, тело списка — прежнее (DISCLOSURES)", () => {
+    assert.ok(disclosures.includes("alter function public.list_member_clients(uuid) rename to list_member_clients_rows;"));
+    assert.ok(disclosures.includes("revoke all on function public.list_member_clients_rows(uuid) from public, anon, authenticated;"));
+    assert.ok(disclosures.includes("return query select x from public.list_member_clients_rows(p_client_id) x;"));
+    assert.ok(
+      disclosures.includes("insert into public.client_list_disclosures (tenant_id, user_id, clients_count)"),
+      "выдача списка не пишется в журнал",
+    );
   });
 
   test("номер — сразу по блоку «Клиент», без двери и точек (03.10)", () => {
@@ -333,6 +441,65 @@ describe("сервер: клиенты по уровням", () => {
     );
     // Выбор клиента мастера — номер у тех же клиентов.
     assert.ok(phoneOpen.includes("'phone', case when c.id = any(cs.open_ids) then c.phone else '' end,"));
+    // Последнее определение двери клиентов записи держит то же правило номера.
+    assert.ok(anyTeamClient.includes("'phone', case when c.id = any(cs.open_ids) then c.phone else '' end,"));
+  });
+
+  test("партнёр записывает клиента любой команды компании, но базу и номер это не открывает", () => {
+    // Годится любой живой клиент активной компании — и только он.
+    assert.ok(
+      anyTeamClient.includes(
+        "select p_client is not null and exists ( select 1 from public.clients c where c.id = p_client and c.tenant_id = public.current_tenant_id() and c.deleted_at is null );",
+      ),
+    );
+    assert.ok(anyTeamClient.includes("revoke all on function public.member_client_bookable(uuid) from public, anon, authenticated;"));
+    // Создание, правка и копия спрашивают его; прежняя проверка команды ушла.
+    for (const [fn, check] of [
+      ["member_appointment_create", "if not public.member_client_bookable((v_rest ->> 'client_id')::uuid) then raise exception 'access:client'"],
+      ["member_appointment_update", "if not public.member_client_bookable((p_patch ->> 'client_id')::uuid) then raise exception 'access:client'"],
+      ["member_appointment_copy", "if s.client_id is not null and not public.member_client_bookable(s.client_id) then raise exception 'access:client'"],
+    ] as const) {
+      const start = anyTeamClient.indexOf(`CREATE OR REPLACE FUNCTION public.${fn}(`);
+      const body = anyTeamClient.slice(start, anyTeamClient.indexOf("$function$;", start));
+      assert.ok(start >= 0 && body.includes(check), `${fn}: клиент не по member_client_bookable`);
+      assert.ok(!body.includes("member_client_in_team"), `${fn}: снова клиент только своей команды`);
+    }
+    // Последнее создание записи держит то же правило клиента и вдобавок
+    // спрашивает «Сумму» у скидки и своей цены.
+    const createStart = createAmount.search(/create or replace function public\.member_appointment_create\(/i);
+    const createBody = createAmount.slice(createStart, createAmount.indexOf("$function$;", createStart));
+    assert.ok(
+      createBody.includes("if not public.member_client_bookable((v_rest ->> 'client_id')::uuid) then raise exception 'access:client'"),
+      "member_appointment_create: клиент не по member_client_bookable",
+    );
+    assert.ok(!createBody.includes("member_client_in_team"), "member_appointment_create: снова клиент только своей команды");
+    assert.ok(
+      createBody.includes("if v_money_set and not public.member_can('record.amount', 'write', v_team) then raise exception 'access:block:record.amount'"),
+      "member_appointment_create: скидка без права «Сумма»",
+    );
+    // Право на запись не ослабло: «Новые записи» в команде записи.
+    assert.ok(anyTeamClient.includes("if v_kind = 'work' and not public.member_can('calendar.create', 'write', v_team) then raise exception 'access:block:calendar.create'"));
+    // Имя клиента своей записи — в окне «Ограничения»; номер — прежним правилом.
+    assert.ok(
+      anyTeamClient.includes(
+        "and a.team_id = any(ct.ids) and a.created_by = auth.uid() and a.date >= coalesce(cs.window_starts ->> a.team_id, '')",
+      ),
+    );
+    // «Номер уже есть» — только при «Новых записях» в команде, только полный номер.
+    assert.ok(anyTeamClient.includes("if public.member_can('calendar.create', 'write', p_team) is not true then raise exception 'access:block:calendar.create'"));
+    assert.ok(anyTeamClient.includes("if p_phone_e164 is null or p_phone_e164 !~ '^\\+[1-9][0-9]{6,14}$' then return null;"));
+    assert.ok(anyTeamClient.includes("'phone', case when is_open then hit.phone else '' end,"));
+    assert.ok(anyTeamClient.includes("revoke all on function public.member_find_client_by_phone(text, text) from public, anon;"));
+    // Копия: по-прежнему «Перенос записей» и окно «Ограничения» — давнюю
+    // запись с давним клиентом партнёр не копирует.
+    const copyStart = anyTeamClient.indexOf("CREATE OR REPLACE FUNCTION public.member_appointment_copy(");
+    const copyBody = anyTeamClient.slice(copyStart, anyTeamClient.indexOf("$function$;", copyStart));
+    assert.ok(copyBody.includes("if public.member_record_hidden(s.kind, s.team_id, s.date) then raise exception"));
+    assert.ok(copyBody.includes("if not public.member_can('calendar.move', 'write', s.team_id) then raise exception 'access:block:calendar.move'"));
+    assert.ok(copyBody.includes("p_id uuid DEFAULT NULL::uuid"), "у копии пропало умолчание p_id");
+    // SMS из записи по-прежнему проверяет клиента команды.
+    assert.equal(lastDefiner("sms_send_manual"), SMS_SEND, "sms_send_manual переопределён позже");
+    assert.ok(smsSend.includes("member_client_in_team(v_client, v_team)"));
   });
 
   test("«Клиент», «История», «SMS» — свои права; номер и SMS с карточки — по ним", () => {
@@ -521,13 +688,11 @@ describe("сервер: клиенты по уровням", () => {
       leaks.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
       "копия давней записи возвращает клиента в окно",
     );
-    // Копию определяет миграция без дублей — сторож клиента в ней тот же.
+    // Копию определила миграция без дублей, последней — «клиент любой
+    // команды»: клиент копии — по `member_client_bookable`, а давнюю запись
+    // не копирует окно «Ограничения» (тест «партнёр записывает клиента…»).
     const copy = norm(readFileSync(join(MIGRATIONS_DIR, COPY), "utf8"));
-    assert.equal(lastDefiner("member_appointment_copy"), COPY, "копия переопределена позже");
-    assert.ok(
-      copy.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
-      "копия без дублей потеряла сторож клиента команды",
-    );
+    assert.equal(lastDefiner("member_appointment_copy"), ANY_TEAM_CLIENT, "копия переопределена позже");
     assert.ok(
       copy.includes("revoke all on function public.member_appointment_copy(uuid, text, text, text, uuid) from public, anon;"),
       "новая сигнатура копии осталась исполнимой для anon",
@@ -1021,10 +1186,11 @@ describe("экраны: вкладка «Клиенты» открывается
     // Список — маршрут + папка `list/`; шапка с лентой команд — `ListTopBar.tsx`.
     const list = clientsListSource();
     const top = clientsListTopBarSource();
-    // Срез строго по разметке шапки: от неё до ленты команд под ней. Якорь —
-    // сам тег; не найден — тест падает, а не проверяет весь файл (якорь
-    // в виде снесённого `<ClientsFilterBar` молча шёл бы срезом до конца).
-    const start = top.indexOf("minHeight: 48");
+    // Срез строго по разметке шапки: от шестерёнки до ленты команд под ней.
+    // Якорь — сама шестерёнка; не найден — тест падает, а не проверяет весь
+    // файл. `minHeight: 48` якорем быть не может: та же высота у полосы
+    // выбора над шапкой, и срез молча начался бы с неё.
+    const start = top.indexOf('id="clients.gear"');
     const end = top.indexOf("<ScopeChips");
     assert.ok(start > 0 && end > start, "границы шапки списка не найдены");
     const header = top.slice(start, end);

@@ -62,7 +62,7 @@ export function ChooseRow({
       >
         {label}
       </Text>
-      {disabled ? null : <ChevronRight color={t.chevron} size={ICON.sm} />}
+      {disabled ? null : <ChevronRight color={t.chevron} size={ICON.chevron} />}
     </Pressable>
   );
 }

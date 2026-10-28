@@ -67,7 +67,7 @@ export const CLAIM_FIRST_ATTEMPT_DELAY_MS = 3_000;
 /** Порядок важности: первой — роль (единственная сверка «всё ещё участник»,
  *  пока опрос роли стоит; разбор у `planSwitchRevalidation`), затем то, из
  *  чего рисуется календарь. Остальное — в том порядке, в каком лежит в кэше. */
-export const REVALIDATION_PRIORITY: readonly string[] = [
+const REVALIDATION_PRIORITY: readonly string[] = [
   "current-role",
   "appointments",
   "teams",
@@ -191,7 +191,7 @@ export interface FreshnessContext {
 
 /** Сколько данные ключа считаются свежими. `null` — ключ компанию не называет,
  *  и решает прежний общий порог. */
-export function companyFreshnessMs(
+function companyFreshnessMs(
   key: readonly unknown[],
   ctx: FreshnessContext,
 ): number | null {
@@ -219,7 +219,7 @@ export function staleTimeFor(
   return companyFreshnessMs(key, ctx) ?? DEFAULT_STALE_MS;
 }
 
-export interface QueryStateLike {
+interface QueryStateLike {
   data: unknown;
   dataUpdatedAt: number;
   isInvalidated: boolean;

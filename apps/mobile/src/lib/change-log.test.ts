@@ -65,6 +65,19 @@ describe("история изменений — слова", () => {
     assert.equal(describeField("status", ["scheduled", "completed"]), null);
     assert.equal(changesSummary({ status: ["scheduled", "completed"], payment_status: ["unpaid", "paid"] }), "Оплата не оплачена → оплачена");
     assert.deepEqual(allChanges({ status: ["in_progress", "completed"] }), []);
+    // Материалы ставит сервер при закрытии визита оплатой — правкой человека
+    // они в журнале не читаются, ни словом, ни в «ещё N».
+    const paid = {
+      status: ["scheduled", "completed"],
+      payments: { "+": ["400.00"] },
+      paid_amount: [0, 400],
+      material_lines: "*",
+      payment_method: [null, "cash"],
+    };
+    assert.equal(describeField("material_lines", "*"), null);
+    assert.ok(!changesSummary(paid).includes("Материалы"));
+    assert.ok(!changesSummary(paid).includes("ещё"));
+    assert.ok(!allChanges(paid).some((line) => line.startsWith("Материалы") || line.startsWith("Служебные")));
     // Статусы инвойса — прежними словами.
     assert.equal(describeField("status", ["issued", "paid"]), "Статус выставлен → оплачен");
     assert.equal(describeField("client_id", ["a", "b"]), "Клиент");

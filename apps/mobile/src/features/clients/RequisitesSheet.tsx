@@ -28,12 +28,15 @@ import { useClientsCapabilities } from "@/session/company-scope";
 const FIELDS: {
   key: (typeof REQUISITES_KEYS)[number];
   label: string;
-  autoCapitalize?: "words" | "none";
+  autoCapitalize?: "words" | "none" | "characters";
   multiline?: boolean;
+  /** Номер пишется только латиницей — клавиатура сразу английская. */
+  latin?: boolean;
 }[] = [
   { key: "legal_name", label: "Юридическое имя", autoCapitalize: "words" },
-  { key: "vat_number", label: "VAT номер", autoCapitalize: "none" },
-  { key: "reg_number", label: "Регистрационный номер", autoCapitalize: "none" },
+  // Номера — сразу заглавными, как их сохранит нормализация и напечатает инвойс.
+  { key: "vat_number", label: "VAT номер", autoCapitalize: "characters", latin: true },
+  { key: "reg_number", label: "Регистрационный номер", autoCapitalize: "characters", latin: true },
   { key: "billing_address", label: "Юридический адрес", multiline: true },
 ];
 
@@ -147,6 +150,7 @@ export function RequisitesSheet({
               separated={i > 0}
               multiline={f.multiline}
               autoCapitalize={f.autoCapitalize}
+              keyboardType={f.latin ? "latin" : undefined}
               // Курсор сразу в первое пустое поле: лист открыли, чтобы
               // вписать, а не чтобы посмотреть.
               autoFocus={f.key === focusKey}

@@ -20,7 +20,7 @@ import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
-import { shareInvitation, waitSheetExit } from "../InviteMemberSheet";
+import { shareInvitation, waitSheetExit } from "../invitation-share";
 import { useAccessBlocks } from "@/session/access-queries";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { useUpdateMasterInvitation } from "./invitation-api";
@@ -39,6 +39,7 @@ import {
 } from "./master-draft";
 import { rightsFocusQuery } from "./rights-focus";
 import { useDraftTeamAccess } from "./draft-team-access";
+import { draftWithRole } from "./role-draft";
 import { areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { waitSubtitle } from "../invitation-wait";
 
@@ -116,6 +117,11 @@ export function MasterInviteCard({
     rightsHref: `/cabinet/people/${invitationSegment(invitationId)}/rights`,
     onAdd: () => {
       if (draft) setSheetTeamIds(draft.teamIds);
+    },
+    // Роль уходит целиком приглашением — тем же `update_invitation`, что и
+    // строка прав.
+    onApplyRole: (role, team) => {
+      if (draft && blocks) commit(draftWithRole(draft, blocks, role, team));
     },
   });
 

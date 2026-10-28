@@ -55,7 +55,7 @@ export interface PickedFile {
   fileSize?: number;
 }
 
-export class AttachmentError extends Error {}
+class AttachmentError extends Error {}
 
 function genAttachmentId(): string {
   // Hermes only guarantees getRandomValues in the current native build;
@@ -90,7 +90,7 @@ function normalizeMime(reported: string | undefined, name: string): string {
   );
 }
 
-export function isImage(att: { mime_type: string }): boolean {
+function isImage(att: { mime_type: string }): boolean {
   return att.mime_type.startsWith("image/");
 }
 
@@ -237,7 +237,7 @@ export async function getSignedUrl(
 
 // ─── Hooks ─────────────────────────────────────────────────────────────
 
-export interface AttachmentsData {
+interface AttachmentsData {
   items: ClientAttachment[];
   /** attachment id → 5-min signed URL, images only. */
   thumbs: Record<string, string>;

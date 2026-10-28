@@ -6,7 +6,7 @@ import type { FieldRowView } from "./use-field-row";
 // the element tree stays exactly what it was before the split.
 export function renderFieldRowInline(v: FieldRowView) {
   const {
-    label, value, placeholder, separated, keyboardType, autoCapitalize,
+    label, value, placeholder, separated, nativeKeyboard, autoCapitalize,
     autoFocus, multiline, valueColor, tabular, trailing, onLabelPress,
     inputColor, readOnly, noCopy, t, editing, editingNow, text, selectOnFocus,
     setInput, startEditing, onChangeText, commit,
@@ -65,7 +65,7 @@ export function renderFieldRowInline(v: FieldRowView) {
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
             keyboardAppearance="light"
-            keyboardType={keyboardType}
+            keyboardType={nativeKeyboard}
             selectTextOnFocus={selectOnFocus}
             contextMenuHidden={noCopy}
             autoCapitalize={autoCapitalize}

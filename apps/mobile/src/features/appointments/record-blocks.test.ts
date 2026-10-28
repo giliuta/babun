@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { parseMemberAccessMap, type AccessLevel, type MemberAccessMap } from "@/session/access-map";
-import { bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlocks } from "./record-blocks";
+import { bookIsReadOnly, bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlocks } from "./record-blocks";
 
 const TEAM = "team-1";
 
@@ -319,6 +319,22 @@ describe("запись клиента без тарифа (02.10)", () => {
       if (key.startsWith("edit")) assert.equal(value, false, `${key} должен быть закрыт`);
       else assert.equal(value, owner[key as keyof typeof owner], `${key} — как с тарифом`);
     }
+  });
+});
+
+describe("чужое событие у владельца — та же страница, только просмотр", () => {
+  const read = (over: Partial<Parameters<typeof bookIsReadOnly>[0]>) =>
+    bookIsReadOnly({ isMember: false, kind: "event", workInPlan: true, ownEvent: true, ...over });
+
+  test("своё событие владелец правит, чужое — только смотрит", () => {
+    assert.equal(read({}), false);
+    assert.equal(read({ ownEvent: false }), true);
+  });
+
+  test("сотруднику событие решают его права, а запись клиента — тариф", () => {
+    assert.equal(read({ isMember: true, ownEvent: false }), false);
+    assert.equal(read({ kind: "work", ownEvent: false }), false);
+    assert.equal(read({ kind: "work", workInPlan: false }), true);
   });
 });
 

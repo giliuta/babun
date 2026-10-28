@@ -48,7 +48,7 @@ const FORBIDDEN_IN_PREFETCH = [
 ];
 
 describe("прогрев чужой компании не имеет побочных действий", () => {
-  const prefetch = read("tenant-prefetch.ts");
+  const prefetch = stripComments(readModuleSource(join(here, "tenant-prefetch.ts")));
   const fetchers = read("../session/company-fetchers.ts");
 
   test("исполнитель прогрева не зовёт ничего из запрещённого списка", () => {

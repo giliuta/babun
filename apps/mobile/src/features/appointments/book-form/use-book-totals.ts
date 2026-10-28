@@ -17,7 +17,7 @@ import {
 import { serviceBuffersMinutes } from "./book-math";
 import { recordTotals, totalDraftText, typedDiscount } from "./book-money";
 
-export interface BookTotalsInput {
+interface BookTotalsInput {
   serviceIds: string[];
   catalog: Map<string, Service>;
   overrides: Record<string, ServiceOverride>;

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { capsText } from "../caps-text";
 
 /** Отступ карточки от краёв экрана — один на все группы и на весь продукт
  *  (`GUTTER`, DS §3). Был 12 при документе, обещающем 16. */
@@ -84,11 +85,10 @@ export function RowGroupHeader({
             lineHeight: 14,
             fontWeight: "700",
             letterSpacing: 0.8,
-            textTransform: "uppercase",
             color: t.caption,
           }}
         >
-          {title}
+          {capsText(title)}
         </Text>
       ) : null}
       {action ?? null}

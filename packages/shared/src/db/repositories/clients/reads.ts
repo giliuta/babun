@@ -36,6 +36,10 @@ async function listClientRows(
   return rows;
 }
 
+/** Порядок набора тегов — порядок выбора: первый тег главный (его имя на
+ *  плитке клиента), поэтому строки идут по `position`. `tag_id` разводит
+ *  равные места и держит страницы устойчивыми: без полного порядка строка
+ *  на стыке страниц могла бы выпасть или повториться. */
 async function listClientTagAssignments(
   supabase: DbSupabase,
   tenantId: string,
@@ -47,6 +51,7 @@ async function listClientTagAssignments(
       .select("client_id, tag_id")
       .eq("tenant_id", tenantId)
       .order("client_id", { ascending: true })
+      .order("position", { ascending: true })
       .order("tag_id", { ascending: true })
       .range(offset, offset + CLIENT_PAGE_SIZE - 1);
     if (error) throw new Error(`listClients tags: ${error.message}`);
@@ -129,7 +134,10 @@ export async function getClient(
     .from("client_tag_assignments")
     .select("tag_id")
     .eq("client_id", id)
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    // Первый тег набора — главный: порядок мест, а не случайный порядок строк.
+    .order("position", { ascending: true })
+    .order("tag_id", { ascending: true });
   if (assignErr) throw new Error(`getClient tags: ${assignErr.message}`);
 
   return {

@@ -20,7 +20,7 @@ export interface TransferAccount extends SectionAccount {
 }
 
 /** Имя команды по id. `null` — команды в справочнике нет вовсе. */
-export type TeamNameResolver = (teamId: string | null) => string | null;
+type TeamNameResolver = (teamId: string | null) => string | null;
 
 /** Группа списка: команда и её счета. */
 export interface TransferGroup<T extends TransferAccount> {

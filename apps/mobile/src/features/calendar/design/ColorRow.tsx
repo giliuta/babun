@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { RecordMark } from "@/components/ui/RecordMark";
+import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useThemeColors } from "@/theme/colors";
 
 /** СТРОКА ЦВЕТА — КУСОЧЕК КАЛЕНДАРЯ И ПРАВИЛО. Слева образец блока записи
@@ -14,6 +15,7 @@ export function ColorRow({
   hue,
   separated,
   onPress,
+  onToggle,
 }: {
   title: string;
   when: string;
@@ -21,6 +23,9 @@ export function ColorRow({
   separated: boolean;
   /** Нет — «Только видит»: строка показывает цвет, без двери. */
   onPress?: () => void;
+  /** ВЫКЛЮЧАТЕЛЬ СЛУЧАЯ: выключен — такая запись красится обычным цветом.
+   *  Включён ли — говорит сам цвет (`hue`). Нет — строка без выключателя. */
+  onToggle?: (next: boolean) => void;
 }) {
   const t = useThemeColors();
   return (
@@ -56,10 +61,14 @@ export function ColorRow({
           maxFontSizeMultiplier={1.3}
           style={{ fontSize: 13, color: t.sub, marginTop: 2 }}
         >
-          {hue ? when : `${when} · без цвета`}
+          {hue || onToggle ? when : `${when} · без цвета`}
         </Text>
       </View>
-      {onPress ? <ChevronRight size={18} color={t.faint} strokeWidth={2.2} /> : null}
+      {onToggle ? (
+        <SwitchControl value={!!hue} onValueChange={onToggle} accessibilityLabel={title} />
+      ) : onPress ? (
+        <ChevronRight size={18} color={t.faint} strokeWidth={2.2} />
+      ) : null}
     </Pressable>
   );
 }

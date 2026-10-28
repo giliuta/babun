@@ -1,6 +1,7 @@
 import { serviceClient } from "../_shared/service-client.ts";
 import { json as jsonResponse } from "../_shared/http.ts";
 import { cancelSoleOwnedSubscriptions } from "../_shared/subscriptions.ts";
+import { ownedTenants, purgeGoneTenantsStorage } from "../_shared/tenant-storage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,6 +124,9 @@ Deno.serve(async (request) => {
   }
   await markCleanup(service, user.id, "soft_deleted");
 
+  // Компании, где он владелец: какие из них ушли, скажет чтение после каскада.
+  const ownedTenantIds = await ownedTenants(service, user.id);
+
   // One RPC = one Postgres transaction for every sole-owned tenant. A single
   // cascade error rolls all tenant deletions back. From this point onward the
   // account is already inaccessible, so failures are reported as accepted
@@ -163,6 +167,13 @@ Deno.serve(async (request) => {
     });
     return json(200, { ok: true, pending_cleanup: true });
   }
+
+  // ФАЙЛЫ УШЕДШИХ КОМПАНИЙ — ПОСЛЕ ОКОНЧАТЕЛЬНОГО УДАЛЕНИЯ ВХОДА. Сорвись оно
+  // после сноса — человек остался бы с аккаунтом, но без файлов. Каскад унёс
+  // строки, а фото, чеки, файлы клиентов и логотипы (бакет публичный)
+  // остались бы навсегда; сбой здесь не страшен — остаток подберёт
+  // `storage-janitor`.
+  await purgeGoneTenantsStorage(service, ownedTenantIds);
 
   // No auth row remains, so no retry is required. A stale log is harmless,
   // but remove it on the happy path to retain only actionable cleanup work.

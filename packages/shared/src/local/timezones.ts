@@ -11,7 +11,7 @@
 // сверка (по 15-м числам) этого не ловила: Иерусалим и Газа переводят часы
 // не в те же дни, что ЕС, и с ней они стояли в одной строке с Хельсинки.
 // Несколько дней в году граница суток у них разъезжалась бы с европейской,
-// и выручка падала бы не в те сутки. Групп: 62 из 418 зон.
+// и выручка падала бы не в те сутки. Групп: 64 из 418 зон.
 //
 // ИМЕНА ЗОН СОВРЕМЕННЫЕ. ICU по старой памяти отдаёт `Europe/Kiev`,
 // `Asia/Calcutta`, `Asia/Saigon`, `America/Godthab` и ещё восемь
@@ -27,7 +27,7 @@
 // внутри группы — по узнаваемости: первые попадают в подпись.
 //
 // Сгенерировано из ICU; руками не правится.
-export interface ZoneCity {
+interface ZoneCity {
   name: string;
   zone: string;
 }
@@ -111,7 +111,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Boise", zone: "America/Boise" },
       { name: "Cambridge Bay", zone: "America/Cambridge_Bay" },
       { name: "Ciudad Juarez", zone: "America/Ciudad_Juarez" },
-      { name: "Inuvik", zone: "America/Inuvik" },
     ],
   },
   {
@@ -124,9 +123,13 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     // в тот день, когда система обновила базу поясов: данные здесь застыли
     // на момент генерации, а `Intl` живёт вместе с ОС. Ради этого тест и
     // писался — молча разъехавшийся пояс сдвинул бы человеку сутки.
+    //
+    // Инувик (Северо-Западные территории) живёт по часам Альберты и ушёл
+    // вместе с ней — перебор зон ICU даёт ему ровно Эдмонтон.
     zone: "America/Edmonton",
     cities: [
       { name: "Edmonton", zone: "America/Edmonton" },
+      { name: "Inuvik", zone: "America/Inuvik" },
     ],
   },
   {
@@ -156,6 +159,15 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Ojinaga", zone: "America/Ojinaga" },
       { name: "Rankin Inlet", zone: "America/Rankin_Inlet" },
       { name: "Resolute", zone: "America/Resolute" },
+    ],
+  },
+  {
+    // МАНИТОБА ОСТАЛАСЬ НА ЛЕТНЕМ ВРЕМЕНИ НАВСЕГДА — как Альберта, и с ноября
+    // 2026 Виннипег перестал возвращаться к зимнему вместе с Чикаго. Своей
+    // группой — по той же причине, что Эдмонтон: перебор всех зон ICU не
+    // нашёл ни одной, что ведёт себя так же весь год.
+    zone: "America/Winnipeg",
+    cities: [
       { name: "Winnipeg", zone: "America/Winnipeg" },
     ],
   },

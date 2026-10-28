@@ -28,7 +28,7 @@ export interface ReferenceGateInput {
   teamScheduleQuery: GateQuery;
 }
 
-export interface ReferenceGate {
+interface ReferenceGate {
   referenceQueries: readonly GateRef[];
   essentialQueries: readonly GateRef[];
   failedReference: GateRef | undefined;

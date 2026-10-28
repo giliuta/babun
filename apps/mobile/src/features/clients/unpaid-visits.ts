@@ -9,7 +9,7 @@ import { appointmentDebt, type ClientInvoicing } from "@babun/shared/local/selec
 // итог над историей) показало бы €150 после тапа по «Долг €240» — и
 // человек перестал бы верить обоим числам.
 
-export interface UnpaidVisits {
+interface UnpaidVisits {
   /** Записи с неполученными деньгами, в порядке входа. */
   list: Appointment[];
   /** Сумма долга по ним — то же число, что «Долг» в сводке. */
