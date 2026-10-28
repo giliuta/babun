@@ -43,7 +43,7 @@ export function AccessSectionsCard({
               tile={look.tile}
               icon={look.icon}
               title={section.title}
-              sub={sectionBrief(section)}
+              sub={sectionBrief(section, sections)}
               onPress={() => onOpen(section)}
             />
           </Fragment>

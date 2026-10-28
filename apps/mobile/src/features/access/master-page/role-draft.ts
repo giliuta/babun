@@ -1,7 +1,7 @@
 import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import type { MasterDraft } from "./master-draft";
 import { offeredBlocks } from "./rights-copy";
-import { roleLevel, type RolePreset } from "./role-presets";
+import { inRolePart, roleLevel, type RolePart, type RolePreset } from "./role-presets";
 
 /** Роль в черновике нового партнёра или в приглашении: права команды
  *  `teamId` и права аккаунта встают положениями роли. Хранится только
@@ -12,10 +12,11 @@ export function draftWithRole(
   blocks: readonly AccessBlock[],
   role: RolePreset,
   teamId: string,
+  part: RolePart = "all",
 ): MasterDraft {
   const team: Record<string, AccessLevel> = { ...(draft.calendarLevels[teamId] ?? {}) };
   const company: Record<string, AccessLevel> = { ...draft.companyLevels };
-  for (const block of offeredBlocks(blocks)) {
+  for (const block of offeredBlocks(blocks).filter((candidate) => inRolePart(candidate, part))) {
     const target = block.scope === "calendar" ? team : company;
     const level = roleLevel(role, block);
     if (level === (block.levels[0] ?? "off")) delete target[block.key];

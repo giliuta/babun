@@ -12,7 +12,7 @@ import { CALENDAR_GROUPS } from "./access-summary";
 import { visibleLevel, type MasterDraft } from "./master-draft";
 import { activeOf } from "./rights-page-shared";
 import { rightsFocusQuery } from "./rights-focus";
-import type { RolePreset } from "./role-presets";
+import type { RolePart, RolePreset } from "./role-presets";
 import { viewSections } from "./rights-view-sections";
 
 // ЛЕНТА КОМАНД И «ДОСТУП» У НОВОГО СОТРУДНИКА И У ПРИГЛАШЕНИЯ — КАК У
@@ -37,7 +37,7 @@ export function useDraftTeamAccess({
   /** «Добавить» справа от ленты — шторка команд. */
   onAdd: () => void;
   /** Роль выбранной команды — все её права разом (`draftWithRole`). */
-  onApplyRole?: (role: RolePreset, teamId: string) => void;
+  onApplyRole?: (role: RolePreset, teamId: string, part: RolePart) => void;
 }): {
   activeId: string | null;
   select: (teamId: string) => void;
@@ -84,7 +84,7 @@ export function useDraftTeamAccess({
                 teamId={activeId}
                 teamName={teams.find((team) => team.id === activeId)?.name ?? ""}
                 stepAllowed={allows}
-                onApply={(role) => onApplyRole(role, activeId)}
+                onApply={(role, part) => onApplyRole(role, activeId, part)}
               />
             ) : undefined
           }

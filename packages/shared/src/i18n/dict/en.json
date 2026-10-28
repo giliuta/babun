@@ -5185,5 +5185,12 @@
  "команд": "teams",
  "Посмотреть как {0}": "View as {0}",
  "Посмотреть как партнёр": "View as the partner",
- "Всё видит": "Sees everything"
+ "Всё видит": "Sees everything",
+ "Права аккаунта — как у роли «{0}»": "Account rights now match “{0}”",
+ "Права аккаунта — как у роли «{0}»?": "Set account rights to match “{0}”?",
+ "Тариф, SMS, история, реквизиты и «Партнёры» — одни на все команды партнёра, не только на «{0}».": "Plan, SMS, history, business details and “Partners” are shared across all of the partner's teams, not just “{0}”.",
+ "Поставить": "Set",
+ "Закрыто · видит цены записей и доход дня": "Closed · sees appointment prices and day income",
+ "Закрыто · видит цены записей": "Closed · sees appointment prices",
+ "Закрыто · видит доход дня": "Closed · sees day income"
 }

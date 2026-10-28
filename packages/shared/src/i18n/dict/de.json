@@ -5185,5 +5185,12 @@
  "команд": "Teams",
  "Посмотреть как {0}": "Ansehen als {0}",
  "Посмотреть как партнёр": "Als Partner ansehen",
- "Всё видит": "Sieht alles"
+ "Всё видит": "Sieht alles",
+ "Права аккаунта — как у роли «{0}»": "Kontorechte wie bei der Rolle „{0}“",
+ "Права аккаунта — как у роли «{0}»?": "Kontorechte wie bei der Rolle „{0}“ setzen?",
+ "Тариф, SMS, история, реквизиты и «Партнёры» — одни на все команды партнёра, не только на «{0}».": "Tarif, SMS, Verlauf, Firmendaten und „Partner“ gelten für alle Teams des Partners, nicht nur für „{0}“.",
+ "Поставить": "Festlegen",
+ "Закрыто · видит цены записей и доход дня": "Gesperrt · sieht Terminpreise und Tageseinnahmen",
+ "Закрыто · видит цены записей": "Gesperrt · sieht Terminpreise",
+ "Закрыто · видит доход дня": "Gesperrt · sieht Tageseinnahmen"
 }

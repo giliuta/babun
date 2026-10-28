@@ -34,9 +34,16 @@ export function MemberTeamRole({
       teamName={teamName}
       locked={locked || writer.pending}
       stepAllowed={allows}
-      onApply={(role) => {
-        const changes = roleChanges(blocks, role, teamId, levelOf);
-        if (changes) writer.applyBatch(changes, `Роль «${role.title}» — права выставлены`);
+      onApply={(role, part) => {
+        const changes = roleChanges(blocks, role, teamId, levelOf, part);
+        if (changes) {
+          writer.applyBatch(
+            changes,
+            part === "account"
+              ? `Права аккаунта — как у роли «${role.title}»`
+              : `Роль «${role.title}» — права выставлены`,
+          );
+        }
       }}
     />
   );

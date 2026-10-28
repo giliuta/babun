@@ -5185,5 +5185,12 @@
  "команд": "equipos",
  "Посмотреть как {0}": "Ver como {0}",
  "Посмотреть как партнёр": "Ver como el socio",
- "Всё видит": "Ve todo"
+ "Всё видит": "Ve todo",
+ "Права аккаунта — как у роли «{0}»": "Permisos de la cuenta como el rol «{0}»",
+ "Права аккаунта — как у роли «{0}»?": "¿Permisos de la cuenta como el rol «{0}»?",
+ "Тариф, SMS, история, реквизиты и «Партнёры» — одни на все команды партнёра, не только на «{0}».": "Plan, SMS, historial, datos fiscales y «Socios» son comunes a todos los equipos del socio, no solo a «{0}».",
+ "Поставить": "Aplicar",
+ "Закрыто · видит цены записей и доход дня": "Cerrado · ve precios de citas e ingresos del día",
+ "Закрыто · видит цены записей": "Cerrado · ve precios de citas",
+ "Закрыто · видит доход дня": "Cerrado · ve ingresos del día"
 }

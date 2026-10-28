@@ -263,6 +263,15 @@ describe("подпись раздела в «Доступе»", () => {
     const open = [{ ...closed[0], level: "full" }, { ...closed[1], level: "own" }];
     assert.equal(sectionBrief({ rows: open } as unknown as Parameters<typeof sectionBrief>[0]), "Всё открыто");
   });
+  test("«Финансы» закрыты, но цены записей и доход дня видны — так и сказано", () => {
+    const finance = { area: "finance", rows: [{ block: block("finance.income", ["off", "read", "write", "full"], 103), level: "off" }] };
+    const record = { rows: [{ block: block("record.amount", ["off", "read"], 40), level: "read" }] };
+    const day = { rows: [{ block: block("calendar.day_money", ["off", "read"], 41), level: "read" }] };
+    type Arg = Parameters<typeof sectionBrief>[0];
+    assert.equal(sectionBrief(finance as unknown as Arg, [finance, record, day] as unknown as Arg[]), "Закрыто · видит цены записей и доход дня");
+    assert.equal(sectionBrief(finance as unknown as Arg, [finance, record] as unknown as Arg[]), "Закрыто · видит цены записей");
+    assert.equal(sectionBrief(finance as unknown as Arg, [finance] as unknown as Arg[]), "Всё закрыто");
+  });
   test("всё открыто, но не на высшей ступени — «Всё видит», а не «Всё открыто»", () => {
     const rows = [
       { block: block("finance.income", ["off", "read", "write", "full"], 103), level: "read" },

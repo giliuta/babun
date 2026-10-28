@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Briefcase, ClipboardList, SlidersHorizontal, Wrench } from "lucide-react-native";
 
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { confirmAction } from "@/lib/confirm";
 
 import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import {
@@ -11,16 +12,23 @@ import {
   ROLE_PRESETS,
   matchRole,
   roleAllowed,
+  roleChanges,
   type RoleKey,
+  type RolePart,
   type RolePreset,
 } from "../master-page/role-presets";
 import type { LevelReader } from "../master-page/rights-rows";
 import type { RightLook } from "./right-look";
 
 // СТРОКА «РОЛЬ» — ПЕРВОЙ В БЛОКЕ «ДОСТУП». Тап — шторка готовых ролей; тап
-// по роли ставит все права выбранной команды разом и закрывает шторку
+// по роли ставит все права ВЫБРАННОЙ КОМАНДЫ разом и закрывает шторку
 // (одиночный выбор — без кнопки). Строки разделов под ней показывают уже
 // новые положения; поправил строку руками — здесь «Своя».
+//
+// ПРАВА АККАУНТА — ОТДЕЛЬНЫМ ВОПРОСОМ. Тариф, SMS, история и «Партнёры» одни
+// на все команды человека; роль с чипа одной команды меняла их молча. Если
+// роль ставит их иначе, после шторки спрашиваем словами — и только «Да»
+// меняет аккаунт. Вопрос — когда шторка ушла (`onExited`), а не поверх неё.
 
 const ROLE_LOOK: Record<RoleKey, RightLook> = {
   master: { icon: Wrench, tile: SETTINGS_TILE.teal },
@@ -47,17 +55,32 @@ export function TeamRoleRow({
   /** Ступень, которую может поставить тот, кто выдаёт (директор — не выше
    *  своей); нет — владелец, можно всё. */
   stepAllowed?: (block: AccessBlock, teamId: string | null, level: AccessLevel) => boolean;
-  onApply: (role: RolePreset) => void;
+  onApply: (role: RolePreset, part: RolePart) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const askAccount = useRef<RolePreset | null>(null);
   const current = matchRole(blocks, levelOf, teamId);
   const look = current ? ROLE_LOOK[current] : CUSTOM_LOOK;
   const word = current ? (ROLE_PRESETS.find((role) => role.key === current)?.title ?? "") : CUSTOM_ROLE_WORD;
   // Роль, которую сервер отказал бы целиком (выше прав директора), в шторке
   // не стоит: строки «нельзя» без объяснения не бывает.
   const offered = ROLE_PRESETS.filter(
-    (role) => !stepAllowed || roleAllowed(blocks, role, teamId, levelOf, stepAllowed),
+    (role) => !stepAllowed || roleAllowed(blocks, role, teamId, levelOf, stepAllowed, "team"),
   );
+  const accountDiffers = (role: RolePreset) =>
+    !!roleChanges(blocks, role, teamId, levelOf, "account") &&
+    (!stepAllowed || roleAllowed(blocks, role, teamId, levelOf, stepAllowed, "account"));
+  const afterSheet = () => {
+    const role = askAccount.current;
+    askAccount.current = null;
+    if (!role) return;
+    void confirmAction(`Права аккаунта — как у роли «${role.title}»?`, {
+      message: `Тариф, SMS, история, реквизиты и «Партнёры» — одни на все команды партнёра, не только на «${teamName}».`,
+      confirmLabel: "Поставить",
+    }).then((ok) => {
+      if (ok) onApply(role, "account");
+    });
+  };
   const canPick = !locked && offered.length > 0;
 
   return (
@@ -81,10 +104,12 @@ export function TeamRoleRow({
           color: ROLE_LOOK[role.key].tile,
           hint: role.hint,
           onPress: () => {
-            if (role.key !== current) onApply(role);
+            if (role.key !== current) onApply(role, "team");
+            if (accountDiffers(role)) askAccount.current = role;
           },
         }))}
         onClose={() => setOpen(false)}
+        onExited={afterSheet}
       />
     </>
   );

@@ -160,8 +160,8 @@ function MasterDraftCard({
     initialTeam: teamId,
     rightsHref: `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
     onAdd: () => setCalendarsOpen(true),
-    onApplyRole: (role, team) =>
-      blocks && updateMasterDraft((currentDraft) => draftWithRole(currentDraft, blocks, role, team)),
+    onApplyRole: (role, team, part) =>
+      blocks && updateMasterDraft((currentDraft) => draftWithRole(currentDraft, blocks, role, team, part)),
   });
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и

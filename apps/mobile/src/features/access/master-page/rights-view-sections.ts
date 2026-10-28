@@ -171,14 +171,22 @@ export function teamLevels(
  *  строк самого раздела: «События, метка дня, график команды». Ничего —
  *  «Всё закрыто»; всё на высшей ступени — «Всё открыто», всё, но не на
  *  высшей, — «Всё видит». */
-export function sectionBrief(section: Pick<ViewSection, "rows">): string {
+export function sectionBrief(
+  section: Pick<ViewSection, "rows"> & { area?: ViewSection["area"] },
+  /** Все разделы страницы — для «Финансов»: деньги, открытые в записи. */
+  all: readonly Pick<ViewSection, "rows">[] = [],
+): string {
   // «ОГРАНИЧЕНИЯ» — НЕ ДОСТУП, А СРЕЗ ЧУЖОГО: окно по времени режет записи,
   // деньги или базу, но само ничего не открывает. Посчитанное открытым, оно
   // подписывало «Финансы: Ограничения» человеку, у которого денег нет вовсе.
   const rows = section.rows.filter((row) => !isWindowBlock(row.block));
   // Серая строка (главный блок скрыт) не открыта, что бы в ней ни стояло.
   const open = rows.filter((row) => !row.foldedBy && !isClosedStep(row.level));
-  if (open.length === 0) return "Всё закрыто";
+  if (open.length === 0) {
+    // «ФИНАНСЫ: ВСЁ ЗАКРЫТО» ВРАЛО, когда цены записей и доход дня ему
+    // видны — они живут в разделах календаря и записи, а деньги это те же.
+    return section.area === "finance" ? financeClosedBrief(all) : "Всё закрыто";
+  }
   // «ВСЁ ОТКРЫТО» — ТОЛЬКО НА МАКСИМУМЕ. Раздел, где всё лишь видно, тоже
   // подписывался «Всё открыто», и владелец читал «может всё» про человека,
   // который ничего не меняет.
@@ -199,6 +207,20 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
     return `${titles.slice(0, BRIEF_NAMES).join(", ")} и ещё ${titles.length - BRIEF_NAMES}`;
   }
   return titles.join(", ");
+}
+
+/** «Закрыто», и что из денег он всё же видит вне раздела. */
+function financeClosedBrief(all: readonly Pick<ViewSection, "rows">[]): string {
+  const seen = (key: string) =>
+    all.some((section) =>
+      section.rows.some((row) => row.block.key === key && !row.foldedBy && !isClosedStep(row.level)),
+    );
+  const prices = seen("record.amount");
+  const dayMoney = seen("calendar.day_money");
+  if (prices && dayMoney) return "Закрыто · видит цены записей и доход дня";
+  if (prices) return "Закрыто · видит цены записей";
+  if (dayMoney) return "Закрыто · видит доход дня";
+  return "Всё закрыто";
 }
 
 /** Право-окно («Ограничения»): ступени — сроки, а не «видит / меняет». */

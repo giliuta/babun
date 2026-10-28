@@ -120,8 +120,8 @@ export function MasterInviteCard({
     },
     // Роль уходит целиком приглашением — тем же `update_invitation`, что и
     // строка прав.
-    onApplyRole: (role, team) => {
-      if (draft && blocks) commit(draftWithRole(draft, blocks, role, team));
+    onApplyRole: (role, team, part) => {
+      if (draft && blocks) commit(draftWithRole(draft, blocks, role, team, part));
     },
   });
 

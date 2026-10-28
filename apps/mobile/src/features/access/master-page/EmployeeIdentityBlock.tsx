@@ -99,7 +99,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
   commitOnLeave.current = p.onNameCommit;
   useEffect(() => () => commitOnLeave.current?.(), []);
 
-  // Новый партнёр и ждущее приглашение — только почта: имя и
+  // Новый партнёр и ждущее приглашение — почта и, по желанию, имя;
   // телефон он ведёт сам в своём профиле.
   if (p.emailOnly) {
     return (
@@ -127,6 +127,19 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
             onChangeText={p.onEmailChange ?? noop}
             onBlur={p.onEmailEditEnd}
           />
+          {/* ИМЯ — ПО ЖЕЛАНИЮ, ЕСЛИ ЕГО МОЖНО ВПИСАТЬ. Без имени ждущее
+              приглашение в списке называлось почтой; сервер имя принимает
+              (`p_full_name`). Своё имя партнёр потом ведёт сам в профиле. */}
+          {p.emailEditable && p.onNameChange ? (
+            <Field
+              label=""
+              accessibilityLabel="Имя"
+              placeholder="Имя"
+              value={p.identity.name}
+              autoCapitalize="words"
+              onChangeText={p.onNameChange}
+            />
+          ) : null}
         </View>
       </SectionCard>
     );
