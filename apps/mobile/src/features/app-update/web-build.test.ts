@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { bundleIdOf, dropStaleServiceWorkers, isNewBuild, runningBundleId } from "./web-build";
+import { bundleIdOf, dropStaleServiceWorkers, isNewBuild, runningBundleIds } from "./web-build";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (name: string) => readFileSync(resolve(here, name), "utf8");
@@ -15,21 +15,35 @@ describe("веб: новая сборка сайта — по имени бан�
   test("имя бандла берётся из разметки и из скриптов вкладки", () => {
     assert.equal(bundleIdOf(html("entry-d722eb7f7855366f71aa9a4bbc982f65")), "entry-d722eb7f7855366f71aa9a4bbc982f65");
     assert.equal(bundleIdOf("<html>Ошибка 502</html>"), null);
-    assert.equal(
-      runningBundleId([{ src: "https://babun.app/og.js" }, { src: "https://babun.app/_expo/static/js/web/entry-abc123.js" }]),
-      "entry-abc123",
+    assert.deepEqual(
+      runningBundleIds([{ src: "https://babun.app/og.js" }, { src: "https://babun.app/_expo/static/js/web/entry-abc123.js" }]),
+      ["entry-abc123"],
     );
   });
 
   test("Metro в разработке — бандл без хэша, проверка молчит", () => {
-    assert.equal(runningBundleId([{ src: "http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web" }]), null);
-    assert.equal(isNewBuild(null, "entry-abc"), false);
+    assert.deepEqual(runningBundleIds([{ src: "http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web" }]), []);
+    assert.equal(isNewBuild([], "entry-abc"), false);
   });
 
   test("новая — только другое имя; пустой ответ сети новой версией не считается", () => {
-    assert.equal(isNewBuild("entry-aaa", "entry-bbb"), true);
-    assert.equal(isNewBuild("entry-aaa", "entry-aaa"), false);
-    assert.equal(isNewBuild("entry-aaa", null), false);
+    assert.equal(isNewBuild(["entry-aaa"], "entry-bbb"), true);
+    assert.equal(isNewBuild(["entry-aaa"], "entry-aaa"), false);
+    assert.equal(isNewBuild(["entry-aaa"], null), false);
+  });
+
+  test("словарь языка — свой чанк раньше главного бандла: та же сборка не «новая»", () => {
+    // Чанк словаря встаёт в документ раньше главного скрипта, а async-чанк
+    // маршрута может зваться и `index-…`: вкладка сверяет весь список.
+    const tab = runningBundleIds([
+      { src: "/_expo/static/js/web/en-91b839b4fb75662480cf2786524cb527.js" },
+      { src: "/_expo/static/js/web/index-470e31cfe7c41e0e1057926a13e9a1d9.js" },
+      { src: "/_expo/static/js/web/index-20ebe48e42d9076cef039f58d827e99d.js" },
+    ]);
+    const served = bundleIdOf(html("index-20ebe48e42d9076cef039f58d827e99d"));
+    assert.equal(served, "index-20ebe48e42d9076cef039f58d827e99d");
+    assert.equal(isNewBuild(tab, served), false);
+    assert.equal(isNewBuild(tab, "index-ffffffffffffffffffffffffffffffff"), true);
   });
 
   test("проводка: только веб, сверка при фокусе и по таймеру, перезагрузка лишь по кнопке", () => {

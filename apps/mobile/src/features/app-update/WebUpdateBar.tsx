@@ -7,7 +7,7 @@ import {
   bundleIdOf,
   dropStaleServiceWorkers,
   isNewBuild,
-  runningBundleId,
+  runningBundleIds,
 } from "./web-build";
 
 // «ДОСТУПНА НОВАЯ ВЕРСИЯ» В ВЕБЕ. Правило — `web-build.ts`. Сверка — при
@@ -19,8 +19,8 @@ function useNewWebBuild(): boolean {
   const [fresh, setFresh] = useState(false);
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    const running = runningBundleId(document.scripts);
-    if (!running) return;
+    const running = runningBundleIds(document.scripts);
+    if (running.length === 0) return;
     let alive = true;
     const check = () => {
       if (document.visibilityState === "hidden") return;

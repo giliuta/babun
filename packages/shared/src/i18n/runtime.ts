@@ -12,39 +12,22 @@ import { createElement, Fragment, type ReactNode } from "react";
 
 import { uiIntlTag, uiLocale } from "./locale";
 import type { UiLocale } from "./locales";
+import { loadDictionary, type Dictionary } from "./dict-source";
 
-type Dictionary = Readonly<Record<string, string>>;
+// Where dictionaries live: `dict-source.ts` (the phone — all in the bundle)
+// and `dict-source.web.ts` (the site — the active one as its own chunk,
+// fetched before the app starts).
+export { preloadDictionary } from "./dict-source";
 
 let dictionary: Dictionary | null = null;
 let loadedFor: UiLocale | null = null;
-
- 
-function load(code: UiLocale): Dictionary | null {
-  switch (code) {
-    case "en":
-      return require("./dict/en.json") as Dictionary;
-    case "bg":
-      return require("./dict/bg.json") as Dictionary;
-    case "el":
-      return require("./dict/el.json") as Dictionary;
-    case "uk":
-      return require("./dict/uk.json") as Dictionary;
-    case "de":
-      return require("./dict/de.json") as Dictionary;
-    case "es":
-      return require("./dict/es.json") as Dictionary;
-    case "ru":
-      return null;
-  }
-}
- 
 
 function active(): Dictionary | null {
   const code = uiLocale();
   if (code !== loadedFor) {
     loadedFor = code;
     try {
-      dictionary = load(code);
+      dictionary = loadDictionary(code);
     } catch {
       dictionary = null;
     }

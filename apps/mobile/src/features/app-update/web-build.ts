@@ -6,12 +6,19 @@
 // уже заменили, — без меню «…» в записи и без исправлений.
 //
 // Версия у веб-сборки уже есть, сервер не нужен: Expo кладёт бандл под
-// именем с хэшем содержимого (`/_expo/static/js/web/entry-<хэш>.js`), и
-// `index.html` ссылается ровно на него. Новый выпуск — новое имя в свежем
-// `index.html`. Сверяем имя, на котором работает вкладка, с тем, что сайт
-// отдаёт сейчас.
+// именем с хэшем содержимого (`/_expo/static/js/web/index-<хэш>.js`, у
+// сборки со входом `expo-router/entry` — `entry-<хэш>.js`), и `index.html`
+// ссылается ровно на него. Новый выпуск — новое имя в свежем `index.html`.
+// Сверяем: есть ли бандл, который сайт отдаёт сейчас, среди скриптов вкладки.
+//
+// ВКЛАДКА ГРУЗИТ НЕ ОДИН СКРИПТ. Словарь языка приходит отдельным чанком с
+// тем же видом имени (`en-<хэш>.js`, а чанк может зваться и `index-…`), и
+// встаёт в документ раньше главного. Поэтому вкладка отвечает не «своим
+// именем», а списком: новая сборка — та, чьего бандла в списке нет. Чанки
+// словарей названы по содержимому, и их адреса вшиты в главный бандл: правка
+// словаря меняет и его имя.
 
-const BUNDLE = /\/_expo\/static\/js\/web\/(entry-[0-9a-f]+)\.js/;
+const BUNDLE = /\/_expo\/static\/js\/web\/((?:entry|index)-[0-9a-f]+)\.js/;
 
 /** Сколько ждать между проверками, пока вкладка открыта. */
 export const WEB_BUILD_CHECK_MS = 10 * 60 * 1000;
@@ -21,25 +28,26 @@ export function bundleIdOf(html: string): string | null {
   return BUNDLE.exec(html)?.[1] ?? null;
 }
 
-/** Имя бандла, на котором работает эта вкладка. В разработке (Metro)
- *  бандл зовётся иначе — тогда `null`, и проверка молчит. */
-export function runningBundleId(scripts: ArrayLike<{ src: string }>): string | null {
+/** Бандлы, которые загрузила эта вкладка. В разработке (Metro) бандл
+ *  зовётся иначе — тогда список пуст, и проверка молчит. */
+export function runningBundleIds(scripts: ArrayLike<{ src: string }>): string[] {
+  const ids: string[] = [];
   for (let i = 0; i < scripts.length; i += 1) {
     const id = bundleIdOf(scripts[i]?.src ?? "");
-    if (id) return id;
+    if (id) ids.push(id);
   }
-  return null;
+  return ids;
 }
 
 /** Вышла ли новая сборка. Пустой ответ (сеть, страница ошибки) — не
  *  новая: плашка о несуществующей версии хуже молчания. */
-export function isNewBuild(running: string | null, served: string | null): boolean {
-  return running !== null && served !== null && served !== running;
+export function isNewBuild(running: readonly string[], served: string | null): boolean {
+  return running.length > 0 && served !== null && !running.includes(served);
 }
 
 /** Что нужно от `navigator.serviceWorker` и `caches` — в тесте подделки. */
 interface WorkerRegistry {
-  getRegistrations(): Promise<ReadonlyArray<{ unregister(): Promise<boolean> }>>;
+  getRegistrations(): Promise<readonly { unregister(): Promise<boolean> }[]>;
 }
 interface CacheStore {
   keys(): Promise<string[]>;
