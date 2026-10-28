@@ -8,6 +8,8 @@ import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { SELECT_SHEET_RATIO, SelectList, SelectRow } from "@/components/ui/select-rows";
 import type { Team } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
+import { useCalendarVisibility } from "@/session/workspaces";
+import { useTeamName } from "@/session/team-name";
 
 // КАЛЕНДАРИ МАСТЕРА — ШТОРКА ВЫБОРА ПО КАНОНУ (`select-rows`), как теги у
 // клиента: календарей может быть несколько, поэтому тап отмечает строку, а
@@ -31,6 +33,12 @@ export function CalendarPickerSheet({
   /** Лист уехал и его окно снято — отсюда можно поднимать следующий. */
   onExited?: () => void;
 }) {
+  // СКРЫТЫЙ КАЛЕНДАРЬ ВЛАДЕЛЬЦА («My») В ВЫБОРЕ НЕ СТОИТ: человек его нигде,
+  // кроме шестерёнки, не видит. Уже выбранный остаётся — снять его можно.
+  const { isHidden } = useCalendarVisibility();
+  // Команда, названная почтой, — именем, как в ленте календаря.
+  const teamName = useTeamName();
+  const shown = teams.filter((team) => !isHidden(team.tenant_id, team.id) || selected.includes(team.id));
   return (
     <BottomSheet
       visible={visible}
@@ -48,12 +56,12 @@ export function CalendarPickerSheet({
       }
     >
       <SelectList>
-        {teams.length > 0 ? (
-          teams.map((team) => (
+        {shown.length > 0 ? (
+          shown.map((team) => (
             <SelectRow
               key={team.id}
               icon={CalendarRange}
-              title={team.name}
+              title={teamName(team.name)}
               color={team.color ?? undefined}
               selected={selected.includes(team.id)}
               accessibilityRole="checkbox"

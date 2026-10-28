@@ -5192,5 +5192,8 @@
  "Поставить": "Aplicar",
  "Закрыто · видит цены записей и доход дня": "Cerrado · ve precios de citas e ingresos del día",
  "Закрыто · видит цены записей": "Cerrado · ve precios de citas",
- "Закрыто · видит доход дня": "Cerrado · ve ingresos del día"
+ "Закрыто · видит доход дня": "Cerrado · ve ingresos del día",
+ "Работа · {0}": "Trabajo · {0}",
+ "{0} · получено {1}": "{0} · cobrado {1}",
+ "Получено": "Cobrado"
 }

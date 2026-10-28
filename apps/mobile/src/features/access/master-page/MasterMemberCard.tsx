@@ -370,7 +370,15 @@ export function MasterMemberCard({
       >
         {card ? (
           <>
-            <MasterWorkBlock card={card} teamIds={draft.teamIds} userId={userId} />
+            {/* «РАБОТА» — ПО ЧИПУ: лента команд сверху выбирает команду, и
+                блок считает её, а не сумму всех его команд одинаково на любом
+                чипе. */}
+            <MasterWorkBlock
+              card={card}
+              teamIds={activeId ? [activeId] : draft.teamIds}
+              teamName={activeId && draft.teamIds.length > 1 ? teamNameOf(activeId) : null}
+              userId={userId}
+            />
             {/* Журнала «Номера клиентов» нет: номер приходит целиком с блоком
                 «Клиент», открытий по одному не бывает. */}
             <PartnerPersonalBlocks card={card} joinedAt={member?.joinedAt ?? null} readOnly={!!manager.readOnly} />

@@ -5192,5 +5192,8 @@
  "Поставить": "Set",
  "Закрыто · видит цены записей и доход дня": "Closed · sees appointment prices and day income",
  "Закрыто · видит цены записей": "Closed · sees appointment prices",
- "Закрыто · видит доход дня": "Closed · sees day income"
+ "Закрыто · видит доход дня": "Closed · sees day income",
+ "Работа · {0}": "Work · {0}",
+ "{0} · получено {1}": "{0} · received {1}",
+ "Получено": "Received"
 }

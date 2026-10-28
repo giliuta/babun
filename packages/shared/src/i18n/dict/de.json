@@ -5192,5 +5192,8 @@
  "Поставить": "Festlegen",
  "Закрыто · видит цены записей и доход дня": "Gesperrt · sieht Terminpreise und Tageseinnahmen",
  "Закрыто · видит цены записей": "Gesperrt · sieht Terminpreise",
- "Закрыто · видит доход дня": "Gesperrt · sieht Tageseinnahmen"
+ "Закрыто · видит доход дня": "Gesperrt · sieht Tageseinnahmen",
+ "Работа · {0}": "Arbeit · {0}",
+ "{0} · получено {1}": "{0} · erhalten {1}",
+ "Получено": "Erhalten"
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Briefcase, ClipboardList, SlidersHorizontal, Wrench } from "lucide-react-native";
 
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -28,7 +28,8 @@ import type { RightLook } from "./right-look";
 // ПРАВА АККАУНТА — ОТДЕЛЬНЫМ ВОПРОСОМ. Тариф, SMS, история и «Партнёры» одни
 // на все команды человека; роль с чипа одной команды меняла их молча. Если
 // роль ставит их иначе, после шторки спрашиваем словами — и только «Да»
-// меняет аккаунт. Вопрос — когда шторка ушла (`onExited`), а не поверх неё.
+// меняет аккаунт. Действие строки `PickerSheet` и так выполняет, когда
+// шторка уже ушла, — вопрос не ложится поверх неё.
 
 const ROLE_LOOK: Record<RoleKey, RightLook> = {
   master: { icon: Wrench, tile: SETTINGS_TILE.teal },
@@ -58,7 +59,6 @@ export function TeamRoleRow({
   onApply: (role: RolePreset, part: RolePart) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const askAccount = useRef<RolePreset | null>(null);
   const current = matchRole(blocks, levelOf, teamId);
   const look = current ? ROLE_LOOK[current] : CUSTOM_LOOK;
   const word = current ? (ROLE_PRESETS.find((role) => role.key === current)?.title ?? "") : CUSTOM_ROLE_WORD;
@@ -70,10 +70,7 @@ export function TeamRoleRow({
   const accountDiffers = (role: RolePreset) =>
     !!roleChanges(blocks, role, teamId, levelOf, "account") &&
     (!stepAllowed || roleAllowed(blocks, role, teamId, levelOf, stepAllowed, "account"));
-  const afterSheet = () => {
-    const role = askAccount.current;
-    askAccount.current = null;
-    if (!role) return;
+  const askAccount = (role: RolePreset) => {
     void confirmAction(`Права аккаунта — как у роли «${role.title}»?`, {
       message: `Тариф, SMS, история, реквизиты и «Партнёры» — одни на все команды партнёра, не только на «${teamName}».`,
       confirmLabel: "Поставить",
@@ -105,11 +102,10 @@ export function TeamRoleRow({
           hint: role.hint,
           onPress: () => {
             if (role.key !== current) onApply(role, "team");
-            if (accountDiffers(role)) askAccount.current = role;
+            if (accountDiffers(role)) askAccount(role);
           },
         }))}
         onClose={() => setOpen(false)}
-        onExited={afterSheet}
       />
     </>
   );
