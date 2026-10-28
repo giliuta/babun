@@ -10,10 +10,13 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");
 
-test("строки дня рисует SelectRow, своей геометрии 56pt и суммы 16pt нет", () => {
+test("операция дня — RecordRowView ленты, запись — плашка SelectRow с подписью whatLine", () => {
+  const list = read("DayList.tsx");
+  assert.match(list, /<RecordRowView key=\{key\} row=\{\{ \.\.\.row, key \}\} tone=\{dayTxTone\(tx\)\}/);
+  assert.doesNotMatch(list, /<TxRow/);
   const rows = read("rows.tsx");
-  assert.match(rows, /import \{ SelectRow \} from "@\/components\/ui\/select-rows";/);
-  assert.equal((rows.match(/<SelectRow/g) ?? []).length, 2);
+  assert.match(rows, /const what = whatLine\(\{ time, services \}\);/);
+  assert.equal((rows.match(/<SelectRow/g) ?? []).length, 1);
   assert.doesNotMatch(rows, /minHeight: 56/);
   assert.doesNotMatch(rows, /fontSize: 16/);
 });
