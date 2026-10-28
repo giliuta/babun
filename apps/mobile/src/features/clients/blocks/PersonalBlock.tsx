@@ -38,6 +38,7 @@ import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
+import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 
 /** Значок источника: у засеянного готового — его, у своего — общий. */
 function sourceIconOf(row: ClientSource) {
@@ -70,7 +71,13 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
   const sourceRow = resolveSource(client.acquisition_source, sources, sourceTeamId);
   // Готовый источник («Рекомендация») — на языке интерфейса, свой — как назван.
   const source = sourceRow ? sourceDisplayName(sourceRow) : null;
-  const sourceOptions = sourcePickerOptions(sources, sourceTeamId);
+  // Календарь в архиве никого не обслуживает — его источники не предлагаются
+  // (`serving-teams.ts`); уже выбранный остаётся подписью.
+  const archivedTeamIds = useArchivedTeamIds();
+  const sourceOptions =
+    sourceTeamId && archivedTeamIds.has(sourceTeamId)
+      ? []
+      : sourcePickerOptions(sources, sourceTeamId);
   const sourcesDoor = useClientSettingsDoor("sources", sourceTeamId);
   // «Кто привёл»: список — сами клиенты компании, тот же кеш, что у списка.
   const { data: allClients = [] } = useClients();

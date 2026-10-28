@@ -107,3 +107,15 @@ describe("фильтры списка и пачка — календари ле�
     assert.match(read("list/use-list-bulk-edit.ts"), /fallbackTeam, archivedTeamIds\)/);
   });
 });
+
+describe("источник и тип объекта — без календарей в архиве", () => {
+  test("источник клиента архивной команды не предлагается", () => {
+    const src = read("blocks/PersonalBlock.tsx");
+    assert.match(src, /sourceTeamId && archivedTeamIds\.has\(sourceTeamId\)\s*\?\s*\[\]\s*:\s*sourcePickerOptions\(sources, sourceTeamId\)/);
+  });
+  test("типы объекта архивной команды не предлагаются", () => {
+    const src = read("ObjectFields.tsx");
+    assert.match(src, /teamId && archivedTeamIds\.has\(teamId\)\s*\?\s*\[\]/);
+    assert.match(src, /!preset\.teamId \|\| !archivedTeamIds\.has\(preset\.teamId\)/);
+  });
+});
