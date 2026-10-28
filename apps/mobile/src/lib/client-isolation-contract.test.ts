@@ -94,3 +94,12 @@ describe("client page money and the label view", () => {
     assert.match(sql, /revoke insert, update, delete, truncate, references, trigger on public\.cities_live from authenticated, service_role;/);
   });
 });
+
+describe("a client lives in a live team", () => {
+  test("moving or creating a client in an archived team is refused", () => {
+    const sql = code(migration("20261028220100_client_team_must_be_active.sql"));
+    assert.equal(sql.split("hint = ''client:team_inactive''").length - 1, 2);
+    assert.match(sql, /\(tg_op = ''INSERT'' or new\.team_id is distinct from old\.team_id\)/);
+    assert.match(sql, /before insert or update of tenant_id, team_id, referred_by_client_id, favorite_master_id, city, acquisition_source, locations/);
+  });
+});
