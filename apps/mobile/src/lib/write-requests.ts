@@ -24,6 +24,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "access_company",
   "account_balances",
   "appointment_link_lookup",
+  // Отпечаток записей по месяцам для сверки календаря (20261028180000): `stable`.
+  "appointment_month_digest",
   // Оплаты тарифа в Кабинете (20261004085616): `stable`.
   "cabinet_tariff_payments",
   // Сводка «есть ли работа» по командам для «Тарифа» (20261028154000): `stable`.

@@ -60,6 +60,7 @@ export {
   subscribeRevalidated,
   cacheSignature,
 } from "./revalidate-events";
+export { forgetSettledRevalidations } from "./revalidator";
 
 export {
   startRealtimeTenantSync,

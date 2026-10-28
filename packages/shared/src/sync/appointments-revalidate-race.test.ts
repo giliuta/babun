@@ -23,6 +23,7 @@ import {
 } from "../db/cache/sql";
 import { cacheServerAppointment, listAppointments } from "./appointmentsCached";
 import { createBlankAppointment } from "../local/appointments";
+import { forgetSettledRevalidations } from "./revalidator";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const APPT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -79,6 +80,8 @@ beforeEach(() => {
   setSql(new MemorySqlAdapter(new Database(":memory:")));
   setNetwork(new OnlineNetwork());
   __resetCacheForTests();
+  // Разовый пропуск эха сверки (`revalidator.ts`) не переносится между тестами.
+  forgetSettledRevalidations();
 });
 afterEach(() => {
   __resetCacheForTests();

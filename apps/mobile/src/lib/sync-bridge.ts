@@ -28,6 +28,7 @@ import { AppState } from "react-native";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CachedTable } from "@babun/shared/db/cache";
 import {
+  forgetSettledRevalidations,
   subscribeRevalidated,
   startCalendarSignals,
   startRealtimeTenantSync,
@@ -142,9 +143,15 @@ export function startSyncBridge(
           if (change?.id) checkAfterOwnWindow(qc, change.id, () => !disposed);
           return;
         }
+        // Чужая правка: перечитка после неё обязана идти в сеть, даже если
+        // только что была сверка (`revalidator.ts`, разовый пропуск эха).
+        forgetSettledRevalidations(table);
         invalidate(qc, table);
       },
-      onResync: (table) => invalidate(qc, table),
+      onResync: (table) => {
+        forgetSettledRevalidations(table);
+        invalidate(qc, table);
+      },
     });
     // 3. Claim caught up — realtime of this tenant was blind until now and a
     // token push does not rejoin channels, so no resync fires. Re-read ONLY
