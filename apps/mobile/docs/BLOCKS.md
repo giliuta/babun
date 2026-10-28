@@ -42,10 +42,10 @@
 | Боковое поле блока | **16** (`GUTTER`) | `src/components/ui/SectionCard.tsx` |
 | Промежуток между блоками | **8** (`mt-2`) | `src/components/ui/SectionCard.tsx` |
 | Радиус блока и любой поверхности | **10** (`t.radius.card`) | `src/theme/colors.ts` |
-| Подпись блока: слева | **16** (`px-4`) | `src/components/ui/SectionCard.tsx:58` |
+| Подпись блока: слева | **16** (`px-4`) | `src/components/ui/SectionCard.tsx` |
 | Подпись блока: сверху / снизу | **10** / **2** (`pt-2.5` / `pb-0.5`) | там же |
-| Подпись блока: кегль | **11 / 700**, трекинг **+0.6**, UPPERCASE, цвет `faint` | `src/components/ui/SectionCard.tsx:64` |
-| Команда блока (иконка справа) | абсолютом `right: 16`, `top: 6` (в плотной шапке **2**), между иконками **16**, `hitSlop 12`, размер **18** (`ICON.sm`); серая, а действие над содержимым (`accent`, адрес объекта) — акцентом | `src/components/ui/SectionCard.tsx:82` |
+| Подпись блока: кегль | **11 / 700**, трекинг **+0.6**, UPPERCASE, цвет `faint` | `src/components/ui/SectionCard.tsx` |
+| Команда блока (иконка справа) | абсолютом `right: 16`, `top: 7` (в плотной шапке **3**), между иконками **16**, `hitSlop 12`, размер **18** (`ICON.command`, тот же, что у команды в шапке шторки); серая, а действие над содержимым (`accent`, адрес объекта) — акцентом | `src/components/ui/SectionCard.tsx` |
 | Тело блока с `padded` | **16** по краям, **8** сверху (`p-4 pt-2`) | `src/components/ui/SectionCard.tsx` |
 | **Плотный случай** — форма в ШТОРКЕ (`dense` у `SectionCard`, `compact` у `ChooseRow`) | промежуток **6** (`mt-1.5`), подпись **6** сверху / **0** снизу, дверь `py-2`, кружок **30pt** | вторая сессия 2026-09-10 |
 

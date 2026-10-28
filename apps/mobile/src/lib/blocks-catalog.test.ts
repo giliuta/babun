@@ -150,7 +150,8 @@ describe("библиотека блоков указывает на живой �
     assert.match(card, /position: "absolute"/, "команда блока вернулась в поток");
     assert.match(card, /right: 16/);
     // В плотной шапке (форма в шторке) подпись на 4 выше — и команда тоже.
-    assert.match(card, /top: dense \? 2 : 6/);
+    assert.match(card, /top: dense \? 3 : 7/);
+    assert.match(card, /size=\{ICON\.command\}/, "команда блока больше не ICON.command");
     assert.match(card, /gap: 16/);
     assert.match(card, /className="p-4 pt-2"/, "внутренние отступы тела блока поехали");
 
