@@ -137,6 +137,10 @@ const DISCLOSURES = "20261027225327_client_list_disclosure_journal.sql";
 // МЁРТВЫЕ ВЕТКИ: «правка клиента целиком» — только владелец (у блока «Клиенты»
 // нет ступени «Меняет»), ветка «номер в день записи» снята со всех дверей.
 const DEAD_BRANCHES = "20261028101000_dead_rights_branches_removed.sql";
+
+// ОДНА ПОЛИТИКА НА ДЕЙСТВИЕ: разрешающие политики таблицы слиты в `<таблица>_<действие>`
+// дословным OR прежних условий — правила прав теперь читаются там.
+const MERGED_POLICIES = "20261028101100_permissive_policies_merged.sql";
 const disclosures = norm(readFileSync(join(MIGRATIONS_DIR, DISCLOSURES), "utf8"));
 
 // НОМЕР — СРАЗУ: «Клиент: Видит» отдаёт контакты целиком,
@@ -321,15 +325,21 @@ describe("сервер: клиенты по уровням", () => {
 
   test("«Источники» шестерёнки правятся своим правом, а не правом тегов (03.10)", () => {
     const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
-    const touching = files.filter((name) =>
-      readFileSync(join(MIGRATIONS_DIR, name), "utf8").includes("client_sources_write_settings"),
-    );
+    const touching = files.filter((name) => {
+      const sql = readFileSync(join(MIGRATIONS_DIR, name), "utf8");
+      return sql.includes("client_sources_write_settings") || sql.includes("policy client_sources_");
+    });
     const last = touching[touching.length - 1];
-    assert.equal(last, "20261003154100_clients_settings_rights_like_gear.sql", "политику источников переписали позже");
-    const gear = norm(readFileSync(join(MIGRATIONS_DIR, last), "utf8"));
-    const policy = gear.slice(gear.indexOf("alter policy client_sources_write_settings"));
-    assert.equal(policy.split("access_calendars('clients.settings_sources', 'write')").length - 1, 2);
-    assert.ok(!policy.includes("settings_tags"), "источники снова правятся правом тегов");
+    assert.equal(last, MERGED_POLICIES, "политики источников переписали позже");
+    const merged = norm(readFileSync(join(MIGRATIONS_DIR, last), "utf8"));
+    for (const [cmd, uses] of [["insert", 1], ["update", 2], ["delete", 1]] as const) {
+      const start = merged.indexOf(`create policy client_sources_${cmd} on public.client_sources`);
+      assert.ok(start >= 0, `нет client_sources_${cmd}`);
+      const policy = merged.slice(start, merged.indexOf(";", start));
+      assert.equal(policy.split("access_calendars('clients.settings_sources'::text, 'write'::text)").length - 1, uses, cmd);
+      assert.ok(!policy.includes("settings_tags"), "источники снова правятся правом тегов");
+    }
+    const gear = norm(readFileSync(join(MIGRATIONS_DIR, "20261003154100_clients_settings_rights_like_gear.sql"), "utf8"));
     assert.ok(gear.includes("'clients.settings_sources', 'clients', 'calendar', array['off', 'read', 'write'], 'Источники'"));
   });
 
