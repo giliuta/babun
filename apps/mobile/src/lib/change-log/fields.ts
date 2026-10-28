@@ -35,6 +35,21 @@ function visitStatusChange(field: string, change: unknown): string | null | unde
   return undefined;
 }
 
+/** МАТЕРИАЛЫ ЗАПИСИ СТАВИТ СЕРВЕР, НЕ ЧЕЛОВЕК. `material_lines` — снимок
+ *  материалов услуг по ценам дня закрытия: триггер
+ *  `freeze_appointment_materials` заполняет его, когда визит закрывается
+ *  (в том числе оплатой), и пересобирает при смене услуг, а присланное
+ *  приложением отбрасывает. Человек его не правит — его правку видно по
+ *  «Услугам» или по оплате, а строка «Материалы» у оплаты читалась как
+ *  изменение, которого никто не делал. Журнал о нём молчит, как о статусе
+ *  визита: не словом и не «служебным полем». */
+const SERVER_FIELDS = new Set(["material_lines"]);
+
+/** Поле, о котором журнал молчит совсем. */
+function silent(field: string, change: unknown): boolean {
+  return SERVER_FIELDS.has(field) || visitStatusChange(field, change) === null;
+}
+
 function fieldValue(field: string, value: unknown): string | null {
   if (value === null || value === undefined || value === "") return "—";
   if (field.endsWith("_id") || (field.endsWith("_at") && field !== "reminder_at")) return null;
@@ -58,6 +73,7 @@ function fieldValue(field: string, value: unknown): string | null {
 
 /** Одно поле правки словами: «Начало 09:30 → 10:00», «Услуги». */
 export function describeField(field: string, change: unknown): string | null {
+  if (SERVER_FIELDS.has(field)) return null;
   const visit = visitStatusChange(field, change);
   if (visit !== undefined) return visit;
   const word = FIELD_WORDS[field];
@@ -81,7 +97,7 @@ export function changesSummary(changes: Record<string, unknown> | null): string 
   const byWord = new Map<string, string>();
   let unknown = 0;
   for (const [field, change] of Object.entries(changes)) {
-    if (visitStatusChange(field, change) === null) continue;
+    if (silent(field, change)) continue;
     const text = describeField(field, change);
     if (!text) {
       unknown += 1;
@@ -133,7 +149,7 @@ export function allChanges(changes: Record<string, unknown> | null): string[] {
   const byWord = new Map<string, string>();
   let unknown = 0;
   for (const [field, change] of Object.entries(changes)) {
-    if (visitStatusChange(field, change) === null) continue;
+    if (silent(field, change)) continue;
     const text = describeField(field, change);
     if (!text) {
       unknown += 1;
