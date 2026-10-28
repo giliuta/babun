@@ -640,7 +640,8 @@ When element context arrives from the browser bridge:
 1. Always read the linked component file fully before editing
 2. Respect existing patterns:
    - Colours come from `apps/mobile/docs/DESIGN-SYSTEM.md` and the tokens in
-     `apps/mobile/global.css` (brand `#2c5be0`) — never hardcode a new hue
+     `apps/mobile/src/theme/colors.ts` (`useThemeColors()`, brand `#2c5be0`;
+     `global.css` only mirrors it for classes) — never hardcode a new hue
    - Components max 400 lines, split if needed
    - RU strings in UI, EN names; comments explain why, never history (rule 8)
    - TypeScript strict, no `any`
