@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryKVStorage, setStorage } from "@babun/shared/storage";
 import { CHROME_STORAGE_KEY } from "./chrome-cache";
+import { CALENDAR_REFS_STORAGE_KEY } from "./calendar-refs-cache";
 import { readModuleSource } from "./module-source";
 
 import {
@@ -53,6 +54,8 @@ describe("настройки, помнящиеся по компании", () =>
     assert.ok(isTenantScopedKey("babun:transfer:last:acc-1"));
     // Шапка без сервера — тоже человека: в ней все его компании.
     assert.ok(isTenantScopedKey(CHROME_STORAGE_KEY));
+    // Справочники календаря без сервера — так же: компания в каждом ключе.
+    assert.ok(isTenantScopedKey(CALENDAR_REFS_STORAGE_KEY));
   });
 
   test("ЧИСТКА ВЖИВУЮ: переход бережёт настройку компании, выход из аккаунта — нет", () => {
@@ -73,6 +76,7 @@ describe("настройки, помнящиеся по компании", () =>
       storage.set(`babun-contact-ways:${TENANT}`, ["call"]);
       storage.set("calendar.view", { mode: "week" });
       storage.set("babun-chats", ["чужое"]);
+      storage.set(CALENDAR_REFS_STORAGE_KEY, { services: "запас" });
       storage.setRaw("babun:auth:last-user-id", "user-1");
 
       for (const key of storage.list()) {
@@ -92,6 +96,7 @@ describe("настройки, помнящиеся по компании", () =>
       "настройка, называющая компанию, обязана пережить переход",
     );
     assert.deepEqual(afterSwitch.get(`babun-contact-ways:${TENANT}`), ["call"]);
+    assert.deepEqual(afterSwitch.get(CALENDAR_REFS_STORAGE_KEY), { services: "запас" });
     // А безымянные — уходят, иначе они будут прочитаны как настройка новой.
     assert.equal(afterSwitch.get("calendar.view"), null);
     assert.equal(afterSwitch.get("babun-chats"), null);
@@ -101,6 +106,11 @@ describe("настройки, помнящиеся по компании", () =>
     const afterSignOut = sweep(false);
     assert.equal(afterSignOut.get(tenantPrefKey("calendar.view", TENANT)), null);
     assert.equal(afterSignOut.get(`babun-contact-ways:${TENANT}`), null);
+    assert.equal(
+      afterSignOut.get(CALENDAR_REFS_STORAGE_KEY),
+      null,
+      "справочники прежнего человека не переживают выход и вход другим",
+    );
     assert.equal(
       afterSignOut.getRaw("babun:auth:last-user-id"),
       "user-1",

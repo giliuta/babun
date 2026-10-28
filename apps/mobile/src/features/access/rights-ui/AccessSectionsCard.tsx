@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -18,13 +18,22 @@ const ROW_SEAM_INSET = 48;
 export function AccessSectionsCard({
   sections,
   onOpen,
+  role,
 }: {
   sections: readonly ViewSection[];
   onOpen: (section: ViewSection) => void;
+  /** Строка «Роль» — над разделами (`TeamRoleRow`). */
+  role?: ReactNode;
 }) {
   if (sections.length === 0) return null;
   return (
     <SectionCard title="Доступ" padded={false}>
+      {role ? (
+        <>
+          {role}
+          <Divider inset={ROW_SEAM_INSET} />
+        </>
+      ) : null}
       {sections.map((section, i) => {
         const look = sectionLook(section.key);
         return (
