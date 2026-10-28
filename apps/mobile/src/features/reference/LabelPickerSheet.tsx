@@ -101,7 +101,7 @@ export function LabelPickerSheet({
             );
           })
         ) : (
-          <EmptyState title="У команды пока нет меток" />
+          <EmptyState title="Меток пока нет" />
         )}
       </SelectList>
     </BottomSheet>

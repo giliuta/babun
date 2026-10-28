@@ -4321,6 +4321,8 @@
  "Удалённый клиент": "Deleted client",
  "Удалённый счёт лежит здесь, пока его не вернут или не удалят насовсем": "A deleted account stays here until it is restored or deleted for good",
  "Удалённый счёт сначала восстановите": "Restore the deleted account first",
+ "Удалённых записей нет": "No deleted appointments",
+ "Удалённых клиентов нет": "No deleted clients",
  "Удалённых операций нет": "No deleted transactions",
  "Удалённых счетов нет": "No deleted accounts",
  "Удерживайте и тяните, чтобы изменить порядок": "Hold and drag to reorder",

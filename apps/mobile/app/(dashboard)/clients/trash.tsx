@@ -72,12 +72,8 @@ function ClientTrashScreen() {
       // «30 дней»; строка тратила два места на одну мысль.
       caption={(c) => DeletedOn(c.deleted_at)}
       trailing={(c) => <DaysLeft purgeAt={c.purge_at} />}
-      empty={{
-        icon: <Trash2 color={t.faint} size={40} strokeWidth={1.5} />,
-        title: "Пусто",
-        subtitle:
-          "Удалённые клиенты лежат здесь — отсюда их можно вернуть. Без записей и денег клиент стирается через 30 дней.",
-      }}
+      // Пустое не объясняет: одна формула на все корзины — «Удалённых N нет».
+      empty={{ title: "Удалённых клиентов нет" }}
       actions={(client) => [
         {
           id: "restore",

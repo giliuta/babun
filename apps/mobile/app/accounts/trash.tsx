@@ -104,11 +104,9 @@ export default function AccountsTrashRoute() {
           <EmptyState state="loading" fill title="Загружаем счета" />
         )
       ) : rows.length === 0 ? (
-        <EmptyState
-          fill
-          title="Удалённых счетов нет"
-          subtitle="Удалённый счёт лежит здесь, пока его не вернут или не удалят насовсем"
-        />
+        // Пустое не объясняет (DESIGN-SYSTEM, LOCKED 08-27): одна формула
+        // на все корзины — «Удалённых N нет».
+        <EmptyState fill title="Удалённых счетов нет" />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}>
           <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>

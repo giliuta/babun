@@ -139,7 +139,7 @@ export function TagPickerSheet({
             />
           ))
         ) : (
-          <EmptyState title="В каталоге пока нет тегов" />
+          <EmptyState title="Тегов пока нет" />
         )}
       </SelectList>
     </BottomSheet>

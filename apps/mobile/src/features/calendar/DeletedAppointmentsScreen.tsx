@@ -185,7 +185,7 @@ export function DeletedAppointmentsScreen() {
           <EmptyState state="loading" fill />
         )
       ) : rows.length === 0 ? (
-        <EmptyState fill title="Пусто" />
+        <EmptyState fill title="Удалённых записей нет" />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {days.map(([day, items]) => (
