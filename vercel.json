@@ -12,7 +12,7 @@
   },
   "rewrites": [
     {
-      "source": "/((?!_expo/|assets/|icons/|\\.well-known/|favicon|apple-touch-icon|manifest.json|metadata.json|og-image.png).*)",
+      "source": "/((?!_expo/|assets/|icons/|\\.well-known/|favicon|apple-touch-icon|manifest.json|metadata.json|og-image.png|sw.js).*)",
       "destination": "/index.html"
     }
   ],
@@ -32,6 +32,13 @@
     {
       "source": "/index.html",
       "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
       ]
     }
