@@ -97,7 +97,7 @@ describe("повторный аудит календаря 03.10", () => {
     const src = screen();
     assert.doesNotMatch(src, /CANCEL_REASONS|"Причина отмены"|cancelWithReason/);
     assert.match(src, /if \(!holdsMoney\(apt\)\) \{\s*setCancelled\(apt, true\);/);
-    assert.match(src, /confirmAction\("Отменить визит с оплатой\?"/);
+    assert.match(src, /confirmAction\("Отменить запись с оплатой\?"/);
     assert.match(src, /const undoable = to !== "cancelled" \|\| !holdsMoney\(apt\);/);
   });
   test("отменённую восстанавливают всегда; с возвращённой оплатой — с вопросом", () => {

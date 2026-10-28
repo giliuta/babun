@@ -101,7 +101,7 @@ export function useRecordMenu({
       list.push(
         apt.status === "cancelled"
           ? { label: "Восстановить", run: () => lifecycle.restoreCancelled(apt) }
-          : { label: "Отменить визит", run: () => lifecycle.cancelVisit(apt) },
+          : { label: "Отменить запись", run: () => lifecycle.cancelVisit(apt) },
       );
     // Запись с деньгами не удаляется (правило сервера) — пункта нет вовсе.
     if (mutable && lifecycle.canDelete(apt))

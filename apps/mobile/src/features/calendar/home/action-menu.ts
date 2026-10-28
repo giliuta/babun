@@ -144,7 +144,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
         items.push(
           apt.status === "cancelled"
             ? { label: "Восстановить", run: () => restoreCancelled(apt) }
-            : { label: "Отменить визит", run: () => cancelVisit(apt) },
+            : { label: "Отменить запись", run: () => cancelVisit(apt) },
         );
       // Запись с деньгами не удаляется (правило сервера) — пункта нет вовсе.
       if ((event ? ownEvent : can.cancel) && canDelete(apt))
@@ -198,7 +198,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
         items.push(
           apt.status === "cancelled"
             ? { label: "Восстановить", run: () => restoreCancelled(apt) }
-            : { label: "Отменить визит", run: () => cancelVisit(apt) },
+            : { label: "Отменить запись", run: () => cancelVisit(apt) },
         );
       }
       if (mutable && canDelete(apt))
