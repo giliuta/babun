@@ -59,7 +59,7 @@
 
 ## Known render warns
 
-- `[RENDER_THIN]` у шести шторок (`BottomSheet`, `OptionSheet`, `PickerSheet`,
+- `[RENDER_THIN]` у пяти шторок (`BottomSheet`, `PickerSheet`,
   `ValuePickerSheet`, `DateWheelSheet`, `AppearanceSheet`): модалка рисуется
   порталом поверх страницы, замер высоты корня видит 0. На снимках шторки
   целые, все клетки оценены good (21.09).

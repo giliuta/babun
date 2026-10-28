@@ -35,7 +35,7 @@ const { BabunProvider, ScreenHeader, SectionCard, ChooseRow, RowGroup, NavRow, B
 - A screen is a column of **blocks**: `SectionCard` (caps title inside a white card) or `RowGroup`. Rows inside: `FieldRow` (editable value; long text → `stacked`), `NavRow` (label → value ›), `ChooseRow` (the door «Добавить …» / «Выбрать …»), `SelectRow` inside `SelectList` in picker sheets, `SwitchRow`, `ActionRow`.
 - **One action per screen, in the footer** (`Button` or `GradientButton`). No buttons inside content; empty states and panels are words only (`EmptyState`, `RowCaption`).
 - Placeholder text names the field («Заметка клиента»), never an example sentence.
-- Choices open **sheets** (`PickerSheet`, `OptionSheet`, `ValuePickerSheet`, `BottomSheet`); destructive actions are a swipe (`SwipeRow`, label «Удалить»/«Убрать») with `confirmAction(...)`.
+- Choices open **sheets** (`PickerSheet`, `ValuePickerSheet`, `BottomSheet`); destructive actions are a swipe (`SwipeRow`, label «Удалить»/«Убрать») with `confirmAction(...)`.
 - Compact: one-word captions with a number («Долг €85»), money right-aligned with tabular digits.
 
 ## Where the truth lives

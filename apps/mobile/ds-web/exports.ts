@@ -31,7 +31,6 @@ export { LabelTag } from "@/components/ui/LabelTag";
 export { LoadingBar } from "@/components/ui/LoadingBar";
 export { MoneyField } from "@/components/ui/MoneyField";
 export { NoticeBar } from "@/components/ui/NoticeBar";
-export { OptionSheet } from "@/components/ui/OptionSheet";
 export { PickerSheet } from "@/components/ui/PickerSheet";
 export { RecordMark } from "@/components/ui/RecordMark";
 export { ReferenceBlock } from "@/components/ui/ReferenceBlock";
