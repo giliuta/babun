@@ -79,7 +79,7 @@ export function SmsSenderSheet({
     >
       <Field
         label="Имя"
-        placeholder="Например, Giliuta"
+        placeholder="Имя отправителя"
         value={name}
         onChangeText={setName}
         maxLength={11}

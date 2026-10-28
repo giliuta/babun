@@ -7,16 +7,20 @@ import { useThemeColors } from "@/theme/colors";
  *  строки — вложенный `Pressable` забирает касание себе, поэтому подкрутить
  *  количество можно, не сняв услугу.
  *
- *  «−» на единице ПРИГАШЕН: снять услугу — это тап по строке, и два разных
- *  жеста для одного действия только сбивают. */
+ *  «−» НА ЕДИНИЦЕ СНИМАЕТ УСЛУГУ. Тап по строке выбранную не снимает: палец,
+ *  промахнувшийся мимо «+» на название, стирал услугу вместе с набранным
+ *  «×3». Снять — тем же органом, которым считали. */
 export function PickerQty({
   name,
   qty,
   onChange,
+  onRemove,
 }: {
   name: string;
   qty: number;
   onChange: (next: number) => void;
+  /** «−» на единице: снять услугу. */
+  onRemove: () => void;
 }) {
   const t = useThemeColors();
   const step = (delta: number, label: string, sign: string, off?: boolean) => (
@@ -24,7 +28,8 @@ export function PickerQty({
       onPress={() => {
         if (off) return;
         haptics.tap();
-        onChange(qty + delta);
+        if (qty + delta < 1) onRemove();
+        else onChange(qty + delta);
       }}
       disabled={off}
       accessibilityRole="button"
@@ -58,7 +63,7 @@ export function PickerQty({
         backgroundColor: t.surface,
       }}
     >
-      {step(-1, `Убавить: ${name}`, "\u2212", qty <= 1)}
+      {step(-1, qty <= 1 ? `Убрать: ${name}` : `Убавить: ${name}`, "\u2212")}
       <Text
         maxFontSizeMultiplier={1.2}
         style={{
