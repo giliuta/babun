@@ -78,6 +78,8 @@ export function SummaryToggle({
         flexShrink: 1,
         minWidth: 0,
         minHeight: 38,
+        flexWrap: "wrap",
+        paddingVertical: 6,
         borderRadius: t.radius.card,
         opacity: dimmed ? 0.4 : 1,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
@@ -93,16 +95,20 @@ export function SummaryToggle({
         className="h-1.5 w-1.5 rounded-full"
         style={{ backgroundColor: locked ? t.muted : color }}
       />
+      {/* НИЧЕГО НЕ РЕЖЕТСЯ МНОГОТОЧИЕМ — ни подпись, ни сумма: на узком
+          iPhone «Ожидается» и «€2 590» не помещались вдвоём, и плитка
+          показывала «Ожидае… €2…» — ни слова, ни числа. Обе стоят своей
+          шириной, а не поместились рядом — сумма переносится второй строкой
+          к правому краю (`flexWrap` у плитки), плитка вырастает. */}
       <Text
         numberOfLines={1}
         className="ml-2 text-sm font-semibold"
-        style={{ color: locked ? t.muted : t.sub, flexShrink: 1 }}
+        style={{ color: locked ? t.muted : t.sub, flexShrink: 0 }}
       >
         {label}
       </Text>
-      {/* Пятизначная прибыль с копейками («€12 450,75») на узком экране не
-          влезала рядом с подписью и вылезала за край плитки: сумма ужимается
-          до 80 %, а не рвётся. */}
+      {/* Сумма, длиннее всей плитки («€12 450,75» на самом узком экране),
+          на своей строке ужимается до 80 %, а не рвётся. */}
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
