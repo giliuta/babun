@@ -43,7 +43,7 @@ export const CABINET_CHAPTER: TourChapter = {
       target: "cabinet.requisites",
       kind: "info",
       optional: true,
-      text: "«Реквизиты» — данные вашей компании для инвойсов и чеков.",
+      text: "«Реквизиты» — данные для инвойсов и чеков.",
     },
     {
       id: "cab.history",
@@ -64,7 +64,7 @@ export const CABINET_CHAPTER: TourChapter = {
       target: "cabinet.export",
       kind: "info",
       optional: true,
-      text: "«Выгрузка данных» — клиенты, записи и финансы одним файлом.",
+      text: "«Выгрузка данных» — клиенты, записи и финансы в CSV, каждый своим файлом.",
     },
     {
       id: "cab.notifications",
