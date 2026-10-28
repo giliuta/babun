@@ -69,3 +69,16 @@ export function updateSummary(
   if (embedded || at === undefined || Number.isNaN(at)) return "Версия из сборки";
   return `Обновлено ${dayMonth(at, now)} в ${clockTime(at)}`;
 }
+
+/** САЙТ — ОДНО ЧИСЛО И ДАТА ВЫПУСКА: «v1.8.33 · 28 октября в 16:10». У сайта
+ *  нет ни номера сборки, ни обновления по воздуху — строка «Обновление · Версия
+ *  из сборки» на вебе говорила о том, чего нет. Дату выпуска вшивает сборка
+ *  сайта (`EXPO_PUBLIC_WEB_BUILT_AT` в `build:web`); без неё — только версия. */
+export function webVersionSummary(version: string, builtAt: Date | null, now: number): string {
+  const at = builtAt?.getTime();
+  if (at === undefined || Number.isNaN(at)) return version;
+  // Дата — своим шаблоном: словарь знает «{0} в {1}», а версия к ней
+  // приставляется без слов.
+  const when = `${dayMonth(at, now)} в ${clockTime(at)}`;
+  return `${version} · ${when}`;
+}

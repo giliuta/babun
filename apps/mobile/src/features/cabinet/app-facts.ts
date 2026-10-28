@@ -19,6 +19,15 @@ export function appBuildFacts(): AppBuildFacts {
   };
 }
 
+/** Когда собран сайт — строка ISO, которую вшивает `build:web`. На телефоне и
+ *  в разработке её нет. */
+export function webBuiltAt(): Date | null {
+  const raw = process.env.EXPO_PUBLIC_WEB_BUILT_AT;
+  if (!raw) return null;
+  const at = new Date(raw);
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
 export function appUpdateFacts(): AppUpdateFacts {
   return {
     // Сборка разработки берёт код из Metro: `isEnabled` там бывает true, а

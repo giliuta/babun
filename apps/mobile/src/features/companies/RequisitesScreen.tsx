@@ -10,7 +10,7 @@ import { ReorderList } from "@/components/ui/ReorderList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { GUTTER } from "@/components/ui/tokens";
+import { GUTTER, LIST_ROW } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -274,13 +274,15 @@ export function RequisitesScreen() {
                         color={company.color}
                         icon={company.icon}
                         fallback={Building2}
-                        size={30}
+                        size={28}
                       />
                       <View style={{ flex: 1 }}>
                         <Text
                           numberOfLines={1}
                           maxFontSizeMultiplier={1.3}
-                          style={{ fontSize: 16, color: t.ink }}
+                          // Строка списка — одна роль на продукт (`LIST_ROW`):
+                          // плитка 28, имя 15/600, подпись 13.
+                          style={{ ...LIST_ROW.name, color: t.ink }}
                         >
                           {company.name}
                         </Text>
@@ -291,7 +293,7 @@ export function RequisitesScreen() {
                           // блоке «Реквизиты» инвойса: документу нечего
                           // напечатать о продавце.
                           style={{
-                            fontSize: 13,
+                            ...LIST_ROW.sub,
                             color: companyFilled(company) ? t.sub : t.warning,
                             marginTop: 1,
                           }}
