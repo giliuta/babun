@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { Href, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "@react-navigation/native";
-import type { Appointment } from "@babun/shared/local/appointments";
+import type { Appointment, AppointmentStatus } from "@babun/shared/local/appointments";
 import { useAndroidBack } from "@/lib/android-back";
 import { chooseOption } from "@/lib/choose";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { resolveReturnTo } from "@/features/appointments/return-to";
+import { withBaselineStatus } from "@/features/appointments/edit-baseline";
 import { draftDirty, type DraftDirtyInput } from "./book-dirty";
+
+/** Статус в эталоне — его сменили мимо «Сохранить» или он с открытия. */
+function baselineStatus(baseline: string | null): AppointmentStatus | null {
+  if (baseline == null) return null;
+  const status = (JSON.parse(baseline) as { status?: AppointmentStatus }).status;
+  return status ?? null;
+}
 
 /** The part of an inline note field the guard needs. */
 interface NoteDraft {
@@ -16,8 +24,10 @@ interface NoteDraft {
 
 interface LeaveGuardInput {
   isEdit: boolean;
-  hydrated: boolean;
   buildPatch: () => Partial<Appointment>;
+  /** Эталон правки — патч записи, какой она открылась, на сегодняшних
+   *  справочниках (`open-baseline.ts`); `null`, пока запись не легла. */
+  baselineSignature: string | null;
   clientNote: NoteDraft;
   objectNote: NoteDraft;
   eventObjectNote: NoteDraft;
@@ -39,8 +49,8 @@ interface LeaveGuardInput {
 /** «Есть несохранённое», the discard question and the way out of the form. */
 export function useLeaveGuard({
   isEdit,
-  hydrated,
   buildPatch,
+  baselineSignature,
   clientNote,
   objectNote,
   eventObjectNote,
@@ -81,26 +91,19 @@ export function useLeaveGuard({
   //
   // У СОЗДАНИЯ это «человек что-то ввёл»: сравнивать не с чем, пустой
   // черновик закрывается молча. У ПРАВКИ вопрос другой — «отличается ли
-  // форма от того, что лежит в базе», поэтому сравниваем собранный патч со
-  // снимком, снятым сразу после гидрации. Снимок берётся эффектом, а не в
-  // самой гидрации: сеты состояния к тому моменту ещё не легли.
+  // форма от того, что лежит в базе», поэтому собранный патч сравнивается с
+  // эталоном. Эталон — не снимок одного кадра: справочники доезжают после
+  // загрузки записи и двигают патч, и снятый раз эталон делал нетронутую
+  // запись изменённой (№17). Его собирает форма на тех же справочниках, что
+  // и патч (`open-baseline.ts`); здесь — только статус, который сменили мимо
+  // «Сохранить» (оплата, «⋯»): он приходит в ссылку через
+  // `withBaselineStatus` и переносится на свежий эталон.
   const editSignature = isEdit ? JSON.stringify(buildPatch()) : "";
   const editBaselineRef = useRef<string | null>(null);
-  useEffect(() => {
-    // ФЛАГ СОСТОЯНИЯ, А НЕ REF — ТА ЖЕ ПРИЧИНА, ЧТО У `hydrated` ВЫШЕ.
-    // `editHydrated` выставляется синхронно внутри гидрации, поэтому этот
-    // эффект отрабатывал в ТОМ ЖЕ коммите и снимал «как было» с ПУСТОЙ формы:
-    // сегодняшняя дата, 10:00, ни клиента, ни услуг. Дальше запись ложилась в
-    // состояние, подпись расходилась со снимком — и всякая открытая запись
-    // считалась изменённой. «Отмена» спрашивала «Закрыть без сохранения?» у
-    // того, кто ничего не трогал, то есть диалог врал ровно там, где обязан
-    // говорить правду. `hydrated` переключается со следующим рендером — когда
-    // значения записи УЖЕ в состоянии.
-    if (!isEdit || !hydrated || editBaselineRef.current != null) {
-      return;
-    }
-    editBaselineRef.current = editSignature;
-  }, [isEdit, hydrated, editSignature]);
+  if (isEdit && baselineSignature != null) {
+    const moved = baselineStatus(editBaselineRef.current);
+    editBaselineRef.current = moved ? withBaselineStatus(baselineSignature, moved) : baselineSignature;
+  }
 
   // Заметки клиента и объекта — тоже «введённое»: диалог «Введённое не
   // сохранится» обязан говорить правду, поэтому их черновики считаются здесь

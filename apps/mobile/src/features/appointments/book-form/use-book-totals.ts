@@ -3,19 +3,14 @@ import type { Discount } from "@babun/shared/local/appointments";
 import { isCustomServiceId } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
-import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import type { Service } from "@/features/services/queries";
 import { durationLabel } from "@/lib/service-format";
 import { useTenant } from "@/session/tenant";
 import { smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/lib/sms-name";
-import {
-  addMinutesHM,
-  buildServices,
-  type ServiceOverride,
-} from "@/features/appointments/helpers";
-import { serviceBuffersMinutes } from "./book-math";
-import { recordTotals, totalDraftText, typedDiscount } from "./book-money";
+import { addMinutesHM, type ServiceOverride } from "@/features/appointments/helpers";
+import { totalDraftText } from "./book-money";
+import { bookTotalsMath } from "./book-totals-math";
 
 interface BookTotalsInput {
   serviceIds: string[];
@@ -75,26 +70,31 @@ export function useBookTotals({
   slotFallback,
   setTimeEnd,
 }: BookTotalsInput) {
-  // ── производные суммы ──
-  const selectedServices = useMemo(
-    () => buildServices(serviceIds, catalog, overrides),
-    [serviceIds, catalog, overrides],
-  );
-  const computedTotal = useMemo(
-    () => selectedServices.reduce((s, x) => s + x.totalPrice, 0),
-    [selectedServices],
-  );
-  const computedDuration = useMemo(
+  // ── производные суммы ── — тем же расчётом, что эталон «как было» у
+  // правки (`bookTotalsMath`): две копии разошлись бы, и нетронутая запись
+  // считалась бы изменённой.
+  const math = useMemo(
     () =>
-      selectedServices.reduce((s, x) => s + x.duration, 0) +
-      serviceBuffersMinutes(serviceIds, catalog),
-    [selectedServices, serviceIds, catalog],
+      bookTotalsMath({
+        serviceIds,
+        catalog,
+        overrides,
+        discountType,
+        discountValue,
+        discountReason,
+        recordVatMode,
+        recordVatRate,
+        rememberedRate: rememberedVatRate.rate,
+        customTotal,
+        totalDraft,
+      }),
+    [
+      serviceIds, catalog, overrides, discountType, discountValue, discountReason,
+      recordVatMode, recordVatRate, rememberedVatRate.rate, customTotal, totalDraft,
+    ],
   );
-
-  const globalDiscount: Discount | null = useMemo(
-    () => typedDiscount(discountType, discountValue, discountReason),
-    [discountType, discountValue, discountReason],
-  );
+  const { selectedServices, computedDuration, globalDiscount, discountAmount, vatRateInUse } = math;
+  const { beforeVat, automaticTotal, effectiveTotal } = math;
 
   // ПЕРЕВОД «УСЛУГА ЗАПИСИ → СТРОКА БЛОКА» — ОДИН НА ЭКРАН. Его читают и блок
   // «Услуги», и шторка «Итого»; две копии этого перевода разъехались бы на
@@ -118,16 +118,6 @@ export function useBookTotals({
     [catalog, nameById, selectedServices],
   );
 
-  const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
-  const vatRateInUse = recordVatRate ?? rememberedVatRate.rate;
-  const { beforeVat, automaticTotal, effectiveTotal } = recordTotals({
-    computedTotal,
-    discountAmount,
-    recordVatMode,
-    vatRateInUse,
-    customTotal,
-    totalDraft,
-  });
 
   // ЧТО ПОДСТАВИТ ШАБЛОН SMS ИЗ ЭТОЙ ЗАПИСИ (STORY-089): «SMS» у номера
   // клиента открывает шаблоны, заполненные ровно тем, что на экране. Сумму

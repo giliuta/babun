@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScrollView } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +25,7 @@ import { useRecordNotes } from "./use-record-notes";
 import { serviceLineActions } from "./service-line-actions";
 import { useEventType } from "./use-event-type";
 import { buildBookPatch } from "./book-patch";
+import { openRecordPatch, type OpenRecord } from "./open-baseline";
 import { referenceGate } from "./reference-gate";
 import { useBookingChain } from "./use-booking-chain";
 import { useReferenceRetry } from "./use-reference-retry";
@@ -263,10 +264,78 @@ export function useBookForm() {
     overlap: slot.overlap,
     timeWarning: slot.timeWarning,
   });
+  // Что на форме сейчас — тем же видом, что ложится в черновик на телефоне.
+  const snapshot = {
+    kind,
+    teamId,
+    clientId,
+    locationId: draft.locationId,
+    address: draft.address,
+    date,
+    timeStart,
+    timeEnd,
+    durationTouched: draft.durationTouched,
+    durationByHand: draft.durationByHand,
+    serviceIds,
+    overrides: draft.overrides,
+    masterId: draft.masterId,
+    customTotal: draft.customTotal,
+    totalDraft: draft.totalDraft,
+    discountType: draft.discountType,
+    discountValue: draft.discountValue,
+    recordVatMode: draft.recordVatMode,
+    recordVatRate: draft.recordVatRate,
+    status: draft.status,
+    // Набранное прямо сейчас, а не осевшее на blur: последние буквы заметки
+    // иначе не попадали в снимок.
+    comment: draft.commentNow.current,
+    eventTitle: draft.eventTitle,
+    eventColor: draft.eventColor,
+    eventTypeId: draft.eventTypeId,
+    eventNotes: draft.eventNotes,
+    eventAddress: draft.eventAddress,
+    eventUrl: draft.eventUrl,
+    eventReminderOffset: draft.eventReminderOffset,
+    repeat: draft.repeat,
+    allDay: draft.allDay,
+    reminderOn: draft.reminderOn,
+    colorOverride: draft.colorOverride,
+    city: draft.city,
+    newRecordId: draft.newRecordIdRef.current,
+    cityTouched: draft.cityTouched,
+  };
+  // ЭТАЛОН ПРАВКИ (№17) — состояние формы в кадр загрузки записи, ДО подъёма
+  // прерванной правки (`useRestoreEditDraft` ниже). Патч из него собирается
+  // на каждом кадре на тех же справочниках, что и патч формы
+  // (`open-baseline.ts`): доехавший каталог, клиент или ставка двигают обе
+  // стороны, и нетронутая запись не «изменена».
+  const [openRecord, setOpenRecord] = useState<OpenRecord | null>(null);
+  useEffect(() => {
+    if (!isEdit || !draft.hydrated || openRecord) return;
+    const { newRecordId: _id, ...open } = snapshot;
+    setOpenRecord({ ...open, discountReason: draft.discountReason });
+    // Один раз на открытие: снимок — значения этого же кадра.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, draft.hydrated]);
+  const baselineSignature = openRecord
+    ? JSON.stringify(
+        openRecordPatch(openRecord, {
+          isEdit,
+          catalog: refs.catalog,
+          rememberedRate: draft.rememberedVatRate.rate,
+          client: clients.find((c) => c.id === openRecord.clientId) ?? null,
+          eventTypeLabel:
+            eventKind.eventTypes.find((type) => type.id === openRecord.eventTypeId)?.label ?? null,
+          eventLoc:
+            places.eventLocationPool.find((row) => row.loc.id === openRecord.locationId)?.loc ?? null,
+          clientLocations: places.clientLocations,
+        }),
+      )
+    : null;
   const guard = useLeaveGuard({
     isEdit,
-    hydrated: draft.hydrated,
     buildPatch,
+    baselineSignature,
     clientNote: notes.clientNote,
     objectNote: notes.objectNote,
     eventObjectNote: notes.eventObjectNote,
@@ -291,7 +360,10 @@ export function useBookForm() {
     tenantId,
     editing: draft.editing,
     hydrated: draft.hydrated,
+    // Снимок, равный записи при открытии, — не правка: его писала форма,
+    // считавшая себя изменённой без рук (№17).
     apply: (snap) => applyBookSnapshot(draft, setTeamId, snap),
+    current: snapshot,
     toast,
     router,
   });
@@ -301,45 +373,7 @@ export function useBookForm() {
     isEdit,
     edit: editOpened,
     dirty: guard.dirty,
-    snapshot: {
-      kind,
-      teamId,
-      clientId,
-      locationId: draft.locationId,
-      address: draft.address,
-      date,
-      timeStart,
-      timeEnd,
-      durationTouched: draft.durationTouched,
-      durationByHand: draft.durationByHand,
-      serviceIds,
-      overrides: draft.overrides,
-      masterId: draft.masterId,
-      customTotal: draft.customTotal,
-      totalDraft: draft.totalDraft,
-      discountType: draft.discountType,
-      discountValue: draft.discountValue,
-      recordVatMode: draft.recordVatMode,
-      recordVatRate: draft.recordVatRate,
-      status: draft.status,
-      // Набранное прямо сейчас, а не осевшее на blur: последние буквы заметки
-      // иначе не попадали в снимок.
-      comment: draft.commentNow.current,
-      eventTitle: draft.eventTitle,
-      eventColor: draft.eventColor,
-      eventTypeId: draft.eventTypeId,
-      eventNotes: draft.eventNotes,
-      eventAddress: draft.eventAddress,
-      eventUrl: draft.eventUrl,
-      eventReminderOffset: draft.eventReminderOffset,
-      repeat: draft.repeat,
-      allDay: draft.allDay,
-      reminderOn: draft.reminderOn,
-      colorOverride: draft.colorOverride,
-      city: draft.city,
-      newRecordId: draft.newRecordIdRef.current,
-      cityTouched: draft.cityTouched,
-    },
+    snapshot,
     toast,
     router,
   });
