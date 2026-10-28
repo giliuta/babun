@@ -17,7 +17,7 @@ import type { BookParams } from "./use-book-draft";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
-export interface BookPrefillInput {
+interface BookPrefillInput {
   params: BookParams;
   isEdit: boolean;
   editing: Appointment | null;

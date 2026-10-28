@@ -10,14 +10,14 @@ import type { AccountKind } from "@babun/shared/local/finance/account";
 const cents = (euros: number): number => Math.round(euros * 100);
 
 /** Способ оплаты по виду счёта — тем же `case`, что в RPC. */
-export function methodForAccount(kind: AccountKind): Payment["method"] {
+function methodForAccount(kind: AccountKind): Payment["method"] {
   if (kind === "cash") return "cash";
   if (kind === "card") return "card";
   if (kind === "bank") return "transfer";
   return "other";
 }
 
-export interface OptimisticPaymentInput {
+interface OptimisticPaymentInput {
   /** id платежа = id попытки (`requestId`), как пишет сервер. */
   requestId: string;
   amount: number;

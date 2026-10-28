@@ -34,7 +34,7 @@ export type PayMethod = Exclude<
 
 /** Платёжный срез записи, который нужен buildDebtPaidPatch (create-режим
  *  шита передаёт undefined — записи ещё нет). */
-export type PaidStateSnapshot = Pick<
+type PaidStateSnapshot = Pick<
   Appointment,
   "payments" | "payment" | "payment_status" | "paid_amount"
 >;

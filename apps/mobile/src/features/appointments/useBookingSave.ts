@@ -29,7 +29,7 @@ import { syncEventAppointmentReminders } from "@/features/calendar/reminders";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
 
-export interface BookingSaveInput {
+interface BookingSaveInput {
   /** Готовый патч заявки (собирает вызывающий экран). */
   patch: Partial<Appointment>;
   kind: "work" | "event";

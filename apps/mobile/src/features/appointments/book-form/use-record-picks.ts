@@ -23,7 +23,7 @@ type Setter<T> = Dispatch<SetStateAction<T>>;
 
 export type ChainStep = "idle" | "client" | "clientClosing" | "services" | "done";
 
-export interface RecordPicksInput {
+interface RecordPicksInput {
   kind: "work" | "event";
   isEdit: boolean;
   editing: Appointment | null;

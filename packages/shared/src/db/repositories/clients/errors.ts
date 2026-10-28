@@ -1,10 +1,10 @@
 // Server refusals of client writes, in words a person can act on.
 
-export type ClientWriteRpcName =
+type ClientWriteRpcName =
   | "create_client_with_tags"
   | "update_client_with_tags";
 
-export type PostgrestErrorLike = {
+type PostgrestErrorLike = {
   code?: string;
   message?: string;
   hint?: string;

@@ -8,7 +8,7 @@ import type { ImportProgress } from "../useImportRows";
 // Upload guardrails — web parity (UploadStep.tsx).
 export const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
 export const MAX_ROWS = 5000;
-export const ALLOWED_EXT = [".csv", ".txt"];
+const ALLOWED_EXT = [".csv", ".txt"];
 
 export type WizardStep = "upload" | "mapping" | "preview" | "result";
 

@@ -7,7 +7,7 @@ import {
   type AddedLocation,
 } from "./event-locations";
 
-export interface ClientLocationsInput {
+interface ClientLocationsInput {
   client: Client | null;
   clients: Client[];
   locationId: string | null;

@@ -29,7 +29,7 @@ import {
 // знает и знать не должна.
 export type ColorSituation = RecordColorSituation;
 
-export interface ColorSituationDef {
+interface ColorSituationDef {
   id: ColorSituation;
   label: string;
 }

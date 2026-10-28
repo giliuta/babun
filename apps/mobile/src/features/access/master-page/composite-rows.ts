@@ -17,9 +17,9 @@ import type { AccessBlock, AccessLevel } from "@/session/access-map";
 // Что закрывается вместе с чем (скрыты услуги — скрыты цены и оплата), живёт
 // в `DEPENDANT_BLOCKS`: там же сворачиваются строки и сбрасываются положения.
 
-export type LevelGet = (key: string) => AccessLevel;
+type LevelGet = (key: string) => AccessLevel;
 
-export interface CompositeRow {
+interface CompositeRow {
   /** Ключ строки — по нему слова, плитка, фраза и вид в шторке. */
   key: string;
   /** Право реестра, без которого строки нет: оно должно быть живым. */
@@ -34,10 +34,10 @@ export interface CompositeRow {
   lockedBy?: (get: LevelGet) => string | null;
 }
 
-export const WHEN_KEY = "record.when";
-export const SERVICES_KEY = "record.services";
-export const AMOUNT_KEY = "record.amount";
-export const PAYMENT_KEY = "record.payment";
+const WHEN_KEY = "record.when";
+const SERVICES_KEY = "record.services";
+const AMOUNT_KEY = "record.amount";
+const PAYMENT_KEY = "record.payment";
 const MOVE = "calendar.move";
 const COLOR = "record.color";
 

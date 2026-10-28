@@ -30,7 +30,7 @@ export const CALENDAR_GROUP_TITLE: Record<CalendarGroup, string> = {
  *  Цвет — к метке (оба про вид записи в сетке), цены — сразу под услугами,
  *  статус со своей заметкой — на месте заметки. Время записи правит
  *  «Переносить» раздела «Календарь». */
-export const RECORD_ROW_ORDER: readonly string[] = [
+const RECORD_ROW_ORDER: readonly string[] = [
   "record.team",
   "record.label",
   "record.when",
@@ -49,7 +49,7 @@ export const RECORD_ROW_ORDER: readonly string[] = [
 /** БЛОКИ СОБЫТИЯ — в порядке страницы события: метка, тип, клиент, объект,
  *  заметка, файлы. Команда и время видны всегда; двигает событие его автор
  *  при «Записи событий: Видит и создаёт». */
-export const EVENT_ROW_ORDER: readonly string[] = [
+const EVENT_ROW_ORDER: readonly string[] = [
   "event.label",
   "event.type",
   "event.client",
@@ -60,7 +60,7 @@ export const EVENT_ROW_ORDER: readonly string[] = [
 
 /** ПРАВА КАЛЕНДАРЯ. Метка дня — первой, дальше — что он делает с записями (новые, перенос, отмена) и что
  *  видит вокруг них (события, график). */
-export const CALENDAR_ROW_ORDER: readonly string[] = [
+const CALENDAR_ROW_ORDER: readonly string[] = [
   "calendar.day_labels",
   "calendar.records",
   "calendar.window",
@@ -77,7 +77,7 @@ export const CALENDAR_ROW_ORDER: readonly string[] = [
  *  у каждого блока свои значения. Карточка со своей шапкой на каждый блок; право, не вошедшее ни в один,
  *  встаёт последней карточкой без шапки. У раздела без блоков — одна
  *  карточка без шапки: имя раздела уже в шапке страницы. */
-export interface SectionBlock {
+interface SectionBlock {
   key: string;
   title: string;
   keys: readonly string[];
@@ -107,7 +107,7 @@ export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
  *  Счета · Документы · Доход · Расход · Долги · Прибыль. «Доход» и «Расход»
  *  переехали сюда из «Главного» календаря — право то же, оно же открывает
  *  деньги дня в календаре. */
-export const FINANCE_ROW_ORDER: readonly string[] = [
+const FINANCE_ROW_ORDER: readonly string[] = [
   "finance.accounts",
   "finance.documents",
   "finance.income",
@@ -120,7 +120,7 @@ export const FINANCE_ROW_ORDER: readonly string[] = [
 /** ШЕСТЕРЁНКА «ФИНАНСОВ» — БЛОКАМИ, КАК НА НЕЙ САМОЙ («Деньги · Категории ·
  *  Документы · Общие»), по строке на каждую. Каждый блок прав — блок шестерёнки, в её
  *  порядке; право, которого ещё нет в реестре, строкой не встаёт. */
-export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
+const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
   {
     key: "money",
     title: "Деньги",
@@ -142,7 +142,7 @@ export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
 
 /** РАЗДЕЛ «КАБИНЕТ» (доступ к реквизитам, тарифу, SMS, оплате): права аккаунта в порядке строк Кабинета.
  *  Право, которого нет в списке, встаёт после них. */
-export const CABINET_ROW_ORDER: readonly string[] = [
+const CABINET_ROW_ORDER: readonly string[] = [
   "cabinet.tariff",
   "cabinet.tariff_payments",
   "cabinet.sms",

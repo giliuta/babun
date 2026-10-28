@@ -11,7 +11,7 @@
 // «скоро»; заполнил — строка появилась сама. Та же почта стоит в документах
 // (`features/legal/operator.ts`).
 
-export interface SupportContacts {
+interface SupportContacts {
   /** Номер для WhatsApp в любом виде: «+357 99 123 456». */
   whatsapp: string;
   /** Ник в Telegram, с «@» или без. */

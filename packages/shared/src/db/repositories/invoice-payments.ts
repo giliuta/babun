@@ -7,7 +7,7 @@ import { roundInvoiceMoney } from "./invoice-write-helpers";
 type DbSupabase = SupabaseClient<Database>;
 type TransactionRow = Database["public"]["Tables"]["finance_transactions"]["Row"];
 
-export type InvoicePaymentsById = Record<string, InvoicePaymentLedger[]>;
+type InvoicePaymentsById = Record<string, InvoicePaymentLedger[]>;
 
 export interface RecordInvoicePaymentDraft {
   request_id: string;
@@ -20,7 +20,7 @@ export interface RecordInvoicePaymentDraft {
   notes?: string | null;
 }
 
-export interface RefundInvoicePaymentDraft {
+interface RefundInvoicePaymentDraft {
   request_id: string;
   amount: number;
   occurred_on: string;

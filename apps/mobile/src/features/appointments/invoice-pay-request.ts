@@ -17,7 +17,7 @@ export interface PayAttempt {
   occurredOn: string;
 }
 
-export interface PayAttemptRef {
+interface PayAttemptRef {
   current: PayAttempt | null;
 }
 

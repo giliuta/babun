@@ -4,7 +4,7 @@ import type { ChainStep } from "./use-record-picks";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
-export interface BookingChainInput {
+interface BookingChainInput {
   chainStep: ChainStep;
   setChainStep: Setter<ChainStep>;
   isEdit: boolean;

@@ -547,7 +547,7 @@ export function levelSentence(blockKey: string, level: AccessLevel, payHere = tr
 
 /** Слово на сегменте. Короче, чем в реестре: «Из его календарей» в трети
  *  ширины не помещается, а фраза под названием и так говорит правило целиком. */
-export const SEGMENT_WORD: Record<AccessLevel, string> = {
+const SEGMENT_WORD: Record<AccessLevel, string> = {
   off: "Не видит",
   read: "Видит",
   write: "Меняет",

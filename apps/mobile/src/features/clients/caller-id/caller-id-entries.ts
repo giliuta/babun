@@ -14,7 +14,7 @@ import { DEFAULT_COUNTRY, tryToE164 } from "@/lib/phone";
 // Цифры E.164 не начинаются с нуля, поэтому порядок «короче — раньше, при
 // равной длине — по строке» совпадает с числовым и не требует BigInt.
 
-export interface CallerIdEntry {
+interface CallerIdEntry {
   /** Цифры E.164 без «+»: «35799123456». */
   number: string;
   /** Подпись на экране звонка: «Andreas Georgiou · Limassol · Babun». */

@@ -29,7 +29,7 @@ export interface PaymentAccountOption {
 
 /** Один запрос на продукт, отдельно от хука: ключ и RPC живут в одном месте,
  *  и вторая копия не разойдётся с первой на ближайшей же правке. */
-export function paymentAccountsQuery(
+function paymentAccountsQuery(
   tenantId: string | null,
   teamId: string | null | undefined,
 ) {

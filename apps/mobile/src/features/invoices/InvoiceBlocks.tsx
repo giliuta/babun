@@ -39,7 +39,7 @@ import { InvoiceTotalSheet } from "./invoice-blocks/InvoiceTotalSheet";
 // ЧЕГО У ИНВОЙСА НЕТ. Скидки (сервер не знает такого поля у счёта) и команды в
 // блоках: команду документ наследует от заявки или чипа и не спрашивает.
 
-export interface InvoiceBlocksTotals {
+interface InvoiceBlocksTotals {
   /** Что заплатит клиент — её показывает строка «Итого» блока услуг. */
   total: number;
 }

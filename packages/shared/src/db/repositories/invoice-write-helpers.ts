@@ -106,7 +106,7 @@ export function validateInvoiceDraft(draft: {
   });
 }
 
-export const MAX_INVOICE_MONEY = 9_999_999_999.99;
+const MAX_INVOICE_MONEY = 9_999_999_999.99;
 
 export function assertInvoiceTotal(total: number): void {
   if (!Number.isFinite(total) || total <= 0) {

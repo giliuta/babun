@@ -11,7 +11,7 @@ import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/
 import { bookIsReadOnly, bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";
 import { EMPTY_REQUESTS } from "./book-constants";
 
-export interface BookRightsInput {
+interface BookRightsInput {
   client: Client | null;
   kind: "work" | "event";
   isEdit: boolean;

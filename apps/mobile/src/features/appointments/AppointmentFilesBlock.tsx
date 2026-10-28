@@ -60,7 +60,7 @@ import { useFilePickers } from "./use-file-pickers";
 
 const EMPTY_PHOTOS: AppointmentPhotoRecord[] = [];
 
-export interface AppointmentFilesBlockProps {
+interface AppointmentFilesBlockProps {
   /** null — запись ещё не создана: файлы копятся в `pending`. */
   appointmentId: string | null;
   clientId: string | null;

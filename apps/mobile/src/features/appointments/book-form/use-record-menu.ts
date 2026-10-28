@@ -16,7 +16,7 @@ import { withBaselineStatus } from "@/features/appointments/edit-baseline";
 import { useCurrentRole } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
 
-export interface RecordMenuInput {
+interface RecordMenuInput {
   isEdit: boolean;
   editing: Appointment | null;
   hydrated: boolean;

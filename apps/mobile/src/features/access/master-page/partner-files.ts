@@ -27,7 +27,7 @@ export interface PartnerFile {
   created_at: string;
 }
 
-export class PartnerFileError extends Error {}
+class PartnerFileError extends Error {}
 
 const MIME_BY_EXT: Record<string, string> = {
   jpg: "image/jpeg",
@@ -42,7 +42,7 @@ const ALLOWED = new Set(Object.values(MIME_BY_EXT));
 const extOf = (name: string) => name.match(/\.([a-z0-9]{1,6})$/i)?.[1]?.toLowerCase() ?? "";
 
 /** Тип файла — из того, что сказал выбор файла, иначе по расширению. */
-export function partnerFileMime(reported: string | undefined, name: string): string {
+function partnerFileMime(reported: string | undefined, name: string): string {
   const mime = reported?.toLowerCase();
   if (mime && ALLOWED.has(mime)) return mime;
   const byExt = MIME_BY_EXT[extOf(name)];

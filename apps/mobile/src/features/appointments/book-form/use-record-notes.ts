@@ -7,7 +7,7 @@ import { useClientCardWritable, type useUpdateClientById } from "@/features/clie
 import { EMPTY_LOCATIONS } from "./book-constants";
 import type { EventLocationRow } from "./event-locations";
 
-export interface RecordNotesInput {
+interface RecordNotesInput {
   client: Client | null;
   clientId: string | null;
   teamId: string | null;

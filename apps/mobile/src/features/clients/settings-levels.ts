@@ -14,7 +14,7 @@ import { accessGate } from "@/session/my-access";
 
 /** Строки шестерёнки клиентов, у которых есть своё право, — в её порядке:
  *  «Клиент» · «Объекты» · «Справочники». */
-export const CLIENT_SETTING_BLOCKS = {
+const CLIENT_SETTING_BLOCKS = {
   card: "clients.settings_card",
   ways: "clients.settings_ways",
   objects: "clients.settings_objects",

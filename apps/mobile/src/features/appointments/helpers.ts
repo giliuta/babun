@@ -158,7 +158,7 @@ export function overrideWithQuantity(
 }
 
 /** Что держит замок: три числа и два слова снимка. */
-export interface LockedLine {
+interface LockedLine {
   pricePerUnit: number;
   originalPrice: number;
   duration: number;

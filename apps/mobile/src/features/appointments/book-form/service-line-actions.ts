@@ -9,7 +9,7 @@ import {
 import { parsePriceTiers } from "@/features/services/economics";
 import { haptics } from "@/lib/haptics";
 
-export interface ServiceLineActionsInput {
+interface ServiceLineActionsInput {
   setServiceIds: Dispatch<SetStateAction<string[]>>;
   setOverrides: Dispatch<SetStateAction<Record<string, ServiceOverride>>>;
   setTotalSheetOpen: Dispatch<SetStateAction<boolean>>;

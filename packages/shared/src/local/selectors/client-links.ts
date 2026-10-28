@@ -23,7 +23,7 @@ import { clientMemberships } from "../clients";
 export type LinkGroup = Pick<Client, "id" | "full_name" | "locations">;
 
 /** Разобранная связь: чем она была в jsonb и на что указывает сейчас. */
-export interface ClientMemberOf {
+interface ClientMemberOf {
   /** Карточка, в которую он входит. */
   groupId: string;
   /** Кем приходится, своими словами: «жена», «жилец». Пусто — роли нет. */
@@ -42,7 +42,7 @@ export interface ClientMemberOf {
 /** Одна строка связи, разобранная на части и собранная целиком.
  *  Части нужны `MemberOfLine` (роль серым, чей — акцентом), целая строка —
  *  `ClientRow.link` и `linkFor`, которые берут одну строку текста. */
-export interface LinkLine {
+interface LinkLine {
   /** Роль первой связи: «жилец». Пусто — роли нет. */
   role: string;
   /** Чья карточка: «Наталья». Никогда не пусто — безымянная связь не строка. */

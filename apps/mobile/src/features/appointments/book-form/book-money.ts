@@ -30,7 +30,7 @@ export interface RecordTotalsInput {
   totalDraft: string;
 }
 
-export interface RecordTotals {
+interface RecordTotals {
   beforeVat: number;
   automaticTotal: number;
   effectiveTotal: number;

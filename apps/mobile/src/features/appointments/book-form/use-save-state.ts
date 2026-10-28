@@ -6,7 +6,7 @@ import { reconcileBookingSelection } from "@/features/appointments/booking-selec
 import type { GateRef } from "./reference-gate";
 import { saveVerdict } from "./save-verdict";
 
-export interface SaveStateInput {
+interface SaveStateInput {
   kind: "work" | "event";
   isEdit: boolean;
   teamId: string | null;

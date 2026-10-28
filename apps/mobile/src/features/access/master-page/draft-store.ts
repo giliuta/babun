@@ -9,7 +9,7 @@ import { STARTER_CALENDAR_LEVELS, emptyMasterDraft, type MasterDraft } from "./m
 // Стек состояние между экранами не передаёт — поэтому черновик живёт здесь, а
 // экраны на него подписаны.
 
-export interface MasterDraftState {
+interface MasterDraftState {
   /** Календарь, из «Мастеров» которого пришли. */
   teamId: string | null;
   draft: MasterDraft;

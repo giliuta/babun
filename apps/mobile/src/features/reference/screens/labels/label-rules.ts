@@ -26,7 +26,7 @@ export const FALLBACK_COLOR = "#8E8E93";
 export const ROW_H = 52;
 
 /** Полное имя дня по ISO-номеру — для объяснения, почему день не берётся. */
-export const WEEKDAY_FULL_BY_ISO: Record<number, string> = {
+const WEEKDAY_FULL_BY_ISO: Record<number, string> = {
   1: "Понедельник",
   2: "Вторник",
   3: "Среда",

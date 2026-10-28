@@ -15,12 +15,12 @@ import { formatPhoneForDisplay } from "@/lib/phone";
 
 export type PersonFactKind = "email" | "phone" | "birthday";
 
-export interface PersonFact {
+interface PersonFact {
   kind: PersonFactKind;
   text: string;
 }
 
-export type PersonCardView = {
+type PersonCardView = {
   title: string;
   /** Имя своего аккаунта — когда оно не повторяет имя человека. */
   company: string | null;

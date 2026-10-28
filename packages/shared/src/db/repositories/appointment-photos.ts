@@ -52,7 +52,7 @@ export interface AppointmentPhotoRecord {
   updated_at: string;
 }
 
-export interface UploadPhotoArgs {
+interface UploadPhotoArgs {
   tenantId: string;
   appointmentId: string;
   /** Browser sends Blob/File; React Native sends an ArrayBuffer. */

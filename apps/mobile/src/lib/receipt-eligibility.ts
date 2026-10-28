@@ -12,7 +12,7 @@ import {
 // Поэтому там, где чек невозможен, его и не предлагают, а человеку, пришедшему
 // ссылкой, называют настоящую причину.
 
-export type ReceiptRefusal = "no-client" | "not-an-invoice" | "refunded" | "nothing";
+type ReceiptRefusal = "no-client" | "not-an-invoice" | "refunded" | "nothing";
 
 /** Платежи инвойса, на которые чек ещё можно выписать: приход, без чека, не
  *  возвращённый целиком. */

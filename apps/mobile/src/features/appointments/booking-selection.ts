@@ -7,7 +7,7 @@ export interface BookingServiceRef {
   team_id: string | null;
 }
 
-export interface BookingMasterRef {
+interface BookingMasterRef {
   id: string;
   team_id: string | null;
 }

@@ -48,7 +48,7 @@ type Common = {
   onClose: () => void;
 };
 
-export type ObjectSheetProps = Common &
+type ObjectSheetProps = Common &
   (
     | {
         mode: "create";

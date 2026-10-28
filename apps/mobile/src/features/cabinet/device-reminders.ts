@@ -60,7 +60,7 @@ export interface ReminderRow {
   source: ReminderSource;
 }
 
-export interface ReminderDay {
+interface ReminderDay {
   key: string;
   /** «Сегодня» · «Завтра» · «Пятница, 19 сентября». */
   title: string;
@@ -217,7 +217,7 @@ export function notificationsSummary(
   return `${state} · ${count} ${countWordRu(count, "напоминание", "напоминания", "напоминаний")}`;
 }
 
-export interface PermissionRowView {
+interface PermissionRowView {
   sub: string;
   /** `request` — системный вопрос (iOS задаёт его один раз, Android — пока
    *  разрешает); `settings` — настройки телефона: спросить уже нельзя. */

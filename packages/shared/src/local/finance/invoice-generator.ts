@@ -40,7 +40,7 @@ export const INVOICE_GENERATOR_DEFAULTS: InvoiceGeneratorSettings = {
 
 /** Строка будущего счёта. Цены — брутто-нетто-агностичны: налог накидывает
  *  документ по своему режиму, а не эта функция. */
-export interface GeneratedInvoiceLine {
+interface GeneratedInvoiceLine {
   title: string;
   qty: number;
   unitPrice: number;

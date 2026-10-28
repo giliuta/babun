@@ -38,7 +38,7 @@ const clean = (v: unknown): string | null => {
 const upper = (v: unknown): string | null => clean(v)?.toUpperCase() ?? null;
 
 /** Пустой набор — не набор: печатать с него нечего. */
-export function isBlankRequisites(fields: Partial<RequisitesFields>): boolean {
+function isBlankRequisites(fields: Partial<RequisitesFields>): boolean {
   return REQUISITES_KEYS.every((k) => clean(fields[k]) === null);
 }
 
@@ -88,7 +88,7 @@ export function clientRequisitesOf(
 
 type RequisitesKey = (typeof REQUISITES_KEYS)[number];
 
-export function defaultRequisites(
+function defaultRequisites(
   sets: readonly ClientRequisites[],
 ): ClientRequisites | null {
   return sets.find((s) => s.is_default) ?? sets[0] ?? null;

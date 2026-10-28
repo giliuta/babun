@@ -27,7 +27,7 @@ import {
 // денег, чека и кредит-ноты нет; удалить — только последний в серии; отменить
 // — кредит-нотой, и только когда денег по нему у нас не осталось.
 
-export interface MenuAction {
+interface MenuAction {
   key: "edit" | "cancel" | "delete" | "delete-note";
   label: string;
   destructive?: boolean;
@@ -37,7 +37,7 @@ export interface MenuAction {
   run: () => void;
 }
 
-export interface InvoiceMenuContext {
+interface InvoiceMenuContext {
   /** Все инвойсы — серия (последний ли) и кредит-ноты. */
   all: readonly InvoiceLedger[];
   payments: readonly InvoicePaymentLedger[];

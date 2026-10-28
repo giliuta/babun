@@ -20,7 +20,7 @@ import {
   type InvitableRole,
 } from "./invitation-flow";
 
-export interface InvitationPreview {
+interface InvitationPreview {
   tenantName: string;
   /** Календарь, в который зовут. `null` — приглашение старой формы, без
    *  календаря: человек войдёт по роли. Показываем ровно то, что приглашение

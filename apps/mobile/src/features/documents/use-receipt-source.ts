@@ -23,7 +23,7 @@ const paperWords = (language: string | null | undefined) =>
 // «Изменить» в листе чека, тот же номер). Деньги уже в журнале: клиент, счёт
 // и сумма — от оплаты.
 
-export type ReceiptSourceMode = "payment" | "edit";
+type ReceiptSourceMode = "payment" | "edit";
 
 export function useReceiptSource(
   params: { transactionId?: string; receiptId?: string },

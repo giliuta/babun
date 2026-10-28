@@ -17,7 +17,7 @@ import { payeeName, withPayee } from "../category-asks";
 // начало плюс операции счёта со знаком (`signedAmount`). Строки — от старых к
 // новым, как в банковской выписке: остаток в каждой строке читается вниз.
 
-export interface StatementRow {
+interface StatementRow {
   /** Кто или что: клиент, категория, другой счёт перевода. */
   title: string;
   /** Вид операции и способ: «Доход · Наличные». */
@@ -28,7 +28,7 @@ export interface StatementRow {
   balance: string;
 }
 
-export interface StatementDay {
+interface StatementDay {
   /** «12.09.2026». */
   date: string;
   rows: StatementRow[];
@@ -47,14 +47,14 @@ export interface StatementDocument {
   closing: string;
 }
 
-export interface StatementRefs {
+interface StatementRefs {
   accounts: readonly { id: string; name: string }[];
   categories: readonly { id: string; name: string }[];
   clients: readonly { id: string; full_name: string }[];
   people?: readonly { id: string; full_name: string }[];
 }
 
-export interface StatementInput {
+interface StatementInput {
   account: { id: string; name: string; opening_balance: number };
   teamName: string | null;
   /** Все операции, какие видны: нужны и чужие ноги переводов — по ним
@@ -188,7 +188,7 @@ function typeLabel(tx: FinanceTransaction): string {
 }
 
 /** «12.09.2026» — дата цифрами, как у чека. */
-export function formatStatementDate(ymd: string): string {
+function formatStatementDate(ymd: string): string {
   const [y, m, d] = ymd.split("-");
   return y && m && d ? `${d}.${m}.${y}` : ymd;
 }

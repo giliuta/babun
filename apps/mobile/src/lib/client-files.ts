@@ -31,7 +31,7 @@ interface ReceiptLike {
   created_at?: string | null;
 }
 
-export interface ClientFileSources<A extends AttachmentLike, V extends VisitPhotoLike, I extends InvoiceLike, R extends ReceiptLike> {
+interface ClientFileSources<A extends AttachmentLike, V extends VisitPhotoLike, I extends InvoiceLike, R extends ReceiptLike> {
   attachments: readonly A[];
   visitPhotos: readonly V[];
   invoices: readonly I[];
@@ -40,7 +40,7 @@ export interface ClientFileSources<A extends AttachmentLike, V extends VisitPhot
 
 /** Запись ленты: `day` — заголовок дня (YYYY-MM-DD), `at` — порядок внутри
  *  дня и время в подписи. */
-export type ClientFileEntry<A, V, I, R> =
+type ClientFileEntry<A, V, I, R> =
   | { type: "photo"; item: A; day: string; at: string }
   | { type: "file"; item: A; day: string; at: string }
   | { type: "visit"; item: V; day: string; at: string }

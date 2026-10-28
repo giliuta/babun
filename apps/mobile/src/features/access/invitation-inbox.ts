@@ -7,7 +7,7 @@
 
 import type { IncomingInvitationView } from "./IncomingInvitationCard";
 
-export type InvitedRole = "dispatcher" | "master";
+type InvitedRole = "dispatcher" | "master";
 
 export interface IncomingInvitation {
   id: string;

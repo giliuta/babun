@@ -45,7 +45,7 @@ type Theme = ReturnType<typeof useThemeColors>;
 
 /** Цвет слова положения — на карточке и на странице прав один: скрытое тише
  *  всего, «смотрит» вполголоса, открытое и разное — полным цветом. */
-export function levelColor(t: Theme, level: AreaLevel): string {
+function levelColor(t: Theme, level: AreaLevel): string {
   const tone = levelTone(level);
   return tone === "faint" ? t.faint : tone === "sub" ? t.sub : t.ink;
 }
@@ -73,7 +73,7 @@ export function HeaderMenuButton({ label, onPress }: { label: string; onPress: (
   );
 }
 
-export interface MasterIdentity {
+interface MasterIdentity {
   name: string;
   email: string;
   phone: string;

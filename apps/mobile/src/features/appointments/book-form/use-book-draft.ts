@@ -61,7 +61,7 @@ export type BookParams = {
   copyOf?: string;
 };
 
-export interface BookDraftInput {
+interface BookDraftInput {
   params: BookParams;
   teamId: string | null;
   setTeamId: Dispatch<SetStateAction<string | null>>;

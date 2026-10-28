@@ -23,7 +23,7 @@ const wider = (
   b: AccessLevel | undefined,
 ): AccessLevel => (b !== undefined && (ranks[b] ?? -1) > (ranks[a] ?? -1) ? b : a);
 
-export interface ClientsAccessLevels {
+interface ClientsAccessLevels {
   clients?: AccessLevel;
   scope?: AccessLevel;
   contacts?: AccessLevel;

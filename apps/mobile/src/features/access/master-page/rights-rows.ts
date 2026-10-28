@@ -85,7 +85,7 @@ export interface RightsRow {
   foldedBy?: string;
 }
 
-export interface RightsSection {
+interface RightsSection {
   area: RightsArea;
   title: string;
   rows: RightsRow[];

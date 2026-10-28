@@ -108,7 +108,7 @@ const isEvent = (kind: Appointment["kind"] | undefined) => kind === "event" || k
 /** Блок статуса: отмена и возврат из отмены — «Отменять». Иного статуса
  *  нет — `null`: его не
  *  меняет никто, визит закрывает оплата. */
-export function statusBlock(next: string, previous: string | undefined): string | null {
+function statusBlock(next: string, previous: string | undefined): string | null {
   return next === "cancelled" || previous === "cancelled" ? "calendar.cancel" : null;
 }
 

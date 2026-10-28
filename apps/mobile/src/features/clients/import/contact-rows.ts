@@ -15,7 +15,7 @@ import { formatPhoneAsYouType, tryToE164 } from "@/lib/phone";
 //   команды), не становится основным: у основного номера есть ключ дубля, а у
 //   такого его нет. Он едет доп. номером — человек увидит и поправит.
 
-export interface ContactLike {
+interface ContactLike {
   id?: string;
   name?: string;
   firstName?: string;

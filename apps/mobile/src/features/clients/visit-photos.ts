@@ -17,7 +17,7 @@ import { useTenantId } from "@/lib/tenant";
 const BUCKET = "appointment-photos";
 const SIGNED_URL_TTL = 5 * 60;
 
-export interface VisitPhoto {
+interface VisitPhoto {
   id: string;
   appointment_id: string;
   storage_path: string;

@@ -170,7 +170,7 @@ export function useSetInvoiceNextNumber() {
  * без отдельной связки сторно печаталось бы в списках как
  * «Инвойс CN-… · Оплачен» с минусовой суммой.
  */
-export interface CreditNoteLinks {
+interface CreditNoteLinks {
   /** id кредит-ноты → id сторнированного инвойса. */
   originalByNoteId: Map<string, string>;
   /** id инвойса → id его кредит-ноты. */

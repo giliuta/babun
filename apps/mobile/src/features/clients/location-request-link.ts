@@ -10,7 +10,7 @@ import { intlLocale } from "@babun/shared/i18n/runtime";
 
 /** Веб-версия живёт на babun.app (master → Vercel); только https открывается
  *  у клиента без приложения — схема babun:// здесь не годится. */
-export const LOCATION_LINK_ORIGIN = "https://babun.app";
+const LOCATION_LINK_ORIGIN = "https://babun.app";
 
 /** Токен выписывает сервер: 24 случайных байта → 32 символа base64url. */
 const TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
@@ -44,7 +44,7 @@ export interface LocationRequest {
   location_id: string | null;
 }
 
-export type LocationRequestState = "pending" | "used" | "expired";
+type LocationRequestState = "pending" | "used" | "expired";
 
 export function locationRequestState(
   r: Pick<LocationRequest, "used_at" | "expires_at">,

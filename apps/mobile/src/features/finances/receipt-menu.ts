@@ -20,7 +20,7 @@ import { useDeleteReceipt } from "./receipts-queries";
 
 type Item = { label: string; destructive?: boolean; icon?: LucideIcon; color?: string; run: () => void };
 
-export function receiptCanEdit(receipt: Pick<Receipt, "status" | "transaction_id">): boolean {
+function receiptCanEdit(receipt: Pick<Receipt, "status" | "transaction_id">): boolean {
   return receipt.status !== "void" && !!receipt.transaction_id;
 }
 

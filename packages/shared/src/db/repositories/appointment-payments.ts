@@ -15,7 +15,7 @@ type Row = Database["public"]["Tables"]["appointments"]["Row"];
 
 export type AppointmentPaymentKind = "settlement" | "prepayment";
 
-export interface RecordAppointmentPaymentInput {
+interface RecordAppointmentPaymentInput {
   appointmentId: string;
   accountId: string;
   /** Евро с копейками (не центы) — как везде в `Appointment`. */
@@ -51,7 +51,7 @@ export async function recordAppointmentPayment(
   return rowToAppointment(data as Row);
 }
 
-export interface CancelAppointmentPaymentInput {
+interface CancelAppointmentPaymentInput {
   appointmentId: string;
   /** id платежа из `payments[]` / `prepayments[]`. */
   paymentId: string;
@@ -73,7 +73,7 @@ export async function cancelAppointmentPayment(
   return rowToAppointment(data as Row);
 }
 
-export interface RefundOverpaymentAndSaveInput {
+interface RefundOverpaymentAndSaveInput {
   appointmentId: string;
   /** Сколько вернуть клиенту — евро с копейками. */
   amount: number;

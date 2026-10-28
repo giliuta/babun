@@ -28,7 +28,7 @@ export interface PaymentRights {
   documents: "write" | "read" | "none";
 }
 
-export interface PaymentRightsInput {
+interface PaymentRightsInput {
   role: UserRole | null | undefined;
   map: MemberAccessMap | undefined;
   teamId: string | null;

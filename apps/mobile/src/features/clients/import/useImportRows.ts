@@ -41,7 +41,7 @@ export interface ImportProgress {
   total: number;
 }
 
-export interface ImportRowError {
+interface ImportRowError {
   source: number;
   reason: string;
 }
@@ -51,7 +51,7 @@ export interface ImportRowsResult {
   errors: ImportRowError[];
 }
 
-export interface ImportRowsArgs {
+interface ImportRowsArgs {
   /** Rows the preview step decided to keep (already deduped/selected). */
   rows: MappedRow[];
   defaultCountry: CountryCode;

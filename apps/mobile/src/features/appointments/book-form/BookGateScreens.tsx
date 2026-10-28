@@ -39,7 +39,7 @@ export function BookMissingScreen({ t, onBack }: { t: Theme; onBack: () => void 
   );
 }
 
-export interface BookLoadingScreenProps {
+interface BookLoadingScreenProps {
   t: Theme;
   title: string;
   onClose: () => void;

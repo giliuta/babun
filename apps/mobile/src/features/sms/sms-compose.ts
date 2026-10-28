@@ -15,7 +15,7 @@ import { analyzeSmsEncoding, MAX_SMS_PARTS, stripEmoji } from "@babun/shared/loc
 /** Значения полей по каноническим (английским) именам токенов. */
 export type SmsVars = Partial<Record<SmsVarKey, string>>;
 
-export type SmsVarKey =
+type SmsVarKey =
   | "Name"
   | "Day"
   | "Date"
@@ -109,7 +109,7 @@ function localizeDate(vars: SmsVars, lang: SmsLanguage): SmsVars {
   return out;
 }
 
-export interface SmsSource {
+interface SmsSource {
   /** [Имя] — «Обращение» клиента или его первое имя (`addressedAs`). */
   name?: string | null;
   /** Дата записи «YYYY-MM-DD» → [День] и [Дата]. */

@@ -43,7 +43,7 @@ export type ChannelId =
   | "sms"
   | "chat";
 
-export interface ChannelDef {
+interface ChannelDef {
   id: ChannelId;
   label: string;
   color: string;
@@ -102,7 +102,7 @@ export const CONTACT_CHANNELS: ChannelDef[] = [
 /** Каналы, которые вообще имеет смысл ПРЕДЛАГАТЬ в настройках. Внутренний
  *  чат исключён, пока каналы сообщений не подключены: тумблер, который ни на
  *  что не влияет, — тот же мёртвый контрол, что и сама строка «Чат». */
-export function offeredChannels(): ChannelDef[] {
+function offeredChannels(): ChannelDef[] {
   return CONTACT_CHANNELS.filter((c) => c.id !== "chat" || isMessagingReady());
 }
 
@@ -112,7 +112,7 @@ export function isChannelOffered(id: ChannelId): boolean {
 }
 
 /** Определение канала по id — списки ходят по ПОРЯДКУ ПОЛЬЗОВАТЕЛЯ. */
-export function channelDef(id: ChannelId): ChannelDef | undefined {
+function channelDef(id: ChannelId): ChannelDef | undefined {
   return CONTACT_CHANNELS.find((c) => c.id === id);
 }
 
@@ -121,7 +121,7 @@ export function channelDef(id: ChannelId): ChannelDef | undefined {
 // WhatsApp», а не «канал включён, а поле выключено». Здесь остались только
 // определения каналов и правила, КУДА они ведут.
 
-export interface ResolvedChannel extends ChannelDef {
+interface ResolvedChannel extends ChannelDef {
   /** Куда вести. Для внутреннего чата — маршрут приложения. */
   url: string;
   internal?: boolean;

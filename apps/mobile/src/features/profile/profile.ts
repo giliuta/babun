@@ -12,7 +12,7 @@
 
 import { DEFAULT_COUNTRY, isDialOnly, tryToE164 } from "@/lib/phone";
 
-export interface PersonalProfile {
+interface PersonalProfile {
   name: string;
   /** E.164 или пусто. */
   phone: string;

@@ -20,7 +20,7 @@ import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 // самое, а оптимистичная строка на устройстве сразу показывает новое юр. имя
 // в поиске и в «Поделиться».
 
-export interface RequisitesWriter {
+interface RequisitesWriter {
   /** Правка набора по id или новый набор (id нет). Возвращает id набора,
    *  null — не записалось. */
   saveRequisites: (

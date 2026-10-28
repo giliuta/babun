@@ -232,7 +232,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
  *  кружок: это тот же `AppearanceTile`, что у тега, метки, услуги, категории и
  *  типа объекта. Свой набор значков у типа события остался — старые слаги
  *  живут картой совместимости, — поэтому набор передаётся плитке. */
-export function TypeMark({ color, icon }: { color: string; icon: string }) {
+function TypeMark({ color, icon }: { color: string; icon: string }) {
   return (
     <AppearanceTile
       color={color}

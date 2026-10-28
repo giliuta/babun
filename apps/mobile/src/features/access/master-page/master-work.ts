@@ -7,14 +7,14 @@ import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 // сотрудника считается по его календарям. События (`kind: "event"`) — не
 // работа: в счёт не идут.
 
-export interface WorkLike {
+interface WorkLike {
   date: string;
   team_id: string | null;
   status?: string | null;
   kind?: string | null;
 }
 
-export interface MonthWork {
+interface MonthWork {
   /** Записей в этом месяце (без отменённых). */
   total: number;
 }
@@ -93,7 +93,7 @@ export interface WorkRow extends WorkLike {
   payment_status?: string | null;
 }
 
-export interface WorkSummary {
+interface WorkSummary {
   total: number;
   cancelled: number;
   /** Выручка — деньги, ПОЛУЧЕННЫЕ по записям периода (кроме отменённых).
@@ -103,7 +103,7 @@ export interface WorkSummary {
   revenue: number;
 }
 
-export interface WorkDay<R> {
+interface WorkDay<R> {
   date: string;
   rows: R[];
 }

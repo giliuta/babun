@@ -136,7 +136,7 @@ export function paramsWithDraft<P extends {
 }
 
 /** Прерванная правка записи `id`, открытой в виде `base` (`updated_at`). */
-export interface BookEditDraft {
+interface BookEditDraft {
   v: 1;
   savedAt: number;
   id: string;

@@ -134,7 +134,7 @@ function useOptimisticPatch() {
   };
 }
 
-export interface RecordPaymentVars {
+interface RecordPaymentVars {
   appointmentId: string;
   accountId: string;
   /** Евро с копейками. */
@@ -191,7 +191,7 @@ export function useRecordPayment(appointmentId?: string | null) {
   });
 }
 
-export interface CancelPaymentVars {
+interface CancelPaymentVars {
   appointmentId: string;
   paymentId: string;
   requestId: string;
@@ -235,7 +235,7 @@ export function useCancelPayment(appointmentId?: string | null) {
   });
 }
 
-export interface RefundOverpaymentVars {
+interface RefundOverpaymentVars {
   appointmentId: string;
   /** Евро с копейками. */
   amount: number;

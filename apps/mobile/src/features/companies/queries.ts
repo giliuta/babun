@@ -29,7 +29,7 @@ export type CompanyDraft = Omit<
   "tenant_id"
 >;
 
-export const companiesQueryKey = (tenantId: string | null) => ["companies", tenantId];
+const companiesQueryKey = (tenantId: string | null) => ["companies", tenantId];
 
 export function useCompanies() {
   // Наборы АККАУНТА СТРАНИЦЫ: в блоке пригласившего аккаунта в

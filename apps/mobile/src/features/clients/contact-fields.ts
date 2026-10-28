@@ -35,7 +35,7 @@ export type ContactHolder = Pick<
   "phones" | "whatsapp_phone" | "telegram_username" | "instagram_username" | "email"
 >;
 
-export interface ContactFieldDef {
+interface ContactFieldDef {
   id: ContactFieldId;
   /** Ярлык строки и подпись пункта в листе «Добавить». */
   label: string;

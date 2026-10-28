@@ -23,7 +23,7 @@ import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 // пропали бы без ошибки. Поэтому черновик сотрудника получает положения из
 // его карты прав (`draftBlocks`) и показывает только блоки с «Меняет».
 
-export type CardBlockKey =
+type CardBlockKey =
   | "note"
   | "people"
   | "objects"
@@ -36,7 +36,7 @@ export type CardBlockKey =
   | "money"
   | "sms";
 
-export interface BlockAccess {
+interface BlockAccess {
   show: boolean;
   edit: boolean;
 }

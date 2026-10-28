@@ -17,7 +17,7 @@ import { receiptClientName, type Receipt } from "@babun/shared/local/finance/rec
 // Здесь только правило (что попадает в срез, как называется, чем сортируется);
 // вёрстка живёт в `DocumentsPanel`, и оба покрыты тестом на этот файл.
 
-export type DocumentKind = "invoice" | "receipt";
+type DocumentKind = "invoice" | "receipt";
 
 /**
  * Сегмент над списком — ровно вид документа, третьего значения нет (только два подраздела

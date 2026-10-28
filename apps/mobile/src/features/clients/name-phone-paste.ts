@@ -25,7 +25,7 @@ const CANDIDATE = /\+?\d[\d\s().-]{5,}\d/g;
  *  («Мария – +357…», «Мария, +357…», «Мария: +357…»). */
 const EDGE_JUNK = /^[\s,;:|/–—-]+|[\s,;:|/–—-]+$/g;
 
-export interface NamePhoneSplit {
+interface NamePhoneSplit {
   /** Имя без номера. */
   name: string;
   /** Номер в виде, каким его показывает поле телефона («+357 99 123456»). */

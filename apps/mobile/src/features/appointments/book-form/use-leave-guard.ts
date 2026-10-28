@@ -14,7 +14,7 @@ interface NoteDraft {
   discard: () => void;
 }
 
-export interface LeaveGuardInput {
+interface LeaveGuardInput {
   isEdit: boolean;
   hydrated: boolean;
   buildPatch: () => Partial<Appointment>;

@@ -11,7 +11,7 @@ import { notify } from "@/lib/notify";
 import type { CalendarMember } from "@/session/access-queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
 
-export interface MemberMenuDeps {
+interface MemberMenuDeps {
   member: CalendarMember | null;
   card: { is_active: boolean } | null;
   patchCard: (patch: { is_active?: boolean }) => void;

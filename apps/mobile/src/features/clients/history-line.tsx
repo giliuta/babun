@@ -20,13 +20,13 @@ import { statsByBlocks } from "@/features/clients/card-access";
 // сколько принесли, и когда были в последний раз. Пусто — значит человек ещё
 // ни разу не обслуживался, и врать «0 визитов» незачем.
 
-export interface HistoryPart {
+interface HistoryPart {
   key: string;
   text: string;
   tone: "debt" | "income" | "plain";
 }
 
-export function clientHistoryParts(
+function clientHistoryParts(
   client: Client,
   stats: ClientStats | undefined,
 ): HistoryPart[] {

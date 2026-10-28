@@ -14,7 +14,7 @@ import { offeredBlocks } from "../master-page/rights-copy";
 // На вход — положение блока в команде; `undefined` — права нет в реестре
 // (сервер его не держит) — о нём итог молчит.
 
-export type LevelRead = (key: string) => AccessLevel | undefined;
+type LevelRead = (key: string) => AccessLevel | undefined;
 
 /** «a», «a и b», «a, b и c». */
 export function joinRu(parts: readonly string[]): string {

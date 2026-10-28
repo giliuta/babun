@@ -6,7 +6,7 @@ import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 //
 // Лист без React: правило читают строка списка и тест.
 
-export type VisitMarkKind = "done" | "unclosed" | "ahead";
+type VisitMarkKind = "done" | "unclosed" | "ahead";
 
 export interface VisitMark {
   date: string;

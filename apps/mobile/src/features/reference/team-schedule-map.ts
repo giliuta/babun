@@ -47,7 +47,7 @@ export function withTeamSchedule(
 }
 
 /** Что откатывать, если правка не сохранится. */
-export interface TeamScheduleWriteContext {
+interface TeamScheduleWriteContext {
   prev: TeamSchedule | undefined;
   teamId: string;
   written: TeamSchedule;

@@ -35,7 +35,7 @@ import {
 
 export type ContactWayId = ChannelId | ContactFieldId;
 
-export interface ContactWayDef {
+interface ContactWayDef {
   id: ContactWayId;
   label: string;
   color: string;
@@ -52,7 +52,7 @@ const FIELD_IDS = new Set<string>(CONTACT_FIELDS.map((f) => f.id));
 
 /** Полный набор в порядке по умолчанию: сперва то, что живёт у номера,
  *  затем то, что бывает только отдельным полем. */
-export const CONTACT_WAYS: ContactWayDef[] = [
+const CONTACT_WAYS: ContactWayDef[] = [
   ...CONTACT_CHANNELS.map((c) => ({
     id: c.id as ContactWayId,
     label: c.label,

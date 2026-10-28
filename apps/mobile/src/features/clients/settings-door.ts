@@ -37,7 +37,7 @@ export interface ClientSettingsDoorInput {
   teamKnown: boolean;
 }
 
-export interface ClientSettingsHref {
+interface ClientSettingsHref {
   pathname: string;
   params: { team?: string; tenant?: string };
 }

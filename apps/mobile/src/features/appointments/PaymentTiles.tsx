@@ -24,7 +24,7 @@ export function useTileWidth(perRow = 3): number {
   return Math.floor((inner - TILE_GAP * (perRow - 1)) / perRow);
 }
 
-export type PaymentTileState = "idle" | "dim" | "pending" | "paid";
+type PaymentTileState = "idle" | "dim" | "pending" | "paid";
 
 export function PaymentTile({
   icon: Icon,

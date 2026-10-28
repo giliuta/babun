@@ -15,7 +15,7 @@ export type VisitStatusKind =
   | "past"
   | "nosum";
 
-export interface VisitStatus {
+interface VisitStatus {
   kind: VisitStatusKind;
   /** Число справа; пусто — денег не показываем. */
   text: string;

@@ -8,7 +8,7 @@ import { Platform, Share } from "react-native";
 // снят с поддержки). В браузере — `navigator.share`, где он есть (телефоны),
 // иначе буфер обмена.
 
-export type ShareOutcome = "shared" | "copied" | "dismissed" | "failed";
+type ShareOutcome = "shared" | "copied" | "dismissed" | "failed";
 
 export function canCopyLink(): boolean {
   return (

@@ -13,7 +13,7 @@ import type { BusinessNow } from "./payment-draft";
 // календаря, по умолчанию Кипр. Считать это в двух местах по-разному значит
 // закрыть визит в 00:30 «вчера» на одном экране и «сегодня» на другом.
 
-export function businessNowFrom(date: Date, zone?: string): BusinessNow {
+function businessNowFrom(date: Date, zone?: string): BusinessNow {
   return { ymd: formatYMD(date), hm: formatHM(date), zone };
 }
 

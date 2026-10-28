@@ -11,7 +11,7 @@
 // «нота → инвойс» она не попадает: без проверки вида она считалась бы
 // инвойсом записи.
 
-export interface AppointmentInvoiceRow {
+interface AppointmentInvoiceRow {
   id: string;
   appointment_id: string | null;
   status: string;

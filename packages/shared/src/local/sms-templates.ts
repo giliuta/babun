@@ -55,7 +55,7 @@ const TOKEN_ALIASES: Record<string, string> = {
 
 /** Каноническое (английское) имя токена: «Имя» → «Name», «Name» → «Name».
  *  Незнакомый токен возвращается как есть. */
-export function canonicalTokenKey(key: string): string {
+function canonicalTokenKey(key: string): string {
   return TOKEN_ALIASES[key] ?? key;
 }
 

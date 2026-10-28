@@ -46,7 +46,7 @@ import { useStepAllowed, useTeamsAllowed } from "@/session/use-partner-manager";
 //   • member — `access/[userId]`: человек уже в календаре.
 // Тело одно (`MasterCardView`); режим решает, откуда данные и куда правка.
 
-export type MasterCardProps =
+type MasterCardProps =
   | { mode: "draft"; teamId: string | null; cardId?: string | null; onBack: () => void }
   | { mode: "invite"; invitationId: string; onBack: () => void }
   | { mode: "member"; userId: string; teamId: string | null; onBack: () => void };

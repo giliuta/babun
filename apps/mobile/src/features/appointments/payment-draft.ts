@@ -111,7 +111,7 @@ export function amountCentsFromInput(text: string): number {
     : 0;
 }
 
-export type AmountProblem = "empty" | "exceeds";
+type AmountProblem = "empty" | "exceeds";
 
 /** Почему сумму нельзя записать; null — можно. */
 export function amountProblem(

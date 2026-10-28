@@ -31,13 +31,13 @@ import { ICON_PRESETS, iconPreset, type IconPreset } from "@/components/ui/icon-
 
 /** Глиф значка. Именно `LucideIcon`, а не свой `ComponentType`: тот же тип
  *  ждёт общий `IconPicker`, и своя подпись рассыпала бы пресеты. */
-export type EventTypeIconCmp = LucideIcon;
+type EventTypeIconCmp = LucideIcon;
 
 /** КАРТА СОВМЕСТИМОСТИ, А НЕ НАБОР ДЛЯ ВЫБОРА. Выбирают теперь из
  *  общих сорока (`ICON_PRESETS`), но у типов, заведённых раньше, в базе лежат
  *  СВОИ слаги — «coffee», «moon», «dumbbell», «graduation-cap». Здесь они и
  *  живут: без этой карты «Обед» превратился бы в безымянный ярлычок. */
-export const EVENT_TYPE_ICONS: Record<string, EventTypeIconCmp> = {
+const EVENT_TYPE_ICONS: Record<string, EventTypeIconCmp> = {
   coffee: Coffee,
   briefcase: Briefcase,
   navigation: Navigation,

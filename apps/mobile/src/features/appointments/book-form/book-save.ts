@@ -21,7 +21,7 @@ import { reminderToast as reminderToastWith } from "./reminder-toast";
 import type { BookDraft } from "./use-book-draft";
 import type { BookReferences } from "./use-book-references";
 
-export interface BookSaveInput {
+interface BookSaveInput {
   canSave: boolean;
   bookingBusy: boolean;
   missingHint: string;

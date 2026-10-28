@@ -66,7 +66,7 @@ export {
 
 /** Что умеет писатель связей. Возвращают `true`, когда правда в базе стала
  *  той, какой её хотели (в том числе когда писать было нечего). */
-export interface LinkWriter {
+interface LinkWriter {
   attach(member: Client, target: LinkTarget): Promise<boolean>;
   setRole(item: ClientLinkItem, role: string): Promise<boolean>;
   detach(item: ClientLinkItem): Promise<boolean>;

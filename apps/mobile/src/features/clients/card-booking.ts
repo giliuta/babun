@@ -18,7 +18,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 
-export interface BookingTarget {
+interface BookingTarget {
   clientId: string;
   locationId?: string | null;
   teamId?: string | null;

@@ -15,7 +15,7 @@ import { teamDesignQueryKey, type TeamDesign } from "@/features/appointments/tea
 // «Маршрут» открывает её сразу. Лист появляется только там, где выбор
 // действительно есть (см. features/clients/route-menu.ts).
 
-export interface MapServiceDef {
+interface MapServiceDef {
   id: MapService;
   label: string;
   /** Значок в листе — тот же приём, что у способов связи. */

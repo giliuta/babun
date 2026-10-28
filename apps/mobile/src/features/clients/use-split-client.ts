@@ -34,7 +34,7 @@ interface SplitClientInput {
   menuOpen: boolean;
 }
 
-export interface SplitClient {
+interface SplitClient {
   /** Обработчик пункта или `undefined` — пункта нет. */
   onSplit?: () => void;
   /** Проп `onExited` меню «⋯». */

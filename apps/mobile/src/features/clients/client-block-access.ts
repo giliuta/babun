@@ -24,7 +24,7 @@ export type ClientCardBlock =
   | "clients.menu"
   | "clients.delete";
 
-export type ClientBlockLevel = "hidden" | "read" | "write";
+type ClientBlockLevel = "hidden" | "read" | "write";
 
 /** Положение блока карточки у клиента. */
 export function clientBlockLevel(

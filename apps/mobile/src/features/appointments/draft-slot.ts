@@ -6,7 +6,7 @@
 // загорались бы ни разу, хотя страница их честно рисует. Добавив команду,
 // нельзя забыть и id: у сохранённой записи в списке дня лежит она сама, и под
 // чужим id («book-draft») запись пересекалась бы сама с собой.
-export interface DraftSlotInput {
+interface DraftSlotInput {
   /** id сохранённой записи; null — новая. */
   editId: string | null;
   teamId: string | null;

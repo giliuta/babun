@@ -13,7 +13,7 @@ import {
 
 type InvitationRow = Database["public"]["Tables"]["invitations"]["Row"];
 
-export interface CreatedInvitation {
+interface CreatedInvitation {
   id: string;
   tenant_id: string;
   email: string;

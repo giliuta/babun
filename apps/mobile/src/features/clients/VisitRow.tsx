@@ -21,7 +21,7 @@ import { useThemeColors, type ThemeColors } from "@/theme/colors";
 // Плашки стоят в `SelectList` — с воздухом между ними, без швов.
 
 /** «чт, 1 октября 2026» — день с годом всегда (общий `humanDayYear`). */
-export function visitDay(ymd: string): string {
+function visitDay(ymd: string): string {
   return humanDayYear(ymd);
 }
 
@@ -51,7 +51,7 @@ const AMOUNT_COLUMN = 64;
 
 const noop = () => {};
 
-export interface VisitTeam {
+interface VisitTeam {
   name: string;
   is_active: boolean;
   color?: string | null;

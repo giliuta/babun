@@ -14,7 +14,7 @@ import type { City, Team } from "@/features/reference/queries";
 import type { useToast } from "@/components/ui/Toast";
 import { formatYMD } from "@/features/appointments/helpers";
 
-export interface TeamLabelInput {
+interface TeamLabelInput {
   isEdit: boolean;
   allTeams: Team[];
   teams: Team[];

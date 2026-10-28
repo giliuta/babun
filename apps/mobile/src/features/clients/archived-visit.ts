@@ -8,7 +8,7 @@
 // которых историю и открывают. У компании с одной командой подписи нет —
 // она у всех визитов была бы одна и та же.
 
-export interface VisitTeamRow {
+interface VisitTeamRow {
   id: string;
   name: string;
   is_active: boolean;

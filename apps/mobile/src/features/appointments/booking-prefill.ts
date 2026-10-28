@@ -12,7 +12,7 @@ export type BookingClientRef = Pick<
   | "deleted_at"
 >;
 
-export interface BookingClientPrefill {
+interface BookingClientPrefill {
   clientId: string;
   locationId: string | null;
   address: string;
@@ -20,7 +20,7 @@ export interface BookingClientPrefill {
   masterId: string | null;
 }
 
-export interface QuickClientDraft {
+interface QuickClientDraft {
   kind: "name" | "phone";
   full_name: string;
   phone: string;
