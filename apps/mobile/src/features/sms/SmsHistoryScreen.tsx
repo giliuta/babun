@@ -9,7 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { GUTTER } from "@/components/ui/tokens";
-import { SummaryToggle } from "@/features/finances/FinanceOverview";
+import { SummaryGroup, SummaryToggle } from "@/features/finances/FinanceOverview";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { haptics } from "@/lib/haptics";
@@ -102,6 +102,7 @@ export function SmsHistoryScreen() {
       ) : null}
 
       <View style={{ marginHorizontal: GUTTER, gap: 6, marginBottom: 8 }}>
+        <SummaryGroup>
         <View style={{ flexDirection: "row", gap: 6 }}>
           <SummaryToggle
             label="Все"
@@ -139,6 +140,7 @@ export function SmsHistoryScreen() {
             onPress={() => toggle("failed")}
           />
         </View>
+        </SummaryGroup>
       </View>
     </View>
   );

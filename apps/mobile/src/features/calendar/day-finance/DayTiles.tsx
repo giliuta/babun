@@ -1,6 +1,6 @@
 import { View } from "react-native";
 import { formatEURExact as formatEUR, moneySign } from "@babun/shared/common/utils/money";
-import { SummaryToggle } from "@/features/finances/FinanceOverview";
+import { SummaryGroup, SummaryToggle } from "@/features/finances/FinanceOverview";
 import type { dayMoney } from "@/features/calendar/day-money";
 import { useThemeColors } from "@/theme/colors";
 import type { DayView } from "./types";
@@ -24,59 +24,61 @@ export function DayTiles({
 }) {
   const t = useThemeColors();
   return (
-    <View
-      style={{
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        gap: 6,
-        opacity: listLoading ? 0.4 : 1,
-      }}
-    >
-      <View style={{ flexDirection: "row", gap: 6 }}>
-        <SummaryToggle
-          label="Доход"
-          color={moneySign(money.income) < 0 ? t.danger : t.success}
-          value={formatEUR(money.income)}
-          // Ноль тише живых денег — как у плиток «Финансов»: красный
-          // «€0» у расхода врал цветом.
-          quiet={moneySign(money.income) === 0}
-          active={view === "income"}
-          onPress={() => pick("income")}
-        />
-        <SummaryToggle
-          label="Расход"
-          color={t.danger}
-          value={formatEUR(money.expense)}
-          quiet={moneySign(money.expense) === 0}
-          active={view === "expense"}
-          onPress={() => pick("expense")}
-        />
-      </View>
-      <View style={{ flexDirection: "row", gap: 6 }}>
-        {/* Долг дня — неоплаченные записи. Без оплаты в записи
-            (функция компании выключена, STORY-088) все записи
-            выглядели бы долгом — плитки нет. */}
-        {showDebt ? (
+    <SummaryGroup>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          gap: 6,
+          opacity: listLoading ? 0.4 : 1,
+        }}
+      >
+        <View style={{ flexDirection: "row", gap: 6 }}>
           <SummaryToggle
-            // Слово «Финансов»: та же плитка там — «Долги».
-            label="Долги"
-            color={t.warning}
-            value={formatEUR(money.debt)}
-            quiet={moneySign(money.debt) === 0}
-            active={view === "debt"}
-            onPress={() => pick("debt")}
+            label="Доход"
+            color={moneySign(money.income) < 0 ? t.danger : t.success}
+            value={formatEUR(money.income)}
+            // Ноль тише живых денег — как у плиток «Финансов»: красный
+            // «€0» у расхода врал цветом.
+            quiet={moneySign(money.income) === 0}
+            active={view === "income"}
+            onPress={() => pick("income")}
           />
-        ) : null}
-        {/* Серым: план — не деньги, а то, что ещё предстоит. */}
-        <SummaryToggle
-          label="Ожидается"
-          color={t.sub}
-          value={formatEUR(money.planned)}
-          quiet={moneySign(money.planned) === 0}
-          active={view === "planned"}
-          onPress={() => pick("planned")}
-        />
+          <SummaryToggle
+            label="Расход"
+            color={t.danger}
+            value={formatEUR(money.expense)}
+            quiet={moneySign(money.expense) === 0}
+            active={view === "expense"}
+            onPress={() => pick("expense")}
+          />
+        </View>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {/* Долг дня — неоплаченные записи. Без оплаты в записи
+              (функция компании выключена, STORY-088) все записи
+              выглядели бы долгом — плитки нет. */}
+          {showDebt ? (
+            <SummaryToggle
+              // Слово «Финансов»: та же плитка там — «Долги».
+              label="Долги"
+              color={t.warning}
+              value={formatEUR(money.debt)}
+              quiet={moneySign(money.debt) === 0}
+              active={view === "debt"}
+              onPress={() => pick("debt")}
+            />
+          ) : null}
+          {/* Серым: план — не деньги, а то, что ещё предстоит. */}
+          <SummaryToggle
+            label="Ожидается"
+            color={t.sub}
+            value={formatEUR(money.planned)}
+            quiet={moneySign(money.planned) === 0}
+            active={view === "planned"}
+            onPress={() => pick("planned")}
+          />
+        </View>
       </View>
-    </View>
+    </SummaryGroup>
   );
 }

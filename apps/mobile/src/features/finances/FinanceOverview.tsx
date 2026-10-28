@@ -13,11 +13,11 @@ import type { Team } from "@/features/reference/queries";
 import type { Period } from "@/lib/period";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
-import { SummaryToggle } from "./finance-overview/SummaryToggle";
+import { SummaryGroup, SummaryToggle } from "./finance-overview/SummaryToggle";
 import { UNKNOWN_BALANCE_TEXT } from "./accounts";
 
 export { PeriodRow, ScopePeriodBar } from "./finance-overview/ScopePeriodBar";
-export { SummaryToggle } from "./finance-overview/SummaryToggle";
+export { SummaryGroup, SummaryToggle } from "./finance-overview/SummaryToggle";
 
 /**
  * Какую панель раскрывает сводка. Страниц среди них больше нет.
@@ -155,6 +155,7 @@ export function FinanceOverview({
       <View className="px-4 pb-2 pt-2">
         {/* Обучение показывает плитки одним шагом: шесть входов одного вида. */}
         <TourTarget id="finances.tiles" style={{ gap: 6 }}>
+        <SummaryGroup>
         {/* Счета | Документы — ТОТ ЖЕ РЯД, ЧТО И СВОДКА: того же вида, что доход и расход,
             долги и прибыль. Плитки в два этажа (другой рост, другой кегль, свой
             значок) глаз читал бы как объекты другого рода, хотя это такие же
@@ -271,6 +272,7 @@ export function FinanceOverview({
             onPress={() => onTap("profit")}
           />
         </View>
+        </SummaryGroup>
         </TourTarget>
 
         {/* ПЛАШКИ «НДС К УПЛАТЕ» ЗДЕСЬ НЕТ: информацию о налоге переносят в другое место.
