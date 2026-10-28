@@ -36,8 +36,7 @@ import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole, useTenant } from "@/session/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { invoiceDictionary } from "@/lib/paper/dictionary";
-import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/lib/paper/format";
+import { useLiveBusinessToday } from "@/features/settings/live-business-today";
 import { confirmThen } from "@/lib/confirm";
 
 // НОВЫЙ ЧЕК — ТОНКИЙ МАРШРУТ НАД СОСТАВИТЕЛЕМ, как `invoices/new.tsx` над
@@ -56,8 +55,7 @@ export default function NewReceiptScreen() {
   // модальным листом, iOS показывал не всегда (замечено на iPhone 17e).
   const justIssued = useRef<Receipt | null>(null);
   const toast = useToast();
-  const calendarSettings = useCalendarSettings();
-  const businessToday = todayYmd(calendarSettings.data?.timezone ?? "Europe/Nicosia");
+  const businessToday = useLiveBusinessToday();
   // Команда приходит чипом с «Финансов»: чек выписывают в той команде, где
   // на него смотрели. Внутри её можно сменить — тогда сменится и список касс.
   const params = useLocalSearchParams<{ teamId?: string; transactionId?: string; receiptId?: string }>();

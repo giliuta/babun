@@ -35,17 +35,13 @@ import { AmountBlock } from "@/features/finances/AmountBlock";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { buildInvoiceDocument } from "@/lib/paper/document";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
-import {
-  formatInvoiceMoney,
-  parseMoneyAmount,
-  todayYmd,
-} from "@/lib/paper/format";
+import { formatInvoiceMoney, parseMoneyAmount } from "@/lib/paper/format";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import { useInvoice, useNextInvoiceSeries } from "@/features/finances/invoices-queries";
 import { creditNoteVat } from "@/features/invoices/credit-note-amounts";
 import { useReceiptRefunds } from "@/features/documents/use-receipt-refunds";
-import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useLiveBusinessToday } from "@/features/settings/live-business-today";
 import { useTenant } from "@/session/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -79,10 +75,7 @@ export default function ReceiptRefundScreen() {
     includeInactive: true,
     includeHidden: true,
   });
-  const calendarSettings = useCalendarSettings();
-  const businessToday = todayYmd(
-    calendarSettings.data?.timezone ?? "Europe/Nicosia",
-  );
+  const businessToday = useLiveBusinessToday();
   const refund = useRefundReceipt();
   const issueDocument = useIssueReceiptCreditNote();
   const requestId = useRef(randomUuid()).current;

@@ -31,6 +31,7 @@ import { useCurrentRole , useTenant } from "@/session/tenant";
 import { accessGate } from "@/session/my-access";
 import { useMyAccess } from "@/session/access-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useLiveBusinessToday } from "@/features/settings/live-business-today";
 import { todayYmd } from "@/lib/paper/format";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -83,9 +84,7 @@ export default function NewInvoiceScreen() {
   const update = useUpdateInvoice(editId ?? "");
   const vat = useVatSettings();
   const teamVat = useTeamVatOverrides();
-  const businessToday = todayYmd(
-    calendarSettings.data?.timezone ?? "Europe/Nicosia",
-  );
+  const businessToday = useLiveBusinessToday();
   const requestId = useRef(randomUuid()).current;
   /** Этот id уже уходил на сервер: ответ мог потеряться, а документ — создаться. */
   const sentRef = useRef(false);

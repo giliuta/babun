@@ -24,7 +24,7 @@ import { useClients } from "@/features/clients/queries";
 import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
 import { buildInvoiceDocument } from "@/lib/paper/document";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
-import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
+import { formatInvoiceMoney, parseMoneyAmount } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
 import { creditNoteLeftToPay, creditNoteVat } from "@/features/invoices/credit-note-amounts";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
@@ -37,7 +37,7 @@ import {
   useIssuePartialCreditNote,
   useNextInvoiceSeries,
 } from "@/features/finances/invoices-queries";
-import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useLiveBusinessToday } from "@/features/settings/live-business-today";
 import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
@@ -68,12 +68,9 @@ export default function CreditNoteScreen() {
   const original = useInvoice(invoiceId);
   const clients = useClients();
   const tenant = useTenant();
-  const calendarSettings = useCalendarSettings();
   // Дату ноты ставит сервер (`tenant_business_date`); превью — тот же день
   // компании по её часовому поясу.
-  const businessToday = todayYmd(
-    calendarSettings.data?.timezone ?? "Europe/Nicosia",
-  );
+  const businessToday = useLiveBusinessToday();
   const cancel = useCancelInvoice(invoiceId ?? "");
   const partial = useIssuePartialCreditNote(invoiceId ?? "");
   const paymentRows = useInvoicePayments();
