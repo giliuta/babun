@@ -34,11 +34,12 @@ export interface SmsTeamTemplate {
   name: string;
   body: string;
   trigger: SmsWhen;
-  /** «До визита» — часы до начала; «После визита» — часы после конца. */
+  /** «До записи» — часы до начала; «После окончания записи» — часы после
+   *  конца. «Визит» в интерфейсе не говорим: сущность — «Запись». */
   hours: number | null;
   /** «Накануне» — «ЧЧ:ММ» по времени календаря. */
   atTime: string | null;
-  /** «Пора повторить» — месяцы после визита. */
+  /** «Пора повторить» — месяцы после окончания записи. */
   months: number | null;
   /** Окно отправки, часы календаря: с `sendFrom` до `sendTo`. */
   sendFrom: number;
@@ -87,11 +88,11 @@ export function parseTeamTemplates(rows: unknown): SmsTeamTemplate[] {
 export const WHEN_LABELS: Record<SmsWhen, string> = {
   manual: "Вручную",
   created: "После записи",
-  before: "До визита",
+  before: "До записи",
   day_before: "Накануне",
   rescheduled: "При переносе",
   cancelled: "При отмене",
-  after: "После визита",
+  after: "После окончания записи",
   repeat: "Пора повторить",
 };
 
@@ -111,7 +112,7 @@ export function whenWords(t: Pick<SmsTeamTemplate, "trigger" | "hours" | "atTime
     case "created":
       return "Сразу после записи";
     case "before":
-      return t.hours ? `За ${hoursSpan(t.hours)} до визита` : "До визита";
+      return t.hours ? `За ${hoursSpan(t.hours)} до записи` : "До записи";
     case "day_before":
       return t.atTime ? `Накануне в ${t.atTime}` : "Накануне";
     case "rescheduled":
@@ -119,9 +120,9 @@ export function whenWords(t: Pick<SmsTeamTemplate, "trigger" | "hours" | "atTime
     case "cancelled":
       return "При отмене записи";
     case "after":
-      return t.hours ? `Через ${hoursSpan(t.hours)} после визита` : "После визита";
+      return t.hours ? `Через ${hoursSpan(t.hours)} после окончания записи` : "После окончания записи";
     case "repeat":
-      return t.months ? `Через ${formatCountRu(t.months, ["месяц", "месяца", "месяцев"])} после визита` : "Пора повторить";
+      return t.months ? `Через ${formatCountRu(t.months, ["месяц", "месяца", "месяцев"])} после окончания записи` : "Пора повторить";
   }
 }
 
@@ -215,8 +216,8 @@ export function draftProblem(d: TemplateDraft): string | null {
   if (d.name.trim().length > 60) return "Название длиннее 60 знаков";
   if (!d.body.trim()) return "Напишите текст";
   if (d.body.trim().length > 1000) return "Текст длиннее 1000 знаков";
-  if (d.trigger === "before" && !(d.hours && d.hours >= 1 && d.hours <= 168)) return "Выберите, за сколько до визита";
-  if (d.trigger === "after" && !(d.hours && d.hours >= 1 && d.hours <= 72)) return "Выберите, через сколько после визита";
+  if (d.trigger === "before" && !(d.hours && d.hours >= 1 && d.hours <= 168)) return "Выберите, за сколько до записи";
+  if (d.trigger === "after" && !(d.hours && d.hours >= 1 && d.hours <= 72)) return "Выберите, через сколько после окончания записи";
   if (d.trigger === "day_before" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(d.atTime ?? "")) return "Выберите время накануне";
   if (d.trigger === "repeat" && !(d.months && d.months >= 1 && d.months <= 24)) return "Выберите, через сколько месяцев";
   // Автоматическое SMS собирает сервер, а долг клиента — это инвойсы и

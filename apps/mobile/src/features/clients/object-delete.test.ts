@@ -13,10 +13,10 @@ test("число визитов — только на этом объекте; �
   assert.equal(visitsOnObject(undefined, "a"), null);
 });
 
-test("вопрос называет визиты, когда они есть", () => {
-  assert.equal(objectDeleteTitle(1), "На объекте 1 визит — удалить?");
-  assert.equal(objectDeleteTitle(3), "На объекте 3 визита — удалить?");
-  assert.equal(objectDeleteTitle(5), "На объекте 5 визитов — удалить?");
+test("вопрос называет записи, когда они есть", () => {
+  assert.equal(objectDeleteTitle(1), "На объекте 1 запись — удалить?");
+  assert.equal(objectDeleteTitle(3), "На объекте 3 записи — удалить?");
+  assert.equal(objectDeleteTitle(5), "На объекте 5 записей — удалить?");
   assert.equal(objectDeleteTitle(0), "Удалить объект?");
   assert.equal(objectDeleteTitle(null), "Удалить объект?");
 });

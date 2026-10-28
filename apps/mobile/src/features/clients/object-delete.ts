@@ -19,5 +19,5 @@ export function visitsOnObject(
 /** Заголовок вопроса: с числом, когда визиты есть. */
 export function objectDeleteTitle(visits: number | null): string {
   if (!visits) return "Удалить объект?";
-  return `На объекте ${formatCountRu(visits, ["визит", "визита", "визитов"])} — удалить?`;
+  return `На объекте ${formatCountRu(visits, ["запись", "записи", "записей"])} — удалить?`;
 }
