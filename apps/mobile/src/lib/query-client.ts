@@ -18,6 +18,7 @@ import {
 } from "./switch-revalidate-plan";
 import { onStorageReady } from "@babun/shared/storage";
 import { restoreChrome, watchChrome } from "./chrome-cache";
+import { restoreCalendarRefs, watchCalendarRefs } from "./calendar-refs-cache";
 
 /** Кто сейчас активен и кого дообновляет очередь — читается на каждое решение
  *  о свежести: оба значения меняются переходом, а не рендером. */
@@ -132,3 +133,9 @@ export const queryClient = new QueryClient({
 // вместо вкладок. Экраны рисуются позже подключения, так что шапка успевает.
 onStorageReady(() => restoreChrome(queryClient));
 watchChrome(queryClient);
+
+// СПРАВОЧНИКИ КАЛЕНДАРЯ — ТАК ЖЕ (`calendar-refs-cache.ts`): услуги, настройки,
+// метки, метки дня и график команды поднимаются до первого экрана, и сетка не
+// ждёт сервер ни на старте, ни без сети.
+onStorageReady(() => restoreCalendarRefs(queryClient));
+watchCalendarRefs(queryClient);
