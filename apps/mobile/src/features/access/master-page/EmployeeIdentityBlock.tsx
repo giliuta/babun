@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { Check, MailCheck, Send, UserRound, type LucideIcon } from "lucide-react-native";
 
@@ -88,6 +89,14 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
     home: useDefaultCountry(),
     onSave: (full) => p.onPhoneChange?.(full),
   });
+  // НАБРАННОЕ ИМЯ НЕ ТЕРЯЕТСЯ НА УХОДЕ. Имя пишется на `onBlur`, а поле,
+  // которое снимают с экрана в фокусе (стрелка «‹», жест «назад»), blur не
+  // получает. Свежий `onNameCommit` держим в ref и зовём при снятии блока —
+  // как имя календаря (`CalendarIdentityCard`). Карточки сами не пишут
+  // пустое и неизменённое имя, так что лишней записи нет.
+  const commitOnLeave = useRef(p.onNameCommit);
+  commitOnLeave.current = p.onNameCommit;
+  useEffect(() => () => commitOnLeave.current?.(), []);
 
   // Новый партнёр и ждущее приглашение — только почта: имя и
   // телефон он ведёт сам в своём профиле.
