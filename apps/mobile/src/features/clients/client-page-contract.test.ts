@@ -690,8 +690,12 @@ describe("общий список без чипа — все команды, н�
   // Пока команда не выбрана, видны все команды — общий список. Клиенты партнёра видны, но в выгрузку, рассылку и архив не
   // попадают: «Выбрать всё» и массовые действия считают только свою базу.
   const list = () => clientsListSource();
-  test("без чипа — весь склеенный список", () => {
-    assert.match(list(), /teamChoice === ALL_TEAMS \? clients : clientsOfTeam\(/);
+  test("без чипа — склеенный список без команд в архиве", () => {
+    assert.match(
+      list(),
+      /teamChoice === ALL_TEAMS\s*\?\s*withoutArchivedTeams\(clients, archivedTeamIds, appointments\)\s*:\s*clientsOfTeam\(/,
+    );
+    assert.match(list(), /useTeams\(\{ includeInactive: true \}\)/);
   });
   test("выбор и массовые действия — только своя база", () => {
     assert.match(list(), /const visible = useMemo\(\s*\(\) => result\.filtered\.filter\(\(c\) => !guestOf\.has\(c\.id\)\)/);
