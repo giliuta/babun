@@ -64,7 +64,7 @@ import type { AccessLevel } from "@/session/access-map";
 // календаря, «Метка» — лиловая, как справочник меток, «Отмена и удаление» —
 // красная, как всё, где ошибка стоит денег.
 
-interface RightLook {
+export interface RightLook {
   icon: LucideIcon;
   tile: string;
 }
