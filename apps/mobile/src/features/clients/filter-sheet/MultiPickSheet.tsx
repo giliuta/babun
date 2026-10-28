@@ -2,7 +2,10 @@ import { useRef } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
+import { ListX } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { ICON } from "@/components/ui/tokens";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import type { FacetOption } from "../filter";
 import { CLIENT_NOUN, type Noun3 } from "./constants";
@@ -10,7 +13,7 @@ import { FooterCta } from "./FooterCta";
 import { PickRow } from "./PickRow";
 
 /** Попап мультивыбора — общая грамматика блоков: контейнеры попапа
- *  периода (блоки canvas без подписей, ряды 48), отметка = оттиск.
+ *  периода (блоки canvas без подписей, ряды 52 — `LIST_ROW`), отметка = оттиск.
  *  Live-apply, тап НЕ закрывает — накликивается набор. «Применить · N»
  *  (и скрим/свайп) возвращают на СТРАНИЦУ фильтров, где выбранное
  *  видно в строке; на список ведёт только CTA страницы (тап не должен
@@ -65,34 +68,19 @@ export function MultiPickSheet({
     b.some((o) => (shown[o.value] ?? 0) > 0 || selected.includes(o.value)),
   );
   return (
-    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={0.85}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          paddingHorizontal: 20,
-          paddingTop: 4,
-          paddingBottom: 12,
-          gap: 12,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-          >
-            {title}
-          </Text>
-          {/* Семантика набора словами — своя формулировка на фасет. */}
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ marginTop: 2, fontSize: 13, color: t.faint }}
-          >
-            {subtitle}
-          </Text>
-        </View>
-        {selected.length > 0 ? (
+    // Шапка — общая `BottomSheet`: имя по центру, подпись фасета под ним,
+    // «Убрать всё» — значком в слоте действия шапки.
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      maxHeightRatio={0.85}
+      title={title}
+      subtitle={subtitle}
+      headerAction={
+        selected.length > 0 ? (
+          // Слот действия шапки — 44pt под значок (имя листа держится по
+          // центру): слово «Убрать» в него не влезало и упиралось в край.
           <Pressable
             onPress={() => {
               haptics.tap();
@@ -101,17 +89,19 @@ export function MultiPickSheet({
             accessibilityRole="button"
             accessibilityLabel={`Убрать всё в «${title}»`}
             hitSlop={10}
-            style={{ minHeight: 32, justifyContent: "center" }}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.5 : 1,
+            })}
           >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-            >
-              Убрать
-            </Text>
+            <ListX color={t.accent} size={ICON.command} strokeWidth={2} />
           </Pressable>
-        ) : null}
-      </View>
+        ) : undefined
+      }
+    >
       {alive || total === 0 ? (
         <ScrollView
           style={{ flexShrink: 1 }}
@@ -164,21 +154,9 @@ export function MultiPickSheet({
         </ScrollView>
       ) : (
         // Тупик (все ряды нулевые) — штатная ситуация при выбранной
-        // команде. Поле мёртвых рядов не объясняет ничего; текст — да.
-        <View style={{ paddingHorizontal: 20, paddingVertical: 22 }}>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-          >
-            При текущих условиях вариантов нет
-          </Text>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ marginTop: 4, fontSize: 13, color: t.faint, lineHeight: 18 }}
-          >
-            Снимите другие условия — и значения появятся.
-          </Text>
-        </View>
+        // команде. Поле мёртвых рядов не говорит ничего; пустое состояние
+        // общее и называет только то, чего нет (DESIGN-SYSTEM, LOCKED 08-27).
+        <EmptyState title="Ничего не найдено" />
       )}
       <FooterCta
         t={t}

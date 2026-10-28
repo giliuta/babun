@@ -9,6 +9,7 @@ import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { CLIENT_NOUN, INK, type Noun3 } from "./constants";
+import { LIST_ROW } from "@/components/ui/tokens";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -92,7 +93,7 @@ export function PickRow({
       className="flex-row items-center active:opacity-90"
       style={[
         {
-          minHeight: 48,
+          minHeight: LIST_ROW.minHeight,
           paddingVertical: rule ? 8 : 0,
           paddingHorizontal: 16,
           borderTopWidth: separated ? 1 : 0,

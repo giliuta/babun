@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { haptics } from "@/lib/haptics";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import type { FacetOption } from "../filter";
 import { CLIENT_NOUN, type Noun3 } from "./constants";
@@ -127,20 +128,7 @@ export function InlineMultiPick({
           ),
         )
       ) : (
-        <View style={{ paddingHorizontal: 4, paddingVertical: 6 }}>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-          >
-            При текущих условиях вариантов нет
-          </Text>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ marginTop: 4, fontSize: 13, color: t.faint, lineHeight: 18 }}
-          >
-            Снимите другие условия — и значения появятся.
-          </Text>
-        </View>
+        <EmptyState title="Ничего не найдено" />
       )}
     </View>
   );

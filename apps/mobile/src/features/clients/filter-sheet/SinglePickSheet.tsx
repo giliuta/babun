@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check } from "lucide-react-native";
 import { haptics } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { LIST_ROW } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
 /** Попап одиночного выбора — закон «галка = один»: тап применяет и
@@ -29,22 +30,16 @@ export function SinglePickSheet({
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   return (
-    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={0.85}>
-      <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-        >
-          {title}
-        </Text>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{ marginTop: 2, fontSize: 13, color: t.faint }}
-        >
-          {subtitle}
-        </Text>
-      </View>
+    // Шапка — общая `BottomSheet` (имя по центру, под ним подпись), как у
+    // всех шторок выбора: своя левая шапка была одна на продукт.
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      maxHeightRatio={0.85}
+      title={title}
+      subtitle={subtitle}
+    >
       {/* Скролл обязателен: при крупном шрифте нижние оси иначе
           недостижимы — до них просто не дотянуться. */}
       <ScrollView
@@ -87,7 +82,7 @@ export function SinglePickSheet({
                       flexDirection: "row",
                       alignItems: "center",
                       paddingHorizontal: 16,
-                      minHeight: 48,
+                      minHeight: LIST_ROW.minHeight,
                       borderTopWidth: i > 0 ? 1 : 0,
                       borderTopColor: t.separator,
                       backgroundColor: pressed
