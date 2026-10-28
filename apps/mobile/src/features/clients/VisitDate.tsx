@@ -33,18 +33,15 @@ export const PHONE_COLUMN = 138;
  *  столбик, чтобы дата не прыгала то здесь, то там. У номера место одной ширины под самый длинный
  *  номер (растёт с крупным шрифтом, как и строки, до 1.3), дата начинается за
  *  ним в одной точке у каждой строки — даже без номера. `phone` — уже в виде
- *  для глаза; `wide` — текст вместо номера («Номер откроется в день записи»):
- *  в столбик он не влезет и идёт своей шириной. */
+ *  для глаза. */
 export function PhoneVisitLine({
   phone,
   phoneColor,
   mark,
-  wide = false,
 }: {
   phone: string | null;
   phoneColor?: string;
   mark: VisitMark | null;
-  wide?: boolean;
 }) {
   const t = useThemeColors();
   const { fontScale } = useWindowDimensions();
@@ -61,11 +58,7 @@ export function PhoneVisitLine({
   ) : null;
   return (
     <View className="mt-0.5 flex-row items-center">
-      {wide ? (
-        <View style={{ flexShrink: 1, marginRight: mark ? 12 : 0 }}>{phoneText}</View>
-      ) : (
-        <View style={{ width: column }}>{phoneText}</View>
-      )}
+      <View style={{ width: column }}>{phoneText}</View>
       {mark ? <VisitDate mark={mark} /> : null}
     </View>
   );

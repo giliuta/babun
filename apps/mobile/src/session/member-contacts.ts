@@ -31,14 +31,14 @@ export type MemberContacts = Pick<
 /** Ответ двери. Отказ — ответом, не ошибкой: строка журнала не откатывается. */
 export type MemberContactsAnswer =
   | { status: "open"; contacts: MemberContacts }
-  | { status: "day" | "right" | "limit" };
+  | { status: "right" | "limit" };
 
 /** `contacts_hidden` строки окна. Нет ключа — строка владельца (`undefined`):
  *  прежнее поведение, дверь не зовётся. */
 export function contactsHiddenOf(row: object): ClientContactsHidden | undefined {
   if (!("contacts_hidden" in row)) return undefined;
   const value = (row as { contacts_hidden?: unknown }).contacts_hidden;
-  return value === "day" || value === "right" ? value : null;
+  return value === "right" ? value : null;
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -50,7 +50,7 @@ const list = (v: unknown): Record<string, unknown>[] =>
 export function parseMemberContacts(raw: unknown): MemberContactsAnswer {
   const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const status = row.status;
-  if (status === "day" || status === "right" || status === "limit") return { status };
+  if (status === "right" || status === "limit") return { status };
   if (status !== "open") throw new Error("Сервер вернул незнакомый ответ о номере");
   const phones: PhoneEntry[] = list(row.phones).map((p) => ({
     id: str(p.id),
@@ -78,12 +78,12 @@ export function parseMemberContacts(raw: unknown): MemberContactsAnswer {
   };
 }
 
-/** Номер закрыт правом: «Скрыт» у блока «Клиент» (`right`) или «в день
- *  записи» (`day`). Открытый номер приходит в строке целиком (видит клиента —
- *  видит номер и звонит), и `null` с пустым номером — просто клиент без номера,
- *  а не замок. */
+/** Номер закрыт правом: «Скрыт» у блока «Клиент» (`right`); ступени «в день
+ *  записи» у сервера нет. Открытый номер приходит в строке целиком (видит
+ *  клиента — видит номер и звонит), и `null` с пустым номером — просто клиент
+ *  без номера, а не замок. */
 export function contactsLocked(client: Pick<Client, "contacts_hidden" | "phone">): boolean {
-  return client.contacts_hidden === "right" || client.contacts_hidden === "day";
+  return client.contacts_hidden === "right";
 }
 
 /** Карточка с открытыми контактами поверх строки окна. Связи («Входит в»)

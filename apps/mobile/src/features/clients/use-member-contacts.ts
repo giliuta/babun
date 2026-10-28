@@ -45,11 +45,9 @@ export function useOpenMemberContacts() {
         }
         haptics.warning();
         toast(
-          answer.status === "day"
-            ? "Номер откроется в день записи"
-            : answer.status === "limit"
-              ? "На сегодня номеров больше не открыть"
-              : "Нет доступа к телефонам",
+          answer.status === "limit"
+            ? "На сегодня номеров больше не открыть"
+            : "Нет доступа к телефонам",
           "info",
         );
         return false;

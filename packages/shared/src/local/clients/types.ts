@@ -183,7 +183,7 @@ export interface ClientMembership {
 /** Почему номер клиента сотруднику сейчас не пришёл (015 + 014):
  *  `null` — можно открыть дверью `member_client_contacts`, `'day'` — откроется
  *  в день записи, `'right'` — права на телефоны нет. */
-export type ClientContactsHidden = "day" | "right" | null;
+export type ClientContactsHidden = "right" | null;
 
 export interface Client {
   id: string;
