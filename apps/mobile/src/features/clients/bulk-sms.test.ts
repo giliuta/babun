@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { createBlankClient } from "@babun/shared/local/clients";
-import { buildBlastSms, buildSequentialSms, bulkBodyFor, bulkProblem } from "./bulk-sms";
+import { buildBlastSms, buildSequentialSms, bulkBodyFor, bulkProblem, bulkSmsAudience, bulkSmsAudienceLine } from "./bulk-sms";
 
 // Рассылка знает о каждом получателе только его имя и имя компании. Поля
 // записи ([Дата], [Время], [Ссылка]) и долг ей взять неоткуда: вырезанное
@@ -45,5 +45,21 @@ describe("текст рассылки", () => {
       bulkProblem(long, [createBlankClient({ full_name: "Александра" })], null),
       "С подставленными именами текст длиннее 3 SMS — сократите его",
     );
+  });
+});
+
+describe("получатели рассылки", () => {
+  test("просившие не писать и чёрный список не считаются, как на сервере", () => {
+    const optOut = createBlankClient({ id: "c3", full_name: "Борис", phone: "99111222" });
+    optOut.sms_opt_out = true;
+    const banned = createBlankClient({ id: "c4", full_name: "Вера", phone: "99333444" });
+    banned.blacklisted = true;
+    const silent = createBlankClient({ id: "c5", full_name: "Глеб" });
+    const got = bulkSmsAudience([anna, optOut, banned, silent]);
+    assert.deepEqual(got.reachable.map((c) => c.id), ["c1"]);
+    assert.equal(got.refused, 2);
+    assert.equal(got.noPhone, 1);
+    assert.equal(bulkSmsAudienceLine(got), "1 получатель · 1 без телефона · 2 без SMS");
+    assert.equal(bulkSmsAudienceLine(bulkSmsAudience([anna, silent])), "1 получатель · 1 без телефона пропущен");
   });
 });

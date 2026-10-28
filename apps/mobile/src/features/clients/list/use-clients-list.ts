@@ -3,6 +3,7 @@ import { useToast } from "@/components/ui/Toast";
 import { loadErrorWords } from "@/lib/connection-words";
 import { useThemeColors } from "@/theme/colors";
 import { useListBulk } from "./use-list-bulk";
+import { useListBulkEdit } from "./use-list-bulk-edit";
 import { useListFilters } from "./use-list-filters";
 import { useListMerge } from "./use-list-merge";
 import { useListRowActions } from "./use-list-row-actions";
@@ -82,6 +83,17 @@ export function useClientsList() {
     toast,
     deleteWithUndo: sources.deleteWithUndo,
   });
+  // Теги, команда и источник выбранным — только своя база: строки
+  // работодателя в выбор не попадают (`useListBulk`).
+  const bulkEdit = useListBulkEdit({
+    scope: sources.scope,
+    caps: sources.caps,
+    selectedClients: bulk.selectedClients,
+    tags: sources.ownTags,
+    ownTeams: sources.ownTeams,
+    toast,
+    exitSelection: bulk.exitSelection,
+  });
 
   // Обрыв — словами, а не текстом ошибки.
   const listErrorWords = loadErrorWords(sources.error, {
@@ -99,6 +111,7 @@ export function useClientsList() {
     ...filters,
     ...rows,
     ...bulk,
+    ...bulkEdit,
     listErrorWords,
   };
 }
