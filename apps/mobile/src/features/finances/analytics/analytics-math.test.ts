@@ -171,14 +171,16 @@ describe("итоги работы", () => {
     assert.equal(w.worked, 185);
     assert.equal(w.paid, 100);
     assert.equal(w.owed, 85);
-    assert.equal(w.averageCheck, 92.5);
+    // У обеих записей долг — в средний чек не вошла ни одна.
+    assert.equal(w.averageCheck, 0);
+    assert.equal(w.checkRecords, 0);
     assert.equal(w.minutes, 120);
     assert.equal(w.perHour, 92.5);
   });
 
   test("без записей — нули, работ на час — нет", () => {
     assert.deepEqual(workTotals([]), {
-      records: 0, worked: 0, paid: 0, owed: 0, averageCheck: 0, minutes: 0, perHour: null,
+      records: 0, worked: 0, paid: 0, owed: 0, averageCheck: 0, checkRecords: 0, minutes: 0, perHour: null,
     });
   });
 
@@ -200,6 +202,30 @@ describe("итоги работы", () => {
     ]);
     assert.equal(w.worked, 90);
     assert.equal(w.owed, 40);
+  });
+
+  test("средний чек — по оплаченным записям с суммой: без визитов на €0 и без долга", () => {
+    const w = workTotals([
+      appt({ id: "a", total_amount: 200, prepaid_amount: 200 }),
+      appt({ id: "b", total_amount: 100, prepaid_amount: 100 }),
+      appt({ id: "zero", total_amount: 0 }),
+      appt({ id: "install", total_amount: 2590 }),
+      appt({ id: "part", total_amount: 300, prepaid_amount: 100 }),
+      appt({ id: "r", total_amount: 80, prepaid_amount: 80, payment_status: "refunded" }),
+    ]);
+    assert.equal(w.records, 6);
+    assert.equal(w.checkRecords, 2);
+    assert.equal(w.averageCheck, 150);
+  });
+
+  test("долг записи решает инвойс: оплаченный инвойсом визит в чек входит, ждущий — нет", () => {
+    const invoicing = { byAppointment: new Map([["paid", 0], ["open", 300]]) } as never;
+    const w = workTotals(
+      [appt({ id: "paid", total_amount: 200 }), appt({ id: "open", total_amount: 300, prepaid_amount: 300 })],
+      invoicing,
+    );
+    assert.equal(w.checkRecords, 1);
+    assert.equal(w.averageCheck, 200);
   });
 });
 

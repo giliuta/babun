@@ -1,72 +1,78 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { TrendingDown, TrendingUp, type LucideIcon } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import { SelectRow } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 
-/** Строка операции — грамматика ленты «Финансов»: пилюля цвета знака,
- *  контекст над названием, сумма справа. */
+// ОДНА ОПЕРАЦИЯ — ОДНА СТРОКА В ОБОИХ МЕСТАХ. «Финансы дня» рисовали её своей
+// строкой (56pt, пилюля, контекст над названием, сумма 16/700), а лента
+// «Финансов» — плашкой `SelectRow` (52pt, плитка вида денег, 15/13): та же
+// оплата выглядела двумя разными вещами. Здесь — геометрия ленты.
+
+const noop = () => {};
+
+function Amount({ text, color, caption }: { text: string; color: string; caption?: string }) {
+  const t = useThemeColors();
+  return (
+    <View style={{ alignItems: "flex-end", flexShrink: 0, maxWidth: "45%" }}>
+      <Text
+        maxFontSizeMultiplier={1.3}
+        numberOfLines={1}
+        style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}
+      >
+        {text}
+      </Text>
+      {caption ? (
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={{ fontSize: 13, color: t.faint }}>
+          {caption}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Строка операции — плашка ленты «Финансов»: плитка вида денег его цветом,
+ *  название, под ним контекст, сумма справа. */
 export function TxRow({
   context,
   title,
   amount,
   outflow,
-  separated,
   onPress,
 }: {
   context: string;
   title: string;
   amount: number;
   outflow: boolean;
-  separated?: boolean;
   onPress?: () => void;
 }) {
   const t = useThemeColors();
   const color = outflow ? t.danger : t.success;
   const money = `${outflow ? "−" : ""}${formatEUR(Math.abs(amount))}`;
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
+    <SelectRow
+      icon={outflow ? TrendingDown : TrendingUp}
+      color={color}
+      plain
+      title={title}
+      subtitle={context || "—"}
       accessibilityLabel={`${title}, ${outflow ? "списание" : "поступление"} ${formatEUR(Math.abs(amount))}`}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        minHeight: 56,
-        paddingLeft: 16,
-        paddingRight: 16,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-        backgroundColor: pressed && onPress ? t.pressed : "transparent",
-      })}
-    >
-      <View style={{ width: 6, height: 36, borderRadius: 999, backgroundColor: color }} />
-      <View style={{ flex: 1 }}>
-        {context ? (
-          <Text numberOfLines={1} style={{ fontSize: 12, color: t.faint }}>
-            {context}
-          </Text>
-        ) : null}
-        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-          {title}
-        </Text>
-      </View>
-      <Text style={{ fontSize: 16, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
-        {money}
-      </Text>
-    </Pressable>
+      // Без двери плашка — показание: нажатие ничего не делает.
+      onPress={onPress ?? noop}
+      trailing={<Amount text={money} color={color} />}
+    />
   );
 }
 
-/** Строка записи (долг, план) — грамматика списка должников: имя сверху,
- *  время и работа под ним, сумма справа. Долг — не транзакция, пилюли нет. */
+/** Строка записи (долг, план) — та же плашка: имя, время и работа под ним,
+ *  сумма справа, состояние словом под суммой. */
 export function RecordRow({
   name,
   context,
   amount,
   color,
   status,
-  separated,
+  icon,
   onPress,
 }: {
   name: string;
@@ -75,44 +81,19 @@ export function RecordRow({
   color: string;
   /** «оплачено» · «долг» · «ожидается» — словом под суммой, в плане дня. */
   status?: string;
-  separated?: boolean;
+  icon: LucideIcon;
   onPress: () => void;
 }) {
-  const t = useThemeColors();
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
+    <SelectRow
+      icon={icon}
+      color={color}
+      plain
+      title={name}
+      subtitle={context || "—"}
       accessibilityLabel={`${name}, ${status ? `${status} ` : ""}${formatEUR(amount)} — открыть запись`}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        minHeight: 56,
-        paddingHorizontal: 16,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-        backgroundColor: pressed ? t.pressed : "transparent",
-      })}
-    >
-      <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "500", color: t.ink }}>
-          {name}
-        </Text>
-        {context ? (
-          <Text numberOfLines={1} style={{ fontSize: 12, color: t.faint }}>
-            {context}
-          </Text>
-        ) : null}
-      </View>
-      <View style={{ alignItems: "flex-end" }}>
-        <Text style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
-          {formatEUR(amount)}
-        </Text>
-        {status ? (
-          <Text style={{ fontSize: 12, color: t.faint }}>{status}</Text>
-        ) : null}
-      </View>
-    </Pressable>
+      onPress={onPress}
+      trailing={<Amount text={formatEUR(amount)} color={color} caption={status} />}
+    />
   );
 }

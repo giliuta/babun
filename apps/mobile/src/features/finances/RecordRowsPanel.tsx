@@ -19,7 +19,7 @@ import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { PanelHeader } from "./PanelHeader";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
-import { rowsNet, type RecordRow } from "./record-rows";
+import { rowsDebt, rowsNet, type RecordRow } from "./record-rows";
 
 // РАЗРЕЗ ДЕНЕГ РАСКРЫВАЕТСЯ НА МЕСТЕ, ПОД ПЛИТКАМИ, а не отдельной страницей:
 // страница — только для того, чем управляют; то, на что смотрят, раскрывается
@@ -88,11 +88,13 @@ export function RecordRowsPanel({
       // Кроме перевода, чья вторая нога вне ленты (`crossesSlice`): в ленте
       // одного счёта он и есть пришедшее или ушедшее.
       net: rowsNet(data, countEveryTone),
+      // Однородному списку долг не нужен: там он и есть итог.
+      debt: countEveryTone ? 0 : rowsDebt(data),
       data,
     }));
   }, [rows, countEveryTone]);
 
-  const sectionHeader = (section: { title: string; net: number }) => {
+  const sectionHeader = (section: { title: string; net: number; debt: number }) => {
     // Ноль движения — не приход: цвет здесь означает направление денег, а у
     // нуля направления нет (тот же закон, что в ленте операций).
     const netSign = moneySign(section.net);
@@ -113,6 +115,8 @@ export function RecordRowsPanel({
           : netSign > 0
             ? t.success
             : t.sub;
+    const showNet = netSign !== 0 || !!countEveryTone;
+    const showDebt = section.debt > 0;
     // ДЕНЬ — ПОДПИСЬЮ НАД ПЛАШКАМИ, а не серой полосой: как день над записями
     // в «Истории» клиента. Шапка дня прилипает к верху при прокрутке: без
     // своего фона строки проезжали сквозь неё, и подпись дня ложилась поверх
@@ -126,12 +130,23 @@ export function RecordRowsPanel({
           // День без пришедших и ушедших денег (одни долги, перевод между
           // своими счетами) итога не печатает: серый «€0» над долгом €200
           // читался как «денег ноль при долге» — число без смысла.
-          netSign === 0 && !countEveryTone ? null : (
+          // Долг дня — рядом, словом и янтарным числом, как хвост строки:
+          // «€180 · долг €100». День из одних долгов — только «долг €100».
+          !showNet && !showDebt ? null : (
             <Text
               className="text-xs font-semibold"
-              style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
+              style={{ fontVariant: ["tabular-nums"] }}
             >
-              {formatEUR(section.net)}
+              {showNet ? (
+                <Text style={{ color: dayColor }}>{formatEUR(section.net)}</Text>
+              ) : null}
+              {showNet && showDebt ? <Text style={{ color: t.faint }}>{" · "}</Text> : null}
+              {showDebt ? (
+                <Text>
+                  <Text style={{ color: t.faint }}>{"долг"}{" "}</Text>
+                  <Text style={{ color: t.warning }}>{formatEUR(section.debt)}</Text>
+                </Text>
+              ) : null}
             </Text>
           )
         }

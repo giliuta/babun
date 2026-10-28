@@ -25,6 +25,7 @@ export {
   dropAccountNames,
   paymentsLine,
   rowMatchesQuery,
+  rowsDebt,
   rowsNet,
   servicesLine,
   whatLine,

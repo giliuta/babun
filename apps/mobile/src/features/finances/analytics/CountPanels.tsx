@@ -149,7 +149,8 @@ export function TeamsPanel({ a, panel }: { a: Analytics; panel: "records" | "che
             <BreakdownBarRow
               key={r.id}
               name={r.name}
-              count={r.records}
+              // В среднем чеке счёт — записи, которые в него вошли.
+              count={panel === "check" ? r.checkRecords : r.records}
               value={
                 panel === "time"
                   ? hoursLabel(r.minutes)

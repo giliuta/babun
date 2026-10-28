@@ -198,6 +198,7 @@ export function useDayFinanceActions({
     canDeleteTx(tx) ? (
       <SwipeRow
         key={key}
+        radius={t.radius.input}
         label="Удалить"
         color={t.danger}
         icon={Trash2}

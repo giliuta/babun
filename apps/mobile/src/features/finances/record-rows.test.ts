@@ -597,3 +597,22 @@ describe("оплата инвойса в ленте денег (владелец
     assert.equal(rows[0].invoiceId, undefined);
   });
 });
+
+describe("долг дня рядом с итогом", () => {
+  test("строка долга и хвост долга склеенной записи складываются; доход — нет", async () => {
+    const { rowsDebt: debt } = await import("./record-rows");
+    assert.equal(
+      debt([
+        { amount: 180, tone: "income" },
+        { amount: 100, tone: "debt" },
+        { amount: 50, tone: "income", extras: [{ tone: "debt", amount: 30 }] },
+      ]),
+      130,
+    );
+  });
+
+  test("день без долга — ноль", async () => {
+    const { rowsDebt: debt } = await import("./record-rows");
+    assert.equal(debt([{ amount: 180, tone: "income" }, { amount: -20, tone: "expense" }]), 0);
+  });
+});

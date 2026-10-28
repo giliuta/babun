@@ -46,6 +46,25 @@ export function rowsNet(
   return cents / 100;
 }
 
+/**
+ * ДОЛГ ДНЯ — рядом с итогом, а не внутри него. Итог дня считает только
+ * пришедшее, и над днём «€180» стоял один, хотя в списке под ним ещё долг
+ * €100: заголовок говорил меньше, чем строки. Долг — строкой «долг» и хвостом
+ * склеенной записи.
+ */
+export function rowsDebt(
+  rows: readonly Pick<RecordRow, "amount" | "tone" | "extras">[],
+): number {
+  let cents = 0;
+  for (const row of rows) {
+    if (row.tone === "debt") cents += Math.round(Math.abs(row.amount) * 100);
+    for (const extra of row.extras ?? []) {
+      if (extra.tone === "debt") cents += Math.round(Math.abs(extra.amount) * 100);
+    }
+  }
+  return cents / 100;
+}
+
 /** Сколько имён услуг печатаем целиком, прежде чем свернуть остаток в «+N». */
 const SERVICES_SHOWN = 2;
 

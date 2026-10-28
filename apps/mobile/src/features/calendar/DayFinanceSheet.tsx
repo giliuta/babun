@@ -2,6 +2,7 @@ import { useBookingBlocks } from "@/features/appointments/booking-prefs";
 import { useRecordBlocks } from "@/features/appointments/useRecordRights";
 import { Text, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
+import { CalendarClock, HandCoins, TrendingUp } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount, getPaidAmount } from "@babun/shared/local/appointments";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -23,7 +24,7 @@ import { useCurrentRole } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { AccountSplit } from "./day-finance/AccountSplit";
 import { dayList } from "./day-finance/day-list";
-import { DayList } from "./day-finance/DayList";
+import { DayList, type RecordStatus } from "./day-finance/DayList";
 import { DayTiles } from "./day-finance/DayTiles";
 import type { DayView } from "./day-finance/types";
 import { useDayAccounts } from "./day-finance/use-day-accounts";
@@ -225,13 +226,14 @@ export function DayFinanceSheet({
     setView((current) => (current === next ? "all" : next));
   };
 
-  // Статус записи в плане дня: оплачено · долг · ожидается.
-  const recordStatus = (a: Appointment): { word: string; amount: number; color: string } => {
-    if (!paymentSeen) return { word: "сумма", amount: Number(a.total_amount) || 0, color: t.sub };
+  // Статус записи в плане дня: оплачено · долг · ожидается — словом под
+  // суммой и значком плашки (доход, монеты долга, визит).
+  const recordStatus = (a: Appointment): RecordStatus => {
+    if (!paymentSeen) return { word: "сумма", amount: Number(a.total_amount) || 0, color: t.sub, icon: CalendarClock };
     const debt = getDebtAmount(a);
-    if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success };
-    if (debtRecords.some((d) => d.id === a.id)) return { word: "долг", amount: debt, color: t.warning };
-    return { word: "ожидается", amount: debt, color: t.sub };
+    if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success, icon: TrendingUp };
+    if (debtRecords.some((d) => d.id === a.id)) return { word: "долг", amount: debt, color: t.warning, icon: HandCoins };
+    return { word: "ожидается", amount: debt, color: t.sub, icon: CalendarClock };
   };
 
   const cta: { label: string; onPress: () => void; open: boolean } =
