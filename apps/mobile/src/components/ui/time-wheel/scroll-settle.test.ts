@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { createScrollSettle, offRow } from "./scroll-settle";
+import { createScrollSettle, createWheelStepper, offRow } from "./scroll-settle";
 import { ITEM_H } from "./wheel-geometry";
 
 /** Ручные часы: таймер срабатывает, только когда тест сам «ждёт». */
@@ -71,5 +71,43 @@ describe("барабан в браузере: выбор по затиханию
     const wheel = readFileSync(resolve(here, "LoopWheelColumn.tsx"), "utf8");
     assert.match(wheel, /onScroll=\{\(e\) => \{[\s\S]{0,200}webSettle\.current\?\.scroll\(y\);/);
     assert.match(wheel, /createScrollSettle\(\(y\) => settleRef\.current\(y, true\)\)/);
+  });
+});
+
+describe("барабан в браузере: колёсико мыши — строка за щелчок", () => {
+  test("щелчок мыши в 100–120 px — ровно одна строка, а не три", () => {
+    const step = createWheelStepper(ITEM_H);
+    assert.equal(step(100), 1);
+    assert.equal(step(120), 1);
+    assert.equal(step(-100), -1);
+  });
+
+  test("тачпад: строка набегает за каждые ITEM_H пути", () => {
+    const step = createWheelStepper(ITEM_H);
+    const out = Array.from({ length: 16 }, () => step(5));
+    assert.equal(out.filter((d) => d === 1).length, 2);
+    assert.equal(out.filter((d) => d !== 0 && d !== 1).length, 0);
+  });
+
+  test("смена направления не тратит щелчок на остаток прежнего хода", () => {
+    const step = createWheelStepper(ITEM_H);
+    assert.equal(step(30), 0);
+    assert.equal(step(-ITEM_H), -1);
+  });
+
+  test("Firefox шлёт строками (deltaMode 1): любой щелчок — строка", () => {
+    const step = createWheelStepper(ITEM_H);
+    assert.equal(step(3, 1), 1);
+    assert.equal(step(-3, 1), -1);
+  });
+
+  test("барабан перехватывает колёсико и возвращает отклонённый выбор", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const wheel = readFileSync(resolve(here, "LoopWheelColumn.tsx"), "utf8");
+    assert.match(wheel, /addEventListener\("wheel", onWheel, \{ passive: false \}\)/);
+    assert.match(wheel, /if \(Platform\.OS !== "web"\) return;/);
+    // Каждый выбор, ушедший хозяину, сверяется: не принят — барабан доезжает назад.
+    const sent = wheel.match(/onChange\((picked|next)\);\s*\n\s*expectAccepted/g) ?? [];
+    assert.equal(sent.length, 3);
   });
 });
