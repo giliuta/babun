@@ -14,6 +14,7 @@ import {
   type PushSettings,
 } from "@/lib/push-settings";
 import { QuietHoursSheet } from "./QuietHoursSheet";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // «СВОДКИ» И «ТИХИЕ ЧАСЫ» НА «УВЕДОМЛЕНИЯХ» — настройки человека, а не
 // команды, поэтому карточки стоят над лентой команд. Сводка — число визитов
@@ -44,7 +45,7 @@ export function PushScheduleCard() {
           sub="В 8:00: сколько визитов и первый"
           toggle={{ value: settings.digestMorning, onChange: (v) => set({ digestMorning: v }) }}
         />
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         <SettingsRow
           tile={SETTINGS_TILE.indigo}
           icon={Moon}
@@ -68,7 +69,7 @@ export function PushScheduleCard() {
         />
         {quietOn ? (
           <>
-            <Divider inset={56} />
+            <Divider inset={SETTINGS_ROW_INSET} />
             <SettingsRow
               tile={SETTINGS_TILE.teal}
               icon={Clock}

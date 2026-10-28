@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 /** Группа шестерёнки: шапка и карточка строк, швы — только между теми, что
  *  остались. Пустая группа не рисуется вовсе — ни шапки, ни белой полосы.
@@ -17,7 +18,7 @@ export function SettingsGroup({ title, rows }: { title?: string; rows: ReactNode
       <SectionCard>
         {shown.map((row, index) => (
           <Fragment key={index}>
-            {index > 0 ? <Divider inset={56} /> : null}
+            {index > 0 ? <Divider inset={SETTINGS_ROW_INSET} /> : null}
             {row}
           </Fragment>
         ))}

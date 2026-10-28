@@ -21,6 +21,7 @@ import { AccountScopeProvider, useAccountGate, useAccountName } from "@/session/
 import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ, — В КАБИНЕТЕ ПАРТНЁРА: здесь идут все
 // разрешения пригласившего, а всё остальное остаётся у самого человека, чтобы
@@ -150,7 +151,7 @@ function InvitedAccountBlock({
         />
         {rows.map((row) => (
           <Fragment key={row.key}>
-            <Divider inset={56} />
+            <Divider inset={SETTINGS_ROW_INSET} />
             {row.node}
           </Fragment>
         ))}

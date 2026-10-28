@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // КОРЕНЬ КАБИНЕТА — ОДИН МАТЕРИАЛ ПЛИТКИ.
 //
@@ -39,9 +40,10 @@ describe("корень Кабинета", () => {
   });
 
   test("разделитель — от текста цветной строки", () => {
+    assert.equal(SETTINGS_ROW_INSET, 56);
     for (const file of ROOT) {
-      for (const m of read(file).matchAll(/<Divider inset=\{(\d+)\}/g)) {
-        assert.equal(m[1], "56", file);
+      for (const m of read(file).matchAll(/<Divider inset=\{([^}]+)\}/g)) {
+        assert.ok(m[1] === "SETTINGS_ROW_INSET" || m[1] === "56", `${file}: шов ${m[1]}`);
       }
     }
   });

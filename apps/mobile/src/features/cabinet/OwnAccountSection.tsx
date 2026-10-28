@@ -24,6 +24,7 @@ import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { DataExportRow } from "./DataExportRow";
 import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // «КОМАНДЫ» — СВОЙ АККАУНТ ЧЕЛОВЕКА, КАКОЙ БЫ АККАУНТ НИ БЫЛ ОТКРЫТ НА ТЕЛЕФОНЕ
 // (свой раздел всегда на месте). Если бы раздел
@@ -71,14 +72,14 @@ export function OwnAccountSection() {
           <TourTarget id="cabinet.tariff">
             <TariffRow />
           </TourTarget>
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           {/* ОПЛАТЫ ТАРИФА — платежи за подписку и чеки.
               Только на сайте: страница ведёт к счетам Stripe с оплатой, а в
               приложении из магазина покупок нет (`pay-here.ts`). */}
           {CAN_PAY_HERE ? (
             <>
               <TariffPaymentsRow />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
             </>
           ) : null}
           {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ, права по каждой команде. */}
@@ -91,7 +92,7 @@ export function OwnAccountSection() {
               onPress={() => router.push("/cabinet/people" as Href)}
             />
           </TourTarget>
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           {/* РЕКВИЗИТЫ — единый блок на весь аккаунт. */}
           <TourTarget id="cabinet.requisites">
             <CabinetRequisitesRow />
@@ -99,26 +100,26 @@ export function OwnAccountSection() {
           {/* СКЛАД ОБОРУДОВАНИЯ — один на аккаунт; строка ждёт готовности. */}
           {SHOW_INVENTORY ? (
             <>
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <InventoryCabinetRow />
             </>
           ) : null}
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
               календарях — он сам и каждый партнёр. */}
           <TourTarget id="cabinet.history">
             <HistoryRow />
           </TourTarget>
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <TourTarget id="cabinet.sms">
             <SmsCabinetRow />
           </TourTarget>
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           {/* ВЫГРУЗКА ДАННЫХ (только из своих личных команд) — клиенты, записи и финансы своего аккаунта. */}
           <TourTarget id="cabinet.export">
             <DataExportRow />
           </TourTarget>
-          <Divider inset={56} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           {/* АРХИВ — в архив календарь уводит владелец, и только он может
               вернуть его или стереть. */}
           <ArchiveRow />
@@ -142,11 +143,11 @@ export function OwnAccountSection() {
       <SectionEyebrow>Команды</SectionEyebrow>
       <SectionCard>
         <TariffRow tenantId={own} />
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         {CAN_PAY_HERE ? (
           <>
             <TariffPaymentsRow tenantId={own} />
-            <Divider inset={56} />
+            <Divider inset={SETTINGS_ROW_INSET} />
           </>
         ) : null}
         <SettingsRow
@@ -156,27 +157,27 @@ export function OwnAccountSection() {
           sub="Права по командам"
           onPress={openInOwn("/cabinet/people")}
         />
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         <CabinetRequisitesRow tenantId={own} />
         {SHOW_INVENTORY ? (
           <>
-            <Divider inset={56} />
+            <Divider inset={SETTINGS_ROW_INSET} />
             <InventoryCabinetRow />
           </>
         ) : null}
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         <HistoryRow tenantId={own} />
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         <SmsCabinetRow tenantId={own} />
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         <SettingsRow
-          tile={SETTINGS_TILE.blue}
+          tile={SETTINGS_TILE.green}
           icon={Download}
           title="Выгрузка данных"
           sub="Клиенты, записи, финансы"
           onPress={openInOwn("/cabinet/export")}
         />
-        <Divider inset={56} />
+        <Divider inset={SETTINGS_ROW_INSET} />
         <SettingsRow
           tile={SETTINGS_TILE.purple}
           icon={Archive}

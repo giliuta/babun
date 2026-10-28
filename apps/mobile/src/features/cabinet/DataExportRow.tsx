@@ -11,7 +11,7 @@ export function DataExportRow() {
   const router = useRouter();
   return (
     <SettingsRow
-      tile={SETTINGS_TILE.blue}
+      tile={SETTINGS_TILE.green}
       icon={Download}
       title="Выгрузка данных"
       sub="Клиенты, записи, финансы"

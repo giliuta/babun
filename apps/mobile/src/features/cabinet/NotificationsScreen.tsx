@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, ScrollView, View, Platform } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
+import { onThisDevice } from "@/lib/device-word";
 import { useRouter } from "expo-router";
 import {
   Bell,
@@ -64,6 +65,7 @@ import {
   type ReminderRow,
   type ReminderSource,
 } from "./device-reminders";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // СТРАНИЦА «УВЕДОМЛЕНИЯ» (Кабинет). Что в списке и почему строка
 // одна на источник — в шапке `device-reminders.ts`.
@@ -215,13 +217,7 @@ export function NotificationsScreen() {
           <SettingsRow
             tile={SETTINGS_TILE.orange}
             icon={Bell}
-            title={
-              Platform.OS === "web"
-                ? "Уведомления в браузере"
-                : Platform.OS === "android"
-                  ? "Уведомления на телефоне"
-                  : "Уведомления на iPhone"
-            }
+            title={`Уведомления ${onThisDevice()}`}
             sub={permissionView?.sub}
             subColor={
               permission && remindersSilenced(permission, count)
@@ -265,7 +261,7 @@ export function NotificationsScreen() {
                 sub={recordsLabel(prefs.records)}
                 onPress={() => setPicker("records")}
               />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.indigo}
                 icon={UserRound}
@@ -285,14 +281,14 @@ export function NotificationsScreen() {
                 title="Новые записи"
                 toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
               />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
                 icon={RefreshCw}
                 title="Переносы и изменения"
                 toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
               />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.red}
                 icon={CalendarX}
@@ -301,7 +297,7 @@ export function NotificationsScreen() {
               />
               {isOwner ? (
                 <>
-                  <Divider inset={56} />
+                  <Divider inset={SETTINGS_ROW_INSET} />
                   <SettingsRow
                     tile={SETTINGS_TILE.teal}
                     icon={Wallet}

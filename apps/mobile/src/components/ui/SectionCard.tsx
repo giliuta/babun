@@ -49,8 +49,8 @@ export function SectionCard({
    *  Шапка и содержимое те же — тише только воздух. */
   dense?: boolean;
   className?: string;
-  /** Identity-tint override for the eyebrow (defaults to neutral faint). The
-   *  caller passes an already-AA-guarded colour; falls back to faint. */
+  /** Identity-tint override for the eyebrow (defaults to full ink — the
+   *  group name, DS §1). The caller passes an already-AA-guarded colour. */
   eyebrowColor?: string;
   children: ReactNode;
 }) {
@@ -89,7 +89,8 @@ export function SectionCard({
                 fontSize: 11,
                 fontWeight: "700",
                 letterSpacing: 0.6,
-                color: eyebrowColor ?? t.faint,
+                // Имя группы — полный чёрный (DS §1 «серого нет»).
+                color: eyebrowColor ?? t.ink,
               }}
             >
               {capsText(title)}
