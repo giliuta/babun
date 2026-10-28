@@ -136,6 +136,10 @@ export function MapPicker({
   const followKey = follow ? `${follow.lat},${follow.lng}` : null;
   useEffect(() => {
     if (!follow || !map.current) return;
+    // ПЕРЕЕЗД ЗА ГЕОКОДЕРОМ — НЕ РУКА. Взведённая однажды карта отдавала
+    // `moveend` этого переезда как выбранную точку: правка текста адреса
+    // переносила поставленную рукой точку на находку геокодера.
+    armed.current = false;
     map.current.setView([follow.lat, follow.lng], 17);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ключ — координаты (followKey): объект follow новый на каждом рендере
   }, [followKey]);

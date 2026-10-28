@@ -80,6 +80,9 @@ export function MapPicker({
   const followKey = follow ? `${follow.lat},${follow.lng}` : null;
   useEffect(() => {
     if (!follow || !mapRef.current) return;
+    // Переезд за геокодером — не палец: взведённая раньше карта отдала бы его
+    // конец как выбранную точку (см. MapPicker.web.tsx).
+    armed.current = false;
     mapRef.current.animateToRegion(
       {
         latitude: follow.lat,
