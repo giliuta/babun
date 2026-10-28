@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useThemeColors } from "@/theme/colors";
-import { ScopePeriodBar, SummaryGroup, SummaryToggle } from "../FinanceOverview";
+import { ScopePeriodBar, SummaryToggle } from "../FinanceOverview";
 import { PeriodPresetModal, PeriodWheelsModal } from "../PeriodSheets";
 import { hoursLabel } from "./analytics-math";
 import { ClientsPanel, ServicesPanel, TeamsPanel } from "./CountPanels";
@@ -155,7 +155,6 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
         />
 
         <View className="px-4 pb-2 pt-2" style={{ gap: 6 }}>
-          <SummaryGroup>
           {showExpense ? (
             <>
               {row(
@@ -196,7 +195,6 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
               {timeTile}
             </>,
           )}
-          </SummaryGroup>
         </View>
 
         {panelBody}
