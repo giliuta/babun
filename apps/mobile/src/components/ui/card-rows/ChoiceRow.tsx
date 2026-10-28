@@ -3,6 +3,7 @@ import { Settings2 } from "lucide-react-native";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
 import { ICON } from "../tokens";
+import { capsText } from "../caps-text";
 
 /** Строка ВЫБОРА КНОПКАМИ: капс-ярлык и готовые значения пилюлями + «+», чтобы
  *  создать своё прямо здесь (тип объекта: готовые кнопки и кнопка плюс).
@@ -55,11 +56,10 @@ export function ChoiceRow({
               fontSize: 11,
               fontWeight: "700",
               letterSpacing: 1.2,
-              textTransform: "uppercase",
               color: t.ink,
             }}
           >
-            {label}
+            {capsText(label)}
           </Text>
           {onSettings ? (
             <Pressable

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { TYPE } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { capsText } from "./caps-text";
 
 // ШАПКА ДНЯ НАД ПЛАШКАМИ — ОДНА НА ВСЕ ЛЕНТЫ. Капс-подпись caption 11/700
 // (DS §2 называет её прямо: «UPPERCASE eyebrows, day dividers»), как у
@@ -28,9 +29,9 @@ export function DayDivider({
     >
       <Text
         maxFontSizeMultiplier={1.3}
-        style={{ ...TYPE.caption, textTransform: "uppercase", color: t.sub }}
+        style={{ ...TYPE.caption, color: t.sub }}
       >
-        {label}
+        {capsText(label)}
       </Text>
       {right}
     </View>

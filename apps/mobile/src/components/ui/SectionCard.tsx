@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Card } from "./Card";
 import { GUTTER, ICON } from "./tokens";
+import { capsText } from "./caps-text";
 import { useThemeColors } from "@/theme/colors";
 
 interface SectionCardAction {
@@ -88,11 +89,10 @@ export function SectionCard({
                 fontSize: 11,
                 fontWeight: "700",
                 letterSpacing: 0.6,
-                textTransform: "uppercase",
                 color: eyebrowColor ?? t.faint,
               }}
             >
-              {title}
+              {capsText(title)}
             </Text>
             {/* КОМАНДЫ — ОДНОЙ АБСОЛЮТНОЙ СТРОКОЙ У ПРАВОГО КРАЯ. В потоке
                 они меняли бы высоту шапки, и подпись блока с командой стояла
