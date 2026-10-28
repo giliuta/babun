@@ -57,9 +57,10 @@ jobs:
       - name: Перенести на production
         working-directory: apps/mobile
         # Группа уже называет обновление однозначно: свежий eas-cli
-        # отвергает --branch рядом с --group.
+        # отвергает --branch рядом с --group, а без вопросов требует --message.
         run: |
           eas update:republish \
             --destination-branch production \
             --group "${{ steps.last.outputs.group }}" \
+            --message "preview → production, группа ${{ steps.last.outputs.group }}" \
             --non-interactive
