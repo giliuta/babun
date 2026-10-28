@@ -13,10 +13,10 @@
 // Счёт БЕЗ команды (общий счёт компании) архивом календаря не задевается: он
 // ничей и продолжает жить, даже если все его команды ушли в архив.
 
-export interface CalendarBoundAccount {
+interface CalendarBoundAccount {
   brigade_id?: string | null;
 }
-export interface CalendarState {
+interface CalendarState {
   id: string;
   is_active: boolean;
 }

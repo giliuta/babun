@@ -187,15 +187,6 @@ export function fillTemplate(body: string, vars: SmsVars): string | null {
   return renderTemplate(body, localizeDate(vars, smsLanguageOf(body))).replace(/[ \t]{2,}/g, " ").trim();
 }
 
-/** Что нужно от шаблона листу: шаблон команды (`sms_team_templates`) и
- *  прежний шаблон компании отвечают одинаково. */
-export interface SmsTemplateLike {
-  id: string;
-  name: string;
-  body: string;
-  enabled: boolean;
-}
-
 /** Ссылка `sms:` с текстом. Разделитель — свойство платформы: iOS ждёт
  *  «&body=», Android — «?body=». Пустой текст — ссылка без текста. */
 export function smsUrlWithBody(url: string, body: string, os: string): string {

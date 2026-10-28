@@ -41,7 +41,7 @@ type IconType = ComponentType<{
 /** Значок вида счёта БЕЗ плитки — тот же глиф, что в строке списка. Экспорт
  *  ради героя карточки счёта: значок там обязан быть тем же, что в строке,
  *  иначе один тап отделяет счёт от его же узнаваемого знака. */
-export const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
+const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
 
 export function SettingsRow({
   tile = "neutral",

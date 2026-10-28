@@ -30,7 +30,7 @@ import { haptics } from "@/lib/haptics";
 // который эти часы скрывал. Пара 00:00–24:00 — не сентинел, а ровно то, что
 // написано: сутки целиком.
 
-export interface HourRangeValue {
+interface HourRangeValue {
   start: number;
   end: number;
   startMinute?: number;

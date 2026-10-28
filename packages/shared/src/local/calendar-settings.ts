@@ -36,7 +36,7 @@ export type RecordColorSituation = (typeof RECORD_COLOR_SITUATIONS)[number];
 /** Чем красить запись, у которой нет своего цвета. */
 export type RecordColorRule = "team" | "label" | "service";
 
-export const RECORD_COLOR_RULES: readonly RecordColorRule[] = [
+const RECORD_COLOR_RULES: readonly RecordColorRule[] = [
   "team",
   "label",
   "service",

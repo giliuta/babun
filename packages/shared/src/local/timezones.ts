@@ -27,7 +27,7 @@
 // внутри группы — по узнаваемости: первые попадают в подпись.
 //
 // Сгенерировано из ICU; руками не правится.
-export interface ZoneCity {
+interface ZoneCity {
   name: string;
   zone: string;
 }

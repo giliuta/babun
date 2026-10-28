@@ -5,9 +5,9 @@
 
 import { generateId } from "./masters";
 
-export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7; // ISO: Mon=1..Sun=7
+type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7; // ISO: Mon=1..Sun=7
 
-export interface ServiceMaterialCost {
+interface ServiceMaterialCost {
   id: string;
   name: string;
   amount: number; // EUR per single execution
@@ -81,7 +81,7 @@ export interface DurationTier {
 // for records that haven't been migrated yet.
 // Accepts just the pricing fields so callers with a different Service
 // shape (mobile's Supabase row) can reuse the same ladder.
-export type ServicePricing = Pick<
+type ServicePricing = Pick<
   Service,
   "price" | "bulk_threshold" | "bulk_price" | "price_tiers"
 >;
@@ -124,7 +124,7 @@ export function pricePerUnit(service: ServicePricing, qty: number): number {
   return basePrice;
 }
 
-export type ServiceDuration = Pick<
+type ServiceDuration = Pick<
   Service,
   "duration_minutes" | "duration_tiers"
 >;

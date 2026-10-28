@@ -16,7 +16,7 @@ import { haptics } from "@/lib/haptics";
 import { useCreateTransfer, useDeleteTransfer } from "./accounts";
 import { transferSuccessToast } from "./transfer-toast";
 
-export interface TransferIntent {
+interface TransferIntent {
   /** Привязан к НАМЕРЕНИЮ (моменту нажатия), а не к открытию листа: повтор
    *  после потерянного ответа обязан попасть в тот же серверный дедуп. */
   requestId: string;

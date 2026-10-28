@@ -41,7 +41,7 @@ export function useSmsComposeContext(): SmsContext | null {
 
 /** Можно ли отсюда отправить через сервис: сервис подключён, баланса
  *  хватает, и есть команда с именем отправителя. Решает всё равно база. */
-export interface SmsServiceState {
+interface SmsServiceState {
   available: boolean;
   priceCents: number;
   context: SmsContext | null;

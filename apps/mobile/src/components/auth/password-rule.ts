@@ -5,10 +5,10 @@
 // наборы — один символ, ряд подряд, повтор, «password» — отсекаем здесь.
 // Одно правило на регистрацию, сброс и смену пароля в Кабинете.
 
-export const PASSWORD_MIN = 6;
+const PASSWORD_MIN = 6;
 
 /** Набран, но короче нижней границы — показать подсказку. */
-export function passwordTooShort(password: string): boolean {
+function passwordTooShort(password: string): boolean {
   return password.length > 0 && password.length < PASSWORD_MIN;
 }
 

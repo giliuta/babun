@@ -234,7 +234,7 @@ export async function updateAccount(
  * возвращаются к порядку строк, деньги никуда не
  * уезжают, а экран показывает ошибку.
  */
-export async function setPrimaryAccount(
+async function setPrimaryAccount(
   supabase: DbSupabase,
   tenantId: string,
   account: Pick<Account, "id" | "brigade_id">,

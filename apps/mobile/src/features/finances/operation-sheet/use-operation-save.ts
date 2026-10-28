@@ -24,7 +24,7 @@ import { editedGross } from "./vat-frame";
 import type { OperationDebtPayment, OperationType } from "./types";
 
 /** Everything `save` reads, as of the render that built it. */
-export interface OperationSaveInput {
+interface OperationSaveInput {
   isEdit: boolean;
   isOwner: boolean;
   transaction: FinanceTransaction | null | undefined;

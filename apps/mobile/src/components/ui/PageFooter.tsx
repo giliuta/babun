@@ -15,7 +15,7 @@ import { useThemeColors } from "@/theme/colors";
 // футер платит его сам (`standalone`), как подвал листа: max(вырез, 10).
 
 /** Поля футера страницы: бока, верх, низ. */
-export const PAGE_FOOTER_PADDING = { horizontal: 20, top: 8, bottom: 10 } as const;
+const PAGE_FOOTER_PADDING = { horizontal: 20, top: 8, bottom: 10 } as const;
 
 export function PageFooter({
   children,

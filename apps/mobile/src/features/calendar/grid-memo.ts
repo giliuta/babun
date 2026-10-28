@@ -73,7 +73,7 @@ type ValueEq = (a: never, b: never) => boolean;
 
 /** Сравнение пропсов для `memo`: ключи из `byContent` — своей функцией,
  *  остальные — `Object.is`, как у самого React. */
-export function propsEqualWith(byContent: Readonly<Record<string, ValueEq>>) {
+function propsEqualWith(byContent: Readonly<Record<string, ValueEq>>) {
   return <P extends object>(prev: Readonly<P>, next: Readonly<P>): boolean => {
     const a = prev as Record<string, unknown>;
     const b = next as Record<string, unknown>;

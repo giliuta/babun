@@ -17,7 +17,7 @@ import { can, type UserRole } from "@/session/role-policy";
 
 /** Тариф компании: «Услуги» живут только на платном. «Мастеров» здесь
  *  больше нет — сотрудники в «Кабинет → Сотрудники». */
-export interface CalendarSettingsPlan {
+interface CalendarSettingsPlan {
   services: boolean;
 }
 
@@ -26,7 +26,7 @@ export interface CalendarSettingsPlan {
  *  её право; владелец видит всё и так. */
 type RowLevel = "hidden" | "read" | "write";
 
-export interface CalendarSettingsAccess {
+interface CalendarSettingsAccess {
   /** «График команды»: `read` — строка без двери, `write` — с правкой. */
   schedule: RowLevel;
   /** «Название и цвет» — карточка команды. */
@@ -54,7 +54,7 @@ const NO_ACCESS: CalendarSettingsAccess = {
 };
 
 /** Что показывает страница настроек календаря этому человеку. */
-export interface CalendarSettingsRows {
+interface CalendarSettingsRows {
   /** Карточка календаря: имя, цвет, значок. */
   rename: boolean;
   /** Карточка правится (иначе — строка с именем и цветом без правки). */

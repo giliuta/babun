@@ -24,7 +24,7 @@ export function defaultTxVatMode(settings: VatSettings): TxVatMode {
   return settings.mode;
 }
 
-export interface VatBreakdown {
+interface VatBreakdown {
   /** Что уйдёт в базу и ляжет на счёт. */
   gross: number;
   /** Налог внутри валовой суммы. 0 — операция без налога. */
@@ -78,7 +78,7 @@ export interface VatSettings {
 export const VAT_OFF: VatSettings = { mode: "off", rate: 0 };
 
 /** Переопределение НДС уровнем ниже компании: null — «наследовать выше». */
-export interface VatOverride {
+interface VatOverride {
   mode: VatMode | null;
   rate: number | null;
 }
@@ -224,7 +224,7 @@ export function grossForPrice(price: number, settings: VatSettings): number {
   return price;
 }
 
-export interface VatSummary {
+interface VatSummary {
   /** Налог, собранный с клиентов (в доходах). */
   collected: number;
   /** Налог, уплаченный поставщикам (в расходах) — идёт в зачёт. */

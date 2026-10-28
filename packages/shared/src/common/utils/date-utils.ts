@@ -43,21 +43,9 @@ export function addDaysYmd(ymd: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-// Formats "2026-04-12" as "12 апреля 2026 г."
-export function formatDateLongRu(dateKey: string): string {
-  const d = new Date(dateKey + "T00:00:00");
-  if (isNaN(d.getTime())) return dateKey;
-  const months = [
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
-  ];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} г.`;
-}
-
 // Short RU date for small chips:
 // "2026-08-19" → "19 авг". No year because the badge is always
-// implied to be relative to the current year ± 12 months. Bigger
-// surfaces use formatDateLongRu (which includes the year).
+// implied to be relative to the current year ± 12 months.
 export function formatDateShortRu(dateKey: string): string {
   const d = new Date(dateKey + "T00:00:00");
   if (isNaN(d.getTime())) return dateKey;

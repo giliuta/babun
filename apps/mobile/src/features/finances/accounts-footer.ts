@@ -19,7 +19,7 @@
 // или закрыться — плиток его уже нет, и перевод «с невидимого» предлагал бы
 // то, чего на экране нет.
 
-export type AccountsFooterAction =
+type AccountsFooterAction =
   | { kind: "create" }
   /** `fromId: null` — источник выберут в самой шторке перевода. */
   | { kind: "transfer"; fromId: string | null }

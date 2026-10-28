@@ -1,4 +1,4 @@
-export type RecoveryLinkCredential =
+type RecoveryLinkCredential =
   | {
       kind: "session";
       accessToken: string;
@@ -41,7 +41,7 @@ export function recoveryLinkKey(credential: RecoveryLinkCredential): string {
 /** Тип одноразового ключа из ссылки письма (`?token_hash=…&type=…`). Письма
  *  подтверждения и входа по коду ведут на babun.app/login с `type=email`
  *  (или устаревшими signup/magiclink); остальное — не наше. */
-export type EmailLinkOtpType = "email" | "signup" | "magiclink";
+type EmailLinkOtpType = "email" | "signup" | "magiclink";
 
 export function emailLinkOtpType(link: string | null | undefined): EmailLinkOtpType {
   if (!link) return "email";

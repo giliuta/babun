@@ -44,7 +44,7 @@ export function paymentMethodLabel(method: string | null | undefined): string {
   return PAYMENT_METHOD_LABEL[method as PaymentMethod] ?? method;
 }
 
-export type ReversalKind = "not_received" | "client_refund";
+type ReversalKind = "not_received" | "client_refund";
 
 export interface FinanceTransaction {
   id: string;

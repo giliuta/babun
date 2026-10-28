@@ -4,7 +4,7 @@ import type { PaletteKey } from "@/features/appointments/booking-prefs";
 
 export type ColorTarget = PaletteKey | "filled";
 
-export interface DesignColorRow {
+interface DesignColorRow {
   id: ColorTarget;
   title: string;
   when: string;

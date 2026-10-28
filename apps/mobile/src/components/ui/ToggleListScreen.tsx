@@ -25,7 +25,7 @@ import { useThemeColors } from "@/theme/colors";
 
 const ROW_H = 56;
 
-export interface ToggleListItem {
+interface ToggleListItem {
   id: string;
   label: string;
   icon: LucideIcon;
@@ -46,7 +46,7 @@ export interface ToggleListItem {
 /** Тело строки: значок · подпись · галка. Ручка перетаскивания живёт снаружи,
  *  в `ReorderList` — вложенная внутрь, она отдавала короткий тап строке, и
  *  палец «поправил порядок», а пункт молча выключался. */
-export function ToggleRow({ item }: { item: ToggleListItem }) {
+function ToggleRow({ item }: { item: ToggleListItem }) {
   const t = useThemeColors();
   return (
     <Pressable
@@ -102,7 +102,7 @@ export function ToggleRow({ item }: { item: ToggleListItem }) {
   );
 }
 
-export interface ToggleListSection {
+interface ToggleListSection {
   /** Капс-заголовок над карточкой. Одна секция — можно без него. */
   title?: string;
   items: ToggleListItem[];

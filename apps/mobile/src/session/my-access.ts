@@ -152,7 +152,7 @@ const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel,
   "clients.delete": BLOCK_RANK,
 };
 
-export type ClientLevelsChange = "same" | "changed" | "narrowed";
+type ClientLevelsChange = "same" | "changed" | "narrowed";
 
 function compareClientLevels(
   was: Readonly<Record<string, AccessLevel>>,
@@ -191,7 +191,7 @@ export function clientLevelsChange(
 /** Первые сегменты ключей, под которыми на телефоне лежат клиенты компании.
  *  Компания — вторым сегментом; у карточки (`["client", id, tenant, view]`) —
  *  третьим. `client-contacts` — номера, открытые дверью по одному. */
-export const CLIENT_DATA_HEADS: readonly string[] = [
+const CLIENT_DATA_HEADS: readonly string[] = [
   "clients",
   "client-tags",
   "client-members",
@@ -255,7 +255,7 @@ export const FINANCE_BLOCK_KEYS: readonly string[] = [
 ];
 
 /** Первые сегменты ключей, под которыми на телефоне лежат деньги компании. */
-export const FINANCE_DATA_HEADS: readonly string[] = [
+const FINANCE_DATA_HEADS: readonly string[] = [
   "transactions",
   "debts",
   "accounts",

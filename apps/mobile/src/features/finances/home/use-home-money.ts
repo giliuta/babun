@@ -19,7 +19,7 @@ import { homeTotals, materialSummaryFor } from "./home-totals";
 import type { useHomeDebts } from "./use-home-debts";
 import type { HomeReferences } from "./use-home-references";
 
-export interface HomeMoneyInput {
+interface HomeMoneyInput {
   refs: HomeReferences;
   debtsState: ReturnType<typeof useHomeDebts>;
   access: FinancePageAccess;

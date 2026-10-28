@@ -39,7 +39,7 @@ export interface ExistingSeedTarget {
   position: number;
 }
 
-export interface PlannedAccount extends AccountSeed {
+interface PlannedAccount extends AccountSeed {
   /** Явная позиция в пределах (тенант, команда): 0, 1, 2… (ТЗ §5.1). */
   position: number;
 }

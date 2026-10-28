@@ -4,7 +4,7 @@
 // Each team has a "general" schedule that applies to all days, plus
 // optional per-weekday overrides with multiple breaks per day.
 
-export interface ScheduleBreak {
+interface ScheduleBreak {
   start: string; // "HH:MM"
   end: string; // "HH:MM"
 }
@@ -34,7 +34,7 @@ export interface TeamSchedule {
   vacations?: VacationRange[];
 }
 
-export interface VacationRange {
+interface VacationRange {
   start: string; // YYYY-MM-DD inclusive
   end: string; // YYYY-MM-DD inclusive
   reason?: string;
@@ -139,7 +139,7 @@ function isInVacation(
   return false;
 }
 
-export function setDateOverride(
+function setDateOverride(
   schedule: TeamSchedule,
   dateKey: string,
   override: DaySchedule | null

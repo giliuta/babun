@@ -15,7 +15,7 @@ import type { AccountWithBalance } from "./accounts";
 import { sumAccountBalances } from "./accounts-sections";
 
 // Глиф по ВИДУ счёта — фолбэк для тех, у кого значок не выбран.
-export const KIND_ICON: Record<AccountKind, LucideIcon> = {
+const KIND_ICON: Record<AccountKind, LucideIcon> = {
   cash: Banknote,
   card: CreditCard,
   bank: Landmark,

@@ -16,7 +16,7 @@ import { useThemeColors } from "@/theme/colors";
 // у тостов. Экраны при этом ничего не знают: они по-прежнему зовут
 // chooseOption() из @/lib/choose.
 
-export interface SheetChoice {
+interface SheetChoice {
   label: string;
   /** Красный пункт: удаление, снятие, отмена. */
   destructive?: boolean;

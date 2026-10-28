@@ -24,7 +24,7 @@ import { toMin } from "@/features/calendar/layout";
 // длительность записи (`durationMinutes`), и собственное время записи не
 // занято — она оттуда уезжает (`ignoreId`).
 
-export interface FreeSlot {
+interface FreeSlot {
   /** Начало слота в минутах от полуночи. */
   startMin: number;
   /** «09:30» — то, что напечатано на кубике и уедет в форму записи. */

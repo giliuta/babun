@@ -54,7 +54,7 @@ function cached<T>(prefix: string): T[] {
 }
 
 /** Номер и цель маршрута записи — из загруженного; `null` — не знаем. */
-export function recordContacts(
+function recordContacts(
   appointmentId: string,
   appointments: readonly Appointment[],
   clients: readonly Client[],
@@ -72,7 +72,7 @@ export function recordContacts(
 
 /** Карта для маршрута из уведомления: выбора здесь нет (листа над
  *  уведомлением не показать), поэтому — первая из карт команды по порядку. */
-export function routeUrlFor(target: string, enabled: MapService[]): string | null {
+function routeUrlFor(target: string, enabled: MapService[]): string | null {
   return directRouteUrl(target, enabled) ?? (enabled[0] ? buildMapUrl(enabled[0], target) : null);
 }
 

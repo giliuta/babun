@@ -128,7 +128,7 @@ function stripDollarBodies(sql: string): string {
   return unwrapped.replace(/\$([a-z_]*)\$[\s\S]*?\$\1\$/gi, "''");
 }
 
-export function parseSchema(files: { name: string; sql: string }[]): Schema {
+function parseSchema(files: { name: string; sql: string }[]): Schema {
   const schema: Schema = new Map();
   for (const { sql: raw } of files) {
     const sql = stripDollarBodies(stripComments(raw));

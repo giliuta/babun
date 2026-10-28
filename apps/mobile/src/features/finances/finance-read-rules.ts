@@ -47,7 +47,7 @@ export interface FinanceReadRules {
   allReceipts: boolean;
 }
 
-export interface FinanceReader {
+interface FinanceReader {
   /** `undefined` — роль ещё не пришла; `null` — человека в компании нет. */
   role: UserRole | null | undefined;
   /** `undefined` — карта прав ещё не пришла. */
@@ -149,7 +149,7 @@ export function readableDocuments(
 // расход, прибыль и всё, что из неё (VAT, материалы услуг), — только обе.
 // Уровень — лучший по календарям: аналитика открывается на всей компании.
 
-export interface MoneySides {
+interface MoneySides {
   income: boolean;
   expense: boolean;
   /** «Прибыль» — разница двух сторон: открыта, когда видны обе. */

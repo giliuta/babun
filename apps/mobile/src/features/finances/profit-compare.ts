@@ -18,7 +18,7 @@ import { inTeamScope } from "./team-scope";
 // сделанных записей периода. Иначе «было» и «стало» мерились бы разными
 // линейками.
 
-export interface PeriodMaterials {
+interface PeriodMaterials {
   amount: number;
   appointmentCount: number;
   /** Записи, у которых материалы есть, — для подписи услуг. */

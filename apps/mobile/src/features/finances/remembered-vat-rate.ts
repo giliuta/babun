@@ -15,7 +15,7 @@ import { useTenantId } from "@/lib/tenant";
 
 // Под `babun:` — его подметает «Выйти» (ключ без
 // префикса переживал выход).
-export const vatRateKey = (tenantId: string | null) => `babun:vat:last-rate:${tenantId ?? "none"}`;
+const vatRateKey = (tenantId: string | null) => `babun:vat:last-rate:${tenantId ?? "none"}`;
 
 /** Написанная ставка либо `null`, если на этом телефоне её ещё не писали. */
 function readStoredVatRate(tenantId: string | null): number | null {

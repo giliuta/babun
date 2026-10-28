@@ -30,7 +30,7 @@ const SETTLE_EASING = Easing.out(Easing.cubic);
 const DIST_RATIO = 0.35;
 const FLING_V = 600;
 
-export interface PeriodPager {
+interface PeriodPager {
   /** Лента: translateX всей оси (UI-поток). */
   axisX: ReturnType<typeof useSharedValue<number>>;
   /** Закоммиченный номер страницы (растёт бесконечно в обе стороны). */

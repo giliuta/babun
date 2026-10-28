@@ -18,7 +18,7 @@
 // Поменялся продукт — правится и текст, и дата «Обновлено».
 
 export type LegalDocId = "privacy" | "terms" | "delete-account";
-export type LegalLang = "ru" | "en";
+type LegalLang = "ru" | "en";
 
 const PRIVACY_RU = /* i18n-ignore */ `# Политика конфиденциальности
 Обновлено 6 октября 2026
@@ -296,13 +296,13 @@ export const LEGAL_SHORT: Readonly<Record<LegalDocId, Readonly<Record<LegalLang,
   "delete-account": { ru: /* i18n-ignore */ "Удаление аккаунта", en: "Delete account" },
 };
 
-export type LegalBlock =
+type LegalBlock =
   | { kind: "title"; text: string }
   | { kind: "heading"; text: string }
   | { kind: "paragraph"; text: string }
   | { kind: "item"; text: string };
 
-export interface LegalFill {
+interface LegalFill {
   name: string;
   address: string;
   email: string;

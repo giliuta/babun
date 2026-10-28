@@ -10,7 +10,7 @@ import {
 import { humanDay } from "@/features/appointments/helpers";
 import { payeeName } from "../category-asks";
 
-export interface TransferLegs {
+interface TransferLegs {
   from: Account;
   to: Account;
 }
@@ -30,7 +30,7 @@ export function transferLegsOf(
     : null;
 }
 
-export interface MetaRowData {
+interface MetaRowData {
   label: string;
   value: string;
 }

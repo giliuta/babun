@@ -47,7 +47,7 @@ export {
 // месяц, поэтому список не перезапрашивается на каждом открытии экрана.
 const ACCOUNT_ROWS_STALE_MS = 5 * 60_000;
 
-export interface AccountsWithBalances {
+interface AccountsWithBalances {
   /** undefined, пока не пришли ОБЕ половины: строки счетов и остатки. */
   data: AccountWithBalance[] | undefined;
   isPending: boolean;

@@ -3,7 +3,7 @@ import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors } from "@/theme/colors";
 
-export interface SheetOption<V extends string> {
+interface SheetOption<V extends string> {
   value: V;
   label: string;
   /** Вторая строка — чем этот вариант отличается. Пусто у обычных строк. */

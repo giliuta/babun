@@ -9,9 +9,9 @@ import { dayWords } from "@/features/sms/appointment-link";
 // свободное время.
 
 /** Страница открыта, закрыта владельцем (или тарифом) или ссылки нет. */
-export type BookingPageState = "open" | "closed" | "missing";
+type BookingPageState = "open" | "closed" | "missing";
 
-export interface BookingService {
+interface BookingService {
   id: string;
   name: string;
   /** Минуты; 0 — у услуги нет своей длительности. */

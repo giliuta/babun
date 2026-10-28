@@ -58,7 +58,7 @@ let pendingFollowup = false;
 // перечитывал бы календарь поверх неё. Поэтому обрыв попытку не тратит: строка ждёт, остальные уходят, а слив повторяется сам через
 // TRANSIENT_RETRY_MS (и сразу — при возврате сети). В счёт идут только ответы
 // сервера, которые повтором не лечатся: RLS, ограничения, 4xx.
-export const TRANSIENT_RETRY_MS = 30_000;
+const TRANSIENT_RETRY_MS = 30_000;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleTransientRetry(opts: ReplayerOptions): void {

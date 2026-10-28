@@ -35,7 +35,7 @@ export interface TransferOpened {
   on: string;
 }
 
-export interface TransferOpening {
+interface TransferOpening {
   step: TransferStep;
   fromId: string | null;
   toId: string | null;

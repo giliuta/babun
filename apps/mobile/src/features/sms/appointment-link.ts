@@ -10,7 +10,7 @@ import { smsVars } from "./sms-compose";
 
 /** Состояние записи для клиента: ждёт ответа, подтверждена, отменена,
  *  прошла или ссылки нет. */
-export type LinkState = "pending" | "confirmed" | "cancelled" | "past" | "missing";
+type LinkState = "pending" | "confirmed" | "cancelled" | "past" | "missing";
 
 export interface AppointmentLinkInfo {
   state: LinkState;

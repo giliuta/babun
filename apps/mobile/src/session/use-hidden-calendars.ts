@@ -21,7 +21,7 @@ const hiddenKey = (userId: string | null) => ["hidden-calendars", userId] as con
 // прятало. Первый кадр читает копию, сервер её подтверждает.
 // Ключ — человека (реестр `tenant-prefs.ts`): переход между аккаунтами её не
 // сносит, выход из аккаунта — сносит.
-export const HIDDEN_CALENDARS_CACHE_PREFIX = "babun:calendars.hidden:";
+const HIDDEN_CALENDARS_CACHE_PREFIX = "babun:calendars.hidden:";
 const cacheKey = (userId: string) => `${HIDDEN_CALENDARS_CACHE_PREFIX}${userId}`;
 function readCache(userId: string | null): string[] | undefined {
   if (!userId) return undefined;

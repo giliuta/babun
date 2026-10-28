@@ -21,10 +21,10 @@ export const ARCHIVE_CALENDAR_MESSAGE =
 export interface CalendarWorkRow {
   team_id?: string | null;
 }
-export interface CalendarAccountRow {
+interface CalendarAccountRow {
   brigade_id?: string | null;
 }
-export interface CalendarDocumentRow {
+interface CalendarDocumentRow {
   brigade_id?: string | null;
   status?: string | null;
 }

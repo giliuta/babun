@@ -39,7 +39,7 @@ export function queuedOpIdsOfCompany(
   return ops.filter((op) => op.payload?.tenant_id === tenantId).map((op) => op.id);
 }
 
-export interface CompanyCalendar {
+interface CompanyCalendar {
   tenantId: string;
   role: string;
   onboarded: boolean;

@@ -25,7 +25,7 @@ export function isColdOfflineCacheMissError(
   );
 }
 
-export const ONLINE_ONLY_WRITE = "ONLINE_ONLY_WRITE" as const;
+const ONLINE_ONLY_WRITE = "ONLINE_ONLY_WRITE" as const;
 
 /**
  * Запись в компанию, которая сейчас НЕ открыта в календаре. Очереди для неё

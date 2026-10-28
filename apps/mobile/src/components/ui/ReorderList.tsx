@@ -47,7 +47,7 @@ function bump(): void {
   haptics.impact();
 }
 
-export interface ReorderRow {
+interface ReorderRow {
   id: string;
 }
 

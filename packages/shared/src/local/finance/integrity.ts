@@ -41,7 +41,7 @@ export function isPaymentAccountCompatible(
  * нескольким командам), а с ними нет и правила перевода «между командами —
  * только через общий счёт».
  */
-export interface AccountTeamAccess {
+interface AccountTeamAccess {
   brigade_id: string | null;
 }
 
@@ -86,7 +86,7 @@ export interface TransferAccountSnapshot {
  * спрашивает её ДО набора суммы, а валидатор отправки зовёт её же — правило на
  * продукт одно.
  */
-export function transferPairError(
+function transferPairError(
   from: TransferAccountSnapshot,
   to: TransferAccountSnapshot,
 ): string | null {

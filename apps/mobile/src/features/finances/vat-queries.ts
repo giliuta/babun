@@ -24,7 +24,7 @@ import { useTenantId } from "@/lib/tenant";
 // команды exemptionNote остаётся: экран НДС команды сознательно проносит его
 // через свой upsert, не затирая чужое значение.
 
-export interface TeamVatOverride {
+interface TeamVatOverride {
   teamId: string;
   mode: VatMode | null;
   rate: number | null;

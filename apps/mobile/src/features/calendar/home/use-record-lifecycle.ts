@@ -19,7 +19,7 @@ import { useRestoreAppointment } from "@/features/calendar/deleted-appointments"
 import { holdsMoney, keptForMoneyHistory } from "./appointment-rules";
 import { useInvoices } from "@/features/finances/invoices-queries";
 
-export interface RecordLifecycleInput {
+interface RecordLifecycleInput {
   toast: ReturnType<typeof useToast>;
   /** Статус записи сменился на сервере — отменой, возвратом или откатом из
    *  тоста. Странице записи это нужно, чтобы «Сохранить» не вернул старый. */

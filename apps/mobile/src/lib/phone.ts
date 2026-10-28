@@ -33,7 +33,7 @@ export const POPULAR_COUNTRIES: readonly CountryCode[] = [
 /** Названия стран на языках приложения (сняты с Intl.DisplayNames):
  *  `{ ru: { BY: "Беларусь" }, en: { … } … }`. Данные, а не фразы — плагин
  *  перевода их не трогает: у каждого языка своя таблица. */
-export const COUNTRY_NAMES_BY_LOCALE = COUNTRY_NAMES as Record<string, Record<string, string>>;
+const COUNTRY_NAMES_BY_LOCALE = COUNTRY_NAMES as Record<string, Record<string, string>>;
 
 /** Название страны на языке `locale`; нет — по-русски, нет и там — ISO. */
 export function countryNameIn(code: CountryCode, locale: string): string {

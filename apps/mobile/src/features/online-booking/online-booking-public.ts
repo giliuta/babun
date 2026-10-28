@@ -17,8 +17,8 @@ import {
 // их забирают другие заказчики, поэтому запрос окон свежий на каждом
 // открытии услуги.
 
-export const bookingPageKey = (token: string | null) => ["online-booking", token];
-export const bookingSlotsKey = (token: string | null, serviceId: string | null) => [
+const bookingPageKey = (token: string | null) => ["online-booking", token];
+const bookingSlotsKey = (token: string | null, serviceId: string | null) => [
   "online-booking",
   token,
   "slots",

@@ -51,7 +51,7 @@ function AmbientHalo() {
 
 // Brand tile — the Babun mark on its «Рассвет» plate with the Halo Cobalt
 // brand shadow. The mark itself lives in src/components/brand/BrandMark.tsx.
-export function AuthBrandMark({ size = 64 }: { size?: number }) {
+function AuthBrandMark({ size = 64 }: { size?: number }) {
   const t = useAuthTheme();
   return <BrandMark size={size} variant="tile" shadow={t.brandShadow} />;
 }

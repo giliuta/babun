@@ -2,7 +2,7 @@ import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-nat
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-export type SegmentOption<V extends string> = {
+type SegmentOption<V extends string> = {
   value: V;
   label: string;
   /** Active label hue — e.g. danger for «Расход», success for «Доход». */

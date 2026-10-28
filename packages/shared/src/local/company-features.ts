@@ -25,9 +25,9 @@ export type CompanyFeatureKey =
   | "client_requisites"
   | "client_files";
 
-export type CompanyFeatureGroup = "record" | "calendar" | "money" | "clients";
+type CompanyFeatureGroup = "record" | "calendar" | "money" | "clients";
 
-export interface CompanyFeatureDef {
+interface CompanyFeatureDef {
   key: CompanyFeatureKey;
   /** Слово на странице «Функции». */
   label: string;

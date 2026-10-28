@@ -7,7 +7,7 @@ import type { WorkBand } from "@/features/calendar/DayView";
 import { parseHourHM } from "./dates";
 
 /** null = day off, undefined = no usable schedule (caller falls back). */
-export type WorkBandFor = (dateYmd: string) => WorkBand | null | undefined;
+type WorkBandFor = (dateYmd: string) => WorkBand | null | undefined;
 
 /** Per-date working band of a team schedule; undefined while there is no
  *  schedule at all. */

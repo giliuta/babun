@@ -251,7 +251,7 @@ export const BLOCK_TEXT_MIN = 2.2;
 export const BLOCK_TEXT = "#ffffff";
 
 /** Прибавка сочности плотного блока (OKLCH C × это). */
-export const BLOCK_CHROMA = 1.18;
+const BLOCK_CHROMA = 1.18;
 
 const solidCache = new Map<string, string>();
 
@@ -322,7 +322,7 @@ export function fillRgba(hue: string, alpha: number): string {
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }
 
-export interface CtaGradient {
+interface CtaGradient {
   from: string;
   to: string;
   label: string;

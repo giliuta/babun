@@ -30,7 +30,7 @@ import { ICON } from "./tokens";
 // Обе роли обязаны выглядеть одинаково, поэтому вёрстка строки живёт в одном
 // месте, а лист — это она же плюс шапка.
 
-export interface ValueOption {
+interface ValueOption {
   id: string;
   label: string;
   /** Вторая строка — чем этот вариант отличается. */

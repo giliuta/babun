@@ -41,7 +41,7 @@ export function editorView<A extends { id: string }>(input: {
  *  уезжает (из открытого листа вопрос iOS не покажет), поэтому ЛЮБОЙ отказ
  *  обязан вернуть лист — иначе вызывающий считает его открытым, а на экране
  *  пусто, и повторный тап по той же строке ничего не открывает. */
-export type AnswerStep = "return" | "delete" | "close" | "transfer" | "trash";
+type AnswerStep = "return" | "delete" | "close" | "transfer" | "trash";
 
 export function stepAfterAnswer(
   decision: CloseDecision | { kind: "trash" },

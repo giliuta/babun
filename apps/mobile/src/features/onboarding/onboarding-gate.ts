@@ -1,7 +1,7 @@
 import { compareVersions } from "@/features/app-update/update-verdict";
 
 /** Первая версия из магазина, в которой обучение живое. */
-export const ONBOARDING_FIRST_VERSION = "1.0.4";
+const ONBOARDING_FIRST_VERSION = "1.0.4";
 
 // ОБУЧЕНИЕ — ТОЛЬКО В СБОРКЕ, КОТОРУЮ ВИДЕЛ ПРОВЕРЯЮЩИЙ APPLE. Оно меняет
 // регистрацию (первый календарь называет человек), а регистрация меняется

@@ -30,7 +30,7 @@ export const CLOSED_ACCOUNT_REASON =
 export const READ_ONLY_REASON =
   "Только просмотр — записывать операции в этом календаре вам нельзя.";
 
-export interface RefundGuards {
+interface RefundGuards {
   refundsKnown: boolean;
   belowRefunded: boolean;
   refundHoldsAccount: boolean;

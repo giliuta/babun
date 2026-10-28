@@ -80,7 +80,7 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   working_team_ids: null,
 };
 
-export function parseTenantProfile(value: Json | null): Tenant {
+function parseTenantProfile(value: Json | null): Tenant {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Профиль компании недоступен");
   }

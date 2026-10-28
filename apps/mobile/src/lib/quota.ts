@@ -3,7 +3,7 @@ import type { Database } from "@babun/shared/db/database.types";
 import type { QuotaGate } from "@babun/shared/sync";
 
 type DbSupabase = SupabaseClient<Database>;
-export type MobileQuotaKind = "clients" | "appointments_month";
+type MobileQuotaKind = "clients" | "appointments_month";
 
 const QUOTA_RPC = {
   clients: "tenant_quota_clients",
@@ -106,7 +106,7 @@ export async function assertQuotaAvailable(
   }
 }
 
-export type CreateQuotaPreflightResult = "checked" | "deferred-offline";
+type CreateQuotaPreflightResult = "checked" | "deferred-offline";
 
 /** Best-effort online preflight for a single interactive create.
  *

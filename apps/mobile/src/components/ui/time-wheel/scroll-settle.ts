@@ -10,7 +10,7 @@ import { ITEM_H } from "./wheel-geometry";
 // приём у веб-барабана даты, `DateSpinner.web.tsx`).
 
 /** Сколько тишины считать концом прокрутки. */
-export const SETTLE_QUIET_MS = 120;
+const SETTLE_QUIET_MS = 120;
 
 type Timer = ReturnType<typeof setTimeout>;
 

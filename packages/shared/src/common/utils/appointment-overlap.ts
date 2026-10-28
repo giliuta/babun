@@ -27,7 +27,7 @@ interface OverlapExisting extends OverlapCandidate {
   status?: string;
 }
 
-export interface OverlapOptions {
+interface OverlapOptions {
   /** Existing events of the candidate's team count as overlaps too. */
   withTeamEvents?: boolean;
 }

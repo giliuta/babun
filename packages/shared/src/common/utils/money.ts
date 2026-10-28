@@ -17,7 +17,7 @@ const NB = "\u00A0"; // неразрывный пробел: число не р�
 // repositories so neither JavaScript nor Postgres silently rounds a value.
 export const MAX_MONEY_CENTS = 999_999_999_999;
 
-export interface MoneyInputOptions {
+interface MoneyInputOptions {
   allowNegative?: boolean;
   allowZero?: boolean;
 }

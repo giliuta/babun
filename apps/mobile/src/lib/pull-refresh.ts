@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // (промис возвращаем — иначе спиннер гаснет на тёплом кэше раньше ответа), а
 // фоновое дообновление показывает LoadingBar, который ничего не сдвигает.
 
-export interface PullRefresh {
+interface PullRefresh {
   /** В проп `refreshing` контрола — только жест пользователя. */
   refreshing: boolean;
   onRefresh: () => void;

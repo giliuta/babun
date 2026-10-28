@@ -20,7 +20,7 @@ import { forClient } from "./home-scope";
 type RecordMoneyAccess = Pick<FinancePageAccess, "recordMoney">;
 type Range = { from: string; to: string };
 
-export interface MaterialSummary {
+interface MaterialSummary {
   amount: number;
   appointmentCount: number;
   byService: Map<string, number>;
@@ -48,7 +48,7 @@ export function materialSummaryFor(
   return { amount, appointmentCount, byService: materialsByService(costly, services) };
 }
 
-export interface HomeTotals {
+interface HomeTotals {
   income: number;
   expense: number;
   profit: number;
@@ -127,14 +127,14 @@ export function homeTotals(input: HomeTotalsInput): HomeTotals {
   };
 }
 
-export interface PreviousProfit extends PeriodMoney {
+interface PreviousProfit extends PeriodMoney {
   from: string;
   to: string;
   transactions: FinanceTransaction[];
   materialCost: number;
 }
 
-export interface PreviousProfitInput {
+interface PreviousProfitInput {
   prevTeamRows: FinanceTransaction[];
   prevCompanyRows: FinanceTransaction[];
   scope: string | null;

@@ -11,7 +11,7 @@ import { SUPPORT_CONTACTS } from "@/features/cabinet/help";
 // Пока поле пусто, страница пишет «—»: такие страницы не выкладываются, пока
 // владелец не заполнил всё (сторож — legal-texts.test.ts, проверка `isReady`).
 
-export interface LegalOperator {
+interface LegalOperator {
   /** Человек или фирма, которая предоставляет сервис: «Babun Ltd». */
   name: string;
   /** Адрес для писем: город и страна как минимум. */

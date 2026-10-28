@@ -3,7 +3,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import type { DocumentFilter } from "../documents";
 
-export interface DebtPayment {
+interface DebtPayment {
   debtId: string;
   counterparty: string;
   amount: number;

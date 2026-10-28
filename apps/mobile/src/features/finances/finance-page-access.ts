@@ -41,7 +41,7 @@ type DebtLike = Pick<Debt, "id" | "team_id">;
 type Side = "income" | "expense";
 type FinanceBlock = string;
 
-export interface FinancePageAccessInput {
+interface FinancePageAccessInput {
   /** `undefined` — роль ещё не пришла; `null` — человека в компании нет. */
   role: UserRole | null | undefined;
   /** `undefined` — карта прав ещё не пришла. */

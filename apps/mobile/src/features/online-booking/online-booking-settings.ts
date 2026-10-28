@@ -7,7 +7,7 @@ import { parseBookingSettings, type BookingSettings } from "./online-booking";
 // сама проверяет, что звонит владелец компании этого календаря. Ответ любой
 // записи — свежее состояние целиком: его и кладём в кэш.
 
-export const bookingSettingsKey = (teamId: string | null) => ["online-booking-settings", teamId];
+const bookingSettingsKey = (teamId: string | null) => ["online-booking-settings", teamId];
 
 export function useBookingSettings(teamId: string | null) {
   return useQuery({

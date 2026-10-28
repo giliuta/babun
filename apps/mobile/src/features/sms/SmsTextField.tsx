@@ -121,7 +121,7 @@ function sampleVars(company: string) {
 }
 
 /** Текст с подставленным примером и его счёт частей. */
-export function useSmsPreview(value: string) {
+function useSmsPreview(value: string) {
   // Имя своей компании — пример «Компания» читался как пустое поле.
   const company = useTenant().data?.name?.trim() || "Ваша компания";
   const sample = useMemo(() => sampleVars(company), [company]);

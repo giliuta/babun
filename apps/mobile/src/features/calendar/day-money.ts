@@ -158,7 +158,7 @@ export function moneyOfDay(
 // Открывая доход, человек видит, сколько зашло на каждый счёт (наличка,
 // карта и т. д. — те, что он создал).
 
-export interface AccountMoney {
+interface AccountMoney {
   /** null — строки без счёта (старые операции). */
   accountId: string | null;
   amount: number;

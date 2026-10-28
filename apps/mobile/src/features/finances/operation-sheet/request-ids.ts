@@ -53,7 +53,7 @@ export function operationIntentKey(f: OperationIntentFields): string {
 
 /** Память «ключ → id» на время жизни формы: повтор без правок — тот же id,
  *  правка — новый ключ и новый id. */
-export function createIntentRequestIds<F>(
+function createIntentRequestIds<F>(
   uuid: () => string,
   keyOf: (fields: F) => string,
 ): {

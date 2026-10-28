@@ -24,7 +24,7 @@ import { useThemeColors } from "@/theme/colors";
 //
 // ШЕСТЕРЁНКА СПРАВА В ШАПКЕ, метка посередине. Тот же глиф `Settings2`, что в шапке счетов и в панелях финансов.
 
-export type CityOption = LabelOption;
+type CityOption = LabelOption;
 
 export function DayLabelSheet({
   visible,

@@ -45,7 +45,7 @@ export function appearanceRowFill(
   return `${color}${pressed ? "24" : "14"}`;
 }
 
-export type AppearanceTab = "icon" | "color";
+type AppearanceTab = "icon" | "color";
 
 /** Образец: квадрат цвета сущности, внутри — её значок. Тот же язык, что у
  *  плиток решётки, поэтому строка и шторка читаются как одно целое. */

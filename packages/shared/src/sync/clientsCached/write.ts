@@ -59,7 +59,7 @@ const ARRAY_FIELDS = [
   "equipment",
 ] as const satisfies readonly (keyof Client)[];
 
-export const CLIENT_NEWER_ON_SERVER =
+const CLIENT_NEWER_ON_SERVER =
   "Карточку клиента изменили на другом устройстве — показываю свежую версию";
 
 /** Правку массива клиента не применили: строка на сервере свежее кэша. */

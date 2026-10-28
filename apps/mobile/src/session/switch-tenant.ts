@@ -53,7 +53,7 @@ const CALENDAR_VIEW_PREF = "calendar.view";
 // работу и заставлял скачивать всё заново при возврате. Разбор — над
 // `cacheClearAll` в `lib/auth-clear.ts`.
 
-export interface SwitchTenantOptions {
+interface SwitchTenantOptions {
   /** Факт с сервера: компания прошла онбординг. `list_my_calendars` отдаёт его
    *  вместе с лентой, поэтому в момент тапа ответ уже лежит — и гейт
    *  «Открываем компанию» не показывается вовсе. */

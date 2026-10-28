@@ -19,7 +19,7 @@ export type UserLike =
   | null
   | undefined;
 
-export interface SignupFinish {
+interface SignupFinish {
   /** Экран «Почти готово» нужен. */
   needed: boolean;
   /** Спросить пароль: входа почтой у аккаунта ещё нет. */

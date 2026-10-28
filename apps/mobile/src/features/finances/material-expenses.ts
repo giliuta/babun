@@ -16,7 +16,7 @@ import { inTeamScope } from "./team-scope";
 // Строка виртуальная: id с префиксом, source «auto», счёта нет. В ленте всех
 // операций её нет — там история денег, а не расчёт.
 
-export const MATERIAL_TX_PREFIX = "material:";
+const MATERIAL_TX_PREFIX = "material:";
 
 export function materialExpenseRows(
   appointments: readonly Appointment[],

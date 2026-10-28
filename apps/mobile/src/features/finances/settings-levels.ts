@@ -17,7 +17,7 @@ import type { UserRole } from "@/session/role-policy";
 //
 // Лист без React: правило читают страница, её подстраницы и тест.
 
-export const FINANCE_SETTING_BLOCKS = {
+const FINANCE_SETTING_BLOCKS = {
   accounts: "finance.settings_accounts",
   trash: "finance.settings_trash",
   categoriesIncome: "finance.settings_categories_income",
@@ -46,7 +46,7 @@ export const CATEGORY_KIND_ROW = {
   debt: "categoriesDebts",
 } as const satisfies Record<"income" | "expense" | "debt", FinanceSettingRow>;
 
-export interface FinanceSettingsInput {
+interface FinanceSettingsInput {
   /** `undefined` — роль ещё не пришла. */
   role: UserRole | null | undefined;
   map: MemberAccessMap | undefined;

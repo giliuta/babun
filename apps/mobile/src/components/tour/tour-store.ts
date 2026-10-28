@@ -14,7 +14,7 @@ import type { ScrollView, View } from "react-native";
 // Хранилище не знает ни про календарь, ни про финансы: главы пишут фичи
 // (`features/onboarding`), здесь только движок.
 
-export type TourStepKind = "info" | "tap" | "input";
+type TourStepKind = "info" | "tap" | "input";
 
 export interface TourStep {
   id: string;
@@ -217,7 +217,7 @@ export function useTourTargetsVersion(): number {
   return useSyncExternalStore(subscribeTargets, readTargetsVersion, readTargetsVersion);
 }
 
-export type TourSnapshot = {
+type TourSnapshot = {
   chapter: TourChapter | null;
   step: TourStep | null;
   index: number;

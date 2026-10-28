@@ -22,7 +22,7 @@ import type { useFinanceRoute } from "../use-finance-route";
 import type { HomeReferences } from "./use-home-references";
 import type { HomeSheetsState } from "./use-home-sheets";
 
-export interface RowActionsInput {
+interface RowActionsInput {
   sheets: HomeSheetsState;
   access: FinancePageAccess;
   view: HomeView;

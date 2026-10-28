@@ -10,7 +10,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 // Долг — только после визита: пока визит впереди, неоплаченное — «к оплате»
 // серым. Отменённая — сумма без «к оплате»: денег по ней никто не ждёт.
 
-export interface AgendaMoney {
+interface AgendaMoney {
   /** Верхняя строка: сумма визита или, когда не оплачено ничего, долг. */
   amount: string;
   amountWarn: boolean;

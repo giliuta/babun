@@ -13,15 +13,6 @@
 //   [Компания]          — tenant brand name
 //   [СсылкаНаОтмену]    — short URL to the public cancel page
 
-export type TemplateKind =
-  | "new_appointment"
-  | "reminder"
-  | "after_24h_short"
-  | "after_24h_long"
-  | "cancellation"
-  | "waitlist"
-  | "debt";
-
 export const AVAILABLE_TOKENS = [
   { token: "[Имя]", label: "Имя клиента" },
   { token: "[День]", label: "День недели" },

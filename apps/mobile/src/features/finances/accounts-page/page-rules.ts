@@ -16,7 +16,7 @@ import { isUuid } from "@babun/shared/sync/uuid";
 // какую команду предложить новому счёту.
 
 /** Ответ на «Скрыть»: всё, что умеет закрытие, кроме удаления. */
-export type HideDecision = Exclude<
+type HideDecision = Exclude<
   CloseDecision,
   { kind: "delete" }
 >;

@@ -29,7 +29,7 @@ export function afterChoiceSheet(): Promise<void> {
 //
 // Возвращает индекс выбранного пункта или null («Отмена» / закрытие).
 
-export interface Choice {
+interface Choice {
   label: string;
   /** Красный пункт: удаление, снятие, отмена записи. */
   destructive?: boolean;

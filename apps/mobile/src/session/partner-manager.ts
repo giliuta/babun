@@ -14,7 +14,7 @@ import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access
 //   • убрать из аккаунта — только партнёра, все команды которого — его.
 // Владельцу всё открыто, как прежде.
 
-export const PARTNERS_KEY = "company.partners";
+const PARTNERS_KEY = "company.partners";
 
 type Role = string | null | undefined;
 
@@ -27,7 +27,7 @@ interface Viewer {
 const isOwner = ({ role, myMap }: Viewer) => role === "owner" || myMap?.isOwner === true;
 
 /** Право «Партнёры» у того, кто смотрит. */
-export function partnersLevel(viewer: Viewer): AccessLevel | "owner" {
+function partnersLevel(viewer: Viewer): AccessLevel | "owner" {
   if (isOwner(viewer)) return "owner";
   return (viewer.myMap?.company[PARTNERS_KEY] as AccessLevel | undefined) ?? "off";
 }

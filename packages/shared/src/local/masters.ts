@@ -30,7 +30,7 @@ export const LEGACY_LEAD_ROLE_ID = "role-lead";
 // замена — флаг `is_lead` у роли (`teams.roles`), тогда меняется только
 // `isLeadRole`. Литерал — в `i18n/ignore.json`: это данные, а не слово
 // интерфейса.
-export const LEAD_ROLE_NAME = "бригадир";
+const LEAD_ROLE_NAME = "бригадир";
 
 export function isLeadRole(role: { name: string }): boolean {
   return role.name.trim().toLowerCase() === LEAD_ROLE_NAME;

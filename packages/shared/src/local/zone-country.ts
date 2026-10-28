@@ -7,7 +7,7 @@
 // Сгенерировано скриптом; руками не правится — при новых зонах в
 // `timezones.ts` перегенерировать.
 
-export const ZONE_COUNTRY: Readonly<Record<string, string>> = {
+const ZONE_COUNTRY: Readonly<Record<string, string>> = {
   "Africa/Abidjan": "CI",
   "Africa/Accra": "GH",
   "Africa/Addis_Ababa": "ET",

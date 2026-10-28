@@ -23,7 +23,7 @@ import { keyNamesKnownTenant } from "./tenant-query-keys";
 
 /** Головы ключей, которые кормит realtime — те же, что в `sync-bridge.ts`,
  *  включая карточку клиента. Все эти ключи называют компанию. */
-export const CLAIM_RESYNC_HEADS: readonly string[] = [
+const CLAIM_RESYNC_HEADS: readonly string[] = [
   "appointments",
   "clients",
   "client-tags",

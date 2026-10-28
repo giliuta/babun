@@ -54,7 +54,7 @@ export function pinchAnchor(visible: number, focalY: number, baseH: number): num
   return (visible + focalY - PAD_TOP) / baseH;
 }
 
-export type PinchFrameInput = {
+type PinchFrameInput = {
   baseH: number;
   anchor: number;
   /** Масштаб жеста в этом кадре и его значение в момент признания. */
@@ -128,7 +128,7 @@ export function releaseScrollsFirst(target: number, scrollY0: number): boolean {
 /** Сколько кадров отпускание дожимает прокрутку, прежде чем сдаться (на
  *  симуляторе хватает двух: кадр, где нативный скролл ещё не знает новой
  *  высоты, и следующий). */
-export const SETTLE_TRIES = 30;
+const SETTLE_TRIES = 30;
 
 /** Шаг 2 отпускания, один кадр: прокрутка только что попросила `target`, а
  *  встала на `actual` (RN клампит по contentSize, который нативный скролл

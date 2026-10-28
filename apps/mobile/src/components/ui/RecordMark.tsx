@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import {
-  BLOCK_TEXT,
   blockContour,
   blockSolid,
   CANCELLED_BORDER,
@@ -116,16 +115,6 @@ export function RecordMark({
       {children}
     </View>
   );
-}
-
-/** Цвет текста внутри знака: белый на плотной заливке, чернила там, где
- *  заливки нет («не красить») или запись отменена. */
-export function recordMarkText(
-  hue: string | null,
-  ink: string,
-  cancelled = false,
-): string {
-  return hue && !cancelled ? BLOCK_TEXT : ink;
 }
 
 export default RecordMark;

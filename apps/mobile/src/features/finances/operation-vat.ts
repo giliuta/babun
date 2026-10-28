@@ -17,7 +17,7 @@ import type { TxVatMode } from "@babun/shared/local/finance/vat";
 // флаг взводит гидрация правки, но у сотрудника клавиш нет, и режим
 // существующей строки сервер знает сам — ему нечего сообщать.
 
-export interface DraftVatInput {
+interface DraftVatInput {
   /** Режим, который стоит в форме сейчас. */
   mode: TxVatMode;
   /** Клавишу НДС нажали руками (или форма открыта на существующей операции —

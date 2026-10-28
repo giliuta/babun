@@ -219,7 +219,7 @@ export function useTenantId(): string | null {
 // ---------------------------------------------------------------------------
 // Onboarding gate.
 
-export interface OnboardingTenant {
+interface OnboardingTenant {
   id: string;
   name: string;
   vertical: string | null;

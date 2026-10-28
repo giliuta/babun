@@ -22,7 +22,7 @@ import type { UserRole } from "@/session/role-policy";
  *
  * Лист без react-native — чтобы правило проверялось тестом.
  */
-export type FinancesGate = "open" | "locked" | "loading" | "boundary";
+type FinancesGate = "open" | "locked" | "loading" | "boundary";
 
 export function financesGate(
   role: UserRole | null | undefined,

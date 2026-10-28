@@ -41,7 +41,7 @@ const FROZEN_KIND_MESSAGE: Record<AccountKind, string> = {
   other: "По счёту уже были операции — значок кассы, карты или банка ему не поставить.",
 };
 
-export type IconChange =
+type IconChange =
   | { ok: true; patch: { icon: string | null; kind?: AccountKind } }
   | { ok: false; title: string; message: string };
 

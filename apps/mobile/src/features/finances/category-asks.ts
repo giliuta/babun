@@ -13,7 +13,7 @@ import type {
 } from "@babun/shared/db/repositories/finance-categories";
 
 /** Что спрашивает форма операции у этой категории. Нет категории — ничего. */
-export interface CategoryAsks {
+interface CategoryAsks {
   employee: boolean;
   client: boolean;
   receipt: boolean;
@@ -88,7 +88,7 @@ export function withPayee(title: string, payee: string | null | undefined): stri
   return name ? `${title} · ${name}` : title;
 }
 
-export interface PayeeCandidate {
+interface PayeeCandidate {
   id: string;
   full_name: string;
   team_id: string | null;

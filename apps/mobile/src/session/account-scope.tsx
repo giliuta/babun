@@ -82,7 +82,7 @@ export function useAccountProfile() {
 }
 
 /** Свои права в аккаунте страницы. */
-export function useAccountAccess(): MemberAccessMap | undefined {
+function useAccountAccess(): MemberAccessMap | undefined {
   const scope = useAccountScope();
   const active = useMyAccess().data;
   const foreign = useQuery({

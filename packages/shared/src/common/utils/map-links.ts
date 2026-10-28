@@ -8,7 +8,7 @@
 
 export type MapService = "google" | "apple" | "waze" | "yandex";
 
-export interface ParsedAddress {
+interface ParsedAddress {
   raw: string;
   coords: { lat: number; lng: number } | null;
   isUrl: boolean;

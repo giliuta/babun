@@ -45,7 +45,7 @@ export interface MemberQueueHost {
   onSent: (op: MemberQueuedOp) => void;
 }
 
-export type MemberQueueEvent = { kind: "refused"; op: MemberQueuedOp; words: string };
+type MemberQueueEvent = { kind: "refused"; op: MemberQueuedOp; words: string };
 
 const listeners = new Set<(event: MemberQueueEvent) => void>();
 
@@ -174,7 +174,7 @@ export function startMemberQueueRuntime(next: MemberQueueHost): () => void {
   };
 }
 
-export type SendOrQueueResult<T> = { queued: false; data: T } | { queued: true };
+type SendOrQueueResult<T> = { queued: false; data: T } | { queued: true };
 
 /** ОТПРАВИТЬ ИЛИ ОТЛОЖИТЬ. Есть связь и у записи нет отложенных правок —
  *  вызов уходит сразу, отказ сервера летит вызывающему как раньше. Нет связи,

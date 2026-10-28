@@ -12,7 +12,7 @@ import type { Period } from "@/lib/period";
 import { forClient } from "./home-scope";
 import type { HomeReferences } from "./use-home-references";
 
-export interface HomeDebtsInput {
+interface HomeDebtsInput {
   refs: Pick<
     HomeReferences,
     "invoices" | "invoicePayments" | "invoiceAppointmentMoney" | "clients" | "categories"

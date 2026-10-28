@@ -19,7 +19,7 @@ import { asRecordWindow, recordWindowStart } from "@/features/appointments/recor
 // календаря (`calendar.window`), как окно сервера
 // (`member_day_money_window_starts`).
 
-export const DAY_MONEY_KEY = "calendar.day_money";
+const DAY_MONEY_KEY = "calendar.day_money";
 
 interface Reader {
   role: AccessGateInput["role"];

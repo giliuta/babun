@@ -12,7 +12,7 @@
 
 import { money, moneySign } from "@babun/shared/common/utils/money";
 
-export interface AlertText {
+interface AlertText {
   title: string;
   message: string;
   /** Подпись деструктивной кнопки. Без неё диалог — просто сообщение. */

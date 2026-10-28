@@ -17,7 +17,7 @@ import { HISTORY_KEY, historyRowVisible } from "./history-access";
 const PAGE = 1000;
 const MAX_ROWS = 3000;
 
-export const changeLogKey = (tenantId: string | null) => ["change-log", tenantId] as const;
+const changeLogKey = (tenantId: string | null) => ["change-log", tenantId] as const;
 
 /** Кто читает журнал и чем его режет. */
 function useHistoryReader() {

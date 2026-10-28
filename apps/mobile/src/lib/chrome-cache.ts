@@ -33,9 +33,9 @@ const CHROME_ROOTS = new Set([
 
 /** Больше записей не держим: свежие вытесняют старые (компаний у человека
  *  единицы, но ключи ролей и команд множатся переходами). */
-export const CHROME_MAX_ENTRIES = 40;
+const CHROME_MAX_ENTRIES = 40;
 
-export interface ChromeEntry {
+interface ChromeEntry {
   key: QueryKey;
   data: unknown;
   /** Когда записано — для вытеснения старых. */

@@ -28,7 +28,7 @@ function shiftDateKey(dateKey: string, days: number): string {
   return proof.toISOString().slice(0, 10);
 }
 
-export interface EventReminderOccurrence {
+interface EventReminderOccurrence {
   when: Date;
   label: string;
   date: string;

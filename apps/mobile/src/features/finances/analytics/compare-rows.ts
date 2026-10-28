@@ -3,12 +3,12 @@ import { changePct, changeText } from "./analytics-math";
 // СПИСОК «К ПРОШЛОМУ ПЕРИОДУ». Цвет изменения — смысл, а не знак: рост
 // расхода красный, падение — зелёное.
 
-export interface DeltaColors {
+interface DeltaColors {
   success: string;
   danger: string;
 }
 
-export interface Delta {
+interface Delta {
   text: string;
   color: string;
 }
@@ -28,7 +28,7 @@ export function deltaOf(
   };
 }
 
-export interface CompareRow {
+interface CompareRow {
   key: string;
   name: string;
   now: string;
@@ -59,7 +59,7 @@ export function compareRow(
   };
 }
 
-export interface MonthTrendRow {
+interface MonthTrendRow {
   key: string;
   profit: number;
   delta: Delta | null;

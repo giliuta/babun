@@ -110,7 +110,7 @@ export function teamAccounts<T extends SectionAccount>(
 
 /** Группа страницы «Счета»: счета одной команды, которые двигаются ручкой
  *  между собой. */
-export interface AccountOrderGroup<T extends SectionAccount> {
+interface AccountOrderGroup<T extends SectionAccount> {
   /** id команды либо `NO_TEAM` — ключ списка и граница перетаскивания. */
   key: string;
   /** Заголовок над группой. `null` — у компании одна команда: называть её
@@ -261,7 +261,7 @@ function ymdToUtc(value: string): number | null {
 }
 
 /** Даты движений счёта, из которых выводится возраст остатка. */
-export interface AccountMovementDates {
+interface AccountMovementDates {
   last_outflow_on: string | null;
   first_tx_on: string | null;
 }

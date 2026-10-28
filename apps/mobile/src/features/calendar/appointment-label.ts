@@ -23,7 +23,7 @@ export interface AppointmentLabelCity {
   color: string | null;
 }
 
-export interface OffDayLabel {
+interface OffDayLabel {
   name: string;
   color: string;
 }

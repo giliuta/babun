@@ -34,7 +34,7 @@ export type AccessLevel =
   | "half"
   | "day";
 export type AccessArea = "calendar" | "finance" | "clients" | "company" | "owner";
-export type AccessScope = "calendar" | "company";
+type AccessScope = "calendar" | "company";
 
 const LEVELS: readonly AccessLevel[] = [
   "off",
@@ -213,7 +213,7 @@ export function levelOf(
   return stored && block.levels.includes(stored) ? stored : fallback;
 }
 
-export interface AccessSection {
+interface AccessSection {
   area: Exclude<AccessArea, "owner">;
   title: string;
   blocks: AccessBlock[];

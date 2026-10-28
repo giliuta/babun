@@ -13,7 +13,7 @@
 //
 // Лист без зависимостей от React и нативного — под `bun test`.
 
-export type BudgetLevel = 0 | 80 | 100;
+type BudgetLevel = 0 | 80 | 100;
 
 /** Что уже сообщено: `${categoryId}:${YYYY-MM}` → порог. */
 export type BudgetSeen = Record<string, BudgetLevel>;
@@ -28,20 +28,20 @@ export interface BudgetCategory {
   team_id?: string | null;
 }
 
-export interface BudgetLedgerRow {
+interface BudgetLedgerRow {
   type: string;
   amount: number;
   category_id: string | null;
 }
 
-export interface BudgetNotice {
+interface BudgetNotice {
   categoryId: string;
   level: Exclude<BudgetLevel, 0>;
   title: string;
   body: string;
 }
 
-export const BUDGET_WARN_SHARE = 0.8;
+const BUDGET_WARN_SHARE = 0.8;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -111,7 +111,7 @@ export function budgetLeftLine(spent: number, budget: number, fmt: (n: number) =
 }
 
 /** Текст уведомления о пороге. */
-export function budgetNoticeText(
+function budgetNoticeText(
   name: string,
   spent: number,
   budget: number,

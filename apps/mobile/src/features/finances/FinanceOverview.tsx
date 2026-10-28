@@ -41,21 +41,21 @@ export type HomeView =
   | "debt"
   | "profit";
 
-export interface InvoiceTileSummary {
+interface InvoiceTileSummary {
   /** Сколько документов (инвойсов и чеков) за период — ровно столько строк
    *  откроется под плиткой (`usePeriodDocuments`). Плитка
    *  печатает ШТУКИ, а не деньги. */
   count: number;
 }
 
-export interface AccountTileSummary {
+interface AccountTileSummary {
   /** Σ остатков набора — та же цифра, что и на странице счетов.
    *  Больше плитке ничего не нужно: она отвечает «сколько у команды», а состав
    *  (сколько счетов, сколько наличными) смотрят на самой странице счетов. */
   total: number | null;
 }
 
-export interface OverviewTotals {
+interface OverviewTotals {
   income: number;
   expense: number;
   profit: number;
