@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Text, View, Platform } from "react-native";
+import { AppState, Linking, Text, View, Platform } from "react-native";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -67,6 +67,24 @@ export function ContactsImportSheet({
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [denied, setDenied] = useState(false);
+  // Вернулся из настроек с доступом — перечитать: иначе лист стоял на «Нет
+  // доступа», пока его не закроют и не откроют. Проверка без запроса: запрос
+  // показывал бы системное окно, а его закрытие снова будило бы этот слушатель.
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!visible || !denied || !Contacts) return;
+    const api = Contacts;
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s !== "active") return;
+      void api
+        .getPermissionsAsync()
+        .then(({ status }) => {
+          if (status === "granted") setRetry((n) => n + 1);
+        })
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, [visible, denied]);
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
   // ПОКОЛЕНИЕ ЗАПУСКА, А НЕ ФЛАГ «ОТМЕНЕНО». Флаг сбрасывало следующее
@@ -134,7 +152,7 @@ export function ContactsImportSheet({
     return () => {
       alive = false;
     };
-  }, [visible, country]);
+  }, [visible, country, retry]);
 
   const newCount = rows?.filter((r) => !r.exists).length ?? 0;
 
@@ -218,12 +236,18 @@ export function ContactsImportSheet({
       scroll
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
-          <Button
-            label={busy ? "Добавляем…" : `Добавить ${picked.size}`}
-            loading={busy}
-            disabled={busy || picked.size === 0}
-            onPress={() => void run()}
-          />
+          {denied && CONTACTS_AVAILABLE ? (
+            // После «Больше не спрашивать» системного окна второй раз нет —
+            // дверь в настройки Babun, как у камеры (lib/camera-denied.ts).
+            <Button label="Открыть настройки" onPress={() => void Linking.openSettings()} />
+          ) : (
+            <Button
+              label={busy ? "Добавляем…" : `Добавить ${picked.size}`}
+              loading={busy}
+              disabled={busy || picked.size === 0}
+              onPress={() => void run()}
+            />
+          )}
         </View>
       }
     >
