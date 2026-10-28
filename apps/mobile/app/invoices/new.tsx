@@ -187,14 +187,16 @@ export default function NewInvoiceScreen() {
       return;
     }
     confirmThen(
-      "Черновик не сохранён",
+      // Уход с несохранённым — одни слова на весь продукт (форма записи,
+      // карточка клиента, шторки правки): пачка 5, Д13.
+      "Закрыть без сохранения?",
       {
-        message: "Уйти и потерять заполненное?",
-        confirmLabel: "Уйти",
+        message: "Введённое не сохранится.",
+        confirmLabel: "Не сохранять",
         destructive: true,
       },
       () => {
-        // «Уйти» — черновик брошен и после выгрузки не вернётся.
+        // «Не сохранять» — черновик брошен и после выгрузки не вернётся.
         clearStoredInvoiceDraft(tenantId, params.teamId);
         leavingRef.current = true;
         navigation.dispatch(data.action);

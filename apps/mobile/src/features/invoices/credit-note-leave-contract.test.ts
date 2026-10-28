@@ -20,7 +20,7 @@ describe("уход с заполненной формы документа", () 
     test(`${name}: спрашивает навигация, теми же словами, что инвойс`, () => {
       assert.match(screen, /usePreventRemove\(dirty,/);
       assert.match(screen, /reason\.trim\(\) !== ""/);
-      for (const phrase of ["\"Черновик не сохранён\"", "\"Уйти и потерять заполненное?\"", "confirmLabel: \"Уйти\""]) {
+      for (const phrase of ["\"Закрыть без сохранения?\"", "\"Введённое не сохранится.\"", "confirmLabel: \"Не сохранять\""]) {
         assert.ok(invoice.includes(phrase), `у инвойса нет ${phrase}`);
         assert.ok(screen.includes(phrase), `у экрана «${name}» нет ${phrase}`);
       }
