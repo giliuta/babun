@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { setShownSessionUserId } from "@/lib/active-tenant";
-import { handleAuthEvent } from "@/lib/auth-clear";
+import { clearQueriesLeftBySignOut, handleAuthEvent } from "@/lib/auth-clear";
 import { queryClient } from "@/lib/query-client";
 import { supabase } from "@/lib/supabase";
 import { shouldPublishSession, signedOutNow } from "./session-publish";
@@ -85,9 +85,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const shownBefore = useRef<string | null>(null);
   useEffect(() => {
     setShownSessionUserId(shownUserId);
-    // Повторы запросов вышедшего ушли бы анонимом (`signedOutNow`).
+    // Повторы запросов вышедшего ушли бы анонимом (`signedOutNow`). Запросы,
+    // которые «Выйти» оставило страницам вышедшего, сносятся только сейчас:
+    // на экране логин, и пересоздавать их некому (`auth-clear/wipe.ts`).
     if (signedOutNow(shownBefore.current, shownUserId)) {
       void queryClient.cancelQueries();
+      clearQueriesLeftBySignOut();
     }
     shownBefore.current = shownUserId;
   }, [shownUserId]);

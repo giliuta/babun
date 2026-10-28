@@ -12,6 +12,7 @@ import {
 } from "@/lib/active-tenant";
 import { isTenantScopedKey } from "@/lib/tenant-prefs";
 import { sweepQueryCacheOnSwitch } from "@/lib/switch-cache-sweep";
+import { removeUnobservedQueries } from "@/lib/sign-out-query-sweep";
 import { notificationsForWipe } from "@/lib/wipe-plan";
 import { clearAllBabunNotifications } from "@/lib/notifications";
 import { resetTeamPrefsCache } from "@/lib/notification-prefs-cache";
@@ -67,10 +68,35 @@ export function consumeSignedOutOnPurpose(): boolean {
 // прежней компании сброс так же не оставляет, но подписчики остаются живыми и
 // узнают, что данных больше нет. На выходе из аккаунта остаётся `clear()` —
 // там сброс означал бы залп запросов без сессии.
+//
+// НО И `clear()` ПОД ЖИВЫМИ ЭКРАНАМИ — ТОТ ЖЕ ЗАЛП, ТОЛЬКО ОТЛОЖЕННЫЙ.
+// «Выйти» чистит, пока страницы вышедшего ещё на месте: первая же их
+// перерисовка заново заводит снесённые запросы (`useQuery` строит запрос
+// по ключу, если в кэше его нет, и тут же идёт в сеть — данных-то нет).
+// Заслонка (`anon-guard.ts`) их не останавливает: supabase-js сначала
+// читает токен из Keychain (~0,4 с), к fetch запрос приходит, когда дерево
+// уже на логине и заслонка открыта, — и уходит анонимом: в журнале шлюза
+// через 0,4 с после logout семь 401 разом (`access_blocks`, `my_access_map`,
+// `list_my_calendars`, …) — все запросы, висящие над экраном входа.
+// Поэтому «Выйти» (`afterSignOut`) сносит сразу только запросы без
+// наблюдателей, а наблюдаемые — `SessionProvider`, когда на экране логин и
+// запросы вышедшего уже выключены (`clearQueriesLeftBySignOut`).
+let observedQueriesAwaitLogin = false;
+
+/** Сносит запросы, оставленные «Выйти» страницам вышедшего. Зовёт
+ *  `SessionProvider` на переходе «был человек → никого» и вход — на случай,
+ *  если перехода не было. Без отложенной чистки ничего не делает. */
+export function clearQueriesLeftBySignOut(): void {
+  if (!observedQueriesAwaitLogin) return;
+  observedQueriesAwaitLogin = false;
+  queryClient.clear();
+}
+
 function wipeFastStores(
   keepSubscribers: boolean,
   keepTenantNamedKeys = false,
   knownTenantIds?: readonly string[],
+  afterSignOut = false,
 ): void {
   const storage = getStorage();
   for (const key of storage.list()) {
@@ -96,7 +122,12 @@ function wipeFastStores(
     // Номера, открытые сотрудником дверью, живут только в памяти — и на
     // выходе уходят вместе с остальным.
     forgetRevealedContacts();
-    queryClient.clear();
+    if (afterSignOut) {
+      removeUnobservedQueries(queryClient);
+      observedQueriesAwaitLogin = true;
+    } else {
+      queryClient.clear();
+    }
     signedOutOnPurpose = true;
     return;
   }
@@ -196,6 +227,9 @@ export async function wipeTenantScopedData(
      *  прежде. Беречь ТОЛЬКО компанию назначения нельзя: так стирается кэш
      *  той, откуда уходим, и обратный путь снова холодный. */
     knownTenantIds?: readonly string[];
+    /** Чистка после «Выйти»: наблюдаемые запросы ждут экрана входа — разбор
+     *  над `clearQueriesLeftBySignOut`. */
+    afterSignOut?: boolean;
   } = {},
 ): Promise<void> {
   // ОТМЕНА НЕ ЖДЁТСЯ, И ЭТО ГЛАВНАЯ СТРОКА ПО СКОРОСТИ ПЕРЕХОДА.
@@ -231,6 +265,7 @@ export async function wipeTenantScopedData(
     opts.keepSubscribers ?? false,
     opts.keepLocalCache ?? false,
     opts.knownTenantIds,
+    opts.afterSignOut ?? false,
   );
 
   // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ SQLite, И ЭТО НЕ ПОСЛАБЛЕНИЕ.
