@@ -32,8 +32,10 @@ describe("импорт из контактов телефона", () => {
 
   test("«Добавить N» — в футере листа, над полосой home-индикатора", () => {
     const src = sheet();
-    // Кнопка — канонический `Button` в футере (вне прокрутки листа).
-    assert.match(src, /footer=\{\s*<View[^>]*>\s*<Button\b[\s\S]{0,240}?onPress=\{\(\) => void run\(\)\}/);
+    // Кнопка — канонический `Button` в футере (вне прокрутки листа). При
+    // отказе в доступе футер отдаёт место «Открыть настройки».
+    const footer = src.slice(src.indexOf("footer={"), src.indexOf("</BottomSheet>"));
+    assert.match(footer, /^footer=\{\s*<View[^>]*>[\s\S]*?<Button\b[^>]*?onPress=\{\(\) => void run\(\)\}[\s\S]*?<\/View>\s*\}\s*>/);
   });
 });
 
