@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// Пачка «Страница клиентов» (28.10): ввод номера, ошибки и «Поделиться» на вебе.
+// Ввод номера, ошибки и «Поделиться» на вебе.
 const src = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(join(src, file), "utf8");
 
