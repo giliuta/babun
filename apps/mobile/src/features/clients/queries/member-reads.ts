@@ -1,4 +1,5 @@
 import { rowToClient } from "@babun/shared/db/repositories/clients";
+import type { Json } from "@babun/shared/db/database.types";
 import type { Client } from "@babun/shared/local/clients";
 import { supabase } from "@/lib/supabase";
 import { readClientWindow, type ListRpc } from "./client-window";
@@ -21,7 +22,7 @@ export async function listMasterClientsSafe(
   clientId?: string,
 ): Promise<Client[]> {
   const rows = await readClientWindow(rpcOf(client), "list_master_clients_safe", clientId);
-  return rows.map(masterClientJsonToClient);
+  return rows.map((row) => masterClientJsonToClient(row as Json));
 }
 
 /** Ответ окна — строка клиента в JSON плюс `tag_ids`: разбирается тем же
