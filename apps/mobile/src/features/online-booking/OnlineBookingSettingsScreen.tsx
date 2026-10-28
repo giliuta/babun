@@ -1,6 +1,6 @@
 import { ScrollView, Text } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { CalendarCheck, Link2 } from "lucide-react-native";
+import { CalendarCheck, Link2, RefreshCw } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PageFooter } from "@/components/ui/PageFooter";
@@ -12,14 +12,20 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { GUTTER } from "@/components/ui/tokens";
 import { useTeams } from "@/features/reference/queries";
+import { confirmThen } from "@/lib/confirm";
 import { useCopyValue } from "@/lib/copy-value";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { bookingUrl, durationWords } from "./online-booking";
-import { useBookingSettings, useSetBookingEnabled, useSetBookingService } from "./online-booking-settings";
+import {
+  useBookingSettings,
+  useNewBookingLink,
+  useSetBookingEnabled,
+  useSetBookingService,
+} from "./online-booking-settings";
 
 // «ОНЛАЙН-ЗАПИСЬ» КАЛЕНДАРЯ — за шестерёнкой календаря (`?team=`, как
-// «Услуги» и «SMS»). Сверху выключатель и ссылка, ниже — какие услуги видны
+// «Услуги» и «SMS»). Сверху выключатель, ссылка и её замена, ниже — какие услуги видны
 // заказчику. Главное действие — «Скопировать ссылку» в футере: её ставят в
 // Instagram, Google-профиль и на визитку.
 //
@@ -39,6 +45,7 @@ export function OnlineBookingSettingsScreen() {
   const settings = useBookingSettings(teamId);
   const setEnabled = useSetBookingEnabled(teamId);
   const setService = useSetBookingService(teamId);
+  const newLink = useNewBookingLink(teamId);
   const copy = useCopyValue();
   const data = settings.data;
   const url = data?.token ? bookingUrl(data.token) : null;
@@ -46,6 +53,19 @@ export function OnlineBookingSettingsScreen() {
 
   const toggle = (enabled: boolean) =>
     setEnabled.mutate(enabled, { onError: (e) => notify("Ошибка", e.message) });
+
+  // Попавшую не туда ссылку отзывают только заменой: старая сразу перестаёт
+  // открываться, поэтому её место в Instagram и на визитках придётся обновить.
+  const reissue = () =>
+    confirmThen(
+      "Выпустить новую ссылку?",
+      {
+        message: "Старая перестанет открываться — замените её везде, где она опубликована.",
+        confirmLabel: "Новая ссылка",
+        destructive: true,
+      },
+      () => newLink.mutate(undefined, { onError: (e) => notify("Ошибка", e.message) }),
+    );
 
   return (
     <Screen edges={["top"]}>
@@ -80,6 +100,15 @@ export function OnlineBookingSettingsScreen() {
                 // что у реквизитов и телефона. Шеврона нет: строка никуда
                 // не ведёт.
                 onLongPress={() => copy(url)}
+              />
+            ) : null}
+            {data.enabled && url ? (
+              <SettingsRow
+                tile={SETTINGS_TILE.orange}
+                icon={RefreshCw}
+                title="Новая ссылка"
+                sub="Старая перестанет открываться"
+                onPress={newLink.isPending ? undefined : reissue}
               />
             ) : null}
           </SectionCard>

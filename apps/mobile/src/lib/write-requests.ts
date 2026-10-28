@@ -138,6 +138,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "onboarding_done",
   // Онлайн-запись (20261027141700): заявка заказчика и выключатели владельца — `volatile`.
   "online_booking_create",
+  "online_booking_new_link",
   "online_booking_set",
   "online_booking_set_service",
   "patch_master_profile",

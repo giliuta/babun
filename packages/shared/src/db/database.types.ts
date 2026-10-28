@@ -6485,6 +6485,7 @@ export type Database = {
         Returns: string[]
       }
       online_booking_hm: { Args: { p_value: string }; Returns: number }
+      online_booking_new_link: { Args: { p_team: string }; Returns: Json }
       online_booking_owner_tenant: { Args: { p_team: string }; Returns: string }
       online_booking_page: { Args: { p_token: string }; Returns: Json }
       online_booking_resolve: {
