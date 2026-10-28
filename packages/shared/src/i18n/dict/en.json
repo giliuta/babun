@@ -5141,5 +5141,13 @@
  "Для номеров не из контактов": "For numbers not in contacts",
  "Звонки": "Calls",
  "Имя клиента при звонке": "Client name on incoming calls",
- "Телефон → Блокировка и идентификация вызовов → Babun": "Phone → Call Blocking & Identification → Babun"
+ "Телефон → Блокировка и идентификация вызовов → Babun": "Phone → Call Blocking & Identification → Babun",
+ "Роль «{0}» — права выставлены": "Role “{0}” — permissions set",
+ "Права вернулись": "Permissions restored",
+ "Своя": "Custom",
+ "Тимлид": "Team lead",
+ "Директор": "Director",
+ "Всё в команде и приглашает партнёров": "Everything in the team, invites partners",
+ "Работает по записям, принимает оплату": "Works the appointments, takes payment",
+ "Ведёт записи и клиентов команды": "Runs the team’s appointments and clients"
 }

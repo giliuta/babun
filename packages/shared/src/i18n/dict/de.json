@@ -5141,5 +5141,13 @@
  "Для номеров не из контактов": "Für Nummern ohne Kontakt",
  "Звонки": "Anrufe",
  "Имя клиента при звонке": "Kundenname bei Anrufen",
- "Телефон → Блокировка и идентификация вызовов → Babun": "Telefon → Anrufe blockieren und identifizieren → Babun"
+ "Телефон → Блокировка и идентификация вызовов → Babun": "Telefon → Anrufe blockieren und identifizieren → Babun",
+ "Роль «{0}» — права выставлены": "Rolle „{0}“ — Berechtigungen gesetzt",
+ "Права вернулись": "Berechtigungen wiederhergestellt",
+ "Своя": "Eigene",
+ "Тимлид": "Teamleiter",
+ "Директор": "Direktor",
+ "Всё в команде и приглашает партнёров": "Alles im Team, lädt Partner ein",
+ "Работает по записям, принимает оплату": "Arbeitet die Termine ab, nimmt Zahlungen an",
+ "Ведёт записи и клиентов команды": "Führt Termine und Kunden des Teams"
 }
