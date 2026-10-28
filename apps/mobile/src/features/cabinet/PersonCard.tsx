@@ -3,6 +3,7 @@ import { Cake, ChevronRight, Mail, Phone, type LucideIcon } from "lucide-react-n
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
 import { useSession } from "@/providers/SessionProvider";
+import { useMirror } from "@/session/mirror-state";
 import { useThemeColors } from "@/theme/colors";
 import { useOwnAccountName } from "./own-account-name";
 import { personCardView, type PersonFactKind } from "./person-card";
@@ -31,8 +32,15 @@ export function PersonCard({ onPress, tourId }: { onPress?: () => void; tourId?:
   const t = useThemeColors();
   const { session } = useSession();
   const accountName = useOwnAccountName().data;
-  const view = personCardView(session?.user, accountName);
-  const label = onPress ? `${view.title}, открыть профиль` : view.title;
+  // В ЗЕРКАЛЕ КАРТА — ТОГО, ЗА КЕМ СМОТРЯТ. Сессия в зеркале ваша, и карта
+  // печатала имя, почту и телефон владельца, а тап вёл в его «Профиль».
+  // Знаем о нём только имя — его и печатаем, без фактов и без двери.
+  const mirror = useMirror();
+  const view = mirror
+    ? personCardView({ user_metadata: { full_name: mirror.name } }, null)
+    : personCardView(session?.user, accountName);
+  const door = mirror ? undefined : onPress;
+  const label = door ? `${view.title}, открыть профиль` : view.title;
 
   // Поле, радиус и кривая угла — те же, что у `SectionCard`: края карты
   // человека и карточек под ней стоят на одной линии.
@@ -106,7 +114,7 @@ export function PersonCard({ onPress, tourId }: { onPress?: () => void; tourId?:
             </Text>
           ) : null}
         </View>
-        {onPress ? (
+        {door ? (
           <ChevronRight color={t.onAccent} size={16} strokeWidth={1.75} />
         ) : null}
       </View>
@@ -153,9 +161,9 @@ export function PersonCard({ onPress, tourId }: { onPress?: () => void; tourId?:
     <View style={{ marginTop: 8, marginHorizontal: GUTTER }}>
       {/* Обучение подсвечивает саму карточку — без полей вокруг неё. */}
       <TourTarget id={tourId ?? "cabinet.person"}>
-      {onPress ? (
+      {door ? (
         <Pressable
-          onPress={onPress}
+          onPress={door}
           accessibilityRole="button"
           accessibilityLabel={label}
           style={surface}

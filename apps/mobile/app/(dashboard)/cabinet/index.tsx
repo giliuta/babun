@@ -56,6 +56,7 @@ import { LanguageRow } from "@/features/cabinet/LanguageRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { useCurrentRole } from "@/session/tenant";
+import { useMirror } from "@/session/mirror-state";
 import { confirmAndSignOut } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -77,6 +78,10 @@ export default function CabinetHome() {
   // таблиц, сотрудник — отложенные вызовы дверей сервера.
   const showSync = role === "owner" || role === "dispatcher" || role === "master";
   // Прокрутка — для обучения: строки внизу оно докручивает на вид.
+  // В ЗЕРКАЛЕ ВХОДА И ВЫХОДА НЕТ: сессия ваша, поэтому «Вход и безопасность»
+  // показывал бы почту и пароль владельца, а «Выйти» разлогинил бы владельца
+  // (выход сеть пропускает и в зеркале — `write-requests.ts`).
+  const mirror = useMirror();
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
 
@@ -139,16 +144,20 @@ export default function CabinetHome() {
 
         <SectionEyebrow>Аккаунт</SectionEyebrow>
         <SectionCard>
-          <TourTarget id="cabinet.account">
-            <SettingsRow
-              tile={SETTINGS_TILE.blue}
-              icon={Shield}
-              title="Вход и безопасность"
-              sub="Пароль, устройства, удаление аккаунта"
-              onPress={() => router.push("/cabinet/account")}
-            />
-          </TourTarget>
-          <Divider inset={56} />
+          {mirror ? null : (
+            <>
+              <TourTarget id="cabinet.account">
+                <SettingsRow
+                  tile={SETTINGS_TILE.blue}
+                  icon={Shield}
+                  title="Вход и безопасность"
+                  sub="Пароль, устройства, удаление аккаунта"
+                  onPress={() => router.push("/cabinet/account")}
+                />
+              </TourTarget>
+              <Divider inset={56} />
+            </>
+          )}
           {/* ПОМОЩЬ — частые вопросы и связь с поддержкой. */}
           <HelpRow />
           <Divider inset={56} />
@@ -159,13 +168,15 @@ export default function CabinetHome() {
             (`confirmAndSignOut` → `scope: "local"`, всегда с вопросом —
             стираются напоминания этого телефона). Выход со всех устройств —
             явной строкой в «Вход и безопасность». */}
-        <SectionCard className="mt-4">
-          <ActionRow
-            label="Выйти из аккаунта"
-            tone="danger"
-            onPress={() => void confirmAndSignOut()}
-          />
-        </SectionCard>
+        {mirror ? null : (
+          <SectionCard className="mt-4">
+            <ActionRow
+              label="Выйти из аккаунта"
+              tone="danger"
+              onPress={() => void confirmAndSignOut()}
+            />
+          </SectionCard>
+        )}
       </ScrollView>
       </TourScrollProvider>
     </Screen>

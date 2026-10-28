@@ -97,8 +97,11 @@ export function DevicesSection() {
         onPress={busy ? undefined : askOthers}
       />
       <Divider inset={56} />
+      {/* Два выхода — одно действие разной ширины, поэтому одна плитка:
+          красный не отличал их, а пугал. Насколько далеко идёт второй,
+          говорит его подпись и вопрос перед выходом. */}
       <SettingsRow
-        tile={SETTINGS_TILE.red}
+        tile={SETTINGS_TILE.indigo}
         icon={LogOut}
         title="Выйти со всех устройств"
         sub="Включая это устройство"
