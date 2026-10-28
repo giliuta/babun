@@ -199,7 +199,18 @@ describe("настройки, помнящиеся по компании", () =>
     // `auto`, `event`, `self` — ключи владельцев в реестре уведомлений
     // (`<группа>:<компания>:<запись>`),
     // сам реестр подметается выходом целиком.
-    const NOT_STORAGE = new Set(["tenant", "personal-event-types", "auto", "event", "self"]);
+    // `appointments-cursor` — метка дельты записей в `sync_meta` SQLite
+    // (`appointmentsCached/incremental.ts`), не в хранилище устройства: выход
+    // стирает `sync_meta` целиком (`cacheClearAll`), а без снимка компании
+    // метка не читается.
+    const NOT_STORAGE = new Set([
+      "tenant",
+      "personal-event-types",
+      "auto",
+      "event",
+      "self",
+      "appointments-cursor",
+    ]);
     const unwiped = [...found]
       .filter(([prefix]) => !NOT_STORAGE.has(prefix))
       .filter(([prefix]) => !WIPED_PREFIXES.some((p) => prefix.startsWith(p)))
