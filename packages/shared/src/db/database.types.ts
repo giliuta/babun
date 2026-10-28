@@ -3239,6 +3239,7 @@ export type Database = {
         Row: {
           created_at: string
           id: number
+          ip_hash: string | null
           phone_e164: string
           team_id: string
           tenant_id: string
@@ -3246,6 +3247,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: number
+          ip_hash?: string | null
           phone_e164: string
           team_id: string
           tenant_id: string
@@ -3253,6 +3255,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: number
+          ip_hash?: string | null
           phone_e164?: string
           team_id?: string
           tenant_id?: string
@@ -5205,7 +5208,69 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      cities_live: {
+        Row: {
+          color: string | null
+          country: string | null
+          created_at: string | null
+          deleted_at: string | null
+          id: string | null
+          is_active: boolean | null
+          name: string | null
+          position: number | null
+          team_id: string | null
+          tenant_id: string | null
+          tint_day: boolean | null
+          updated_at: string | null
+          weekdays: number[] | null
+        }
+        Insert: {
+          color?: string | null
+          country?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          position?: number | null
+          team_id?: string | null
+          tenant_id?: string | null
+          tint_day?: boolean | null
+          updated_at?: string | null
+          weekdays?: number[] | null
+        }
+        Update: {
+          color?: string | null
+          country?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          position?: number | null
+          team_id?: string | null
+          tenant_id?: string | null
+          tint_day?: boolean | null
+          updated_at?: string | null
+          weekdays?: number[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cities_team_fk"
+            columns: ["tenant_id", "team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "cities_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_account_not_hidden: {
@@ -5549,6 +5614,14 @@ export type Database = {
         Args: { p_appointment: string }
         Returns: number
       }
+      appointment_month_digest: {
+        Args: { p_tenant: string }
+        Returns: {
+          digest: number
+          month: string
+          n: number
+        }[]
+      }
       appointment_payment_mirror: { Args: { p_payments: Json }; Returns: Json }
       assert_document_date: {
         Args: {
@@ -5615,6 +5688,13 @@ export type Database = {
           status: string
           time_end: string
           time_start: string
+        }[]
+      }
+      calendar_work_summary: {
+        Args: { p_tenant: string }
+        Returns: {
+          has_work: boolean
+          team_id: string
         }[]
       }
       can_watch_calendar: { Args: { p_topic: string }; Returns: boolean }
@@ -5782,6 +5862,7 @@ export type Database = {
         Returns: Json
       }
       client_attachment_owner: { Args: { p_name: string }; Returns: string }
+      client_checks_apply: { Args: never; Returns: boolean }
       client_clock_skew: { Args: { p_sent_at: string }; Returns: string }
       client_contacts_of: { Args: { p_client: Json }; Returns: Json }
       client_has_history: {
@@ -5793,6 +5874,10 @@ export type Database = {
         Returns: Json
       }
       client_seen_by_caller: { Args: { p_client: Json }; Returns: Json }
+      client_serving_teams: {
+        Args: { p_client: string; p_team: string; p_tenant: string }
+        Returns: string[]
+      }
       client_without_contacts: { Args: { p_client: Json }; Returns: Json }
       client_without_money: { Args: { p_client: Json }; Returns: Json }
       create_client_with_tags: {
@@ -6064,6 +6149,7 @@ export type Database = {
         }
         Returns: Json
       }
+      is_map_url: { Args: { p_url: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
       issue_calendar_feed: { Args: never; Returns: Json }
       issue_invoice: {
@@ -6364,6 +6450,7 @@ export type Database = {
           used_at: string
         }[]
       }
+      member_active_team_ids: { Args: never; Returns: string[] }
       member_appointment_copy: {
         Args: {
           p_date: string
@@ -6464,6 +6551,7 @@ export type Database = {
         Returns: string[]
       }
       onboarding_done: { Args: { p_chapter: string }; Returns: string[] }
+      online_booking_client_ip: { Args: never; Returns: string }
       online_booking_create: {
         Args: {
           p_date: string
@@ -6577,6 +6665,10 @@ export type Database = {
       push_local_now: {
         Args: { p_now?: string; p_tz: string }
         Returns: string
+      }
+      push_payment_account_seen: {
+        Args: { p_account: string; p_teams: string[]; p_tenant: string }
+        Returns: boolean
       }
       push_quiet_flush: { Args: { p_now?: string }; Returns: number }
       read_operational_calendar_settings_safe: {
@@ -7516,6 +7608,7 @@ export type Database = {
         Args: { p_team: string; p_tenant: string }
         Returns: boolean
       }
+      tenant_active_team_ids: { Args: never; Returns: string[] }
       tenant_business_date: { Args: { p_tenant_id: string }; Returns: string }
       tenant_currency: { Args: { p_tenant_id: string }; Returns: string }
       tenant_data_export: { Args: never; Returns: Json }
