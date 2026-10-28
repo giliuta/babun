@@ -68,7 +68,8 @@ export function usePhoneField({
   /** Полный номер, как он сохранён. */
   phone: string;
   home: CountryCode;
-  onSave: (full: string) => void;
+  /** `false` — номер отклонён: строка оставит набранное для правки. */
+  onSave: (full: string) => unknown;
 }) {
   return {
     value: formatPhoneForDisplay(phone, home),
