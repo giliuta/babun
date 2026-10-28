@@ -279,4 +279,64 @@ describe("server hygiene migrations", () => {
     assert.ok(sql.indexOf("for renamed in") < sql.indexOf("insert into public.location_labels"));
     assert.match(sql, /'block:clients\.settings_objects'/);
   });
+
+  test("dead client-rights branches are removed without changing any answer", () => {
+    const sql = code(migration("20261028101000_dead_rights_branches_removed.sql"));
+    // Все пять дверей номера теряют ветку «в день записи», обе пустые функции уходят.
+    for (const fn of [
+      "list_master_clients_safe(uuid)",
+      "list_member_clients_rows(uuid)",
+      "member_find_client_by_phone(text, text)",
+      "member_client_contacts(uuid)",
+      "sms_send_manual(uuid, uuid, text, text, text, text)",
+    ]) {
+      assert.ok(sql.includes(`pg_get_functiondef('public.${fn}'::regprocedure)`), fn);
+    }
+    assert.match(sql, /drop function public\.access_day_contact_client_ids\(\);/);
+    assert.match(sql, /drop function public\.access_day_contact_teams\(\);/);
+    // Правка клиента целиком — владелец; сотрудничьих веток не осталось.
+    const editor = sql.slice(sql.indexOf("create or replace function public.current_user_can_edit_client"));
+    assert.match(editor, /select coalesce\(public\.current_user_role\(\) = 'owner', false\)/);
+    assert.doesNotMatch(editor.slice(0, editor.indexOf("$function$;")), /access_calendars/);
+    // Сторож наката ищет остатки по всем функциям схемы.
+    assert.match(sql, /p\.prosrc like '%access_day_contact%'/);
+  });
+
+  test("permissive policies are merged one per action, word for word", () => {
+    const sql = code(migration("20261028101100_permissive_policies_merged.sql"));
+    const drops = [...sql.matchAll(/^drop policy (\w+) on public\.(\w+);$/gm)];
+    const creates = [...sql.matchAll(/^create policy (\w+) on public\.(\w+)\n {2}as permissive for (\w+) to authenticated$/gm)];
+    assert.equal(drops.length, 117);
+    assert.equal(creates.length, 127);
+    // Без `if exists`: разошедшаяся с файлом база роняет накат.
+    assert.equal(sql.split("drop policy").length - 1, drops.length);
+    assert.doesNotMatch(sql, /if exists/);
+    // Новая политика — `<таблица>_<действие>`, одна на действие таблицы.
+    const seen = new Set<string>();
+    for (const [, name, table, cmd] of creates) {
+      assert.equal(name, `${table}_${cmd}`);
+      assert.ok(!seen.has(name), name);
+      seen.add(name);
+    }
+    // Ограничивающие политики не тронуты.
+    for (const restrictive of [
+      "accounts_hidden_owner_only",
+      "finance_transactions_hidden_owner_only",
+      "finance_transactions_window",
+      "invoices_hidden_owner_only",
+      "receipts_hidden_owner_only",
+    ]) {
+      assert.ok(!drops.some(([, name]) => name === restrictive), restrictive);
+    }
+    assert.match(sql, /raise exception 'остались двойные разрешающие политики: %'/);
+  });
+
+  test("a transfer cannot be dated before the sheet's floor", () => {
+    const sql = code(migration("20261028101200_transfer_date_floor.sql"));
+    assert.match(sql, /select least\(coalesce\(min\(t\.occurred_on\), transfer_floor\), transfer_floor\)/);
+    assert.match(sql, /date_trunc\(''month'', public\.tenant_business_date\(tenant_uuid\)\) - interval ''1 month''/);
+    // Проверка — перед расчётом остатка источника: повтор запроса отвечает раньше неё.
+    assert.match(sql, /\|\| E' {4}raise exception ''Выберите дату не раньше первой операции компании'';\\n'/);
+    assert.match(sql, /a2 constant text := E' {2}select round\(\\n'/);
+  });
 });

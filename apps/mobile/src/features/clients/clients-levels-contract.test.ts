@@ -133,6 +133,10 @@ const trashHistory = norm(readFileSync(join(MIGRATIONS_DIR, TRASH_HISTORY), "utf
 // ВЫДАЧА СПИСКА КЛИЕНТОВ — В ЖУРНАЛ: `list_member_clients` — обёртка с
 // журналом, а тело TAG_ORDER живёт как `list_member_clients_rows` без правок.
 const DISCLOSURES = "20261027225327_client_list_disclosure_journal.sql";
+
+// МЁРТВЫЕ ВЕТКИ: «правка клиента целиком» — только владелец (у блока «Клиенты»
+// нет ступени «Меняет»), ветка «номер в день записи» снята со всех дверей.
+const DEAD_BRANCHES = "20261028101000_dead_rights_branches_removed.sql";
 const disclosures = norm(readFileSync(join(MIGRATIONS_DIR, DISCLOSURES), "utf8"));
 
 // НОМЕР — СРАЗУ: «Клиент: Видит» отдаёт контакты целиком,
@@ -180,9 +184,13 @@ const createAmount = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_AMOUNT), "utf
 
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
-    for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
-      assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
-    }
+    assert.equal(lastDefiner("access_client_ids"), PER_TEAM, "access_client_ids переопределён позже");
+    // Мёртвую ветку «сотрудник меняет клиента» снимает DEAD_BRANCHES: пока она
+    // в `parked/`, последний определитель в `migrations/` — PER_TEAM.
+    assert.ok(
+      [PER_TEAM, DEAD_BRANCHES].includes(lastDefiner("current_user_can_edit_client")),
+      "current_user_can_edit_client переопределён позже",
+    );
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
