@@ -147,10 +147,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   // 20261027225240): `volatile`.
   "refund_overpayment_and_save",
   "replace_day_extras",
-  "reset_appointment_payment",
   "restore_deleted_operation",
   "restore_deleted_appointment",
-  "set_appointment_prepayment",
   "set_client_sms_opt_out",
   "set_client_team",
   "member_trash_client",
