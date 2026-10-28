@@ -95,8 +95,11 @@
 | Скрыть | `EyeOff` |
 
 Размеры: в кружке блока **18** внутри 34pt · в кружке строки шторки **16**
-внутри 28pt · шеврон и команды блока **18** (`ICON.sm`). Своих чисел не
-заводить — только `ICON.lg/md/sm/xs` = 24/22/18/14.
+внутри 28pt · шеврон **18** (`ICON.chevron`) · команды блока и шторки **18**
+(`ICON.command`) · галка выбранной строки **18** (`ICON.check`) · кнопка шапки
+страницы **22** (`ICON.header`). Размер берут ИМЕНЕМ роли, а не ступенью; для
+прочего — ступени `ICON.lg/md/sm/xs` = 24/22/18/14, своих чисел не заводить.
+Сторож — `src/components/ui/icon-roles.test.ts`.
 
 ЗНАЧОК НАСТРОЙКИ ОДИН — `Settings2`, два ползунка. Здесь стояло правило о двух
 ролях: ползунки правят настройки БЛОКА, шестерёнка ведёт на страницу СПИСКА.
@@ -672,13 +675,24 @@
 | ~~`BookingSheets` — «Команда и мастер»~~ | ~~вне `select-rows`~~ | закрыто 2026-09-10 |
 | ~~Теги, категории, лояльность~~ | ~~сырой лист, мусорка, два поля~~ | закрыто 2026-09-10 |
 | ~~16 самописных залитых кнопок~~ | ~~своя `Pressable`~~ | пять закрыто, `variant="filled"` построен |
-| `src/features/clients/ClientDraftNotice.tsx` | компактное действие внутри плашки: 44pt с радиусом числом | жанр канон не описывает — 52pt в строку плашки не встанет, а превращать в ссылку значит решать за владельца. **Ждёт его слова** |
-| `src/features/clients/ClientRow.tsx` | свайп собран на сырой библиотеке; на ЛЕВОЙ кромке ДВЕ кнопки; ротор VoiceOver не видит ни один глагол | `SwipeRow`, одно действие на кромку, второе — в меню долгого нажатия |
-| Кабинет: `src/features/inventory/InventoryEditorSheet.tsx` (склад), `src/features/cabinet/account/DangerZoneSection.tsx` («Вход и безопасность») | сырой `Modal animationType="slide"` вместо `BottomSheet` | рецепт «Метки» |
-| `app/(dashboard)/chats/[id].tsx` | два сырых листа: выбор клиента написан заново | `ClientPickerSheet` |
-| `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
-| 9 мест | `borderRadius` числом (12, 20, 13, 15, 9, 36) | `t.radius.card` / `t.radius.pill` |
-| 27 мест | `borderRadius: 999` литералом | `t.radius.pill` |
+| ~~`src/features/clients/ClientDraftNotice.tsx`~~ | ~~компактное действие 44pt с радиусом числом~~ | закрыто к 2026-10-28: чисел в плашке нет |
+| ~~`src/features/clients/ClientRow.tsx`~~ | ~~свайп на сырой библиотеке, две кнопки на кромке~~ | закрыто 2026-10-27: `SwipeRow` |
+| ~~`src/features/inventory/InventoryEditorSheet.tsx`, `src/features/cabinet/account/DangerZoneSection.tsx`~~ | ~~сырой `Modal animationType="slide"`~~ | закрыто: `BottomSheet` |
+| ~~`src/features/clients/BulkSmsSheet.tsx`~~ · ~~`src/features/clients/import/wizard/MappingPickers.tsx`~~ | ~~сырые листы~~ | закрыто 2026-10-27: `BottomSheet` |
+| `app/(dashboard)/chats/[id].tsx` | сырые листы: выбор клиента написан заново | `ClientPickerSheet` (вкладка за флагом) |
+| `src/features/clients/import/ImportWizardSheet.tsx` | сырой `Modal presentationStyle="pageSheet"` — мастер импорта на весь экран | `BottomSheet`, закрытие скримом |
+| 5 мест (`MapPicker.web`, `LinkMessages`, `OnlineBookingScreen`, `CalendarPreviews`, `TeamLabelRow`) | `borderRadius` числом (9, 13, 36); часть — круги в половину стороны | `t.radius.card` / `t.radius.pill` |
+| 14 мест | `borderRadius: 999` литералом | `t.radius.pill` |
+
+**Законные исключения из «только `BottomSheet`»** — сырой `Modal` там, где
+лист снизу был бы неправдой, а не небрежностью. Новое исключение пишется
+сюда, иначе это нарушение:
+
+| Где | Почему не `BottomSheet` |
+|---|---|
+| `src/features/calendar/ViewModeDropdown.tsx` | выпадающее меню у пилюли вида (День · Неделя · Месяц · Список): якорь — сама пилюля, а не низ экрана |
+| `src/features/calendar/MiniCalendar.tsx` | всплывающий месяц под шапкой календаря, тоже с якорем |
+| `src/features/appointments/AppointmentPhotoViewer.tsx` | просмотр фото на весь экран, чёрный фон и листание — это не панель |
 
 Полный список и порядок работ — `docs/audit/UNIFICATION-2026-09-10.md`
 (в корне репозитория).
