@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   clientWriteRefusal,
@@ -156,6 +157,9 @@ export function useArchiveClients() {
 function useHiddenClients(
   keyOf: typeof clientKeys.trashed,
   read: (client: typeof supabase, tenantId: string) => Promise<Client[]>,
+  /** Сама полка перечитывается на каждом открытии (см. ниже); подписи
+   *  удалённых в календаре и записи берут то, что уже лежит в кэше. */
+  { freshOnMount = true }: { freshOnMount?: boolean } = {},
 ) {
   const scope = useQueryScope();
   const tenantId = scope.tenantId;
@@ -172,23 +176,40 @@ function useHiddenClients(
     // ПОЛКА ПЕРЕЧИТЫВАЕТСЯ НА КАЖДОМ ОТКРЫТИИ: сервер снимает срок клиенту с
     // историей уже после удаления, а сигнал базы полку не трогает — и экран
     // показывал «30 дней» и «Удалить» тому, кого база не сотрёт.
-    refetchOnMount: "always",
+    refetchOnMount: freshOnMount ? "always" : true,
   });
 }
 
 /** «Удалённые клиенты» — ОДНА ПОЛКА (архива нет): и те, кто
  *  сотрётся по сроку, и клиенты с историей без срока; свежие удаления —
  *  сверху. */
-export function useTrashedClients() {
-  return useHiddenClients(clientKeys.trashed, async (client, tenantId) => {
-    const [dated, kept] = await Promise.all([
-      listTrashedCached(client, tenantId),
-      listArchivedCached(client, tenantId),
-    ]);
-    return [...dated, ...kept].sort((a, b) =>
-      (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""),
-    );
-  });
+export function useTrashedClients(opts?: { freshOnMount?: boolean }) {
+  return useHiddenClients(clientKeys.trashed, readTrashed, opts);
+}
+
+async function readTrashed(client: typeof supabase, tenantId: string): Promise<Client[]> {
+  const [dated, kept] = await Promise.all([
+    listTrashedCached(client, tenantId),
+    listArchivedCached(client, tenantId),
+  ]);
+  return [...dated, ...kept].sort((a, b) =>
+    (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""),
+  );
+}
+
+/** ИМЕНА УДАЛЁННЫХ КЛИЕНТОВ — ТОЛЬКО ДЛЯ ПОДПИСИ. Удаление клиента записи
+ *  не трогает: `client_id` остаётся, клиент лежит в «Удалённых клиентах».
+ *  Календарь и форма записи ищут имя в рабочем списке, где удалённых нет, —
+ *  и карточка записи подписывалась «Запись», а блок «Клиент» звал «Выбрать
+ *  клиента», будто человека не было. Выбрать удалённого в запись нельзя:
+ *  выбор читает рабочий список. Полку видит владелец своей базы; сотруднику
+ *  удалённые не приходят, и карта у него пуста. */
+export function useDeletedClientNames(): ReadonlyMap<string, string> {
+  const { data } = useTrashedClients({ freshOnMount: false });
+  return useMemo(
+    () => new Map((data ?? []).map((c) => [c.id, c.full_name || "Без имени"])),
+    [data],
+  );
 }
 
 export function useRestoreClient() {

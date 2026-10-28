@@ -44,6 +44,7 @@ export function WorkBody({ form }: { form: BookModel }) {
     blocks,
     recordSmsContext,
     client,
+    deletedClientName,
     clientStats,
     pickClientOrOpenCard,
     openClientCard,
@@ -174,6 +175,7 @@ export function WorkBody({ form }: { form: BookModel }) {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
+                  deletedName={deletedClientName}
                   onPick={can.editClient ? pickClientOrOpenCard : undefined}
                   pickOpensCard={moneyHoldsClient}
                   onOpenCard={openClientCard}

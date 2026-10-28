@@ -6,6 +6,7 @@ import { shareText } from "@/features/clients/client-share";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
 import { confirmThen } from "@/lib/confirm";
+import { upcomingRecordsNote } from "@/features/clients/delete-words";
 import type { ClientCard } from "./use-client-card";
 
 /** The card's «⋯» menu: what is in it for this viewer and what each item
@@ -142,9 +143,11 @@ export function cardMenuActions(card: ClientCard, c: Client) {
     confirmThen(
       "Удалить клиента?",
       {
-        message: hasHistory
-          ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.`
-          : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
+        message:
+          (hasHistory
+            ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.`
+            : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`) +
+          upcomingRecordsNote(stats?.upcomingRecords ?? 0),
         confirmLabel: "Удалить",
         destructive: true,
       },

@@ -33,6 +33,7 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     unclosedVisits: 0,
     lastUnclosedDate: "",
     pastOpenRecords: 0,
+    upcomingRecords: 0,
     nextApt: null,
     nextAptDays: null,
     debt: 0,

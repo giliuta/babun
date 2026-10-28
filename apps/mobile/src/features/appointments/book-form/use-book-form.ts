@@ -43,6 +43,7 @@ import {
   useRestoreEditDraft,
   useRestoredBookDraft,
 } from "./use-book-draft-memory";
+import { useDeletedClientNames } from "@/features/clients/queries";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -99,6 +100,10 @@ export function useBookForm() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
+  // КЛИЕНТ ЗАПИСИ УДАЛЁН — имя только для подписи блока и меню: клиентом
+  // формы он не становится (ни объектов, ни заметки, ни телефона).
+  const deletedNames = useDeletedClientNames();
+  const deletedClientName = !client && clientId ? (deletedNames.get(clientId) ?? null) : null;
   const access = useBookRights({ client, kind, isEdit, editing, teamId, workInPlan });
   const places = useClientLocations({
     client,
@@ -407,7 +412,8 @@ export function useBookForm() {
     archivedRecord: label.archivedRecord,
     workInPlan,
     nudgeTariff,
-    menuTitle: client?.full_name?.trim() || (editing ? recordComment(editing) : "") || title,
+    menuTitle:
+      client?.full_name?.trim() || deletedClientName || (editing ? recordComment(editing) : "") || title,
     setStatus: draft.setStatus,
     editBaselineRef: guard.editBaselineRef,
     leaveBook: guard.leaveBook,
@@ -458,6 +464,7 @@ export function useBookForm() {
     ...draft,
     ...sheets,
     client,
+    deletedClientName,
     ...access,
     ...places,
     ...label,

@@ -24,6 +24,7 @@ export {
   useArchiveClients,
   useDeleteClientForever,
   useRestoreClient,
+  useDeletedClientNames,
   useTrashClientAsPartner,
   useTrashedClients,
   type ArchiveClientsInput,

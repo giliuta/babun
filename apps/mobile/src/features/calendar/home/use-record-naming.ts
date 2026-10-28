@@ -7,6 +7,7 @@ import type { CalendarSources } from "./use-calendar-sources";
 import type { GridModes } from "./use-grid-modes";
 import type { ReminderReconcile } from "./use-reminder-reconcile";
 import { eventTitleIsNote } from "@/features/calendar/record-title";
+import { useDeletedClientNames } from "@/features/clients/queries";
 
 type UseRecordNamingDeps =
   Pick<CalendarSources, "clients" | "teams" | "calSettings">
@@ -26,10 +27,16 @@ export function useRecordNaming(deps: UseRecordNamingDeps) {
     calSettings?.timezone ??
     "Europe/Nicosia";
 
-  const nameById = useMemo(
-    () => new Map(clients.map((c) => [c.id, c.full_name])),
-    [clients],
-  );
+  // УДАЛЁННЫЙ КЛИЕНТ ОСТАЁТСЯ В СВОИХ ЗАПИСЯХ — именем с пометкой: рабочий
+  // список его не знает, и блок подписывался «Запись», будто клиента не было
+  // (`useDeletedClientNames`). Живой с тем же id не бывает, но он главнее.
+  const deletedNames = useDeletedClientNames();
+  const nameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [id, name] of deletedNames) map.set(id, [name, "удалён"].join(" · "));
+    for (const c of clients) map.set(c.id, c.full_name);
+    return map;
+  }, [clients, deletedNames]);
   // Адрес клиента — тоже картой: `addressFor` зовут на КАЖДЫЙ блок сетки, а в
   // неделе их полторы сотни. Линейный поиск по всем клиентам на каждый блок
   // стоил бы кадра на большой базе.

@@ -4,6 +4,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { confirmThen } from "@/lib/confirm";
+import { upcomingRecordsNote } from "@/features/clients/delete-words";
 import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
@@ -155,9 +156,11 @@ export function useListRowActions({
     confirmThen(
       "Удалить клиента?",
       {
-        message: hasHistory
-          ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.`
-          : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
+        message:
+          (hasHistory
+            ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.`
+            : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`) +
+          upcomingRecordsNote(stats?.upcomingRecords ?? 0),
         confirmLabel: "Удалить",
         destructive: true,
       },
