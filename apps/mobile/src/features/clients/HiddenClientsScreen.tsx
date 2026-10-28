@@ -57,7 +57,7 @@ export function HiddenClientsScreen({
   query: UseQueryResult<Client[], Error>;
   caption: (client: Client) => string;
   trailing?: (client: Client) => ReactNode;
-  empty: { title: string; subtitle: string; icon: ReactNode };
+  empty: { title: string; subtitle?: string; icon?: ReactNode };
   /** Действия строки: «Вернуть» (`id: "restore"`) и «Удалить насовсем»
    *  (`id: "erase"`) — кромками свайпа и листом по долгому нажатию. */
   actions: (client: Client) => HiddenAction[];
