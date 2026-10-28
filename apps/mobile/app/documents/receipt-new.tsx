@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { View } from "react-native";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
@@ -8,6 +7,7 @@ import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
 import { randomUuid } from "@babun/shared/sync";
 import { RowCaption } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
@@ -272,7 +272,7 @@ export default function NewReceiptScreen() {
         number={numberTarget}
         companyLocked={editing || !!source.invoiceCompanyId}
         footer={
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 6 }}>
+          <PageFooter standalone bar gap={6}>
             {/* Причина — словами над кнопкой, как в «Финансах»: серая кнопка
                 без объяснения читается как поломка. */}
             {problem ? <RowCaption text={problem} /> : null}
@@ -281,7 +281,7 @@ export default function NewReceiptScreen() {
               disabled={!!problem}
               onPress={() => setPreviewOpen(true)}
             />
-          </View>
+          </PageFooter>
         }
       />
 

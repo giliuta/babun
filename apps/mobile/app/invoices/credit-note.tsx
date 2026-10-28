@@ -1,10 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import {
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ScrollView, Text } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
@@ -351,14 +348,7 @@ export default function CreditNoteScreen() {
           </SectionCard>
         </ScrollView>
 
-        <View
-          className="px-4 pb-7 pt-3"
-          style={{
-            backgroundColor: t.surface,
-            borderTopWidth: 1,
-            borderTopColor: t.separator,
-          }}
-        >
+        <PageFooter standalone bar>
           <GradientButton
             label={valid ? `Выписать кредит-ноту · ${amount}` : "Выписать кредит-ноту"}
             disabled={!series.data || !valid}
@@ -366,13 +356,13 @@ export default function CreditNoteScreen() {
           />
           {series.error ? (
             <Text
-              className="mt-2 text-center text-sm"
+              className="text-center text-sm"
               style={{ color: t.danger }}
             >
               {tDynamic((series.error as Error).message)}
             </Text>
           ) : null}
-        </View>
+        </PageFooter>
       </KeyboardLift>
 
       <InvoicePreviewSheet

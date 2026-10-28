@@ -5,6 +5,7 @@ import {
   View,
 } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useBeforeUnloadWhileDirty } from "@/lib/use-before-unload";
@@ -445,14 +446,7 @@ export default function ReceiptRefundScreen() {
           </SectionCard>
         </ScrollView>
 
-        <View
-          className="px-4 pb-7 pt-3"
-          style={{
-            backgroundColor: t.surface,
-            borderTopWidth: 1,
-            borderTopColor: t.separator,
-          }}
-        >
+        <PageFooter standalone bar>
           <GradientButton
             label={
               documentOnly
@@ -464,7 +458,7 @@ export default function ReceiptRefundScreen() {
             disabled={!valid || !series.data || (byInvoice && !invoice)}
             onPress={() => setPreviewOpen(true)}
           />
-        </View>
+        </PageFooter>
       </KeyboardLift>
 
       <InvoicePreviewSheet
