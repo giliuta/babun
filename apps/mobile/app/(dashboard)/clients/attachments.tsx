@@ -24,6 +24,7 @@ import { confirmThen } from "@/lib/confirm";
 import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ФАЙЛЫ КЛИЕНТА — ОДНОЙ ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ»: по датам,
 // файлы, чеки и инвойсы — полноценные блоки, которые сразу открываются.
@@ -183,7 +184,7 @@ function ClientAttachmentsScreen() {
       {/* «Добавить файл» — внизу, на месте главного действия страницы: тот
           же футер, что «Записать клиента» и «Добавить объект». */}
       {access.files.show && canChange ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           <GradientButton
             label="Добавить файл"
             disabled={upload.busy}
@@ -192,7 +193,7 @@ function ClientAttachmentsScreen() {
               setAddOpen(true);
             }}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <FileAddSheet visible={addOpen} pickers={upload.pickers} withDocuments onClose={() => setAddOpen(false)} />

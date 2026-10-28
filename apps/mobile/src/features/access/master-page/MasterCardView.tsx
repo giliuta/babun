@@ -1,11 +1,5 @@
 import { type ReactNode, type RefObject } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type TextInput,
-} from "react-native";
+import { Pressable, ScrollView, Text, type TextInput } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { MoreHorizontal, Users } from "lucide-react-native";
 
@@ -32,6 +26,7 @@ import {
   type EmployeeAccessLine,
   type EmployeeContacts,
 } from "./EmployeeIdentityBlock";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // КАРТОЧКА МАСТЕРА — ОДНО ТЕЛО НА ТРИ СЛУЧАЯ. Новый мастер, ждущее приглашение и сотрудник рисуются
 // этим телом; что правится и куда пишется, решает вызывающий режим.
@@ -288,9 +283,9 @@ export function MasterCardView(p: MasterCardViewProps) {
             10 снизу. Внутри `KeyboardAvoidingView` — кнопка едет над
             клавиатурой, а не прячется под ней. */}
         {p.footer ? (
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <PageFooter>
             {p.footer}
-          </View>
+          </PageFooter>
         ) : null}
       </KeyboardLift>
     </Screen>

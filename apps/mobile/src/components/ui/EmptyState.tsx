@@ -7,6 +7,7 @@ import { TourTarget } from "@/components/tour/TourTarget";
 import { Button } from "./Button";
 import { useThemeColors } from "@/theme/colors";
 import { isOutageNoise, OUTAGE_WORDS } from "@/lib/connection-words";
+import { PageFooter } from "./PageFooter";
 
 // Пустое / загрузка / ошибка — одна поверхность на продукт. `fill` занимает
 // экран целиком; без него это блок с полями, годный как ListEmptyComponent.
@@ -130,7 +131,7 @@ export function EmptyState({
         // ОТСТУПЫ — ФУТЕРА ЭКРАНА: 20 по бокам, 8 сверху, 10 снизу,
         // как у «Создать клиента» и «Записать клиента». С 16/16 кнопка
         // стояла бы шире и выше соседних.
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           {action.tourId ? (
             <TourTarget id={action.tourId} shape="control">
               <Button
@@ -148,7 +149,7 @@ export function EmptyState({
               disabled={action.loading}
             />
           )}
-        </View>
+        </PageFooter>
       ) : null}
     </View>
   );

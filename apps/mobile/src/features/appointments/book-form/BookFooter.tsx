@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PAGE_FOOTER_PADDING } from "@/components/ui/PageFooter";
 import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
 import type { BookModel } from "./use-book-form";
@@ -25,12 +26,17 @@ export function BookFooter({ form }: { form: BookModel }) {
   return (
     <View
       style={{
-        paddingHorizontal: 14,
-        paddingTop: 8,
+        // Поля — канон `PageFooter` (20 / 8 / 10, страница без таб-бара
+        // сама платит вырез): «Создать запись» той же ширины, что кнопки
+        // остальных страниц.
+        paddingHorizontal: PAGE_FOOTER_PADDING.horizontal,
+        paddingTop: PAGE_FOOTER_PADDING.top,
         // Клавиатура iOS уже включает полосу home-индикатора: с её
         // отступом под кнопкой висели лишние ~34pt пустоты (тот же
         // закон, что у футера листов, DS §5).
-        paddingBottom: keyboardShown ? 8 : insets.bottom + 8,
+        paddingBottom: keyboardShown
+          ? PAGE_FOOTER_PADDING.bottom
+          : Math.max(insets.bottom, PAGE_FOOTER_PADDING.bottom),
         backgroundColor: groundBg,
         borderTopWidth: 1,
         borderTopColor: t.separator,

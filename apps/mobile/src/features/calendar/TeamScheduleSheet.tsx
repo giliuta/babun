@@ -13,7 +13,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { TimeRangePicker } from "@/components/ui/TimeWheel";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -188,7 +188,7 @@ export function TeamScheduleSheet({
       scroll
       maxHeightRatio={0.92}
       footer={
-        <View className="px-5">
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={onClose} />
         </View>
       }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { useInClientsTab } from "@/lib/reference-href";
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import type { Client } from "@babun/shared/local/clients";
 import { Screen } from "@/components/ui/Screen";
@@ -14,6 +14,7 @@ import { useClientPeople } from "@/features/clients/ClientPeopleDoor";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 const NO_APPOINTMENTS: Appointment[] = [];
 
@@ -102,9 +103,9 @@ function ClientObjectsScreen() {
         </ScrollView>
       )}
       {client && access.objects.show && access.objects.edit ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           <GradientButton label="Добавить объект" onPress={() => setAdding(true)} />
-        </View>
+        </PageFooter>
       ) : null}
       {people.door}
     </Screen>

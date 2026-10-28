@@ -18,6 +18,7 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceMoney, parseMoneyAmount } from "@/lib/paper/format";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // ПРИНЯТЬ ОПЛАТУ ПО ИНВОЙСУ — НАШИМИ БЛОКАМИ. Тот же язык, что у операции и «Оплаты»
 // записи: блок «Сумма» (AmountBlock, остаток подписью), дата строкой с
@@ -149,7 +150,7 @@ export function InvoicePaymentSheet({
       scroll
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: 16, gap: 8 }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE, gap: 8 }}>
           {error ? (
             <Text accessibilityRole="alert" className="text-center text-sm" style={{ color: t.danger }}>
               {error}

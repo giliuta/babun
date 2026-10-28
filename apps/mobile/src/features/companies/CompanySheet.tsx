@@ -7,8 +7,9 @@ import { FieldRow, RowCaption } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { LogoRow } from "@/features/settings/LogoRow";
+import { CONTACT_COLUMN } from "@/features/clients/contact-column";
 import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
@@ -192,14 +193,21 @@ export function CompanySheet({
       // и сохраняет `normalizeCompanyDraft`: в листе они выглядят, как будут
       // выглядеть в документе.
       autoCapitalize?: "none" | "words" | "characters";
+      /** КОНТАКТЫ — КАНОНОМ БЛОКА «КЛИЕНТ»: подпись слева колонкой,
+       *  пустое поле называет себя подсказкой — как телефон и почта в
+       *  «Профиле» и в карточке клиента. */
+      column?: number;
+      /** Подсказка, когда она не совпадает с подписью: у телефона — «Номер». */
+      placeholder?: string;
     } = {},
   ) => (
     <FieldRow
       label={label}
       value={draft[key] ?? ""}
-      placeholder={label}
-      addLabel="Добавить"
-      stacked
+      placeholder={options.placeholder ?? label}
+      addLabel={options.column === undefined ? "Добавить" : undefined}
+      stacked={options.column === undefined}
+      column={options.column}
       live
       separated={options.separated}
       multiline={options.multiline}
@@ -240,7 +248,7 @@ export function CompanySheet({
       maxHeightRatio={0.92}
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button
             label={company ? "Сохранить" : "Добавить реквизиты"}
             loading={saving}
@@ -300,15 +308,21 @@ export function CompanySheet({
         </SectionCard>
 
         <SectionCard dense title="Контакты">
-          {field("contact_phone", "Телефон", { keyboardType: "phone-pad" })}
+          {field("contact_phone", "Телефон", {
+            keyboardType: "phone-pad",
+            column: CONTACT_COLUMN,
+            placeholder: "Номер",
+          })}
           {field("contact_email", "Почта", {
             separated: true,
             keyboardType: "email-address",
             autoCapitalize: "none",
+            column: CONTACT_COLUMN,
           })}
           {field("business_address", "Адрес", {
             separated: true,
             multiline: true,
+            column: CONTACT_COLUMN,
           })}
         </SectionCard>
         <RowCaption text="Адрес печатается так, как набран: перенос строки здесь — перенос на бумаге." />

@@ -8,7 +8,7 @@ import { formatEURExact } from "@babun/shared/common/utils/money";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER, ICON } from "@/components/ui/tokens";
+import { FOOTER_SIDE, ICON } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import {
   SELECT_SHEET_RATIO,
@@ -222,7 +222,7 @@ export function ServicePicker({
       // строке попадал уже в кнопку «Готово» (при наборе количества тапами это обычное дело).
       // Закрыть шторку без единой услуги законно: запись сохраняется и так.
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           {catalogMissing ? (
             // ПРАЙС НЕ ПРИЕХАЛ — ДВЕРИ «ДОБАВИТЬ УСЛУГУ» НЕТ: заводить нечего,
             // услуги у команды есть, их просто не видно. Внизу — «Повторить».

@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { buildQuickClientDraft } from "@/features/appointments/booking-prefill";
@@ -10,6 +9,7 @@ import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
 import { withNewClientTeam } from "@/features/clients/team-scope";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { ClientsList } from "./use-clients-list";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 /** Bottom of the list: bulk actions in selection mode, otherwise
  *  «Создать клиента». */
@@ -78,9 +78,7 @@ export function ListFooter({ list }: { list: ClientsList }) {
         // Отступы — на внутреннем View: KeyboardLift пишет подъём в свой
         // paddingBottom и затёр бы наш.
         <KeyboardLift>
-        <View
-          style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
-        >
+        <PageFooter>
           {/* ТАРИФ БЕЗ КЛИЕНТОВ — КНОПКА СЕРАЯ, а не спрятана (всё видно, новое
               серым): тап поднимает плашку «Нужно изменить
               тариф». Партнёр без своего тарифа видит общий список, но своего
@@ -105,7 +103,7 @@ export function ListFooter({ list }: { list: ClientsList }) {
             />
           </TariffLocked>
           </TourTarget>
-        </View>
+        </PageFooter>
         </KeyboardLift>
       )}
     </>

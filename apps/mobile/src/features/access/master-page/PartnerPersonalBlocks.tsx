@@ -10,7 +10,7 @@ import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { formatShortDateRu } from "@/features/clients/format";
 import type { MasterProfile } from "@/features/reference/master-profile";
 import type { Master } from "@/features/reference/queries";
@@ -181,7 +181,7 @@ function TextFieldsSheet({
       maxHeightRatio={0.92}
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" disabled={!changed} onPress={apply} />
         </View>
       }

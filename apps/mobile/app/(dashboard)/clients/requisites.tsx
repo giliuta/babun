@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { useInClientsTab } from "@/lib/reference-href";
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { clientRequisitesOf } from "@babun/shared/local/client-requisites";
 import { Screen } from "@/components/ui/Screen";
@@ -13,6 +13,7 @@ import { useClient, useUpdateClient } from "@/features/clients/queries";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
 import { haptics } from "@/lib/haptics";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ВСЕ РЕКВИЗИТЫ КЛИЕНТА — СВОЯ СТРАНИЦА, КАК «ИСТОРИЯ» И «ФАЙЛЫ». На карточке — основной набор одной плашкой, тап ведёт сюда; здесь
 // каждый набор своей плашкой. Блок тот же, что на карточке: листы правки,
@@ -84,7 +85,7 @@ function ClientRequisitesScreen() {
         </>
       )}
       {client && access.requisites.show && canEdit ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           <GradientButton
             label="Добавить реквизиты"
             onPress={() => {
@@ -92,7 +93,7 @@ function ClientRequisitesScreen() {
               setAdding(true);
             }}
           />
-        </View>
+        </PageFooter>
       ) : null}
     </Screen>
   );

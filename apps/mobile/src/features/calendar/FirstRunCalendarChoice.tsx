@@ -2,6 +2,7 @@ import { Text, View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 import { TourTarget } from "@/components/tour/TourTarget";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ПЕРВЫЙ ВХОД ВЛАДЕЛЬЦА: календаря ещё нет. Пустая сетка часов и одна кнопка
 // «Создать календарь» внизу; кнопка открывает шторку с названием.
@@ -39,11 +40,11 @@ export function FirstRunCalendarChoice({ onCreate }: { onCreate: () => void }) {
           </View>
         ))}
       </View>
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+      <PageFooter>
         <TourTarget id="calendar.first-create" shape="control">
           <GradientButton label="Создать календарь" onPress={onCreate} />
         </TourTarget>
-      </View>
+      </PageFooter>
     </View>
   );
 }

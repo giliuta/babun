@@ -10,7 +10,7 @@ import {
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useDefaultCountry } from "@/features/reference/default-country";
@@ -235,7 +235,7 @@ export function ContactsImportSheet({
       maxHeightRatio={SELECT_SHEET_RATIO}
       scroll
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           {denied && CONTACTS_AVAILABLE ? (
             // После «Больше не спрашивать» системного окна второй раз нет —
             // дверь в настройки Babun, как у камеры (lib/camera-denied.ts).

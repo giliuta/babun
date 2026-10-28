@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
+import { FOOTER_SIDE } from "./tokens";
 
 // ФУТЕР СТРАНИЦЫ — ГЛАВНОЕ ДЕЙСТВИЕ ВНИЗУ (AGENTS 7.1): 20 по бокам, 8 сверху,
 // 10 снизу, кнопка во всю ширину. Пара листу — `SheetFooter`. Пока канон жил
@@ -15,7 +16,7 @@ import { useThemeColors } from "@/theme/colors";
 // футер платит его сам (`standalone`), как подвал листа: max(вырез, 10).
 
 /** Поля футера страницы: бока, верх, низ. */
-const PAGE_FOOTER_PADDING = { horizontal: 20, top: 8, bottom: 10 } as const;
+export const PAGE_FOOTER_PADDING = { horizontal: FOOTER_SIDE, top: 8, bottom: 10 } as const;
 
 export function PageFooter({
   children,

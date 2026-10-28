@@ -8,6 +8,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useAccountsWithBalances } from "./accounts";
 import { useAppointmentLedger } from "./queries";
 import { paymentEvents, paymentEventsNet } from "./payment-history";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // ИСТОРИЯ ПЛАТЕЖЕЙ ЗАПИСИ. Открывается кнопкой из блока оплаты.
 // На главной ленте одна запись занимает одну строку, а
@@ -59,7 +60,7 @@ export function PaymentHistorySheet({
       // свайпом ПО ГРАБЕРУ: свайп по самому списку его прокручивает. Человек
       // считает, что застрял. Одна подписанная кнопка снимает вопрос.
       footer={
-        <View style={{ paddingHorizontal: 20 }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Закрыть" onPress={onClose} />
         </View>
       }

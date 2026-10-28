@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useInClientsTab } from "@/lib/reference-href";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -29,6 +29,7 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ИСТОРИЯ ЗАПИСЕЙ — полноценная страница со всеми записями клиента.
 //
@@ -259,7 +260,7 @@ function ClientVisitsScreen() {
       {client && access.history.show && bookRight ? (
         // Тот же футер, что «Создать клиента» в списке: те же отступы,
         // та же высота — кнопки экранов стоят на одном уровне.
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           <GradientButton
             label="Записать клиента"
             disabled={!canBook}
@@ -271,7 +272,7 @@ function ClientVisitsScreen() {
               })
             }
           />
-        </View>
+        </PageFooter>
       ) : null}
     </Screen>
   );

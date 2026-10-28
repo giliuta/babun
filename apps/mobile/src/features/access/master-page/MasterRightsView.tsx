@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -16,6 +16,7 @@ import type { RightsArea } from "./master-draft";
 import type { LevelReader } from "./rights-rows";
 import type { RightsFocus } from "./rights-focus";
 import { teamLevels, viewSections } from "./rights-view-sections";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 export type { RightsFocus };
 
@@ -182,9 +183,9 @@ export function MasterRightsView({
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ СТРАНИЦЫ — ВНИЗУ (канон 7.1): посмотреть, что
           из этого выйдет. */}
       {onPreview ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           <GradientButton label="Посмотреть его глазами" onPress={onPreview} />
-        </View>
+        </PageFooter>
       ) : null}
     </Screen>
   );

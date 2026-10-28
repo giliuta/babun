@@ -13,6 +13,7 @@ import { shiftRangeStart } from "@/features/appointments/time-range";
 import { useThemeColors } from "@/theme/colors";
 import { useBusinessToday } from "@/features/settings/business-today";
 import { WHEN_WEEKS_BACK, WHEN_WEEKS_FWD, formatDateRu } from "./when-dates";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // «КОГДА» — ШТОРКА СНИЗУ, А НЕ ОКНО ПО ЦЕНТРУ: тап по времени открывает её
 // снизу вверх — два барабана, один тумблер, то же самое, что период в
@@ -190,7 +191,7 @@ export function WhenSheet({
       padded={false}
       maxHeightRatio={0.72}
       footer={
-        <View style={{ paddingHorizontal: 20 }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button
             label="Применить"
             onPress={() => {

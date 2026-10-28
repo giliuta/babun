@@ -4,7 +4,7 @@ import { House, Tag } from "lucide-react-native";
 import type { Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   SELECT_SHEET_RATIO,
@@ -101,7 +101,7 @@ export function ObjectPickerSheet({
       }}
       footer={
         onAdd ? (
-          <View style={{ paddingHorizontal: GUTTER }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             <Button
               label="Добавить объект"
               onPress={() => {

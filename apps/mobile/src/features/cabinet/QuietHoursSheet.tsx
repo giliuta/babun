@@ -4,6 +4,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { TimeRangePicker } from "@/components/ui/TimeWheel";
 import { haptics } from "@/lib/haptics";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // ТИХИЕ ЧАСЫ — пара «Начало · Конец» тем же барабаном, что у часов календаря
 // (`TimeRangePicker`), но БЕЗ правила «конец позже начала»: тишина идёт через
@@ -45,7 +46,7 @@ export function QuietHoursSheet({
       onClose={onClose}
       title="Тихие часы"
       footer={
-        <View className="px-5">
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button
             label="Применить"
             onPress={() => {

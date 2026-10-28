@@ -20,6 +20,7 @@ import { pad2, parseYMD } from "@/features/appointments/helpers";
 import { usePlanAllows } from "@/session/tenant";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { WorkBand } from "@/features/calendar/DayView";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // Тап по пустому слоту сетки → этот лист (веб-паритет слот-попапа
 // babun.app, только снизу — закон «создание — листом»): дата УЖЕ выбрана
@@ -233,7 +234,7 @@ export function BookSlotSheet({
       title={draft ? dateLabel(draft.date) : undefined}
       footer={
         draft ? (
-          <View className="px-5" style={{ paddingTop: 6 }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE, paddingTop: 6 }}>
           {/* ДВЕ ДОРОГИ СОЗДАНИЯ — ОДНА ГЕОМЕТРИЯ, РАЗНАЯ ЗАЛИВКА: событие тоже такое же,
                 как клиент, но у «События» белый фон при той же кнопке.
 

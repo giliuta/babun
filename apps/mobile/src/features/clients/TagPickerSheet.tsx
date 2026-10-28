@@ -12,7 +12,7 @@ import {
   SelectList,
   SelectRow,
 } from "@/components/ui/select-rows";
-import { GUTTER, ICON } from "@/components/ui/tokens";
+import { FOOTER_SIDE, ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -107,7 +107,7 @@ export function TagPickerSheet({
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         shown.length > 0 ? (
-          <View style={{ paddingHorizontal: GUTTER }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             <Button
               label="Применить"
               onPress={() => {

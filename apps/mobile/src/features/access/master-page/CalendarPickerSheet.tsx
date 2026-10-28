@@ -4,7 +4,7 @@ import { CalendarRange } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { SELECT_SHEET_RATIO, SelectList, SelectRow } from "@/components/ui/select-rows";
 import type { Team } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
@@ -42,7 +42,7 @@ export function CalendarPickerSheet({
       scroll
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={onClose} />
         </View>
       }

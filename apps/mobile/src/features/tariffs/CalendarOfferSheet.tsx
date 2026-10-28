@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
-import { GUTTER, TYPE } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER, TYPE } from "@/components/ui/tokens";
 import { useCurrentRole } from "@/session/tenant";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { notify } from "@/lib/notify";
@@ -107,7 +107,7 @@ export function CalendarOfferSheet({
       title="Новый календарь"
       padded={false}
       footer={
-        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE, gap: 8 }}>
           {!owner ? (
             <Text className="text-center text-[13px]" style={{ color: t.sub }}>
               Календари добавляет владелец

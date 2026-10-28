@@ -6,7 +6,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCreateFirstCalendar,
@@ -154,7 +154,7 @@ export function CalendarCreateSheet({
       scroll
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           {footerNote ? (
             <Text
               accessibilityLiveRegion="polite"

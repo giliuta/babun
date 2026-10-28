@@ -6,7 +6,7 @@ import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import {
   SELECT_SHEET_RATIO,
   SELECT_SIDE,
@@ -227,7 +227,7 @@ export function ClientPickerSheet({
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         onCreate || (onClear && selectedId) ? (
-          <View style={{ paddingHorizontal: GUTTER }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             {/* ДВЕРЬ СОЗДАНИЯ ОДНА — В ФУТЕРЕ: две одинаковые двери под пустым
                 поиском (строка «Создать клиента «Мария»» и кнопка «Создать
                 клиента») были бы лишними. Кнопка называет набранное сама:

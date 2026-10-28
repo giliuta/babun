@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import {
   getCurrentCyprusTime,
@@ -26,6 +26,7 @@ import { useCalendarSettings } from "@/features/settings/local-settings";
 import { StatementPaper } from "@/features/finances/statement/StatementPaper";
 import { shareStatementPdf } from "@/features/finances/statement/statement-pdf";
 import { useStatementDocument } from "@/features/finances/statement/use-statement";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ВЫПИСКА СЧЁТА — СНАЧАЛА ЛИСТ, ПОТОМ ФАЙЛ: сначала создаётся превью, а
 // потом его можно только передавать. Открывается строкой «Выписка» в листе счёта; «назад»
@@ -95,14 +96,14 @@ export default function AccountStatementRoute() {
       ) : (
         <EmptyState fill title="Счёт не найден" />
       )}
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+      <PageFooter>
         <GradientButton
           label="Поделиться PDF"
           loading={sharing}
           disabled={!statement.doc}
           onPress={() => void share()}
         />
-      </View>
+      </PageFooter>
 
       <PeriodPresetModal
         visible={presetsOpen}

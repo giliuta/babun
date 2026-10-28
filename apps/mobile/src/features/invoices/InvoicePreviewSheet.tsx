@@ -7,7 +7,7 @@ import { LanguageOptionList } from "@/components/ui/LanguageOptionList";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
 import { StepBack } from "@/components/ui/StepBack";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import type { InvoiceDocument } from "@/lib/paper/document";
@@ -114,7 +114,7 @@ export function InvoicePreviewSheet({
       scroll
       maxHeightRatio={0.9}
       footer={
-        <View style={{ paddingHorizontal: SIDE }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           {blockedReason ? (
             <Text
               maxFontSizeMultiplier={1.3}

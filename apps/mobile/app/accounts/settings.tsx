@@ -34,6 +34,7 @@ import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
 import { useCurrentRole } from "@/session/tenant";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (панель «Счета» и шестерёнка).
 //
@@ -330,12 +331,12 @@ export default function AccountsScreen() {
           полон или ещё грузится — кнопка на том же месте. Шторка сама
           дочитывает, что ей нужно, и сама говорит про сеть. */}
       {canEdit ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <PageFooter>
           <GradientButton
             label="Добавить счёт"
             onPress={() => setEditor({ open: true, id: null })}
           />
-        </View>
+        </PageFooter>
       ) : null}
 
       <AccountEditorSheet
