@@ -48,7 +48,7 @@ export async function mergeClientsOnServer(input: {
 /** Отказ сервера словами человека. */
 export function mergeRefusal(error: { message: string; code?: string; hint?: string }): string {
   if (error.hint === "merge:paid_visits") {
-    return "У дубля есть оплаченные визиты — клиента у них не сменить, пока оплата не возвращена. Объединить пока нельзя";
+    return "У дубля есть оплаченные записи — клиента у них не сменить, пока оплата не возвращена. Объединить пока нельзя";
   }
   if (error.code === "42501") return "Объединять карточки может только владелец";
   if (error.code === "P0002") return "Одна из карточек уже удалена — обновите страницу";

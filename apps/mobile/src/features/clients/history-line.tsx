@@ -52,7 +52,7 @@ function clientHistoryParts(
   if (stats.lastVisitDate) {
     parts.push({
       key: "last",
-      text: `визит ${formatShortDateRu(stats.lastVisitDate)}`,
+      text: `последняя ${formatShortDateRu(stats.lastVisitDate)}`,
       tone: "plain",
     });
   }

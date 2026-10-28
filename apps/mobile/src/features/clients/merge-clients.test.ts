@@ -336,7 +336,7 @@ describe("объекты и оплаченные визиты при слиян�
         { prepaid_amount: 0, paid_amount: 50, payment_status: "paid" },
         { prepaid_amount: 20, paid_amount: 0, payment_status: "unpaid" },
       ]) ?? "",
-      /2 оплаченных визита/,
+      /2 оплаченные записи/,
     );
   });
 

@@ -149,7 +149,7 @@ export function useMergeDuplicate({
     const blocker = !dup
       ? "Карточка дубля не загрузилась — объединить пока нельзя"
       : !dupAppts.isSuccess
-        ? "Визиты дубля не загрузились — объединить пока нельзя"
+        ? "Записи дубля не загрузились — объединить пока нельзя"
         : mergeBlocker(primary, dup, peopleIdsOf(members, sourceScope?.role === "owner")) ??
           paidVisitsBlocker(dupAppts.data ?? []);
     if (blocker || !dup) {
@@ -162,7 +162,7 @@ export function useMergeDuplicate({
       "Объединить карточки?",
       {
         // Архива клиентов нет: дубль уходит в «Удалённые клиенты».
-        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
+        message: `Данные и записи «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
         confirmLabel: "Объединить",
       },
       () => void merge(dup),

@@ -115,10 +115,10 @@ function ClientRowView({
     !mark
       ? ""
       : mark.kind === "unclosed"
-        ? `визит ${formatShortDateRu(mark.date)} не закрыт`
+        ? `запись ${formatShortDateRu(mark.date)} не закрыта`
         : mark.kind === "ahead"
           ? `записан ${formatShortDateRu(mark.date)}`
-          : `последний визит ${formatShortDateRu(mark.date)}`,
+          : `последняя запись ${formatShortDateRu(mark.date)}`,
     evidence ?? "",
   ]
     .filter(Boolean)

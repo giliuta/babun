@@ -186,11 +186,11 @@ describe("статусы после разбора 2026-08-07", () => {
   test("склонения в улике считают по-русски", () => {
     assert.equal(
       segmentEvidence(client(), ["loyal"], stats({ visits: 22 }), TODAY),
-      "22 визита",
+      "22 записи",
     );
     assert.equal(
       segmentEvidence(client(), ["unclosed"], stats({ unclosedVisits: 5 }), TODAY),
-      "5 визитов не закрыто",
+      "5 записей не закрыто",
     );
   });
 
