@@ -15,5 +15,5 @@ test("итог на экранной бумаге не переносится", 
 
 test("итог в PDF — nowrap и ячейка не уже суммы", () => {
   const pdf = readFileSync(resolve(here, "../../lib/paper/pdf.ts"), "utf8");
-  assert.match(pdf, /\.total-value \{ min-width: 124px;[^}]*white-space: nowrap; \}/);
+  assert.match(pdf, /\.total-value \{ min-width: 124px;[^\n]*white-space: nowrap; \}/);
 });
