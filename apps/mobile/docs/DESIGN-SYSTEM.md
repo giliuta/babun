@@ -430,6 +430,6 @@ Tabular figures on every money/count/€ value. Map: `text-2xl→Headline · tex
 - DO keep shadows accent-tinted on brand surfaces, neutral on plain cards.
 - DO take messenger hues from shared `CHANNEL_COLORS` (WhatsApp/Telegram/Instagram/SMS) and picker palettes from shared `PRESET_COLORS` — never hardcode either.
 - DON'T add a second accent or a violet/teal brand hue.
-- DON'T use 1px borders where a separator color works.
+- DON'T use 1px borders where a separator color works. Поле ввода — заливка `t.fill`, 52, без обводки, фокус — кольцо 1,5 акцентом (`inputFrame`, `components/ui/Field.tsx`, 2026-10-28). **Исключение — заметка** (`InlineNoteField`: запись, клиент, объект, партнёр, долг, операция): белое поле в тонкой светлой рамке, «как лист, в который пишут» — серая плашка читалась мелким примечанием (решение 035/владельца 28.10: оставить).
 - DON'T loop any animation except the single CTA sheen.
 - DON'T exceed 3 type sizes or stack two competing heroes per viewport.
