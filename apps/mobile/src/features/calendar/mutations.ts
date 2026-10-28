@@ -235,6 +235,9 @@ export function useDeleteAppointment() {
         cur?.filter((a) => a.id !== id),
       );
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
+      // Ящик снимает любое удаление записи с командой (20261028111000), и
+      // откат свежей тоже: «Удалённые записи» перечитываются.
+      void qc.invalidateQueries({ queryKey: deletedAppointmentsQueryKey(tenantId) });
     },
     meta: { errorHandled: true }, // call sites alert themselves
   });
@@ -244,7 +247,8 @@ export function useDeleteAppointment() {
  *  Одна дверь на всех: сервер сам ведёт сотрудника через его проверки
  *  блоков. Фото не стираются — они вернутся вместе с записью, а насовсем
  *  уходят из «Удалённых записей». `useDeleteAppointment` остаётся для отката
- *  только что созданного («Отменить» в тосте): такую запись в ящик не кладут. */
+ *  только что созданного («Отменить» в тосте): он идёт и из очереди, а в
+ *  ящик запись кладёт сам сервер — любое удаление (20261028111000). */
 export function useTrashAppointment() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
