@@ -55,6 +55,20 @@ describe("долг по незакрытой работе", () => {
     assert.equal(buildStats(CLIENT, [apt({})]).debt, 100);
   });
 
+  test("незакрытой (жёлтой) считается только запись с долгом, как в календаре", () => {
+    const owes = buildStats(CLIENT, [apt({})]);
+    assert.equal(owes.unclosedVisits, 1);
+    assert.equal(owes.lastUnclosedDate, "2020-01-01");
+    // Запись на €0 («Time») и оплаченная вперёд закрыть нечем.
+    for (const over of [{ total_amount: 0 }, { prepaid_amount: 100 }]) {
+      const s = buildStats(CLIENT, [apt(over)]);
+      assert.equal(s.unclosedVisits, 0, JSON.stringify(over));
+      assert.equal(s.lastUnclosedDate, "", JSON.stringify(over));
+      // Но это история: удаление не обещает «сотрётся через 30 дней».
+      assert.equal(s.pastOpenRecords, 1, JSON.stringify(over));
+    }
+  });
+
   test("но визитом не считается — визиты только подтверждённые", () => {
     assert.equal(buildStats(CLIENT, [apt({})]).visits, 0);
   });

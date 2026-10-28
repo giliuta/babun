@@ -7,13 +7,15 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
 import { updateVerdict } from "./update-verdict";
+import { WebUpdateShell } from "./WebUpdateBar";
 
 // «ВЫШЛО ОБНОВЛЕНИЕ» — НАД ВСЕМИ ЭКРАНАМИ (приложение само говорит, что нужно
 // обновиться). Правило — `update-verdict.ts`, числа
 // — строка платформы в `app_release`, её правят после каждого выпуска.
 //   • ниже минимальной версии — вместо приложения экран «Нужно обновить»;
 //   • ниже последней — один раз за запуск плашка с кнопкой в магазин.
-// В вебе обновлять нечего: сайт всегда последний.
+// В вебе магазина нет, но открытая вкладка держит старый бандл, пока её не
+// перезагрузят: новую сборку сайта показывает плашка (`WebUpdateBar.tsx`).
 
 type Release = { latest_version: string; min_version: string; store_url: string };
 
@@ -80,5 +82,6 @@ export function AppUpdateGate({ children }: { children: ReactNode }) {
       </Screen>
     );
   }
+  if (Platform.OS === "web") return <WebUpdateShell>{children}</WebUpdateShell>;
   return <>{children}</>;
 }
