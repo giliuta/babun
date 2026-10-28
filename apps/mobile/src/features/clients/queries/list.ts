@@ -86,6 +86,12 @@ export function useClients() {
         ? sourceClientsQueryKey(tenantId, scope.view)
         : clientsQueryKey(tenantId, scope.role),
     enabled: !!tenantId && scope.ready,
+    // БЕЗ СЕТИ СВОИ КЛИЕНТЫ ЧИТАЮТСЯ С ТЕЛЕФОНА — как записи. По умолчанию
+    // react-query офлайн не зовёт `queryFn`, и обёртка кэша, у которой копия в
+    // SQLite, не запускалась: календарь без сети рисовал записи без имён.
+    // Чужие источники (запись, работодатель) идут только в сеть — им пауза.
+    networkMode:
+      scope.kind === "record" || scope.kind === "member" ? "online" : "offlineFirst",
     queryFn: () => {
       if (scope.kind === "record") return listMasterClientsSafe(supabase);
       if (scope.kind === "member") {
