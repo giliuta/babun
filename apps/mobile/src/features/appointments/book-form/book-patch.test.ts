@@ -49,6 +49,9 @@ describe("buildBookPatch — event", () => {
   test("an event is named by its type, else its old title, else «Событие»", () => {
     const ev = (over: Partial<BookPatchInput>) => buildBookPatch(input({ kind: "event", ...over }));
     assert.equal(ev({ eventTypeLabel: "Офис", eventTitle: "старое" }).comment, "Офис");
+    // Тип, узнанный по названию (регистр, пробелы), имени не меняет: иначе
+    // нетронутое событие считалось бы изменённым (CAL-23).
+    assert.equal(ev({ eventTypeLabel: "Уборка", eventTitle: "уборка " }).comment, "уборка");
     assert.equal(ev({ eventTitle: "  старое  " }).comment, "старое");
     assert.equal(ev({}).comment, "Событие");
   });

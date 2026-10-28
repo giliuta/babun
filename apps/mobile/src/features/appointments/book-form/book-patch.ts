@@ -59,6 +59,9 @@ export interface BookPatchInput {
 }
 
 // ── сохранение (тот же контракт, что старый шит) ──
+const sameTitle = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
 export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
   const {
     kind,
@@ -131,7 +134,16 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       status: "scheduled",
       // Без типа — маркер базы, всегда русский (`UNTYPED_EVENT`): переведённое
       // слово читалось бы на телефоне с другим языком как имя типа.
-      comment: (eventTypeLabel ?? eventTitle.trim()) || UNTYPED_EVENT,
+      //
+      // ТИП, УЗНАННЫЙ ПО НАЗВАНИЮ, НАЗВАНИЯ НЕ МЕНЯЕТ. Прежнее событие узнаёт
+      // свой тип по имени без учёта регистра и пробелов (`use-event-type`) —
+      // кадром позже снимка «как было». Имя типа в патче делало нетронутое
+      // «уборка» изменённым «Уборка», и «назад» спрашивал «Сохранить
+      // изменения?» (CAL-23). Выбранный рукой тип ставит своё имя сам.
+      comment:
+        (eventTypeLabel != null && !sameTitle(eventTypeLabel, eventTitle)
+          ? eventTypeLabel
+          : eventTitle.trim()) || UNTYPED_EVENT,
       address: placeIsUrl ? "" : place,
       color_override: eventColor,
       // Метка события — та же метка выезда, что у записи: null значит «как
