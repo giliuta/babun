@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { Search } from "lucide-react-native";
 import { getInitials } from "@babun/shared/local/masters";
@@ -10,7 +10,6 @@ import { Divider } from "@/components/ui/Divider";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { usePartnersAccess } from "@/session/use-partner-manager";
 import { useThemeColors } from "@/theme/colors";
-import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
 import { useDataRole } from "@/session/tenant";
 import { usePendingInvitations } from "@/features/settings/team-access";
@@ -22,13 +21,12 @@ import { openMasterDraft } from "@/features/access/master-page/draft-store";
 import {
   invitationSegment,
 } from "@/features/access/master-page/master-draft";
-import { MemberRow, PendingInvitationRow } from "@/features/access/PeopleRows";
+import { PendingInvitationRow, PersonRow } from "@/features/access/PeopleRows";
 import {
   AccessRequestError,
   useCompanyMembers,
   type CalendarMember,
 } from "@/session/access-queries";
-import { LIST_ROW } from "@/components/ui/tokens";
 
 // СОТРУДНИКИ КОМПАНИИ — «Кабинет → Сотрудники». Список один на
 // компанию, под именем — его команды; права по командам — на странице
@@ -241,10 +239,12 @@ export default function MastersScreen() {
           renderItem={({ item }) => {
             if (item.kind === "member") {
               return (
-                <MemberRow
-                  member={item.member}
+                <PersonRow
+                  name={item.member.name}
+                  initials={getInitials(item.member.name)}
                   tint={teamColorById.get(item.member.calendars[0] ?? "") || t.faint}
                   sub={teamNames(item.member.calendars) || "Без команды"}
+                  accessibilityLabel={`${item.member.name}, права доступа`}
                   onPress={() =>
                     router.push(`/cabinet/people/access/${item.member.userId}` as Href)
                   }
@@ -263,9 +263,14 @@ export default function MastersScreen() {
                 />
               );
             }
+            const archived = !item.master.is_active;
             return (
-              <MasterRow
-                master={item.master}
+              <PersonRow
+                name={item.master.full_name || "Без имени"}
+                initials={getInitials(item.master.full_name)}
+                sub={archived ? "В архиве — открыть, чтобы вернуть" : item.master.phone || undefined}
+                muted={archived}
+                accessibilityLabel={`${item.master.full_name || "Мастер"}${archived ? ", в архиве" : ""}`}
                 tint={
                   item.master.team_id
                     ? teamColorById.get(item.master.team_id) ?? t.faint
@@ -333,57 +338,4 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function MasterRow({
-  master,
-  tint,
-  onPress,
-}: {
-  master: Master;
-  tint: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  const archived = !master.is_active;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${master.full_name || "Мастер"}${archived ? ", в архиве" : ""}`}
-      className="flex-row items-center px-4 py-3 active:opacity-60"
-    >
-      <View
-        className="mr-3 h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: archived ? t.faint : tint }}
-      >
-        <Text
-          style={{
-            fontSize: 14,
-            fontWeight: "700",
-            color: readableForeground(archived ? t.faint : tint),
-          }}
-        >
-          {getInitials(master.full_name)}
-        </Text>
-      </View>
-      <View className="flex-1">
-        <Text
-          style={{ ...LIST_ROW.name, color: archived ? t.faint : t.ink }}
-          numberOfLines={1}
-        >
-          {master.full_name || "Без имени"}
-        </Text>
-        {archived ? (
-          <Text style={{ ...LIST_ROW.sub, color: t.faint }} numberOfLines={1}>
-            В архиве — открыть, чтобы вернуть
-          </Text>
-        ) : master.phone ? (
-          <Text style={{ ...LIST_ROW.sub, color: t.sub }} numberOfLines={1}>
-            {master.phone}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
-  );
 }
