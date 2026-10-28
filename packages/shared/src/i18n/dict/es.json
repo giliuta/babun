@@ -195,6 +195,7 @@
  "{0} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.": "{0} pasará a «Clientes eliminados». Las citas y el dinero se quedan en los informes; puedes restaurar al cliente en ajustes.",
  "{0} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.": "{0} pasará a «Clientes eliminados». Las citas y el dinero se quedan en los informes; puedes restaurar al cliente ahí mismo, en ajustes.",
  "{0} ч": "{0} h",
+ "{0} ч {1}": "{0} h {1}",
  "{0} ч {1} мин": "{0} h {1} min",
  "{0} ч назад": "hace {0} h",
  "{0} шт": "{0} uds.",

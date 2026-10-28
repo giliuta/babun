@@ -195,6 +195,7 @@
  "{0} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.": "{0} will move to “Deleted clients”. Appointments and money stay in reports; you can restore the client in settings.",
  "{0} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.": "{0} will move to “Deleted clients”. Appointments and money stay in reports; you can restore the client there, in settings.",
  "{0} ч": "{0} h",
+ "{0} ч {1}": "{0} h {1}",
  "{0} ч {1} мин": "{0} h {1} min",
  "{0} ч назад": "{0} h ago",
  "{0} шт": "{0} pcs",

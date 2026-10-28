@@ -195,6 +195,7 @@
  "{0} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.": "{0} wird in „Gelöschte Kunden“ verschoben. Termine und Geld bleiben in den Berichten; Sie können den Kunden in den Einstellungen wiederherstellen.",
  "{0} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.": "{0} wird in „Gelöschte Kunden“ verschoben. Termine und Geld bleiben in den Berichten; Sie können den Kunden dort in den Einstellungen wiederherstellen.",
  "{0} ч": "{0} Std.",
+ "{0} ч {1}": "{0} Std. {1}",
  "{0} ч {1} мин": "{0} Std. {1} Min.",
  "{0} ч назад": "vor {0} Std.",
  "{0} шт": "{0} Stk.",

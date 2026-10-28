@@ -12,6 +12,21 @@ export function durationLabel(totalMinutes: number): string {
   return rest === 0 ? `${hours} ч` : `${hours} ч ${rest} мин`;
 }
 
+/** Длительность для УЗКОЙ ячейки: «1 ч 30», «1 ч», «45 мин».
+ *
+ *  Колонка «Время» лестницы цен — 94 pt, внутри 74: полное «1 ч 30 мин» туда
+ *  не входит и обрезалось многоточием («1 ч 30 …») — у ступени нельзя было
+ *  прочитать её же время. Слово «мин» после часов уходит: «1 ч 30» читается
+ *  однозначно, а без часов минуты остаются со словом — голое «45» было бы
+ *  числом без единицы. */
+export function durationShort(totalMinutes: number): string {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} мин`;
+  return rest === 0 ? `${hours} ч` : `${hours} ч ${rest}`;
+}
+
 /** Потолок барабана: часы кольцом 0–23, минуты по 5. Больше суток услуга не
  *  длится, а ветка «конец суток» у примитива при 23 не срабатывает никогда. */
 const MAX_DURATION = 23 * 60 + 55;
