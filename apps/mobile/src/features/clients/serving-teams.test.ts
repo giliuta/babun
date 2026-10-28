@@ -156,12 +156,11 @@ describe("«Люди» — только обслуживающие команд�
   });
 });
 
-describe("метки для выбора — `cities_live` с откатом до наката", () => {
+describe("метки для выбора — `cities_live`", () => {
   const src = () => read("../reference/queries/cities.ts");
-  test("читает представление, без него — прежнее чтение живых строк", () => {
+  test("читает представление, без отката на всю таблицу", () => {
     assert.match(src(), /\.from\("cities_live" as "cities"\)/);
-    assert.match(src(), /if \(!isMissingRelation\(error\)\) throw new Error\(error\.message\);\s*return fetchCities\(client, tenantId, false, null\);/);
-    assert.match(src(), /error\.code === "PGRST205"/);
+    assert.doesNotMatch(src(), /isMissingRelation/);
     assert.match(src(), /queryKey: \["cities", tenantId, "picker"\] as const/);
   });
   test("шторка клиента и фильтр списка читают его", () => {

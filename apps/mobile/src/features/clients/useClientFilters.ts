@@ -208,20 +208,32 @@ export function useClientFilters(
   const passesCity = useMemo(() => {
     // Case-insensitive: опция несёт каноничное написание библиотеки, а
     // web/legacy-значение клиента может отличаться регистром.
-    const sel = selectedCities.map((s) => s.trim().toLowerCase());
+    // Метка — тоже в пределах вариантов чипа (см. `liveTags` ниже).
+    const offered = new Set(cityOptions.map((o) => o.value.trim().toLowerCase()));
+    const sel = selectedCities
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => offered.has(s));
     return (c: Client): boolean => {
       if (sel.length === 0) return true;
       return sel.includes((c.city ?? "").trim().toLowerCase());
     };
-  }, [selectedCities]);
+  }, [selectedCities, cityOptions]);
 
+  // ВЫБРАННОЕ ДЕЙСТВУЕТ ТОЛЬКО В ПРЕДЕЛАХ ВАРИАНТОВ ЧИПА. Тег или источник,
+  // выбранный под командой A, под чипом B не имеет ни токена, ни строки в
+  // фильтре, и фильтровать им невидимо значило врать «В этой команде пока нет
+  // клиентов». Сам выбор не стирается: вернулись на A — он снова в силе.
+  const liveTags = useMemo(() => {
+    const offered = new Set(tagOptions.map((o) => o.value));
+    return activeTags.filter((id) => offered.has(id));
+  }, [activeTags, tagOptions]);
   const passesTag = useMemo(() => {
-    const sel = activeTags;
+    const sel = liveTags;
     // OR-внутри фасета — единая семантика с Команда/Метка: показать
     // клиентов с ЛЮБЫМ из выбранных тегов (между секциями остаётся AND).
     return (c: Client): boolean =>
       sel.length === 0 || sel.some((t) => c.tag_ids.includes(t));
-  }, [activeTags]);
+  }, [liveTags]);
 
   const sourceOptions = useMemo<FacetOption[]>(
     () => sourceFilterOptions(customSources, sourceTeamId),
@@ -230,10 +242,11 @@ export function useClientFilters(
 
   // Корзина — имя строки источника: «Instagram» всех команд — один вариант.
   const passesSource = useMemo(() => {
-    const sel = sources as string[];
+    const offered = new Set(sourceOptions.map((o) => o.value));
+    const sel = (sources as string[]).filter((value) => offered.has(value));
     return (c: Client): boolean =>
       sel.length === 0 || sel.includes(sourceBucket(c.acquisition_source, customSources, c.team_id));
-  }, [sources, customSources]);
+  }, [sources, customSources, sourceOptions]);
 
   // Тип объекта сравнивается без регистра — как и схлопывается в варианты
   // «Дом» у одного клиента и «дом» у другого — один

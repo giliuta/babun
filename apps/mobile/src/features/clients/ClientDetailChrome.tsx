@@ -53,6 +53,8 @@ interface ClientDetailChromeProps {
    *  (STORY-086, сценарий ж). Пункт есть, только когда страница его передала:
    *  а передаёт она его, лишь когда выносить есть что (`canSplitClient`). */
   onSplit?: () => void;
+  /** «Сменить команду» — только владелец своей базы; нет — пункта нет. */
+  onChangeTeam?: () => void;
   /** Меню ушло и его окно снято — отсюда поднимается следующая шторка
    *  (iOS не показывает вторую модалку, пока первая не ушла). */
   onMenuExited?: () => void;
@@ -76,6 +78,7 @@ export function ClientDetailChrome({
   canDelete = false,
   onMerge,
   onSplit,
+  onChangeTeam,
   onMenuExited,
 }: ClientDetailChromeProps) {
   const t = useThemeColors();
@@ -95,6 +98,7 @@ export function ClientDetailChrome({
     onShare,
     onMerge,
     onSplit,
+    onChangeTeam,
     onToggleBlacklist: canEdit ? onToggleBlacklist : undefined,
     onDelete: canDelete ? onDelete : undefined,
   });

@@ -10,7 +10,7 @@ import {
   DeletedOn,
   HiddenClientsScreen,
 } from "@/features/clients/HiddenClientsScreen";
-import { useCurrentRole } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { Screen } from "@/components/ui/Screen";
@@ -47,7 +47,11 @@ function ClientTrashScreen() {
   // «Удалить насовсем» разрешено только владельцу (гейт в самой мутации).
   // Показывать его диспетчеру значит обещать действие, которое ответит
   // отказом, — предлагать нужно только то, что человек может сделать.
-  const role = useCurrentRole().data;
+  // РОЛЬ — КОМПАНИИ ОТКРЫТОГО СПИСКА, а не активной: полка читается по ней
+  // (`useTrashedClients`), и по роли активной компании владелец чужой базы
+  // видел бы «Удалить насовсем», которое ответит отказом.
+  const scope = useClientsScopeOrNull();
+  const role = scope ? (scope.kind === "own" ? scope.role : "member") : undefined;
   const isOwner = role === "owner";
 
   // ПОЛКА СВОЕЙ БАЗЫ — ТОЛЬКО ВЛАДЕЛЬЦУ (так же решает RLS). Партнёр по ссылке

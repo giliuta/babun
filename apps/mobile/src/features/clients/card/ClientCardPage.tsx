@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ScrollView } from "react-native";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { UserPlus } from "lucide-react-native";
@@ -16,12 +17,16 @@ import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";
 import { ClientScreenFooter } from "@/features/clients/ClientScreenFooter";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDraftNotice } from "@/features/clients/ClientDraftNotice";
+import { ClientTeamRow, ClientTeamSheet } from "@/features/clients/ClientTeamRow";
+import { useSetClientTeam } from "@/features/clients/use-set-client-team";
+import { useClientTeamChoices } from "@/features/clients/use-client-team-choices";
 import { DuplicateNotice } from "@/features/clients/DuplicateNotice";
 import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
 import ClientContactRow from "@/features/clients/ClientContactRow";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
 import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
+import { notify } from "@/lib/notify";
 import type { CardMenu } from "./card-menu-actions";
 import { CardDataNotice } from "./CardDataNotice";
 import type { ClientCard } from "./use-client-card";
@@ -89,6 +94,26 @@ export function ClientCardPage({
     onBookFromMenu,
     onDelete,
   } = menu;
+  // «СМЕНИТЬ КОМАНДУ» — ТОЛЬКО ВЛАДЕЛЕЦ СВОЕЙ БАЗЫ и только когда есть куда:
+  // варианты — живые видимые команды. Пишет дверь `set_client_team`.
+  const [teamOpen, setTeamOpen] = useState(false);
+  const setClientTeam = useSetClientTeam();
+  const { choices: teamChoices } = useClientTeamChoices();
+  const onChangeTeam =
+    !isDraft && scope?.kind === "own" && teamChoices.length > 1
+      ? () => {
+          setMenuOpen(false);
+          setTeamOpen(true);
+        }
+      : undefined;
+  const changeTeam = (teamId: string) => {
+    setClientTeam.mutate(
+      { id: c.id, teamId },
+      {
+        onError: (e) => notify("Команда не сменилась", e instanceof Error ? e.message : undefined),
+      },
+    );
+  };
 
   return (
     // Все номера страницы — клиента, его людей, доп. номера — предлагают
@@ -123,6 +148,7 @@ export function ClientCardPage({
         canDelete={caps.manage || partnerDelete}
         onMerge={onMerge}
         onSplit={split.onSplit}
+        onChangeTeam={onChangeTeam}
         onMenuExited={split.onMenuExited}
       />
 
@@ -162,6 +188,11 @@ export function ClientCardPage({
               router.replace(pathname === "/client" ? { ...card, pathname: "/client" } : card);
             }}
           />
+        ) : null}
+
+        {/* КОМАНДА НОВОГО КЛИЕНТА — ВИДНА И МЕНЯЕТСЯ ДО «СОЗДАТЬ КЛИЕНТА». */}
+        {isDraft ? (
+          <ClientTeamRow teamId={c.team_id ?? null} onPick={(teamId) => update({ team_id: teamId })} />
         ) : null}
 
         {/* ОДНА карточка-идентичность на оба режима: в черновике те же
@@ -337,6 +368,12 @@ export function ClientCardPage({
       ) : null}
       </KeyboardLift>
 
+      <ClientTeamSheet
+        visible={teamOpen}
+        teamId={c.team_id ?? null}
+        onPick={changeTeam}
+        onClose={() => setTeamOpen(false)}
+      />
       <RemindSheet
         visible={remindOpen}
         clientName={c.full_name}

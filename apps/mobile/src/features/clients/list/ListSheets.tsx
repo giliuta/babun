@@ -8,6 +8,7 @@ import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
 import { clientsInsightsHref, type ClientsScope } from "@/session/clients-company";
 import { ClientsScopeProvider } from "@/session/company-scope";
 import { teamForNewClient } from "@/features/clients/team-scope";
+import { useClientTeamChoices } from "@/features/clients/use-client-team-choices";
 import type { ClientsList } from "./use-clients-list";
 import { BulkEditSheets } from "./BulkEditSheets";
 
@@ -21,6 +22,8 @@ function RowScope({ scope, children }: { scope: ClientsScope | null; children: R
 /** Sheets of the list: remind, the row menu, filters, imports, bulk SMS,
  *  bulk tags / team / source. */
 export function ListSheets({ list }: { list: ClientsList }) {
+  // Импорт без чипа — в первую ВИДИМУЮ команду, как и новый клиент.
+  const { isVisible: isTeamVisible } = useClientTeamChoices();
   const {
     router,
     scope,
@@ -126,12 +129,12 @@ export function ListSheets({ list }: { list: ClientsList }) {
       <ImportWizardSheet
         visible={importOpen}
         onClose={() => setImportOpen(false)}
-        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id))}
+        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id), isTeamVisible)}
       />
       <ContactsImportSheet
         visible={contactsOpen}
         onClose={() => setContactsOpen(false)}
-        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id))}
+        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id), isTeamVisible)}
       />
       <BulkSmsSheet
         visible={smsOpen}

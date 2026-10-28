@@ -74,6 +74,11 @@ describe("лента команд во вкладке «Клиенты»", () =>
     assert.equal(teamForNewClient(ALL_TEAMS, teams), "team-1");
     assert.equal(teamForNewClient("team-9", teams), "team-1");
     assert.equal(teamForNewClient(ALL_TEAMS, []), null);
+    // Скрытая в ленте команда новым клиентом не становится: первая видимая.
+    const visible = (id: string) => id !== "team-1";
+    assert.equal(teamForNewClient(ALL_TEAMS, teams, visible), "team-3");
+    assert.equal(teamForNewClient("team-1", teams, visible), "team-1");
+    assert.equal(teamForNewClient(ALL_TEAMS, ["team-1"], visible), "team-1");
   });
 });
 

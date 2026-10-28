@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { haptics } from "@/lib/haptics";
@@ -47,12 +46,14 @@ export function InlineMultiPick({
   onClear: () => void;
 }) {
   const t = useThemeColors();
-  // Счётчики замораживаются на раскрытии: иначе ряды прыгали бы под пальцем
-  // после каждого тапа (то же правило, что было у шторки).
-  const frozen = useRef(counts).current;
+  // СЧЁТЧИКИ ЖИВЫЕ: число у ряда — сколько клиентов он даст при нынешнем
+  // наборе. Замороженное на раскрытии, оно после первого тапа врало: ряд
+  // обещал 12, а давал 3. Ряды при этом не переставляются — порядок от
+  // чисел не зависит, меняются только цифры.
+  const shown = counts;
   const total = blocks.reduce((n, b) => n + b.length, 0);
   const alive = blocks.some((b) =>
-    b.some((o) => (frozen[o.value] ?? 0) > 0 || selected.includes(o.value)),
+    b.some((o) => (shown[o.value] ?? 0) > 0 || selected.includes(o.value)),
   );
   return (
     <View style={{ gap: 8 }}>
@@ -117,7 +118,7 @@ export function InlineMultiPick({
                     active={selected.includes(o.value)}
                     separated={i > 0}
                     tick={o.color || undefined}
-                    count={frozen[o.value] ?? 0}
+                    count={shown[o.value] ?? 0}
                     reduced={reduced}
                     noun={noun}
                     onToggle={() => onToggle(o.value)}
