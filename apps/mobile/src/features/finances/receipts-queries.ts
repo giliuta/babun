@@ -1,15 +1,13 @@
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { getAppointment } from "@babun/shared/db/repositories/appointments";
-import type { TransactionDraft } from "@babun/shared/db/repositories/finance-transactions";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type {
   Receipt,
   ReceiptLineSnapshot,
 } from "@babun/shared/local/finance/receipt";
-import { invalidateLedger, useInsertTransaction } from "@/features/finances/queries";
+import { invalidateLedger } from "@/features/finances/queries";
 import { randomUuid } from "@babun/shared/sync";
-import { composeReceipt } from "@/features/finances/compose-receipt";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { toJson } from "@babun/shared/db/json";
@@ -148,41 +146,6 @@ export function useIssueReceipt() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["receipts"] });
     },
-    meta: { errorHandled: true },
-  });
-}
-
-/**
- * ЧЕК, СОСТАВЛЕННЫЙ С НУЛЯ: сначала ДЕНЬГИ, потом БУМАГА.
- *
- * Чек можно составлять вручную — по клиенту и дате принятия платежа. Такой чек
- * ВСЕГДА записывает приход на выбранный
- * счёт. Бумага без денег была бы подделкой: у клиента на руках документ, в
- * финансах — пусто.
- *
- * ПОРЯДОК ВАЖЕН И НЕОБРАТИМ. Сначала проводка (её проверяют права и правила
- * журнала), только потом дверь чека. Обратный порядок невозможен: `issue_
- * receipt` берёт готовую строку прихода и из неё же снимает сумму, налог,
- * клиента и счёт — сумма чека не приходит с устройства отдельным числом.
- *
- * ЕСЛИ ВТОРОЙ ШАГ УПАЛ, деньги остаются записанными — и это правильнее
- * отката: приход был, человек его подтвердил, и молча стирать движение денег
- * из-за неудачи с бумагой нельзя. Повторное «Выписать» на том же экране
- * второго прихода не пишет: приход идёт с id попытки (`composeReceipt`), и
- * чек выписывается на уже записанную строку.
- */
-export function useComposeReceipt() {
-  const insert = useInsertTransaction();
-  const issue = useIssueReceipt();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: (input: {
-      draft: TransactionDraft;
-      lines: ReceiptLineSnapshot[];
-      /** Id попытки — один на экран до успешной выписки. */
-      requestId: string;
-    }): Promise<Receipt> =>
-      composeReceipt(input, { insert: insert.mutateAsync, issue: issue.mutateAsync }),
     meta: { errorHandled: true },
   });
 }

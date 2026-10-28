@@ -18,12 +18,12 @@ import {
 const paperWords = (language: string | null | undefined) =>
   invoiceDictionary(isUiLocale(language) ? language : "en");
 
-// ОТКУДА ЧЕК БЕРЁТ СЕБЯ: с нуля; на принятую оплату
-// (`transactionId` — значок чека в записи, «Выписать чек» инвойса); правка
-// выписанного (`receiptId` — «Изменить» в листе чека, тот же номер). В двух
-// последних случаях деньги уже в журнале: клиент, счёт и сумма — от оплаты.
+// ОТКУДА ЧЕК БЕРЁТ СЕБЯ: на принятую оплату (`transactionId` — значок чека в
+// записи, «Выписать чек» инвойса) или правка выписанного (`receiptId` —
+// «Изменить» в листе чека, тот же номер). Деньги уже в журнале: клиент, счёт
+// и сумма — от оплаты.
 
-export type ReceiptSourceMode = "new" | "payment" | "edit";
+export type ReceiptSourceMode = "payment" | "edit";
 
 export function useReceiptSource(
   params: { transactionId?: string; receiptId?: string },
@@ -45,20 +45,19 @@ export function useReceiptSource(
   const tx = useReceiptTransaction(txId).data ?? null;
   const invoice = useInvoice(tx?.invoice_id ?? undefined);
   const appointment = useReceiptAppointment(tx && !tx.invoice_id ? tx.appointment_id : null);
-  const mode: ReceiptSourceMode = params.receiptId ? "edit" : params.transactionId ? "payment" : "new";
+  const mode: ReceiptSourceMode = params.receiptId ? "edit" : "payment";
   const ready =
-    mode === "new" ||
-    (!!tx &&
-      (mode !== "edit" || !!editing) &&
-      (!tx.invoice_id || !invoice.isLoading) &&
-      Boolean(tx.invoice_id || !tx.appointment_id || !appointment.isLoading));
+    !!tx &&
+    (mode !== "edit" || !!editing) &&
+    (!tx.invoice_id || !invoice.isLoading) &&
+    Boolean(tx.invoice_id || !tx.appointment_id || !appointment.isLoading);
   const invoiceRow = invoice.data ?? null;
   const invoiceNumber = invoiceRow?.number ?? null;
   const invoiceCompanyId = invoiceRow?.company_id ?? null;
 
   const seeded = useRef(false);
   useEffect(() => {
-    if (mode === "new" || !ready || !tx || seeded.current) return;
+    if (!ready || !tx || seeded.current) return;
     seeded.current = true;
     const base = {
       clientId: tx.client_id,

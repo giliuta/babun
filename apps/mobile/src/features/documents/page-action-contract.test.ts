@@ -59,14 +59,18 @@ describe("страница инвойса", () => {
 });
 
 describe("счёт чека на оплату", () => {
-  test("составитель и маршрут берут счета со скрытыми и закрытыми, когда чек на оплату", () => {
-    const options = /useAccountsWithBalances\(\s*forPayment \? \{ includeInactive: true, includeHidden: true, includeDeleted: true \} : undefined,\s*\)/;
-    assert.match(read("ReceiptComposer.tsx"), options);
-    assert.match(readFileSync(resolve(here, "../../../app/documents/receipt-new.tsx"), "utf8"), options);
+  test("составитель берёт счёт проводки и среди скрытых и закрытых", () => {
+    const composer = read("ReceiptComposer.tsx");
+    assert.match(
+      composer,
+      /useAccountsWithBalances\(\{\s*includeInactive: true,\s*includeHidden: true,\s*includeDeleted: true,\s*\}\)/,
+    );
+    assert.match(composer, /\.filter\(\(a\) => a\.id === draft\.accountId\)/);
   });
 
-  test("у чека на оплату «Выберите счёт» не бывает: счёт — у проводки", () => {
+  test("чека с нуля нет: ни «Выберите счёт», ни прихода из составителя", () => {
     const page = readFileSync(resolve(here, "../../../app/documents/receipt-new.tsx"), "utf8");
-    assert.match(page, /: !forPayment && !account\s*\? "Выберите счёт/);
+    assert.doesNotMatch(page, /Выберите счёт|useComposeReceipt|forPayment/);
+    assert.match(page, /if \(!params\.transactionId && !params\.receiptId\) \{/);
   });
 });
