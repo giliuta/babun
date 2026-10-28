@@ -9,7 +9,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { LogoRow } from "@/features/settings/LogoRow";
-import { CONTACT_COLUMN } from "@/features/clients/contact-column";
+import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
@@ -310,19 +310,19 @@ export function CompanySheet({
         <SectionCard dense title="Контакты">
           {field("contact_phone", "Телефон", {
             keyboardType: "phone-pad",
-            column: CONTACT_COLUMN,
+            column: PERSON_COLUMN,
             placeholder: "Номер",
           })}
           {field("contact_email", "Почта", {
             separated: true,
             keyboardType: "email-address",
             autoCapitalize: "none",
-            column: CONTACT_COLUMN,
+            column: PERSON_COLUMN,
           })}
           {field("business_address", "Адрес", {
             separated: true,
             multiline: true,
-            column: CONTACT_COLUMN,
+            column: PERSON_COLUMN,
           })}
         </SectionCard>
         <RowCaption text="Адрес печатается так, как набран: перенос строки здесь — перенос на бумаге." />

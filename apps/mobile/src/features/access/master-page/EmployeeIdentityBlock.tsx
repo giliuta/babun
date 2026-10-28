@@ -10,7 +10,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import type { ContactHolder } from "@/features/clients/contact-fields";
-import { CONTACT_COLUMN } from "@/features/clients/contact-column";
+import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import { useDefaultCountry } from "@/features/reference/default-country";
 import { usePhoneField } from "@/features/clients/use-phone-country";
 import { useThemeColors } from "@/theme/colors";
@@ -187,7 +187,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {(p.editable || p.identity.phone) && !p.live ? (
           <FieldRow
             label="Телефон"
-            column={CONTACT_COLUMN}
+            column={PERSON_COLUMN}
             separated
             tabular
             seed={phoneField.seed}
@@ -224,7 +224,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {p.hideEmail ? null : (
           <FieldRow
             separated
-            column={CONTACT_COLUMN}
+            column={PERSON_COLUMN}
             label="Почта"
             placeholder="Почта"
             value={p.identity.email}
@@ -246,7 +246,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {p.accountSeen ? (
           <FieldRow
             label="Вход"
-            column={CONTACT_COLUMN}
+            column={PERSON_COLUMN}
             separated
             readOnly
             noCopy

@@ -1,17 +1,14 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { ScrollView, View } from "react-native";
-import { Cake, CalendarHeart, CreditCard, Hash, Landmark, MapPin, type LucideIcon } from "lucide-react-native";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
-import { Divider } from "@/components/ui/Divider";
-import { FieldRow } from "@/components/ui/card-rows";
+import { ColumnDoorRow, FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { formatShortDateRu } from "@/features/clients/format";
+import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import type { MasterProfile } from "@/features/reference/master-profile";
 import type { Master } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
@@ -33,17 +30,14 @@ const localYmd = (iso: string) => {
   return Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const PAYOUT_FIELDS: { key: Exclude<TextKey, "address">; label: string; icon: LucideIcon }[] = [
-  { key: "bank_name", label: "Банк", icon: Landmark },
-  { key: "iban", label: "IBAN", icon: CreditCard },
-  { key: "tax_number", label: "Налоговый номер", icon: Hash },
+const PAYOUT_FIELDS: { key: Exclude<TextKey, "address">; label: string }[] = [
+  { key: "bank_name", label: "Банк" },
+  { key: "iban", label: "IBAN" },
+  { key: "tax_number", label: "Налоговый номер" },
 ];
 
 const clean = (key: TextKey, value: string) =>
   key === "iban" ? value.replace(/\s+/g, " ").trim() : value.trim();
-
-/** Шов между строками — до текста, мимо плитки, как в «Доступе». */
-const ROW_SEAM_INSET = 48;
 
 export function PartnerPersonalBlocks({
   card,
@@ -55,7 +49,6 @@ export function PartnerPersonalBlocks({
   joinedAt?: string | null;
   readOnly: boolean;
 }) {
-  const t = useThemeColors();
   const { profile, write } = useMasterProfileWrite(card);
   const [dateOpen, setDateOpen] = useState<DateField | null>(null);
   const [sheet, setSheet] = useState<{ keys: TextKey[]; focus: TextKey } | null>(null);
@@ -71,25 +64,25 @@ export function PartnerPersonalBlocks({
           run();
         };
 
+  // СТРОКИ — КОЛОНКОЙ, КАК «ПРОФИЛЬ» И ПОЛЯ ПАРТНЁРА ВЫШЕ: подпись слева,
+  // значение рядом, правка за дверью (`ColumnDoorRow`). Плитка с подписью
+  // второй строкой была третьим способом показать данные человека.
   const row = (
     i: number,
-    title: string,
-    icon: LucideIcon,
-    tile: string,
+    label: string,
     value: string | null,
+    placeholder: string,
     onPress?: () => void,
   ) => (
-    <Fragment key={title}>
-      {i > 0 ? <Divider inset={ROW_SEAM_INSET} /> : null}
-      <SettingsRow
-        tile={tile}
-        icon={icon}
-        title={title}
-        sub={value || "не указан"}
-        subColor={value ? undefined : t.faint}
-        onPress={onPress}
-      />
-    </Fragment>
+    <ColumnDoorRow
+      key={label}
+      separated={i > 0}
+      label={label}
+      value={value}
+      placeholder={placeholder}
+      column={PERSON_COLUMN}
+      onPress={onPress}
+    />
   );
 
   const birthday = dateValue("birthday");
@@ -99,13 +92,13 @@ export function PartnerPersonalBlocks({
   return (
     <>
       <SectionCard title="Личное" padded={false}>
-        {row(0, "День рождения", Cake, SETTINGS_TILE.red, birthday ? formatShortDateRu(birthday) : null, open(() => setDateOpen("birthday")))}
-        {row(1, "С нами с", CalendarHeart, SETTINGS_TILE.green, since ? formatShortDateRu(since) : null, open(() => setDateOpen("hire_date")))}
-        {row(2, "Адрес", MapPin, SETTINGS_TILE.blue, text("address") || null, open(() => setSheet({ keys: ["address"], focus: "address" })))}
+        {row(0, "День рождения", birthday ? formatShortDateRu(birthday) : null, "Дата", open(() => setDateOpen("birthday")))}
+        {row(1, "С нами с", since ? formatShortDateRu(since) : null, "Дата", open(() => setDateOpen("hire_date")))}
+        {row(2, "Адрес", text("address") || null, "Адрес", open(() => setSheet({ keys: ["address"], focus: "address" })))}
       </SectionCard>
       <SectionCard title="Выплаты" padded={false}>
         {PAYOUT_FIELDS.map((field, i) =>
-          row(i, field.label, field.icon, SETTINGS_TILE.indigo, text(field.key) || null, open(() => setSheet({ keys: payoutKeys, focus: field.key }))),
+          row(i, field.label, text(field.key) || null, field.label, open(() => setSheet({ keys: payoutKeys, focus: field.key }))),
         )}
       </SectionCard>
 

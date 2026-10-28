@@ -13,6 +13,7 @@
 export { RowGroup, RowGroupBody, RowGroupHeader } from "./card-rows/RowGroup";
 export { FieldRow, type FieldRowProps } from "./card-rows/FieldRow";
 export { NavRow } from "./card-rows/NavRow";
+export { ColumnDoorRow } from "./card-rows/ColumnDoorRow";
 export { RowActionButton } from "./card-rows/RowActionButton";
 export { ActionRow } from "./card-rows/ActionRow";
 export { ChoiceRow } from "./card-rows/ChoiceRow";

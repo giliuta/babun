@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { ScrollView } from "react-native";
-import { CalendarDays, KeyRound, Mail } from "lucide-react-native";
+import { KeyRound } from "lucide-react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { Divider } from "@/components/ui/Divider";
+import { ColumnDoorRow } from "@/components/ui/card-rows";
+import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import { useSession } from "@/providers/SessionProvider";
 import { ChangeEmailSheet } from "@/features/cabinet/ChangeEmailSheet";
 import { DangerZoneSection } from "./DangerZoneSection";
@@ -43,20 +44,23 @@ export function AccountScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 32 }}
         >
+          {/* ДАННЫЕ АККАУНТА — КОЛОНКОЙ, как «Профиль» и карточка партнёра:
+              подпись слева, значение рядом. Действия ниже — строками с
+              плиткой. */}
           <SectionCard>
-            <SettingsRow
-              tile={SETTINGS_TILE.blue}
-              icon={Mail}
-              title="Почта"
-              sub={u?.email ?? "—"}
+            <ColumnDoorRow
+              label="Почта"
+              value={u?.email}
+              placeholder="—"
+              column={PERSON_COLUMN}
               onPress={u?.email ? () => setEmailSheet(true) : undefined}
             />
-            <Divider inset={56} />
-            <SettingsRow
-              tile={SETTINGS_TILE.teal}
-              icon={CalendarDays}
-              title="Зарегистрирован"
-              sub={registered}
+            <ColumnDoorRow
+              separated
+              label="Зарегистрирован"
+              value={registered}
+              placeholder="—"
+              column={PERSON_COLUMN}
             />
           </SectionCard>
 
