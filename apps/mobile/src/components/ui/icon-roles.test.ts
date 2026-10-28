@@ -109,4 +109,12 @@ describe("ICON — роли значков", () => {
     assert.deepEqual(offenders([ui("card-rows/ChoiceRow.tsx")], "Settings2", ["ICON.command"]), []);
     assert.deepEqual(offenders([ui("select-rows.tsx")], "Check", ["ICON.check"]), []);
   });
+
+  test("команда в шапке блока (SectionCard) — та же ICON.command, что в шапке шторки", () => {
+    // Значок приходит пропом (`item.icon`), поэтому общий поиск по имени
+    // глифа его не видит: `Settings2` блока типов события рисовался 20, а тот
+    // же `Settings2` в шапке `PickerSheet` — 18.
+    assert.deepEqual(offenders([ui("SectionCard.tsx")], "item.icon", ["ICON.command"]), []);
+    assert.ok(sizesOf(ui("SectionCard.tsx"), "item.icon").length > 0, "SectionCard: команда не найдена — сторож ослеп");
+  });
 });
