@@ -94,7 +94,7 @@ export function DateCell({
         </Text>
         <View style={{ height: 16, justifyContent: "center" }}>
           {dayOff ? (
-            <LabelTag color={t.danger} text="Выходной" lg />
+            <LabelTag color={null} text="Выходной" lg />
           ) : label ? (
             <LabelTag color={label.color} text={label.name} lg />
           ) : null}
@@ -165,7 +165,7 @@ export function DateCell({
             появлении/смене метки, меняется только он. */}
         <View style={{ height: 15, justifyContent: "center" }}>
           {dayOff ? (
-            <LabelTag color={t.danger} text="Вых" />
+            <LabelTag color={null} text="Вых" />
           ) : label ? (
             // По символам, а не по UTF-16: `slice` резал эмодзи пополам.
             <LabelTag color={label.color} text={Array.from(label.name).slice(0, 4).join("")} />

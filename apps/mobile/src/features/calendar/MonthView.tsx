@@ -60,7 +60,7 @@ export const MonthView = memo(function MonthView({
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   /** У команды на эту дату выходной (график: «не работаем»). Как в Неделе и
-   *  Дне, выходной заменяет метку: красная точка вместо цветной. */
+   *  Дне, выходной заменяет метку: нейтральная точка вместо цветной. */
   isDayOff?: (dateYmd: string) => boolean;
   /** Дыра дня — «чего этой работе не хватает», агрегатом на день: первая
    *  незакрытая ситуация по `COLOR_SITUATIONS`. Месяц говорит «сюда надо
@@ -208,14 +208,17 @@ export const MonthView = memo(function MonthView({
                         {d.getDate()}
                       </Text>
                       {/* Точка метки — тот же цвет города, что в шапках
-                          Дня/Недели: маршрут читается и с высоты месяца. */}
+                          Дня/Недели: маршрут читается и с высоты месяца.
+                          Выходной — точка без пигмента (`chevron`): цвет
+                          отдан меткам, красная точка путалась с красной
+                          меткой. */}
                       {label || dayOff ? (
                         <View
                           style={{
                             width: 6,
                             height: 6,
                             borderRadius: 3,
-                            backgroundColor: dayOff ? t.danger : label?.color,
+                            backgroundColor: dayOff ? t.chevron : label?.color,
                           }}
                         />
                       ) : null}

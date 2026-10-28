@@ -119,12 +119,12 @@ export function WeekProjection({
                 тапе — прямо под пальцем. */}
             <View style={{ height: 15, justifyContent: "center" }}>
               {off ? (
-                // Выходной занимает место метки первым — тем же красным и по
-                // тому же правилу, что в шапке календаря: «работаем ли»
-                // важнее, чем «где».
-                <LabelTag color={t.danger} text="Вых" />
+                // Выходной занимает место метки первым — тем же нейтральным
+                // корешком и по тому же правилу, что в шапке календаря:
+                // «работаем ли» важнее, чем «где».
+                <LabelTag color={null} text="Вых" />
               ) : foreign ? (
-                <LabelTag color={foreign.color ?? t.faint} text={foreign.name} />
+                <LabelTag color={foreign.color} text={foreign.name} />
               ) : mine ? (
                 own ? (
                   <LabelTag color={color} text={own} />

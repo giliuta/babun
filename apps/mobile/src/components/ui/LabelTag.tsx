@@ -11,7 +11,7 @@ export function LabelTag({
   text,
   lg = false,
 }: {
-  color: string;
+  color: string | null;
   text: string;
   lg?: boolean;
 }) {
@@ -29,9 +29,9 @@ export function LabelTag({
         borderRadius: lg ? 5 : 4,
         paddingHorizontal: lg ? 8 : 5,
         paddingVertical: lg ? 1.5 : 1,
-        backgroundColor: `${color}29`,
+        backgroundColor: color ? `${color}29` : t.rowFillPressed,
         borderWidth: 1,
-        borderColor: `${color}8c`,
+        borderColor: color ? `${color}8c` : t.separatorStrong,
       }}
     >
       <Text
