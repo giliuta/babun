@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { useToast } from "@/components/ui/Toast";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -51,6 +52,9 @@ export function InvoiceEditor({
     accountId, previewOpen, setPreviewOpen,
   } = draft;
   const paper = useInvoicePaper({ draft, clients, existing, tenant, businessToday, onDirtyChange });
+  // Язык бумаги — не поле формы, и снимок `paper.dirty` его не видит.
+  const bornLanguage = useRef(language).current;
+  const unchanged = !!existing && !paper.dirty && language === bornLanguage;
   // Новый инвойс «с нуля» переживает выгрузку приложения (`stored-draft.ts`).
   const tenantId = useTenantId();
   const fromScratch =
@@ -267,6 +271,7 @@ export function InvoiceEditor({
                 reason={reason}
                 actionLabel={actionLabel}
                 submitting={submitting}
+                unchanged={unchanged}
                 onPreview={() => setPreviewOpen(true)}
               />
             }

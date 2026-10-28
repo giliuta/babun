@@ -13,12 +13,16 @@ export function InvoiceEditorFooter({
   reason,
   actionLabel,
   submitting,
+  unchanged = false,
   onPreview,
 }: {
   error: string | null;
   reason: InvoiceReason;
   actionLabel: string;
   submitting: boolean;
+  /** Правка выставленного без единой правки: сохранять нечего — кнопка
+   *  серая, как «Сохранить» операции. */
+  unchanged?: boolean;
   onPreview: () => void;
 }) {
   const t = useThemeColors();
@@ -41,7 +45,7 @@ export function InvoiceEditorFooter({
         label={actionLabel}
         onPress={onPreview}
         loading={submitting}
-        disabled={submitting || reason !== null}
+        disabled={submitting || reason !== null || unchanged}
       />
     </PageFooter>
   );
