@@ -253,4 +253,14 @@ describe("подпись раздела в «Доступе»", () => {
     assert.match(brief, / и ещё 3$/);
     assert.equal(brief.split(", ").length, 2);
   });
+  test("«Ограничения» не открывают раздел: денег нет — «Всё закрыто», а не «Ограничения»", () => {
+    const window: AccessLevel[] = ["week", "near", "month", "quarter", "half", "own"];
+    const closed = [
+      { block: block("finance.income", ["off", "read", "write", "full"], 103), level: "off" },
+      { block: block("finance.window", window, 107), level: "week" },
+    ];
+    assert.equal(sectionBrief({ rows: closed } as unknown as Parameters<typeof sectionBrief>[0]), "Всё закрыто");
+    const open = [{ ...closed[0], level: "read" }, { ...closed[1], level: "own" }];
+    assert.equal(sectionBrief({ rows: open } as unknown as Parameters<typeof sectionBrief>[0]), "Всё открыто");
+  });
 });
