@@ -26,13 +26,14 @@ import { buildInvoiceDocument } from "@/lib/paper/document";
 import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
-import { creditNoteLeftToPay } from "@/features/invoices/credit-note-amounts";
+import { creditNoteLeftToPay, creditNoteVat } from "@/features/invoices/credit-note-amounts";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import {
   useCancelInvoice,
   useInvoice,
   useInvoicePayments,
+  useInvoices,
   useIssuePartialCreditNote,
   useNextInvoiceSeries,
 } from "@/features/finances/invoices-queries";
@@ -76,6 +77,7 @@ export default function CreditNoteScreen() {
   const cancel = useCancelInvoice(invoiceId ?? "");
   const partial = useIssuePartialCreditNote(invoiceId ?? "");
   const paymentRows = useInvoicePayments();
+  const invoices = useInvoices();
   const requestId = useRef(randomUuid()).current;
   /** Этот id уже уходил на сервер: ответ мог потеряться, а нота — выписаться. */
   const sentRef = useRef(false);
@@ -115,6 +117,10 @@ export default function CreditNoteScreen() {
   const parsed = parseMoneyAmount(text);
   const value = parsed ?? 0;
   const whole = Math.abs(value - due) < 0.005;
+  // Налог, уже унесённый прежними нотами этого инвойса.
+  const priorVat = (invoices.data ?? [])
+    .filter((note) => note.kind === "credit_note" && note.credit_note_of_id === row?.id)
+    .reduce((sum, note) => sum - note.vat_amount, 0);
   // Получено больше нового «к оплате» — столько вернётся клиенту (у всей
   // суммы — всё полученное).
   const toRefund = Math.max(0, Math.round((paid - (due - value)) * 100) / 100);
@@ -140,9 +146,15 @@ export default function CreditNoteScreen() {
   // с минусом, без строк (бумага печатает одну строку «к инвойсу …»).
   const paperDoc = useMemo(() => {
     if (!row) return null;
-    // Налог ноты — доля налога инвойса; строки — только у полной отмены без
-    // прежних частичных (как у сервера).
-    const vat = row.total > 0 ? Math.round((row.vat_amount * value) / row.total * 100) / 100 : 0;
+    // Налог ноты — доля налога инвойса, у полной отмены — его остаток; строки —
+    // только у полной отмены без прежних частичных (как у сервера).
+    const vat = creditNoteVat({
+      vat: row.vat_amount,
+      total: row.total,
+      amount: value,
+      priorVat,
+      closes: whole,
+    });
     const fullFirst = whole && (row.credited_amount ?? 0) === 0;
     const draft: InvoiceLedgerWithLines = {
       ...row,
@@ -180,6 +192,7 @@ export default function CreditNoteScreen() {
     reason,
     value,
     whole,
+    priorVat,
     defaultNote,
     tenant.data,
     client,

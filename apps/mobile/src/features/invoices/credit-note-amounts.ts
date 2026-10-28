@@ -30,3 +30,31 @@ export function creditNoteAmountForRefund(
 export function creditNoteLeftToPay(due: number, paid: number, value: number): number {
   return round2(Math.max(0, due - value - paid));
 }
+
+/** Налог кредит-ноты — как его посчитает сервер. Доля налога бумаги от суммы
+ *  ноты — в центах (во float «1,005» округлялось не туда), но не больше
+ *  остатка налога: прежние ноты уже унесли свою часть. Нота, закрывающая
+ *  остаток суммы, несёт весь остаток налога — иначе сумма нот не сходится с
+ *  бумагой на цент. `priorVat` — налог прежних нот, положительным числом. */
+export function creditNoteVat({
+  vat,
+  total,
+  amount,
+  priorVat,
+  closes,
+}: {
+  vat: number;
+  total: number;
+  amount: number;
+  priorVat: number;
+  closes: boolean;
+}): number {
+  const vatCents = Math.round(vat * 100);
+  if (!(vatCents > 0)) return 0;
+  const left = Math.max(0, vatCents - Math.round(priorVat * 100));
+  if (closes) return left / 100;
+  const totalCents = Math.round(total * 100);
+  if (!(totalCents > 0)) return 0;
+  const share = Math.round((vatCents * Math.round(amount * 100)) / totalCents);
+  return Math.min(share, left) / 100;
+}

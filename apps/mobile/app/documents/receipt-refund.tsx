@@ -43,6 +43,7 @@ import {
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import { useInvoice, useNextInvoiceSeries } from "@/features/finances/invoices-queries";
+import { creditNoteVat } from "@/features/invoices/credit-note-amounts";
 import { useReceiptRefunds } from "@/features/documents/use-receipt-refunds";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useTenant } from "@/session/tenant";
@@ -137,15 +138,19 @@ export default function ReceiptRefundScreen() {
     if (!receipt) return null;
     if (byInvoice) {
       if (!invoice) return null;
-      // Как сервер: остаток инвойса; налог — весь налог бумаги, если частичных
-      // нот не было (иначе его доля); строки — только у первой ноты.
+      // Как сервер: остаток инвойса; налог — остаток налога бумаги за вычетом
+      // прежних нот; строки — только у первой ноты.
       const left = Math.round((invoice.total - (invoice.credited_amount ?? 0)) * 100) / 100;
       const firstNote = (invoice.credited_amount ?? 0) === 0;
-      const noteVat = firstNote
-        ? invoice.vat_amount
-        : invoice.total > 0
-          ? Math.round(((invoice.vat_amount * left) / invoice.total) * 100) / 100
-          : 0;
+      const noteVat = creditNoteVat({
+        vat: invoice.vat_amount,
+        total: invoice.total,
+        amount: left,
+        priorVat: refunds.notes
+          .filter((note) => note.credit_note_of_id === invoice.id)
+          .reduce((sum, note) => sum - note.vat_amount, 0),
+        closes: true,
+      });
       const draft: InvoiceLedgerWithLines = {
         ...invoice,
         id: "receipt-credit-note-draft",
@@ -177,11 +182,16 @@ export default function ReceiptRefundScreen() {
         creditNote: { originalNumber: invoice.number },
       });
     }
-    const vat =
-      receipt.vat_amount && receipt.amount > 0
-        ? Math.round(((receipt.vat_amount * value) / receipt.amount) * 100) /
-          100
-        : 0;
+    // Нота, доводящая возврат до суммы чека, несёт остаток налога чека.
+    const priorNotes = refunds.notes.filter((note) => note.credit_note_of_receipt_id === receipt.id);
+    const credited = priorNotes.reduce((sum, note) => sum - note.total, 0);
+    const vat = creditNoteVat({
+      vat: receipt.vat_amount ?? 0,
+      total: receipt.amount,
+      amount: value,
+      priorVat: priorNotes.reduce((sum, note) => sum - note.vat_amount, 0),
+      closes: Math.round((credited + value) * 100) >= Math.round(receipt.amount * 100),
+    });
     const draft = {
       id: "receipt-credit-note-draft",
       tenant_id: receipt.tenant_id,
@@ -231,6 +241,7 @@ export default function ReceiptRefundScreen() {
     receipt,
     byInvoice,
     invoice,
+    refunds.notes,
     paperLanguage,
     series.data,
     businessToday,
