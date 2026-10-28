@@ -71,14 +71,14 @@ export function OwnAccountSection() {
           <TourTarget id="cabinet.tariff">
             <TariffRow />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           {/* ОПЛАТЫ ТАРИФА — платежи за подписку и чеки.
               Только на сайте: страница ведёт к счетам Stripe с оплатой, а в
               приложении из магазина покупок нет (`pay-here.ts`). */}
           {CAN_PAY_HERE ? (
             <>
               <TariffPaymentsRow />
-              <Divider inset={48} />
+              <Divider inset={56} />
             </>
           ) : null}
           {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ, права по каждой команде. */}
@@ -91,7 +91,7 @@ export function OwnAccountSection() {
               onPress={() => router.push("/cabinet/people" as Href)}
             />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           {/* РЕКВИЗИТЫ — единый блок на весь аккаунт. */}
           <TourTarget id="cabinet.requisites">
             <CabinetRequisitesRow />
@@ -99,26 +99,26 @@ export function OwnAccountSection() {
           {/* СКЛАД ОБОРУДОВАНИЯ — один на аккаунт; строка ждёт готовности. */}
           {SHOW_INVENTORY ? (
             <>
-              <Divider inset={48} />
+              <Divider inset={56} />
               <InventoryCabinetRow />
             </>
           ) : null}
-          <Divider inset={48} />
+          <Divider inset={56} />
           {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
               календарях — он сам и каждый партнёр. */}
           <TourTarget id="cabinet.history">
             <HistoryRow />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           <TourTarget id="cabinet.sms">
             <SmsCabinetRow />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           {/* ВЫГРУЗКА ДАННЫХ (только из своих личных команд) — клиенты, записи и финансы своего аккаунта. */}
           <TourTarget id="cabinet.export">
             <DataExportRow />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           {/* АРХИВ — в архив календарь уводит владелец, и только он может
               вернуть его или стереть. */}
           <ArchiveRow />
@@ -142,11 +142,11 @@ export function OwnAccountSection() {
       <SectionEyebrow>Команды</SectionEyebrow>
       <SectionCard>
         <TariffRow tenantId={own} />
-        <Divider inset={48} />
+        <Divider inset={56} />
         {CAN_PAY_HERE ? (
           <>
             <TariffPaymentsRow tenantId={own} />
-            <Divider inset={48} />
+            <Divider inset={56} />
           </>
         ) : null}
         <SettingsRow
@@ -156,19 +156,19 @@ export function OwnAccountSection() {
           sub="Права по командам"
           onPress={openInOwn("/cabinet/people")}
         />
-        <Divider inset={48} />
+        <Divider inset={56} />
         <CabinetRequisitesRow tenantId={own} />
         {SHOW_INVENTORY ? (
           <>
-            <Divider inset={48} />
+            <Divider inset={56} />
             <InventoryCabinetRow />
           </>
         ) : null}
-        <Divider inset={48} />
+        <Divider inset={56} />
         <HistoryRow tenantId={own} />
-        <Divider inset={48} />
+        <Divider inset={56} />
         <SmsCabinetRow tenantId={own} />
-        <Divider inset={48} />
+        <Divider inset={56} />
         <SettingsRow
           tile={SETTINGS_TILE.blue}
           icon={Download}
@@ -176,9 +176,9 @@ export function OwnAccountSection() {
           sub="Клиенты, записи, финансы"
           onPress={openInOwn("/cabinet/export")}
         />
-        <Divider inset={48} />
+        <Divider inset={56} />
         <SettingsRow
-          tile="neutral"
+          tile={SETTINGS_TILE.purple}
           icon={Archive}
           title="Архив"
           sub="Удалённые календари"

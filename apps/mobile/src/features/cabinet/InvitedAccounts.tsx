@@ -143,14 +143,14 @@ function InvitedAccountBlock({
         {/* Команды этого аккаунта, в которых человек работает, — словами:
             сами они живут в ленте календаря. */}
         <SettingsRow
-          tile="neutral"
+          tile={SETTINGS_TILE.purple}
           icon={Users}
           title="Команды"
           sub={teamNames.length > 0 ? teamNames.join(" · ") : undefined}
         />
         {rows.map((row) => (
           <Fragment key={row.key}>
-            <Divider inset={48} />
+            <Divider inset={56} />
             {row.node}
           </Fragment>
         ))}

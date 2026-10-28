@@ -45,6 +45,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { TourScrollProvider, TourTarget } from "@/components/tour/TourTarget";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
@@ -114,17 +115,17 @@ export default function CabinetHome() {
           <TourTarget id="cabinet.notifications">
             <NotificationsRow />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           <TourTarget id="cabinet.languages">
             <LanguageRow />
           </TourTarget>
           {showSync ? (
             <>
-              <Divider inset={48} />
+              <Divider inset={56} />
               <SettingsRow
-                // Своего пигмента у синхронизации нет: зелёный уже носят
-                // «Приглашения», и два одинаковых якоря на экране глаз спутает.
-                tile="neutral"
+                // Бирюза — не зелёный: зелёный уже носят «Приглашения», и два
+                // одинаковых якоря на экране глаз спутает.
+                tile={SETTINGS_TILE.teal}
                 icon={RefreshCw}
                 title="Синхронизация"
                 sub={syncDepth > 0 ? "Ждут отправки" : "Все изменения на сервере"}
@@ -140,19 +141,17 @@ export default function CabinetHome() {
         <SectionCard>
           <TourTarget id="cabinet.account">
             <SettingsRow
-              // Своего пигмента у безопасности в словаре `SETTINGS_TILE` нет:
-              // голый глиф, как у «Часового пояса».
-              tile="neutral"
+              tile={SETTINGS_TILE.blue}
               icon={Shield}
               title="Вход и безопасность"
               sub="Пароль, устройства, удаление аккаунта"
               onPress={() => router.push("/cabinet/account")}
             />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={56} />
           {/* ПОМОЩЬ — частые вопросы и связь с поддержкой. */}
           <HelpRow />
-          <Divider inset={48} />
+          <Divider inset={56} />
           <AboutRow />
         </SectionCard>
 

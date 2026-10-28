@@ -2,6 +2,7 @@ import { useRouter, type Href } from "expo-router";
 import { Archive } from "lucide-react-native";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useTeams } from "@/features/reference/queries";
 
 // СТРОКА «АРХИВ» В КАБИНЕТЕ: в архиве лежит полностью всё архивное.
@@ -16,7 +17,7 @@ export function ArchiveRow() {
 
   return (
     <SettingsRow
-      tile="neutral"
+      tile={SETTINGS_TILE.purple}
       icon={Archive}
       title="Архив"
       sub={
