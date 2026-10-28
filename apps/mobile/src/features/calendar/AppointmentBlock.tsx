@@ -105,7 +105,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     deckBadgeLow,
     money,
     fadeRows,
-    textW,
   } = layout;
   const drag = useBlockDrag({
     apt,

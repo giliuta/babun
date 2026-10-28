@@ -4,6 +4,7 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { LoopWheelColumn, WheelWithLines } from "./time-wheel/LoopWheelColumn";
 import { DIGIT_FONT, MINUTES, MINUTE_STEP, pad2 } from "./time-wheel/wheel-geometry";
+import { capsText } from "./caps-text";
 
 // Барабан времени — крупная активная цифра, соседи тише, линии среза по
 // центральному ряду (вид портирован 1:1 из веб-TimeWheels). Правки вида — только
@@ -25,7 +26,6 @@ export {
   VISIBLE_ROWS,
   WHEEL_H,
 } from "./time-wheel/wheel-geometry";
-import { capsText } from "./caps-text";
 export { LoopWheelColumn, WheelWithLines } from "./time-wheel/LoopWheelColumn";
 
 /**
