@@ -1,6 +1,7 @@
 import { CalendarClock, CalendarRange, Globe, ZoomIn } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsGroup } from "@/components/ui/SettingsGroup";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { formatHm } from "@/features/calendar/window";
 import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
@@ -39,9 +40,13 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
           суток, которые он определяет, — значит он им предшествует.
           Настройка У КАЖДОГО КАЛЕНДАРЯ СВОЯ: второй календарь может стоять в
           другой стране (колонка `teams.timezone`). */}
-      {rows.timezone ? (
-        <SectionCard>
-          <TourTarget id="settings.timezone">
+      {/* ВРЕМЯ КАЛЕНДАРЯ — ОДНОЙ КАРТОЧКОЙ СО ШВАМИ (пачка 5, Д4): пояс,
+          часы сетки и график команды — один вопрос «когда», и каждая строка
+          своей плашкой разрывала его на три. */}
+      <SettingsGroup
+        rows={[
+      rows.timezone ? (
+          <TourTarget key="timezone" id="settings.timezone">
           <SettingsRow
             // ЦВЕТНАЯ ПЛИТКА, КАК У ВСЕХ ДВЕРЕЙ ЭТОЙ СТРАНИЦЫ:
             // «neutral» — материал денежных экранов (канон SettingsRow),
@@ -66,17 +71,16 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
             onPress={rows.timezoneEdit ? () => setPicker("tz") : undefined}
           />
           </TourTarget>
-        </SectionCard>
-      ) : null}
-      {/* ВАЛЮТЫ ЗДЕСЬ НЕТ: она одна на
-          компанию и живёт в «Настройки финансов → Вся компания». */}
-      {/* «МАСТЕРОВ» ЗДЕСЬ НЕТ: сотрудник один на
+      ) : null,
+      /* ВАЛЮТЫ ЗДЕСЬ НЕТ: она одна на
+          компанию и живёт в «Настройки финансов → Вся компания». */
+      /* «МАСТЕРОВ» ЗДЕСЬ НЕТ: сотрудник один на
           компанию и живёт в «Кабинет → Сотрудники», права — по командам
-          на его странице. */}
-      {/* «Длительности записи» здесь нет:
+          на его странице. */
+      /* «Длительности записи» здесь нет:
           длительность даёт УСЛУГА, а не настройка календаря. Дефолт
-          тапа по слоту остался кодовым фолбэком 30 мин. */}
-      {/* ДВА ВОПРОСА ПРО ЧАСЫ СТОЯТ РЯДОМ: на разных концах экрана человек
+          тапа по слоту остался кодовым фолбэком 30 мин. */
+      /* ДВА ВОПРОСА ПРО ЧАСЫ СТОЯТ РЯДОМ: на разных концах экрана человек
           сравнивал бы их по памяти.
           «Часы календаря» — какой отрезок суток ВИДЕН на сетке; настройка
           общая на все календари, и это сказано в самой строке, а не
@@ -85,16 +89,15 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
 
           ПОРЯДОК: сперва часы календаря, потом график команды. Так и читается: сначала настраивают саму сетку — то,
           на что смотришь каждый день, — а уже потом заполняют её работой
-          конкретной команды. */}
-      {/* «МАСШТАБ» — В ШТОРКЕ «ЧАСЫ КАЛЕНДАРЯ» (ползунок в процентах). Часы
+          конкретной команды. */
+      /* «МАСШТАБ» — В ШТОРКЕ «ЧАСЫ КАЛЕНДАРЯ» (ползунок в процентах). Часы
           говорят, КАКОЙ отрезок суток есть на сетке, масштаб — СКОЛЬКО
           его видно сразу. Масштаб личный и телефонный (`grid-memory.ts`),
           поэтому шторка открыта каждому: без права менять часы — только
           с ползунком. Тот, кому часы не видны вовсе, получает свою
-          строку «Масштаб» с той же шторкой. */}
-      <SectionCard className="mt-4">
-        {rows.hours ? (
-          <TourTarget id="settings.hours">
+          строку «Масштаб» с той же шторкой. */
+      rows.hours ? (
+          <TourTarget key="hours" id="settings.hours">
             <SettingsRow
               tile={SETTINGS_TILE.teal}
               icon={CalendarRange}
@@ -110,7 +113,7 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
             />
           </TourTarget>
         ) : (
-          <TourTarget id="settings.zoom">
+          <TourTarget key="zoom" id="settings.zoom">
             <SettingsRow
               tile={SETTINGS_TILE.indigo}
               icon={ZoomIn}
@@ -119,11 +122,9 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
               onPress={() => setPicker("zoom")}
             />
           </TourTarget>
-        )}
-      </SectionCard>
-      {rows.schedule ? (
-        <SectionCard>
-          <TourTarget id="settings.schedule">
+        ),
+      rows.schedule ? (
+          <TourTarget key="schedule" id="settings.schedule">
             <SettingsRow
               tile={SETTINGS_TILE.blue}
               icon={CalendarClock}
@@ -134,8 +135,9 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
               onPress={rows.scheduleEdit ? () => setScheduleOpen(true) : undefined}
             />
           </TourTarget>
-        </SectionCard>
-      ) : null}
+      ) : null,
+        ]}
+      />
     </>
   );
 }

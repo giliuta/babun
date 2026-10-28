@@ -1,11 +1,11 @@
 import type { Href } from "expo-router";
 import { Briefcase, ClipboardList, Tags } from "lucide-react-native";
-import { SectionCard } from "@/components/ui/SectionCard";
+import { SettingsGroup } from "@/components/ui/SettingsGroup";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
-import { OnlineBookingSettingsRow } from "@/features/online-booking/OnlineBookingSettingsRow";
-import { DeletedAppointmentsDoor } from "@/features/calendar/DeletedAppointmentsDoor";
+import { useOnlineBookingSettingsRow } from "@/features/online-booking/OnlineBookingSettingsRow";
+import { useDeletedAppointmentsRow } from "@/features/calendar/DeletedAppointmentsDoor";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 import { TourTarget } from "@/components/tour/TourTarget";
@@ -13,19 +13,24 @@ import { TourTarget } from "@/components/tour/TourTarget";
 /** Doors of the calendar: «Записи», «Услуги», «Метки» and the team's SMS. */
 export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsState }) {
   const { router, team, rows, bookingSub, labelsSub, isOwner } = screen;
+  const onlineRow = useOnlineBookingSettingsRow(isOwner ? (team?.id ?? null) : null);
+  const deletedRow = useDeletedAppointmentsRow(team?.id ?? null);
+  // ОДНА КАРТОЧКА СО ШВАМИ, как в шестерёнках клиентов, финансов и Кабинета:
+  // каждая дверь своей карточкой делала страницу лесенкой одиночных плашек
+  // (пачка 5, Д4). Шов — только между строками, что остались.
   return (
-    <>
-      {/* КАК ВЫГЛЯДИТ И ЧТО СПРАШИВАЕТ ЗАПИСЬ. Шестерёнка настраивает ТО, НА ЧТО СМОТРИШЬ, а цвет блока
+    <SettingsGroup
+      rows={[
+      /* КАК ВЫГЛЯДИТ И ЧТО СПРАШИВАЕТ ЗАПИСЬ. Шестерёнка настраивает ТО, НА ЧТО СМОТРИШЬ, а цвет блока
           и набор блоков формы — это ровно оно; держать их только в Кабинете
           значило отправлять человека в другую вкладку за настройкой того,
           что у него сейчас перед глазами.
           Стоит ПЕРЕД справочниками: сперва решают, как запись выглядит и о
           чём спрашивает, и только потом наполняют её услугами и метками.
           Настройка одна на фирму, а не на команду, — поэтому команду сюда,
-          в отличие от «Услуг» и «Меток», не передаём. */}
-      {rows.booking ? (
-        <SectionCard>
-          <TourTarget id="settings.records">
+          в отличие от «Услуг» и «Меток», не передаём. */
+      rows.booking ? (
+          <TourTarget key="records" id="settings.records">
           <SettingsRow
             tile={SETTINGS_TILE.blue}
             icon={ClipboardList}
@@ -44,22 +49,17 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
             }
           />
           </TourTarget>
-        </SectionCard>
-      ) : null}
+      ) : null,
 
-      {/* СПРАВОЧНИКИ КАЛЕНДАРЯ. Метки живут здесь, а не в настройках клиентов:
+      /* СПРАВОЧНИКИ КАЛЕНДАРЯ. Метки живут здесь, а не в настройках клиентов:
           метка — это про ДЕНЬ и
-          маршрут команды, а карточка клиента её только показывает. */}
-      {/* Карточка гаснет ВМЕСТЕ со своей строкой, как у «Мастеров» и
-          «Меток»: пустая `SectionCard` оставляла белую полосу и лишний
-          зазор между «Записью» и «Метками». */}
-      {rows.services ? (
-      <SectionCard>
-        {/* Услуги — здесь, потому что именно они дают ДЛИТЕЛЬНОСТЬ записи
+          маршрут команды, а карточка клиента её только показывает. */
+      rows.services ? (
+        /* Услуги — здесь, потому что именно они дают ДЛИТЕЛЬНОСТЬ записи
             (настройки «Длительность» на календаре больше нет). Тот же
             экран, что в Кабинете, второй дверью внутри стека /calendar:
-            наружу этот стек не ведёт (закон навигации). */}
-        <TourTarget id="settings.services">
+            наружу этот стек не ведёт (закон навигации). */
+        <TourTarget key="services" id="settings.services">
         <TariffLocked locked={rows.servicesLocked}>
         <SettingsRow
           tile={SETTINGS_TILE.blue}
@@ -81,11 +81,9 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
         />
         </TariffLocked>
         </TourTarget>
-      </SectionCard>
-      ) : null}
-      {rows.labels ? (
-        <SectionCard>
-          <TourTarget id="settings.labels">
+      ) : null,
+      rows.labels ? (
+          <TourTarget key="labels" id="settings.labels">
           <SettingsRow
             tile={SETTINGS_TILE.purple}
             icon={Tags}
@@ -112,25 +110,23 @@ export function CalendarReferenceRows({ screen }: { screen: CalendarSettingsStat
             }
           />
           </TourTarget>
-        </SectionCard>
-      ) : null}
-      {/* SMS КОМАНДЫ (STORY-089). Шаблоны, отправка и история
+      ) : null,
+      /* SMS КОМАНДЫ (STORY-089). Шаблоны, отправка и история
           той команды, чьи настройки открыты; баланс компании — Кабинет →
-          SMS. Шаблоны правит владелец — строка только ему. */}
-      {isOwner ? (
-        <SectionCard>
-          <TourTarget id="settings.sms">
+          SMS. Шаблоны правит владелец — строка только ему. */
+      isOwner ? (
+          <TourTarget key="sms" id="settings.sms">
             <SmsSettingsRow teamId={team?.id ?? null} />
           </TourTarget>
-        </SectionCard>
-      ) : null}
-      {/* ОНЛАЙН-ЗАПИСЬ КОМАНДЫ — страница babun.app/b для заказчиков:
+      ) : null,
+      /* ОНЛАЙН-ЗАПИСЬ КОМАНДЫ — страница babun.app/b для заказчиков:
           выключатель, ссылка, какие услуги видны. Её публикует владелец —
-          строка только ему, и сервер пускает только его. */}
-      {isOwner ? <OnlineBookingSettingsRow teamId={team?.id ?? null} /> : null}
-      {/* «УДАЛЁННЫЕ ЗАПИСИ» — ящик удалённого в этом календаре: 30 дней,
-          «Вернуть». Строку видит тот, кто может удалять. */}
-      {team ? <DeletedAppointmentsDoor teamId={team.id} /> : null}
-    </>
+          строка только ему, и сервер пускает только его. */
+      onlineRow,
+      /* «УДАЛЁННЫЕ ЗАПИСИ» — ящик удалённого в этом календаре: 30 дней,
+          «Вернуть». Строку видит тот, кто может удалять. */
+      deletedRow,
+      ]}
+    />
   );
 }
