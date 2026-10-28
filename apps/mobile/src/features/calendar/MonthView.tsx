@@ -14,6 +14,7 @@ import {
 import { useThemeColors } from "@/theme/colors";
 import { useSituationPalette } from "@/features/appointments/booking-prefs";
 import { dayMonthLabel } from "./day-month-label";
+import { dayRecordCount } from "./day-money";
 import { groupByDate, monthCells, ymd } from "./month-view/month-grid";
 import { useMonthMoney } from "./month-view/use-month-money";
 
@@ -136,7 +137,7 @@ export const MonthView = memo(function MonthView({
               const inMonth = d.getMonth() === month.getMonth();
               const isToday = key === todayStr;
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-              const count = byDay.get(key)?.length ?? 0;
+              const count = dayRecordCount(byDay.get(key) ?? []);
               const totals = totalsByDay.get(key) ?? null;
               // Метка — и на хвостовых днях чужого месяца: тап по ним открывает шторку метки, а поставленная
               // метка точкой не показывалась — выбор пропадал на глазах.
