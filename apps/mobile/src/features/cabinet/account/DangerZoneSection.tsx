@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { ActionRow } from "@/components/ui/card-rows";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { Trash2 } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Field } from "@/components/ui/Field";
@@ -71,14 +72,16 @@ export function DangerZoneSection({ email }: { email: string }) {
 
   return (
     <>
-      {/* ВХОД — СТРОКА СПИСКА, А НЕ ВТОРАЯ КНОПКА-ПИЛЮЛЯ: красная `ActionRow`
-          со значком, как «Выйти со всех устройств» выше. */}
-      <SectionCard title="Опасная зона" padded={false}>
-        <Text className="px-4 pt-1 text-sm leading-5" style={{ color: t.sub }}>
-          Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и
-          настройки.
-        </Text>
-        <ActionRow label="Удалить аккаунт" tone="danger" icon={Trash2} onPress={openSheet} />
+      {/* ВХОД — СТРОКА СПИСКА, А НЕ ВТОРАЯ КНОПКА-ПИЛЮЛЯ: красная плитка,
+          как «Выйти со всех устройств» выше. */}
+      <SectionCard title="Опасная зона">
+        <SettingsRow
+          tile={SETTINGS_TILE.red}
+          icon={Trash2}
+          title="Удалить аккаунт"
+          sub="Все данные сотрутся навсегда"
+          onPress={openSheet}
+        />
       </SectionCard>
 
       {/* ПОДТВЕРЖДЕНИЕ — КАНОНИЧЕСКИЙ ЛИСТ (AGENTS Canon Reuse п.5): шапка,
@@ -100,7 +103,7 @@ export function DangerZoneSection({ email }: { email: string }) {
       >
         <View style={{ paddingHorizontal: 16 }}>
           <Text style={{ marginBottom: 12, fontSize: 14, lineHeight: 20, color: t.sub }}>
-            Введите {email ? "email аккаунта" : /* i18n-ignore */ "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
+            Введите {email ? "почту аккаунта" : /* i18n-ignore */ "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
           </Text>
           <Field
             label="Подтверждение"

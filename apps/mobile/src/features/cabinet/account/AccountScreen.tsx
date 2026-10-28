@@ -1,62 +1,30 @@
 import { useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ScrollView } from "react-native";
+import { CalendarDays, KeyRound, Mail } from "lucide-react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
-import { ChevronRight } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { Divider } from "@/components/ui/Divider";
-import { ICON } from "@/components/ui/tokens";
 import { useSession } from "@/providers/SessionProvider";
-import { useThemeColors } from "@/theme/colors";
 import { ChangeEmailSheet } from "@/features/cabinet/ChangeEmailSheet";
 import { DangerZoneSection } from "./DangerZoneSection";
 import { DevicesSection } from "./DevicesSection";
-import { PasswordSection } from "./PasswordSection";
+import { PasswordSheet } from "./PasswordSection";
 
-function Row({
-  label,
-  value,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  /** Строка-дверь: шеврон справа, тап открывает правку (почта). */
-  onPress?: () => void;
-}) {
-  const t = useThemeColors();
-  const body = (
-    <View className="flex-1">
-      <Text style={{ fontSize: 12, color: t.faint }}>{label}</Text>
-      <Text style={{ marginTop: 2, fontSize: 16, color: t.ink }} selectable={!onPress}>
-        {value}
-      </Text>
-    </View>
-  );
-  if (!onPress) return <View className="px-4 py-3">{body}</View>;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
-      className="flex-row items-center px-4 py-3"
-      style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
-    >
-      {body}
-      <ChevronRight size={ICON.sm} color={t.faint} />
-    </Pressable>
-  );
-}
-
+// «ВХОД И БЕЗОПАСНОСТЬ» — СТРОКИ КАНОНА, КАК ВЕСЬ КАБИНЕТ. Страница жила своей
+// вёрсткой: подпись над значением в рамке, три поля пароля прямо в карточке,
+// действия голыми ссылками и «Удалить аккаунт» третьим стилем. Теперь каждое
+// действие — строка `SettingsRow` с плиткой, правка — в листе с кнопкой в
+// футере (пароль, как почта). Служебного «ID пользователя» нет: человеку
+// он ничего не говорит, а поддержке хватает почты.
 export function AccountScreen() {
   const { session } = useSession();
   const u = session?.user;
   const [emailSheet, setEmailSheet] = useState(false);
+  const [passwordSheet, setPasswordSheet] = useState(false);
   const registered = u?.created_at
     ? new Date(u.created_at).toLocaleDateString("ru-RU", {
         day: "numeric",
@@ -69,27 +37,38 @@ export function AccountScreen() {
     <Screen edges={["top"]}>
       {/* Шапка = строка Кабинета, которой сюда пришли. */}
       <ScreenHeader title="Вход и безопасность" />
-      <KeyboardLift
-        style={{ flex: 1 }}
-      >
+      <KeyboardLift style={{ flex: 1 }}>
         <ScrollView
           className="flex-1"
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 32 }}
         >
           <SectionCard>
-            <Row
-              label="Email"
-              value={u?.email ?? "—"}
+            <SettingsRow
+              tile={SETTINGS_TILE.blue}
+              icon={Mail}
+              title="Почта"
+              sub={u?.email ?? "—"}
               onPress={u?.email ? () => setEmailSheet(true) : undefined}
             />
-            <Divider inset={16} />
-            <Row label="Зарегистрирован" value={registered} />
-            <Divider inset={16} />
-            <Row label="ID пользователя" value={u?.id ?? "—"} />
+            <Divider inset={56} />
+            <SettingsRow
+              tile={SETTINGS_TILE.teal}
+              icon={CalendarDays}
+              title="Зарегистрирован"
+              sub={registered}
+            />
           </SectionCard>
 
-          <PasswordSection email={u?.email ?? null} />
+          <SectionCard title="Безопасность">
+            <SettingsRow
+              tile={SETTINGS_TILE.orange}
+              icon={KeyRound}
+              title="Сменить пароль"
+              sub="Нужен текущий пароль"
+              onPress={() => setPasswordSheet(true)}
+            />
+          </SectionCard>
           <DevicesSection />
           <DangerZoneSection email={u?.email ?? ""} />
         </ScrollView>
@@ -98,6 +77,11 @@ export function AccountScreen() {
         visible={emailSheet}
         onClose={() => setEmailSheet(false)}
         currentEmail={u?.email ?? ""}
+      />
+      <PasswordSheet
+        visible={passwordSheet}
+        onClose={() => setPasswordSheet(false)}
+        email={u?.email ?? null}
       />
     </Screen>
   );

@@ -72,7 +72,6 @@
  "CSV не выгружен": "CSV not exported",
  "CSV-файл с заголовком. Распознаются колонки: Имя, Телефон, Город, Email, Адрес, Заметка (русские или английские названия, разделитель «,» или «;»). Кириллица — в кодировке UTF-8.": "CSV file with a header row. Recognised columns: Name, Phone, City, Email, Address, Note (English names, separator “,” or “;”). Use UTF-8 encoding.",
  "Google Карты": "Google Maps",
- "ID пользователя": "User ID",
  "PDF пока недоступен": "PDF not available yet",
  "PDF собирался слишком долго.": "The PDF took too long to create.",
  "PDF создан, но открыть меню экспорта не удалось. {0}": "PDF created, but the export menu couldn't be opened. {0}",
@@ -100,7 +99,6 @@
  "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Changes to this appointment haven't reached the server yet — delete it after syncing",
  "deleteClient: клиент не найден": "deleteClient: client not found",
  "deleteClientTag: тег не найден": "deleteClientTag: tag not found",
- "email аккаунта": "your account email",
  "fetchMyCalendars: лента календарей читается только обычным клиентом — флаг «активная» в ней считается от заголовка компании.": "fetchMyCalendars: the calendar feed is read only by the regular client – its “active” flag is derived from the account header.",
  "restoreClient: клиент не найден": "restoreClient: client not found",
  "sms: баланс меняется только журналом (sms_ledger_post)": "sms: the balance changes only via the ledger (sms_ledger_post)",
@@ -4214,7 +4212,6 @@
  "Угандийский шиллинг": "Ugandan shilling",
  "Угия": "Ouguiya",
  "Удаление аккаунта": "Account deletion",
- "Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и настройки.": "Deleting the account can't be undone. All clients, appointments and settings will be erased.",
  "Удаление записи": "Appointment deletion",
  "Удаление клиента": "Client deletion",
  "Удаление сейчас недоступно — попробуйте позже. {0}.": "Deletion isn't available right now – try again later. {0}.",
@@ -5177,5 +5174,10 @@
  "＋ Добавить": "＋ Add",
  "＋ Описание": "＋ Description",
  "＋ Перерыв после услуги": "＋ Break after service",
- "＋ По дням недели": "＋ By weekday"
+ "＋ По дням недели": "＋ By weekday",
+ "Нужен текущий пароль": "Requires your current password",
+ "Все данные сотрутся навсегда": "All data will be erased for good",
+ "почту аккаунта": "your account email",
+ "Включая это устройство": "Including this device",
+ "Набранные пароли не сохранятся.": "The passwords you typed won't be kept."
 }

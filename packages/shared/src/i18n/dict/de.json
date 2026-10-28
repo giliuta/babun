@@ -72,7 +72,6 @@
  "CSV не выгружен": "CSV nicht exportiert",
  "CSV-файл с заголовком. Распознаются колонки: Имя, Телефон, Город, Email, Адрес, Заметка (русские или английские названия, разделитель «,» или «;»). Кириллица — в кодировке UTF-8.": "CSV-Datei mit Kopfzeile. Erkannte Spalten: Name, Telefon, Stadt, E-Mail, Adresse, Notiz (deutsche oder englische Namen, Trennzeichen „,“ oder „;“). Kodierung: UTF-8.",
  "Google Карты": "Google Maps",
- "ID пользователя": "Benutzer-ID",
  "PDF пока недоступен": "PDF noch nicht verfügbar",
  "PDF собирался слишком долго.": "Das PDF hat zu lange gedauert.",
  "PDF создан, но открыть меню экспорта не удалось. {0}": "PDF erstellt, aber das Exportmenü ließ sich nicht öffnen. {0}",
@@ -100,7 +99,6 @@
  "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Änderungen an diesem Termin sind noch nicht beim Server — löschen Sie ihn nach der Synchronisierung",
  "deleteClient: клиент не найден": "deleteClient: Kunde nicht gefunden",
  "deleteClientTag: тег не найден": "deleteClientTag: Tag nicht gefunden",
- "email аккаунта": "die E-Mail des Kontos",
  "fetchMyCalendars: лента календарей читается только обычным клиентом — флаг «активная» в ней считается от заголовка компании.": "fetchMyCalendars: Der Kalender-Feed wird nur vom normalen Client gelesen — das Flag „aktiv“ darin wird aus dem Konto-Header berechnet.",
  "restoreClient: клиент не найден": "restoreClient: Kunde nicht gefunden",
  "sms: баланс меняется только журналом (sms_ledger_post)": "sms: Das Guthaben ändert sich nur über das Journal (sms_ledger_post)",
@@ -4214,7 +4212,6 @@
  "Угандийский шиллинг": "Uganda-Schilling",
  "Угия": "Ouguiya",
  "Удаление аккаунта": "Konto löschen",
- "Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и настройки.": "Das Löschen des Kontos ist endgültig. Alle Kunden, Termine und Einstellungen werden gelöscht.",
  "Удаление записи": "Termin löschen",
  "Удаление клиента": "Kunden löschen",
  "Удаление сейчас недоступно — попробуйте позже. {0}.": "Löschen ist gerade nicht möglich – versuchen Sie es später erneut. {0}.",
@@ -5177,5 +5174,10 @@
  "＋ Добавить": "＋ Hinzufügen",
  "＋ Описание": "＋ Beschreibung",
  "＋ Перерыв после услуги": "＋ Pause nach der Leistung",
- "＋ По дням недели": "＋ Nach Wochentagen"
+ "＋ По дням недели": "＋ Nach Wochentagen",
+ "Нужен текущий пароль": "Aktuelles Passwort erforderlich",
+ "Все данные сотрутся навсегда": "Alle Daten werden endgültig gelöscht",
+ "почту аккаунта": "die E-Mail-Adresse des Kontos",
+ "Включая это устройство": "Einschließlich dieses Geräts",
+ "Набранные пароли не сохранятся.": "Die eingegebenen Passwörter werden nicht gespeichert."
 }

@@ -72,7 +72,6 @@
  "CSV не выгружен": "CSV no exportado",
  "CSV-файл с заголовком. Распознаются колонки: Имя, Телефон, Город, Email, Адрес, Заметка (русские или английские названия, разделитель «,» или «;»). Кириллица — в кодировке UTF-8.": "Archivo CSV con encabezado. Se reconocen las columnas: Nombre, Teléfono, Ciudad, Email, Dirección, Nota (nombres en español o inglés, separador «,» o «;»). Codificación: UTF-8.",
  "Google Карты": "Google Maps",
- "ID пользователя": "ID de usuario",
  "PDF пока недоступен": "El PDF aún no está disponible",
  "PDF собирался слишком долго.": "El PDF tardó demasiado en crearse.",
  "PDF создан, но открыть меню экспорта не удалось. {0}": "PDF creado, pero no se pudo abrir el menú de exportación. {0}",
@@ -100,7 +99,6 @@
  "deleteAppointment: Правки этой записи ещё не дошли до сервера — удалите её после синхронизации": "deleteAppointment: Los cambios de esta cita aún no han llegado al servidor; elimínela después de sincronizar",
  "deleteClient: клиент не найден": "deleteClient: cliente no encontrado",
  "deleteClientTag: тег не найден": "deleteClientTag: distintivo no encontrado",
- "email аккаунта": "el email de la cuenta",
  "fetchMyCalendars: лента календарей читается только обычным клиентом — флаг «активная» в ней считается от заголовка компании.": "fetchMyCalendars: el feed de calendarios solo lo lee el cliente normal; su indicador «activo» se calcula a partir de la cabecera de la cuenta.",
  "restoreClient: клиент не найден": "restoreClient: cliente no encontrado",
  "sms: баланс меняется только журналом (sms_ledger_post)": "sms: el saldo solo cambia mediante el registro (sms_ledger_post)",
@@ -4214,7 +4212,6 @@
  "Угандийский шиллинг": "Chelín ugandés",
  "Угия": "Uguiya",
  "Удаление аккаунта": "Eliminación de la cuenta",
- "Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и настройки.": "Eliminar la cuenta es irreversible. Se borrarán todos los clientes, citas y ajustes.",
  "Удаление записи": "Eliminación de la cita",
  "Удаление клиента": "Eliminación de clientes",
  "Удаление сейчас недоступно — попробуйте позже. {0}.": "La eliminación no está disponible ahora — inténtalo más tarde. {0}.",
@@ -5177,5 +5174,10 @@
  "＋ Добавить": "＋ Añadir",
  "＋ Описание": "＋ Descripción",
  "＋ Перерыв после услуги": "＋ Descanso tras el servicio",
- "＋ По дням недели": "＋ Por días de la semana"
+ "＋ По дням недели": "＋ Por días de la semana",
+ "Нужен текущий пароль": "Requiere la contraseña actual",
+ "Все данные сотрутся навсегда": "Todos los datos se borrarán para siempre",
+ "почту аккаунта": "el correo de la cuenta",
+ "Включая это устройство": "Incluido este dispositivo",
+ "Набранные пароли не сохранятся.": "Las contraseñas escritas no se guardarán."
 }
