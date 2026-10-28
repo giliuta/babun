@@ -1108,6 +1108,70 @@ export type Database = {
           },
         ]
       }
+      client_list_disclosures: {
+        Row: {
+          clients_count: number
+          disclosed_at: string
+          id: number
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          clients_count: number
+          disclosed_at?: string
+          id?: never
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          clients_count?: number
+          disclosed_at?: string
+          id?: never
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_list_disclosures_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_phone_lookups: {
+        Row: {
+          id: number
+          looked_up_at: string
+          phone_hash: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: never
+          looked_up_at?: string
+          phone_hash: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          id?: never
+          looked_up_at?: string
+          phone_hash?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_phone_lookups_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_sources: {
         Row: {
           created_at: string
@@ -2324,6 +2388,30 @@ export type Database = {
           },
         ]
       }
+      invitation_email_log: {
+        Row: {
+          email_lower: string
+          id: number
+          sender: string
+          sent_at: string
+          tenant_id: string
+        }
+        Insert: {
+          email_lower: string
+          id?: number
+          sender: string
+          sent_at?: string
+          tenant_id: string
+        }
+        Update: {
+          email_lower?: string
+          id?: number
+          sender?: string
+          sent_at?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -3083,6 +3171,102 @@ export type Database = {
           },
         ]
       }
+      onboarding_progress: {
+        Row: {
+          created_at: string
+          done: string[]
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          done?: string[]
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          done?: string[]
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_progress_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_booking_pages: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          team_id: string
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          team_id: string
+          tenant_id: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          team_id?: string
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_booking_pages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_booking_requests: {
+        Row: {
+          created_at: string
+          id: number
+          phone_e164: string
+          team_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          phone_e164: string
+          team_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          phone_e164?: string
+          team_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_booking_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_files: {
         Row: {
           created_at: string
@@ -3214,6 +3398,24 @@ export type Database = {
         }
         Relationships: []
       }
+      push_badges: {
+        Row: {
+          count: number
+          day: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          day: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       push_devices: {
         Row: {
           created_at: string
@@ -3237,6 +3439,30 @@ export type Database = {
           locale?: string
           platform?: string
           token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_held: {
+        Row: {
+          created_at: string
+          id: number
+          kind: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          kind: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          kind?: string
+          tenant_id?: string
           user_id?: string
         }
         Relationships: []
@@ -3974,6 +4200,7 @@ export type Database = {
           error_message: string | null
           for_start: string | null
           id: string
+          known_start: string | null
           message_body: string | null
           mode: string
           segments: number | null
@@ -4000,6 +4227,7 @@ export type Database = {
           error_message?: string | null
           for_start?: string | null
           id?: string
+          known_start?: string | null
           message_body?: string | null
           mode: string
           segments?: number | null
@@ -4026,6 +4254,7 @@ export type Database = {
           error_message?: string | null
           for_start?: string | null
           id?: string
+          known_start?: string | null
           message_body?: string | null
           mode?: string
           segments?: number | null
@@ -4208,6 +4437,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      storage_janitor_keep: {
+        Row: {
+          bucket_id: string
+          kept_at: string
+          name: string
+          reason: string
+        }
+        Insert: {
+          bucket_id: string
+          kept_at?: string
+          name: string
+          reason: string
+        }
+        Update: {
+          bucket_id?: string
+          kept_at?: string
+          name?: string
+          reason?: string
+        }
+        Relationships: []
       }
       team_design: {
         Row: {
@@ -5297,7 +5547,20 @@ export type Database = {
         Args: { p_service_ids: Json; p_services: Json; p_tenant: string }
         Returns: Json
       }
+      appointment_money_outside_invoices: {
+        Args: { p_appointment: string }
+        Returns: number
+      }
       appointment_payment_mirror: { Args: { p_payments: Json }; Returns: Json }
+      assert_document_date: {
+        Args: {
+          p_company: string
+          p_date: string
+          p_doc_type: string
+          p_tenant: string
+        }
+        Returns: undefined
+      }
       assert_invoice_account: {
         Args: { p_account_id: string; p_tenant_id: string }
         Returns: undefined
@@ -5355,6 +5618,7 @@ export type Database = {
           time_start: string
         }[]
       }
+      can_watch_calendar: { Args: { p_topic: string }; Returns: boolean }
       cancel_appointment_payment: {
         Args: {
           p_appointment_id: string
@@ -5471,6 +5735,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      catalog_unit_price: {
+        Args: {
+          p_bulk_price: number
+          p_bulk_threshold: number
+          p_price: number
+          p_qty: number
+          p_tiers: Json
+        }
+        Returns: number
+      }
       change_log_array_diff: {
         Args: { p_new: Json; p_old: Json }
         Returns: Json
@@ -5508,7 +5782,13 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: Json
       }
+      client_attachment_owner: { Args: { p_name: string }; Returns: string }
+      client_clock_skew: { Args: { p_sent_at: string }; Returns: string }
       client_contacts_of: { Args: { p_client: Json }; Returns: Json }
+      client_has_history: {
+        Args: { p_client: string; p_with_trash?: boolean }
+        Returns: boolean
+      }
       client_masked_for_member: {
         Args: { p_blocks: Json; p_client: Json }
         Returns: Json
@@ -5764,7 +6044,19 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: string
       }
+      invitation_inviter_live: {
+        Args: { p_tenant: string; p_user: string }
+        Returns: boolean
+      }
       invitation_preview: { Args: { p_token: string }; Returns: Json }
+      invitations_drop_by_inviter: {
+        Args: { p_tenant: string; p_user: string }
+        Returns: undefined
+      }
+      invoice_appointment_credit: {
+        Args: { p_invoice: string }
+        Returns: number
+      }
       invoice_object_snapshot: {
         Args: {
           p_client_id: string
@@ -6026,6 +6318,10 @@ export type Database = {
       list_master_services_safe: { Args: never; Returns: Json[] }
       list_member_access: { Args: { p_user_id: string }; Returns: Json }
       list_member_clients: { Args: { p_client_id?: string }; Returns: Json[] }
+      list_member_clients_rows: {
+        Args: { p_client_id?: string }
+        Returns: Json[]
+      }
       list_members: { Args: { p_team_id?: string }; Returns: Json }
       list_my_calendars: {
         Args: never
@@ -6093,6 +6389,10 @@ export type Database = {
         Args: { p_block: string; p_min: string; p_team: string }
         Returns: boolean
       }
+      member_catalog_priced: {
+        Args: { p_rest: Json; p_team: string }
+        Returns: Json
+      }
       member_check_appointment_field: {
         Args: {
           p_created_by: string
@@ -6133,6 +6433,16 @@ export type Database = {
         Args: { p_patch: Json; p_team: string }
         Returns: Json
       }
+      merge_clients: {
+        Args: {
+          p_duplicate: string
+          p_location_remap?: Json
+          p_patch?: Json
+          p_primary: string
+          p_tag_ids?: string[]
+        }
+        Returns: Json
+      }
       my_access_map: { Args: never; Returns: Json }
       my_calendar_feed: { Args: never; Returns: Json }
       my_invitations: { Args: never; Returns: Json }
@@ -6166,7 +6476,35 @@ export type Database = {
         }
         Returns: Json
       }
+      online_booking_day_slots: {
+        Args: {
+          p_date: string
+          p_duration: number
+          p_team: string
+          p_tenant: string
+        }
+        Returns: string[]
+      }
+      online_booking_hm: { Args: { p_value: string }; Returns: number }
+      online_booking_owner_tenant: { Args: { p_team: string }; Returns: string }
       online_booking_page: { Args: { p_token: string }; Returns: Json }
+      online_booking_resolve: {
+        Args: { p_token: string }
+        Returns: {
+          business_name: string
+          calendar_name: string
+          country: string
+          logo_url: string
+          state: string
+          team_id: string
+          tenant_id: string
+          tz: string
+        }[]
+      }
+      online_booking_services: {
+        Args: { p_team: string; p_tenant: string }
+        Returns: Json
+      }
       online_booking_set: {
         Args: { p_enabled: boolean; p_team: string }
         Returns: Json
@@ -6180,6 +6518,7 @@ export type Database = {
         Args: { p_service: string; p_token: string }
         Returns: Json
       }
+      paid_calendar_count: { Args: { p_tenant: string }; Returns: number }
       partners_card_manageable: {
         Args: { p_master_id: string }
         Returns: boolean
@@ -6193,6 +6532,7 @@ export type Database = {
         Returns: undefined
       }
       partners_manageable: { Args: { p_user: string }; Returns: boolean }
+      partners_removable: { Args: { p_user: string }; Returns: boolean }
       patch_master_profile: {
         Args: { p_master_id: string; p_patch: Json }
         Returns: Json
@@ -6206,11 +6546,39 @@ export type Database = {
         }[]
       }
       personal_calendar_name: { Args: { p_locale: string }; Returns: string }
+      phone_to_e164: {
+        Args: { p_country: string; p_phone: string }
+        Returns: string
+      }
       purge_deleted_appointments: { Args: never; Returns: number }
+      purge_deleted_cities: { Args: never; Returns: number }
       purge_deleted_operations: { Args: never; Returns: number }
       purge_expired_accounts: { Args: never; Returns: number }
       purge_expired_clients: { Args: never; Returns: number }
       purge_unconfirmed_signups: { Args: never; Returns: number }
+      push_activity_targets: {
+        Args: { p_log: Database["public"]["Tables"]["change_log"]["Row"] }
+        Returns: {
+          kind: string
+          pref_team: string
+          show_client: boolean
+          user_id: string
+        }[]
+      }
+      push_badge_bump: {
+        Args: { p_by: number; p_day: string; p_user: string }
+        Returns: number
+      }
+      push_digest_dispatch: { Args: { p_now?: string }; Returns: number }
+      push_in_quiet: {
+        Args: { p_now?: string; p_user: string }
+        Returns: boolean
+      }
+      push_local_now: {
+        Args: { p_now?: string; p_tz: string }
+        Returns: string
+      }
+      push_quiet_flush: { Args: { p_now?: string }; Returns: number }
       read_operational_calendar_settings_safe: {
         Args: never
         Returns: {
@@ -6440,6 +6808,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      refresh_invoice_status: {
+        Args: { p_invoice: string }
+        Returns: undefined
       }
       refund_appointment_overpayment: {
         Args: {
@@ -7007,7 +7379,7 @@ export type Database = {
         Args: { p_appointment: string; p_at?: string; p_template: string }
         Returns: boolean
       }
-      sms_enqueue_due: { Args: never; Returns: number }
+      sms_enqueue_due: { Args: { p_appointment?: string }; Returns: number }
       sms_enqueue_trigger: {
         Args: { p_appointment: string; p_at?: string; p_trigger: string }
         Returns: boolean
@@ -7124,6 +7496,14 @@ export type Database = {
       sms_unfreeze: { Args: { p_tenant: string }; Returns: undefined }
       sms_wake: { Args: never; Returns: undefined }
       start_trial: { Args: { p_tier: string }; Returns: Json }
+      storage_janitor_candidates: {
+        Args: { p_limit?: number; p_min_age?: string }
+        Returns: {
+          bucket_id: string
+          name: string
+          reason: string
+        }[]
+      }
       submit_rating: {
         Args: { p_comment: string; p_stars: number; p_token: string }
         Returns: {
