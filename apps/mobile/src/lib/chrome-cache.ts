@@ -13,7 +13,9 @@ import { getStorage } from "@babun/shared/storage";
 //
 // Чего здесь НЕТ: денег, клиентов, записей. Без сервера в теле экрана —
 // «Нет связи» с «Повторить», а не вчерашние цифры. Шапка — не данные: имена
-// команд и роль, по которым экран решает, что рисовать вокруг.
+// команд и роль, по которым экран решает, что рисовать вокруг. Справочники
+// календаря лежат в соседнем запасе той же механики (`calendar-refs-cache.ts`),
+// записи и клиенты — в SQLite.
 //
 // Ключ хранилища начинается с `babun2:` — выход из аккаунта стирает его
 // вместе со всем остальным (`auth-clear.ts`), на общем телефоне чужая шапка
@@ -44,9 +46,24 @@ interface ChromeEntry {
 
 export type ChromeStore = Record<string, ChromeEntry>;
 
+/** Запас ответов на устройстве: где лежит, какие ключи в него идут и сколько
+ *  записей держать. Шапка — одно такое хранилище, справочники календаря
+ *  (`calendar-refs-cache.ts`) — второе; механика у них общая. */
+export interface DeviceQueryStore {
+  storageKey: string;
+  holds: (key: QueryKey) => boolean;
+  max: number;
+}
+
 export function isChromeKey(key: QueryKey): boolean {
   return typeof key[0] === "string" && CHROME_ROOTS.has(key[0]);
 }
+
+const CHROME_STORE: DeviceQueryStore = {
+  storageKey: CHROME_STORAGE_KEY,
+  holds: isChromeKey,
+  max: CHROME_MAX_ENTRIES,
+};
 
 /** Следующее состояние хранилища после удачного ответа. Тот же ответ —
  *  тот же объект (записывать нечего); сверх предела — уходят самые старые. */
@@ -69,21 +86,21 @@ export function nextChromeStore(
   return Object.fromEntries(Object.entries(next).filter(([k]) => keep.has(k)));
 }
 
-function readStore(): ChromeStore {
+function readStore(storageKey: string): ChromeStore {
   try {
-    const value = getStorage().get<ChromeStore>(CHROME_STORAGE_KEY);
+    const value = getStorage().get<ChromeStore>(storageKey);
     return value && typeof value === "object" ? value : {};
   } catch {
     return {};
   }
 }
 
-/** Поднять запомненную шапку в кэш запросов. Запрос, у которого данные уже
- *  есть, не трогаем; поднятое — протухшее (`updatedAt: 0`) и перечитается. */
-export function restoreChrome(qc: QueryClient): number {
+/** Поднять запас в кэш запросов. Запрос, у которого данные уже есть, не
+ *  трогаем; поднятое — протухшее (`updatedAt: 0`) и перечитается. */
+export function restoreDeviceStore(qc: QueryClient, spec: DeviceQueryStore): number {
   let restored = 0;
-  for (const entry of Object.values(readStore())) {
-    if (!Array.isArray(entry?.key) || !isChromeKey(entry.key)) continue;
+  for (const entry of Object.values(readStore(spec.storageKey))) {
+    if (!Array.isArray(entry?.key) || !spec.holds(entry.key)) continue;
     if (qc.getQueryData(entry.key) !== undefined) continue;
     qc.setQueryData(entry.key, entry.data, { updatedAt: 0 });
     restored += 1;
@@ -91,23 +108,33 @@ export function restoreChrome(qc: QueryClient): number {
   return restored;
 }
 
-/** Записывать каждый удачный ответ запросов шапки. */
-export function watchChrome(qc: QueryClient): () => void {
+/** Записывать каждый удачный ответ запросов этого запаса. */
+export function watchDeviceStore(qc: QueryClient, spec: DeviceQueryStore): () => void {
   return qc.getQueryCache().subscribe((event) => {
     if (event.type !== "updated" || event.action.type !== "success") return;
     const { queryKey } = event.query;
-    if (!isChromeKey(queryKey)) return;
+    if (!spec.holds(queryKey)) return;
     // Поднятое из хранилища — тоже «success», но с меткой 0: его и так знаем.
     if (event.query.state.dataUpdatedAt === 0) return;
     // Читаем каждый раз, а не держим копию: выход из аккаунта стирает ключ,
-    // и копия в памяти воскресила бы чужую шапку следующей записью.
-    const current = readStore();
-    const next = nextChromeStore(current, queryKey, event.query.state.data, Date.now());
+    // и копия в памяти воскресила бы чужой запас следующей записью.
+    const current = readStore(spec.storageKey);
+    const next = nextChromeStore(current, queryKey, event.query.state.data, Date.now(), spec.max);
     if (next === current) return;
     try {
-      getStorage().set(CHROME_STORAGE_KEY, next);
+      getStorage().set(spec.storageKey, next);
     } catch {
-      // Хранилище недоступно — шапка просто не запомнится.
+      // Хранилище недоступно — запас просто не запомнится.
     }
   });
+}
+
+/** Поднять запомненную шапку в кэш запросов. */
+export function restoreChrome(qc: QueryClient): number {
+  return restoreDeviceStore(qc, CHROME_STORE);
+}
+
+/** Записывать каждый удачный ответ запросов шапки. */
+export function watchChrome(qc: QueryClient): () => void {
+  return watchDeviceStore(qc, CHROME_STORE);
 }
