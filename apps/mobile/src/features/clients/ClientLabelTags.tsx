@@ -3,6 +3,7 @@ import { useRouter, type Href } from "expo-router";
 import { Pressable, View } from "react-native";
 import { Bookmark, Settings2, Tags } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
+import type { Appointment } from "@babun/shared/local/appointments";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { GUTTER, ICON } from "@/components/ui/tokens";
@@ -10,6 +11,8 @@ import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { TagPickerSheet } from "@/features/clients/TagPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { tagsOfferedFor } from "@/features/clients/picker-tags";
+import { labelsOfferedFor, servingTeamIds } from "@/features/clients/serving-teams";
+import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 import { useReferenceHref } from "@/lib/reference-href";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useCities } from "@/features/reference/queries";
@@ -28,6 +31,7 @@ import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 
 export function ClientLabelTags({
   client,
+  appointments,
   update,
   tags,
   readOnly,
@@ -39,6 +43,8 @@ export function ClientLabelTags({
   labelOn?: boolean;
   tagOn?: boolean;
   client: Client;
+  /** Записи клиента: их команды — тоже обслуживающие календари. */
+  appointments: readonly Pick<Appointment, "team_id" | "client_id" | "status">[];
   update: (patch: Partial<Client>) => Promise<boolean> | void;
   /** Каталог тегов компании (Кабинет → «Теги клиентов»). */
   tags: ClientTag[];
@@ -51,18 +57,24 @@ export function ClientLabelTags({
   const t = useThemeColors();
   const router = useRouter();
   const { data: cities = [] } = useCities();
+  // ВАРИАНТЫ — ТОЛЬКО ОБСЛУЖИВАЮЩИХ КАЛЕНДАРЕЙ (`serving-teams.ts`): своя
+  // команда клиента и команды его записей, без архива и удалённых строк.
+  // Раньше шторка клиента Y&D предлагала метки всех календарей компании,
+  // включая «Кабинет 1» и «Ирина» из архива.
+  const archivedTeamIds = useArchivedTeamIds();
+  const servingTeams = useMemo(
+    () => servingTeamIds(client, appointments, archivedTeamIds),
+    [client, appointments, archivedTeamIds],
+  );
   // ОДНО ИМЯ — ОДНА СТРОКА: метка принадлежит команде, у клиента она — имя.
-  const labelOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return cities
-      .filter((c) => {
-        const key = c.name.trim().toLowerCase();
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map((c) => ({ name: c.name, color: c.color ?? getAvatarColor(c.name) }));
-  }, [cities]);
+  const servingLabels = useMemo(
+    () => labelsOfferedFor(cities, servingTeams),
+    [cities, servingTeams],
+  );
+  const labelOptions = useMemo(
+    () => servingLabels.map((c) => ({ name: c.name, color: c.color ?? getAvatarColor(c.name) })),
+    [servingLabels],
+  );
   const [labelOpen, setLabelOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   // ШЕСТЕРЁНКИ ЛИСТОВ — ДВЕРЬ С ВОЗВРАТОМ (AGENTS 5.4): адрес своей вкладки
@@ -73,7 +85,11 @@ export function ClientLabelTags({
   const teamParams = client.team_id ? { team: client.team_id } : undefined;
   const tagsDoor = useClientSettingsDoor("tags", client.team_id ?? null);
   const label = client.city.trim();
-  const labelColor = cities.find((c) => c.name === label)?.color ?? getAvatarColor(label);
+  // Цвет — строки обслуживающего календаря: у одноимённых меток разных
+  // команд цвета свои.
+  const labelColor =
+    (servingLabels.find((c) => c.name === label) ?? cities.find((c) => c.name === label))?.color ??
+    getAvatarColor(label);
   const labelAuto = !!label && !client.city_manual;
 
   // Теги — набор, который RPC заменяет ЦЕЛИКОМ: пишем из свежайшего значения
@@ -83,11 +99,11 @@ export function ClientLabelTags({
   );
   const [shownTags, setShownTags] = useState<string[]>(client.tag_ids);
   useEffect(() => setShownTags(client.tag_ids), [client.tag_ids]);
-  // ТЕГИ — КОМАНДЫ КЛИЕНТА (закреплены за командой): в шторке теги его
-  // команды и уже стоящие на нём теги других команд (`picker-tags.ts`).
+  // ТЕГИ — ОБСЛУЖИВАЮЩИХ КАЛЕНДАРЕЙ (закреплены за командой): в шторке теги
+  // его календарей и уже стоящие на нём теги других (`picker-tags.ts`).
   const offeredTags = useMemo(
-    () => tagsOfferedFor(tags, client.team_id ?? null, shownTags),
-    [tags, client.team_id, shownTags],
+    () => tagsOfferedFor(tags, servingTeams, shownTags),
+    [tags, servingTeams, shownTags],
   );
   // ТЕГОВ НЕСКОЛЬКО: шторка отдаёт весь набор по «Применить», карточка
   // показывает его сразу и откатывает, если запись не прошла.

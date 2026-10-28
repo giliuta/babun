@@ -177,6 +177,7 @@ export function ClientCardPage({
         {labelsOn ? (
           <ClientLabelTags
             client={c}
+            appointments={appointments}
             update={update}
             tags={tags}
             readOnly={!access.labels.edit}

@@ -18,25 +18,36 @@ const tag = (id: string, team_id: string | null): ClientTag =>
 
 describe("теги в шторке", () => {
   const catalog = [tag("own", "T1"), tag("common", null), tag("foreign", "T2"), tag("other", "T2")];
+  const serving = (...ids: string[]) => new Set(ids);
 
-  test("предложены теги команды клиента и общие", () => {
-    assert.deepEqual(tagsOfferedFor(catalog, "T1", []).map((t) => t.id), ["own", "common"]);
+  test("предложены теги обслуживающих календарей — и только их", () => {
+    assert.deepEqual(tagsOfferedFor(catalog, serving("T1"), []).map((t) => t.id), ["own"]);
+    assert.deepEqual(
+      tagsOfferedFor(catalog, serving("T1", "T2"), []).map((t) => t.id),
+      ["own", "foreign", "other"],
+    );
   });
 
   test("уже стоящий тег другой команды виден — его можно снять", () => {
     assert.deepEqual(
-      tagsOfferedFor(catalog, "T1", ["foreign"]).map((t) => t.id),
-      ["own", "common", "foreign"],
+      tagsOfferedFor(catalog, serving("T1"), ["foreign"]).map((t) => t.id),
+      ["own", "foreign"],
     );
   });
 
-  test("клиент без команды — весь каталог", () => {
-    assert.equal(tagsOfferedFor(catalog, null, []).length, catalog.length);
+  test("никто не обслуживает — предлагать нечего", () => {
+    assert.equal(tagsOfferedFor(catalog, serving(), []).length, 0);
   });
 
-  test("карточка отдаёт шторке именно этот набор", () => {
+  test("скрытый тег не предлагается, пока не стоит", () => {
+    const hidden = { ...tag("quiet", "T1"), hidden: true } as ClientTag;
+    assert.deepEqual(tagsOfferedFor([hidden], serving("T1"), []), []);
+    assert.deepEqual(tagsOfferedFor([hidden], serving("T1"), ["quiet"]).map((t) => t.id), ["quiet"]);
+  });
+
+  test("карточка отдаёт шторке набор обслуживающих календарей", () => {
     const tiles = read("ClientLabelTags.tsx");
-    assert.match(tiles, /tagsOfferedFor\(tags, client\.team_id \?\? null, shownTags\)/);
+    assert.match(tiles, /tagsOfferedFor\(tags, servingTeams, shownTags\)/);
     assert.match(tiles, /tags=\{offeredTags\}/);
   });
 });

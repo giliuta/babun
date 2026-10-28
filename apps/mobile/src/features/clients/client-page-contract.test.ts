@@ -695,7 +695,11 @@ describe("общий список без чипа — все команды, н�
       list(),
       /teamChoice === ALL_TEAMS\s*\?\s*withoutArchivedTeams\(clients, archivedTeamIds, appointments\)\s*:\s*clientsOfTeam\(/,
     );
-    assert.match(list(), /useTeams\(\{ includeInactive: true \}\)/);
+    assert.match(list(), /const archivedTeamIds = useArchivedTeamIds\(\)/);
+    assert.match(
+      readModuleSource(resolve(here, "use-archived-teams.ts")),
+      /useTeams\(\{ includeInactive: true \}\)[\s\S]*!tm\.is_active/,
+    );
   });
   test("выбор и массовые действия — только своя база", () => {
     assert.match(list(), /const visible = useMemo\(\s*\(\) => result\.filtered\.filter\(\(c\) => !guestOf\.has\(c\.id\)\)/);

@@ -8,7 +8,8 @@ import { ALL_TEAMS } from "@/features/clients/team-scope";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useBusinessToday } from "@/features/settings/business-today";
 import type { ListTeam } from "./use-list-merge";
-import { filterTagsFor, pruneFilter, uniqueById } from "./list-derive";
+import { cityFacetOptions } from "@/features/clients/useClientFilters/options";
+import { filterLabelsFor, filterTagsFor, pruneFilter, uniqueById } from "./list-derive";
 
 const NO_SOURCES: ClientSource[] = [];
 
@@ -40,7 +41,8 @@ export function useListFilters({
   teamChoice: string;
   teamClients: FilterArgs[0];
   teamAppointments: FilterArgs[1];
-  cities: FilterArgs[3];
+  /** Справочник меток компании: отбор по календарям ленты — здесь. */
+  cities: (FilterArgs[3][number] & { team_id: string | null; is_active?: boolean | null; deleted_at?: string | null })[];
   statsMap: FilterArgs[5];
   sort: FilterArgs[6];
   filter: ClientsFilter;
@@ -54,6 +56,14 @@ export function useListFilters({
   guestClientSources: ClientSource[];
   guestSourcesSettled: boolean;
 }) {
+  // МЕТКИ В ФИЛЬТРАХ — КАЛЕНДАРЕЙ ЛЕНТЫ: правило — `filterLabelsFor`.
+  // Прунинг сверяется с метками ВСЕХ календарей ленты: тап по чипу сужает
+  // варианты, но не выкидывает выбранное в другой команде.
+  const ribbonLabels = useMemo(() => filterLabelsFor(cities, teams, null), [cities, teams]);
+  const filterLabels = useMemo(
+    () => (teamChoice === ALL_TEAMS ? ribbonLabels : filterLabelsFor(cities, teams, teamChoice)),
+    [cities, teams, teamChoice, ribbonLabels],
+  );
   // ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ: правило — `filterTagsFor`.
   const filterTags = useMemo(
     () => filterTagsFor(tags, teams, teamChoice === ALL_TEAMS ? null : teamChoice),
@@ -83,7 +93,7 @@ export function useListFilters({
     teamClients,
     teamAppointments,
     teams,
-    cities,
+    filterLabels,
     filterTags,
     statsMap,
     sort,
@@ -100,7 +110,8 @@ export function useListFilters({
   // чипу сужает варианты до его команды, и прунинг по ним навсегда
   // выкидывал из «набора дня» выбранное в другой команде. Убирается только
   // то, чего больше нет нигде.
-  const { teamOptions, cityOptions } = result;
+  const { teamOptions } = result;
+  const cityOptions = useMemo(() => cityFacetOptions(data ?? [], ribbonLabels), [data, ribbonLabels]);
   const tagOptions = useMemo(() => tags.map((tag) => ({ value: tag.id })), [tags]);
   const sourceOptions = useMemo(() => sourceFilterOptions(ownSources, null), [ownSources]);
   const sourcesReady = sourcesQuery.isSuccess && guestSourcesSettled;
