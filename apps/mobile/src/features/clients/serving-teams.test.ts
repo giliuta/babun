@@ -119,3 +119,12 @@ describe("источник и тип объекта — без календар�
     assert.match(src, /!preset\.teamId \|\| !archivedTeamIds\.has\(preset\.teamId\)/);
   });
 });
+
+describe("«Кто привёл» — ровно видимое в «Клиентах»", () => {
+  test("те же строки по тем же правам, без клиентов команд в архиве", () => {
+    const src = read("blocks/PersonalBlock.tsx");
+    assert.match(src, /const \{ data: allClients = \[\] \} = useClients\(\);/);
+    assert.match(src, /withoutArchivedTeams\(allClients, archivedTeamIds, companyAppointments\)/);
+    assert.match(src, /title="Кто привёл"\s*clients=\{referrerPool\}/);
+  });
+});

@@ -10,7 +10,7 @@
 // Метка» в записи (`ClientLabelTags`). Здесь остались справочные
 // свойства человека — строками одного вида: значение справа, тап — выбор.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
@@ -24,6 +24,8 @@ import { formatShortDateRu } from "@/features/clients/format";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { normalizeYMD } from "@/features/clients/OptionalDateField";
 import { useClients } from "@/features/clients/queries";
+import { useAppointments } from "@/features/calendar/queries";
+import { withoutArchivedTeams } from "@/features/clients/team-scope";
 import { useClientSources } from "@/features/clients/acquisition-sources";
 import {
   isReferral,
@@ -81,6 +83,14 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
   const sourcesDoor = useClientSettingsDoor("sources", sourceTeamId);
   // «Кто привёл»: список — сами клиенты компании, тот же кеш, что у списка.
   const { data: allClients = [] } = useClients();
+  // ВЫБОР «КТО ПРИВЁЛ» — РОВНО ВИДИМОЕ В «КЛИЕНТАХ»: те же строки по тем же
+  // правам (`useClients`), и без клиентов команд в архиве — как список под
+  // «Все» (`withoutArchivedTeams`). Привести может клиент любой живой команды.
+  const { data: companyAppointments = [] } = useAppointments();
+  const referrerPool = useMemo(
+    () => withoutArchivedTeams(allClients, archivedTeamIds, companyAppointments),
+    [allClients, archivedTeamIds, companyAppointments],
+  );
   const referrerName =
     allClients.find((x: Client) => x.id === client.referred_by_client_id)?.full_name ?? null;
   // Значок плитки — значок самого источника (тот же, что в шторке выбора).
@@ -197,6 +207,7 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
       <ClientPickerSheet
         visible={referrerOpen}
         title="Кто привёл"
+        clients={referrerPool}
         selectedId={client.referred_by_client_id}
         excludeId={client.id}
         clearLabel="Убрать"
