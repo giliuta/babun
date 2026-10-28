@@ -20,6 +20,7 @@ import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
 import { dayMonthLabel } from "./day-month-label";
+import { dayRecordCount } from "./day-money";
 import { TourTarget } from "@/components/tour/TourTarget";
 
 function sameDay(a: Date, b: Date) {
@@ -325,7 +326,7 @@ function WeekHeaderRow({
       {days.map((d) => {
         const ymd = formatYMD(d);
         const isToday = sameDay(d, today);
-        const count = apptsFor(ymd).length;
+        const count = dayRecordCount(apptsFor(ymd));
         const label = labelFor?.(ymd) ?? null;
         return (
           <Pressable

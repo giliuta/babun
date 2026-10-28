@@ -11,6 +11,7 @@ import {
   writeEditDraft,
   type BookDraftSnapshot,
 } from "./book-draft-store";
+import { sameAsOpen } from "./open-baseline";
 
 /** Черновик новой записи, поднятый с телефона при открытии формы, и способ
  *  его забыть. Читается один раз — первым рендером, до умолчаний формы.
@@ -118,6 +119,7 @@ export function useRestoreEditDraft({
   editing,
   hydrated,
   apply,
+  current,
   toast,
   router,
 }: {
@@ -126,6 +128,8 @@ export function useRestoreEditDraft({
   editing: Appointment | null;
   hydrated: boolean;
   apply: (snap: Omit<BookDraftSnapshot, "v" | "savedAt">) => void;
+  /** Форма в кадр открытия — с ней сверяется поднимаемый снимок. */
+  current: Omit<BookDraftSnapshot, "v" | "savedAt">;
   toast: ReturnType<typeof useToast>;
   router: ReturnType<typeof useRouter>;
 }): { id: string; base: string } | null {
@@ -138,6 +142,11 @@ export function useRestoreEditDraft({
     setOpened(base);
     const saved = readEditDraft(tenantId, base.id, base.base);
     if (!saved) return;
+    // Снимок без единой правки (№17) — стереть, а не поднимать с плашкой.
+    if (sameAsOpen(saved.snap, current)) {
+      clearEditDraft(tenantId, base.id);
+      return;
+    }
     apply(saved.snap);
     toast("Черновик восстановлен", "info", {
       label: "Удалить черновик",

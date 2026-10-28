@@ -92,7 +92,6 @@ export function homeTotals(input: HomeTotalsInput): HomeTotals {
     else if (tx.type === "expense") expenseCents += Math.round(tx.amount * 100);
   }
   const income = incomeCents / 100;
-  const expense = expenseCents / 100;
   // Debt via the shared getDebtAmount (prepaid + payments[]) — the web
   // payment_status/paid_amount fields are never mapped by the mobile
   // repository, so «total − paid_amount» would flag every completed

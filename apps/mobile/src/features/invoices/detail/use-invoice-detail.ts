@@ -72,11 +72,17 @@ export function useInvoiceDetail() {
   // Кредит-нота к ЧЕКУ (возврат по чеку) ссылается на чек, а не на
   // инвойс: номер — его.
   const noteReceipt = useReceipt(invoice.data?.credit_note_of_receipt_id ?? null).data ?? null;
-  const creditNote = creditNoteOfId
-    ? { originalNumber: numberById.get(creditNoteOfId) ?? null }
-    : invoice.data?.kind === "credit_note"
-      ? { originalNumber: noteReceipt?.number ?? null, ofReceipt: true }
-      : null;
+  const isCreditNote = invoice.data?.kind === "credit_note";
+  const noteReceiptNumber = noteReceipt?.number ?? null;
+  const creditNote = useMemo(
+    () =>
+      creditNoteOfId
+        ? { originalNumber: numberById.get(creditNoteOfId) ?? null }
+        : isCreditNote
+          ? { originalNumber: noteReceiptNumber, ofReceipt: true }
+          : null,
+    [creditNoteOfId, numberById, isCreditNote, noteReceiptNumber],
+  );
   const pay = useRecordInvoicePayment(id);
   // Id платежа живёт на странице, а не в листе: закрыть и открыть лист после
   // потерянного ответа — тот же платёж, а не второй (`sendPayment`).

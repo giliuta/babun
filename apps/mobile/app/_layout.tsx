@@ -35,6 +35,7 @@ import { reconcileBabunNotifications } from "@/lib/notifications";
 import { getActiveTenantId } from "@/lib/active-tenant";
 import { switchTenant } from "@/session/switch-tenant";
 import { refreshAppointmentsForTap } from "@/lib/notification-tap";
+import { watchFontScaleReload } from "@/lib/font-scale-reload";
 
 void SplashScreen.preventAutoHideAsync();
 // Свежее обновление по воздуху — с первого запуска, пока видна заставка.
@@ -229,6 +230,9 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  // Шрифт поменяли в настройках телефона — замеры текста пересчитывает только
+  // новый запуск кода (`font-scale-reload.ts`).
+  useEffect(() => watchFontScaleReload(), []);
   return (
     <AppProviders>
       {/* РЕЖИМ «ЕГО ГЛАЗАМИ» — НАД ВСЕМ ПРИЛОЖЕНИЕМ: пока он включён, права и

@@ -91,8 +91,7 @@ export interface AccountDraft {
   color?: string | null;
   position?: number;
   /** Основной счёт группы. Ставить `true` СМЕНОЙ основного нельзя — уникальный
-   *  частичный индекс отвергнет второй флаг в группе; для смены есть
-   *  {@link setPrimaryAccount}, который сперва снимает старый. */
+   *  частичный индекс отвергнет второй флаг в группе: сперва снимают старый. */
   is_primary?: boolean;
   /** Показывать ли счёт при оплате заявок. Новый счёт заводится принимающим:
    *  форма создания об этом не спрашивает, выключают потом в настройках. */
@@ -221,49 +220,6 @@ export async function updateAccount(
     duplicate: patch.name
       ? duplicateAccountNameMessage(patch.name)
       : undefined,
-  });
-}
-
-/**
- * Назначить счёт основным для его группы (команды или счетов компании).
- *
- * ДВА ЗАПРОСА, А НЕ ОДИН. Уникальный частичный индекс
- * `ux_accounts_primary_per_brigade` проверяется построчно, поэтому пометить
- * новый счёт, не сняв флаг со старого, физически нельзя — снимаем первым.
- * Обрыв между шагами оставляет группу без основного счёта: резолверы при этом
- * возвращаются к порядку строк, деньги никуда не
- * уезжают, а экран показывает ошибку.
- */
-async function setPrimaryAccount(
-  supabase: DbSupabase,
-  tenantId: string,
-  account: Pick<Account, "id" | "brigade_id">,
-): Promise<void> {
-  const group = supabase
-    .from("accounts")
-    .update({ is_primary: false })
-    .eq("tenant_id", tenantId)
-    .eq("is_primary", true);
-  const { error: clearError } = await (
-    account.brigade_id === null
-      ? group.is("brigade_id", null)
-      : group.eq("brigade_id", account.brigade_id)
-  );
-  if (clearError) {
-    throw new Error(
-      accountWriteErrorMessage(clearError, {
-        fallback: "Не удалось сменить основной счёт",
-      }),
-    );
-  }
-  const { data, error } = await supabase
-    .from("accounts")
-    .update({ is_primary: true })
-    .eq("id", account.id)
-    .select("id")
-    .maybeSingle();
-  assertAccountWritten({ data, error }, {
-    fallback: "Не удалось сделать счёт основным",
   });
 }
 

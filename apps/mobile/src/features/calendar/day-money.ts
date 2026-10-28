@@ -46,6 +46,13 @@ export function isMoneyRecord(a: Pick<Appointment, "kind">): boolean {
   return a.kind === "work";
 }
 
+/** Счётчик записей дня в «Месяце» и «Неделе» — без отменённых, как деньги
+ *  дня (`dayMoney` их не считает). Отменённая в счётчике, но не в сумме
+ *  давала «3 записи» при деньгах двух (№8 владельца). */
+export function dayRecordCount(appointments: readonly Pick<Appointment, "status">[]): number {
+  return appointments.filter((a) => a.status !== "cancelled").length;
+}
+
 export interface DayMoney {
   /** Пришло за день: доходы минус возвраты (+ старые ручные доходы дня). */
   income: number;

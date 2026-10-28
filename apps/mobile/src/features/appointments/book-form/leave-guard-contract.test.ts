@@ -54,3 +54,14 @@ test("копия события на весь день — форма новог
   const prefill = readFileSync(resolve(here, "use-book-prefill.ts"), "utf8");
   assert.match(prefill, /hydrate\(\{ \.\.\.duplicateAppointment\(copySource\)/);
 });
+
+test("эталон правки — вид при открытии на сегодняшних справочниках, а не снимок кадра (№17)", () => {
+  const guard = readFileSync(resolve(here, "use-leave-guard.ts"), "utf8");
+  // Одноразового снимка по `hydrated` больше нет: справочники доезжали позже.
+  assert.doesNotMatch(guard, /editBaselineRef\.current = editSignature/);
+  assert.match(guard, /editBaselineRef\.current = moved \? withBaselineStatus\(baselineSignature, moved\) : baselineSignature;/);
+  const form = readFileSync(resolve(here, "use-book-form.ts"), "utf8");
+  // Состояние открытия снимается ДО подъёма прерванной правки.
+  assert.ok(form.indexOf("setOpenRecord(") < form.indexOf("useRestoreEditDraft({"));
+  assert.match(form, /openRecordPatch\(openRecord, \{/);
+});

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import { dayMoney, isMoneyRecord, moneyByAccount, moneyOfDay } from "./day-money";
+import { dayMoney, dayRecordCount, isMoneyRecord, moneyByAccount, moneyOfDay } from "./day-money";
 
 // ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ. Живой случай: предоплата
 // €20 внесена 30.09 за запись на 1.10 — полоса показывала её в среду, где
@@ -183,6 +183,16 @@ describe("события и отменённые — не деньги", () => {
     );
     assert.equal(day.records.length, 0);
     assert.equal(day.debt, 0);
+  });
+
+  test("счётчик записей дня в «Месяце» и «Неделе» — без отменённых, как деньги (№8)", () => {
+    const list = [
+      appt({ id: "a1", date: "2026-09-29" }),
+      appt({ id: "a2", date: "2026-09-29" }),
+      appt({ id: "c1", date: "2026-09-29", status: "cancelled" }),
+    ];
+    assert.equal(dayRecordCount(list), 2);
+    assert.equal(run("2026-09-29", list, []).records.length, dayRecordCount(list));
   });
 });
 
