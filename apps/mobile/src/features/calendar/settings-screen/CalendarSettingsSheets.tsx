@@ -9,10 +9,13 @@ import { readViewportH } from "@/features/calendar/grid-memory";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { formatHm } from "@/features/calendar/window";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
+import { useTeamName } from "@/session/team-name";
 
 /** The screen's sheets: new calendar offer and form, hours, timezone and
  *  the team schedule. */
 export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsState }) {
+  // Подпись шторки графика — имя команды правилом показа (`useTeamName`).
+  const showTeamName = useTeamName();
   const {
     router,
     teams,
@@ -88,7 +91,7 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
       <TeamScheduleSheet
         visible={scheduleOpen}
         teamId={team?.id}
-        teamName={team?.name}
+        teamName={team ? showTeamName(team.name) : undefined}
         onClose={() => setScheduleOpen(false)}
       />
     </>

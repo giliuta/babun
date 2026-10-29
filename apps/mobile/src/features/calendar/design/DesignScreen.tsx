@@ -24,6 +24,7 @@ import { BLOCK_ICON, BLOCK_LABEL } from "./block-meta";
 import { BlockOrder } from "./BlockOrder";
 import { ColorRow } from "./ColorRow";
 import { useDesignScreen } from "./use-design-screen";
+import { useTeamName } from "@/session/team-name";
 
 // «ЗАПИСИ» — КАК ВЫГЛЯДИТ И ИЗ ЧЕГО СОСТОИТ ЗАПИСЬ.
 // ТРИ КАРТОЧКИ, ВСЁ ТАПОМ. Название «Записи», а не «Дизайн»: на странице и
@@ -47,6 +48,9 @@ import { useDesignScreen } from "./use-design-screen";
 // Состояние страницы — `use-design-screen.ts`, строки — соседними файлами.
 
 export function DesignScreen() {
+  // Имя команды — правилом показа: команда, названная почтой, не печатается
+  // адресом (`useTeamName`, как чипы ленты над шестерёнкой).
+  const teamName = useTeamName();
   const {
     router,
     team,
@@ -87,7 +91,7 @@ export function DesignScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Записи" subtitle={team?.name} />
+      <ScreenHeader title="Записи" subtitle={team ? teamName(team.name) : undefined} />
       <ScrollView scrollEnabled={!dragging} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* ПЕРЕКЛЮЧАТЕЛЬ «КЛИЕНТ | СОБЫТИЕ» — НАВЕРХУ И НА ВСЮ СТРАНИЦУ
             (выбрал клиентов — настраивает всё по клиентам, событий — всё по
