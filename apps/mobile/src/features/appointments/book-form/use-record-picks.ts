@@ -8,7 +8,6 @@ import {
 } from "@babun/shared/local/clients";
 import type { Service } from "@/features/services/queries";
 import type { Master } from "@/features/reference/queries";
-import type { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { resolveBookingClientPrefill } from "@/features/appointments/booking-prefill";
 import {
@@ -48,13 +47,15 @@ interface RecordPicksInput {
   setCityTouched: Setter<boolean>;
   setAddress: Setter<string>;
   setEventAddress: Setter<string>;
+  setEventPlacePin: Setter<string>;
+  setEventPlaceNote: Setter<string>;
   clientLocations: Location[];
   eventLocationPool: EventLocationRow[];
   eventLocationOwner: Client | null;
   clientPickerOpen: boolean;
   setClientPickerOpen: Setter<boolean>;
   setObjectSheet: Setter<boolean>;
-  toast: ReturnType<typeof useToast>;
+  setPlaceSheet: Setter<boolean>;
   router: ReturnType<typeof useRouter>;
 }
 
@@ -83,13 +84,15 @@ export function useRecordPicks({
   setCityTouched,
   setAddress,
   setEventAddress,
+  setEventPlacePin,
+  setEventPlaceNote,
   clientLocations,
   eventLocationPool,
   eventLocationOwner,
   clientPickerOpen,
   setClientPickerOpen,
   setObjectSheet,
-  toast,
+  setPlaceSheet,
   router,
 }: RecordPicksInput) {
   const selectTeam = (nextTeamId: string | null) => {
@@ -254,24 +257,24 @@ export function useRecordPicks({
     if (loc) {
       setAddress(locationAddressForBooking(loc));
       // Адрес-снимок события: объект могут удалить, а куда ехали — видно.
-      if (kind === "event") setEventAddress(locationAddressForBooking(loc));
+      // Объект клиента заменяет объект самого события целиком.
+      if (kind === "event") {
+        setEventAddress(locationAddressForBooking(loc));
+        setEventPlacePin("");
+        setEventPlaceNote("");
+      }
     }
     haptics.tap();
   };
 
-  // «ДОБАВИТЬ ОБЪЕКТ» У СОБЫТИЯ. Выбрать объект можно без клиента, а вот
-  // ЗАВЕСТИ новый — нет: своей таблицы у объекта нет, он лежит в `locations`
-  // клиента. Поэтому строка не пропадает и не превращается в отговорку
-  // «сначала выберите клиента» — она сама открывает выбор клиента и говорит,
-  // зачем он понадобился.
+  // «ДОБАВИТЬ ОБЪЕКТ» У СОБЫТИЯ. С клиентом — объект заводится ему, тем же
+  // листом, что в записи. Без клиента — СРАЗУ форма объекта события
+  // (`PlaceSheet`): объект живёт в самом событии, ни списка чужих объектов,
+  // ни выбора клиента «ради объекта».
   const openEventObjectAdd = () => {
     haptics.tap();
-    if (!client) {
-      toast("Объект заводится клиенту — выберите клиента");
-      setClientPickerOpen(true);
-      return;
-    }
-    setObjectSheet(true);
+    if (client) setObjectSheet(true);
+    else setPlaceSheet(true);
   };
   // Правка объекта пишет в карточку его ВЛАДЕЛЬЦА: у события это может быть
   // не тот клиент, что стоит в форме.

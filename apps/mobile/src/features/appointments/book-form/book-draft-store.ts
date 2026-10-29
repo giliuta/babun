@@ -60,6 +60,10 @@ export interface BookDraftSnapshot {
   eventTypeId: string | null;
   eventNotes: string;
   eventAddress: string;
+  /** Точка и заметка объекта события без клиента (`event-place.ts`). Старые
+   *  снимки их не знают — пусто. */
+  eventPlacePin?: string;
+  eventPlaceNote?: string;
   eventUrl: string;
   eventReminderOffset: number | null;
   repeat: PersonalEventRepeat;

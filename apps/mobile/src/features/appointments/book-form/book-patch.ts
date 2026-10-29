@@ -14,6 +14,7 @@ import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
 import { UNTYPED_EVENT } from "@/features/calendar/record-title";
+import { placeCoords } from "./event-place";
 
 export interface BookPatchInput {
   kind: "work" | "event";
@@ -29,6 +30,10 @@ export interface BookPatchInput {
   /** The picked object of the event (any client's), if any. */
   eventLoc: Location | null;
   eventAddress: string;
+  /** Объект события без клиента: точка ссылкой и заметка (`event-place.ts`).
+   *  Нет — пусто. */
+  eventPlacePin?: string;
+  eventPlaceNote?: string;
   allDay: boolean;
   repeat: PersonalEventRepeat;
   eventNotes: string;
@@ -75,6 +80,8 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
     locationId,
     eventLoc,
     eventAddress,
+    eventPlacePin = "",
+    eventPlaceNote = "",
     allDay,
     repeat,
     eventNotes,
@@ -112,6 +119,13 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       ? locationAddressForBooking(eventLoc)
       : eventAddress.trim();
     const placeIsUrl = !eventLoc && isLikelyUrl(place);
+    // ОБЪЕКТ СОБЫТИЯ БЕЗ КЛИЕНТА — в самой записи: точка в `address_lat/lng`,
+    // заметка в `address_note`. Точка без координат (короткая ссылка) — в
+    // ссылку события, если своей ссылки нет. У объекта клиента своё место в
+    // его карточке, и в записи этих полей нет.
+    const pin = eventLoc ? "" : eventPlacePin.trim();
+    const coords = placeCoords(pin);
+    const pinAsUrl = pin && coords.lat == null ? pin : "";
     return {
       kind: "event",
       date,
@@ -122,7 +136,7 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       event_all_day: allDay,
       event_repeat: repeat,
       event_notes: eventNotes.trim(),
-      event_url: placeIsUrl ? place : eventUrl.trim(),
+      event_url: placeIsUrl ? place : eventUrl.trim() || pinAsUrl,
       event_push_enabled: eventReminderOffset != null,
       event_push_offsets:
         eventReminderOffset == null ? [] : [eventReminderOffset],
@@ -145,6 +159,9 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
           ? eventTypeLabel
           : eventTitle.trim()) || UNTYPED_EVENT,
       address: placeIsUrl ? "" : place,
+      address_lat: coords.lat,
+      address_lng: coords.lng,
+      address_note: eventLoc ? "" : eventPlaceNote.trim(),
       color_override: eventColor,
       // Метка события — та же метка выезда, что у записи: null значит «как
       // у дня».

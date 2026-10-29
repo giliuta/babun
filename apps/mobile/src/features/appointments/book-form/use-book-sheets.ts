@@ -18,6 +18,8 @@ export function useBookSheets() {
   // правка выбранного объекта — удержанием его строки.
   const [objectPicker, setObjectPicker] = useState(false);
   const [objectEdit, setObjectEdit] = useState(false);
+  // Объект события без клиента — своя форма (`PlaceSheet`), без списка.
+  const [placeSheet, setPlaceSheet] = useState(false);
   const [labelSheetOpen, setLabelSheetOpen] = useState(false);
   const [totalSheetOpen, setTotalSheetOpen] = useState(false);
   return {
@@ -43,6 +45,8 @@ export function useBookSheets() {
     setObjectPicker,
     objectEdit,
     setObjectEdit,
+    placeSheet,
+    setPlaceSheet,
     labelSheetOpen,
     setLabelSheetOpen,
     totalSheetOpen,

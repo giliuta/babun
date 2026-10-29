@@ -37,6 +37,7 @@ import {
 } from "@/features/appointments/helpers";
 import type { BookReferences } from "./use-book-references";
 import { first } from "./book-math";
+import { pinOfCoords } from "./event-place";
 import type { BookDraftSnapshot } from "./book-draft-store";
 
 // A type alias, not an interface: route params need an index-compatible shape.
@@ -167,6 +168,9 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
   const [eventTypeId, setEventTypeId] = useState<string | null>(restored?.eventTypeId ?? null);
   const [eventNotes, setEventNotes] = useState(restored?.eventNotes ?? "");
   const [eventAddress, setEventAddress] = useState(restored?.eventAddress ?? "");
+  // Объект события без клиента — точка и заметка рядом с адресом (`event-place.ts`).
+  const [eventPlacePin, setEventPlacePin] = useState(restored?.eventPlacePin ?? "");
+  const [eventPlaceNote, setEventPlaceNote] = useState(restored?.eventPlaceNote ?? "");
   const [eventUrl, setEventUrl] = useState(restored?.eventUrl ?? "");
   const [eventReminderOffset, setEventReminderOffset] = useState<number | null>(
     restored?.eventReminderOffset ?? null,
@@ -292,6 +296,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
         // Одна строка «адрес или ссылка»: у прежнего события с одним пином
         // поле показывает пин, а не пустоту.
         setEventAddress(editing.address || editing.event_url || "");
+        setEventPlacePin(pinOfCoords(editing.address_lat, editing.address_lng));
+        setEventPlaceNote(editing.address_note ?? "");
         setEventUrl(editing.event_url ?? "");
         setEventReminderOffset(
           editing.event_push_enabled
@@ -374,6 +380,10 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
     setEventNotes,
     eventAddress,
     setEventAddress,
+    eventPlacePin,
+    setEventPlacePin,
+    eventPlaceNote,
+    setEventPlaceNote,
     eventUrl,
     eventReminderOffset,
     repeat,

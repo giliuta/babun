@@ -1,4 +1,4 @@
-import { useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +16,7 @@ import {
   type ObjectFieldsValue,
 } from "@/features/clients/ObjectFields";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
+import { isPlaceReady } from "@/features/clients/object-address";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 import { useObjectCreate, type AddedObject } from "./object-sheet/use-object-create";
@@ -164,6 +165,81 @@ function EditMode(props: Extract<ObjectSheetProps, { mode: "edit" }>) {
   );
 }
 
+/** Пустая форма объекта без клиента. */
+const EMPTY_PLACE: ObjectFieldsValue = {
+  type: "",
+  target: "",
+  parts: {},
+  partsOpen: false,
+  pin: "",
+  note: "",
+};
+
+/** ОБЪЕКТ СОБЫТИЯ БЕЗ КЛИЕНТА — ТА ЖЕ ФОРМА, ТОЛЬКО БЕЗ «ТИПА ОБЪЕКТА».
+ *
+ *  Такой объект живёт в самом событии (адрес, точка, заметка записи) и в
+ *  базу клиентов не попадает, поэтому писателя `locations` у листа нет: он
+ *  отдаёт готовое значение форме события, а в базу оно уедет с «Сохранить»
+ *  события. Тип объекта хранить негде — блока нет. Вид — `Shell`, как у
+ *  объекта клиента: разных дизайнов одной формы нет. */
+export function PlaceSheet({
+  visible,
+  initial,
+  onApply,
+  onClose,
+}: {
+  visible: boolean;
+  /** Объект, который уже стоит в событии; `null` — заводим новый. */
+  initial: ObjectFieldsValue | null;
+  onApply: (value: ObjectFieldsValue) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState<ObjectFieldsValue>(initial ?? EMPTY_PLACE);
+  // Каждое открытие — с того, что стоит в событии сейчас: лист остаётся
+  // смонтированным, и без пересева он показывал бы прошлый ввод.
+  useEffect(() => {
+    if (visible) setValue(initial ?? EMPTY_PLACE);
+    // Сеем только на открытие: `initial` пересобирается каждый рендер формы.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+  const t = useThemeColors();
+  const ready = isPlaceReady(value);
+  return (
+    <Shell
+      visible={visible}
+      title={initial ? "Объект" : "Новый объект"}
+      teamId={null}
+      value={value}
+      typeOptions={[]}
+      noType
+      onChange={(patch) => setValue((v) => ({ ...v, ...patch }))}
+      flush={() => {}}
+      onClose={onClose}
+      footer={
+        <>
+          {!ready ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 13, color: t.sub, textAlign: "center", marginBottom: 8 }}
+            >
+              Впишите адрес, вставьте ссылку или отметьте точку на карте
+            </Text>
+          ) : null}
+          <Button
+            label={initial ? "Сохранить" : "Добавить объект"}
+            disabled={!ready}
+            onPress={() => {
+              onApply(value);
+              onClose();
+            }}
+          />
+        </>
+      }
+    />
+  );
+}
+
 function Shell({
   visible,
   title,
@@ -179,6 +255,7 @@ function Shell({
   onClose,
   extra,
   footer,
+  noType = false,
 }: {
   visible: boolean;
   title: string;
@@ -196,6 +273,8 @@ function Shell({
   onClose: () => void;
   extra?: ReactNode;
   footer: ReactNode;
+  /** Без «Типа объекта» (`PlaceSheet`). */
+  noType?: boolean;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -242,6 +321,7 @@ function Shell({
       >
         <ObjectFields
           addressRef={addressRef}
+          noType={noType}
           teamId={teamId}
           value={value}
           typeOptions={typeOptions}
@@ -258,7 +338,7 @@ function Shell({
               : undefined
           }
           onTypeSettings={
-            typesDoor
+            typesDoor && !noType
               ? () => {
                   // ДВЕРЬ ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ ЕГО, как выбор категории:
                   // закрытый лист вернул бы «назад» на карточку, а начатый объект
