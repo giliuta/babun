@@ -61,10 +61,8 @@ export function SummaryToggle({
       // Закрытая строка не называет сумму вслух: «Доход: €0» прозвучал бы
       // фактом о деньгах, а их здесь просто не показывают.
       accessibilityLabel={`${label}: ${locked ? "нет доступа" : (a11yValue ?? value)}`}
-      // Строка 38pt + зазор 6pt между рядами: цель касания добирает до 44
-      // за счёт зазора, вид не меняется (тот же приём, что у Chip).
-      hitSlop={{ top: 3, bottom: 3 }}
-      className="flex-row items-center px-3.5 active:opacity-70"
+      // Плитка-карточка 56pt — цель касания выше 44 сама.
+      className="px-3.5 active:opacity-70"
       style={{
         // РОВНО ПОЛОВИНА РЯДА, А НЕ «СКОЛЬКО ПОПРОСИТ СОДЕРЖИМОЕ». Ширину
         // задаёт сетка, а не длина подписи: иначе «Счета | Документы» едут
@@ -77,7 +75,8 @@ export function SummaryToggle({
         flexGrow: 1,
         flexShrink: 1,
         minWidth: 0,
-        minHeight: 38,
+        paddingVertical: 9,
+        gap: 2,
         borderRadius: t.radius.card,
         opacity: dimmed ? 0.4 : 1,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
@@ -89,29 +88,34 @@ export function SummaryToggle({
         borderCurve: "continuous",
       }}
     >
-      <View
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: locked ? t.muted : color }}
-      />
-      <Text
-        numberOfLines={1}
-        className="ml-2 text-sm font-semibold"
-        style={{ color: locked ? t.muted : t.sub, flexShrink: 1 }}
-      >
-        {label}
-      </Text>
-      {/* Пятизначная прибыль с копейками («€12 450,75») на узком экране не
-          влезала рядом с подписью и вылезала за край плитки: сумма ужимается
-          до 80 %, а не рвётся. */}
+      {/* КАРТОЧКА: ПОДПИСЬ МЕЛКО СВЕРХУ, СУММА КРУПНО ПОД НЕЙ — у всех плиток
+          и при любой длине одинаково (владелец 28.10, вариант 2 из трёх рядом).
+          В строку «подпись слева, сумма справа» на узком iPhone не помещалось
+          «Ожидается €12 345»: сумма резалась, а общий кегль по самой длинной
+          падал до 4–10pt. Условный переход в столбик отвергнут — разнобой. */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: locked ? t.muted : color }}
+        />
+        <Text
+          numberOfLines={1}
+          className="ml-1.5 text-xs font-semibold"
+          style={{ color: locked ? t.muted : t.sub, flexShrink: 1 }}
+        >
+          {label}
+        </Text>
+      </View>
+      {/* Сумма длиннее всей плитки («€12 450,75» на самом узком экране)
+          ужимается до 80 %, а не рвётся. */}
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.8}
-        className={`ml-auto pl-2 text-[15px] ${quiet || locked ? "font-semibold" : "font-bold"}`}
+        className={`text-[17px] ${quiet || locked ? "font-semibold" : "font-bold"}`}
         style={{
           color: locked ? t.muted : quiet ? t.caption : color,
           fontVariant: ["tabular-nums"],
-          flexShrink: 1,
         }}
       >
         {value}

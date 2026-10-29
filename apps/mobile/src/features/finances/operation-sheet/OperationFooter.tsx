@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import { Button } from "@/components/ui/Button";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import type { OperationReason } from "./operation-guards";
 
@@ -24,7 +24,7 @@ export function OperationFooter({
 }) {
   const th = useThemeColors();
   return (
-    <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+    <View style={{ paddingHorizontal: FOOTER_SIDE, gap: 8 }}>
       {reason ? (
         <Pressable
           disabled={!reason.retry || !onRetry}

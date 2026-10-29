@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useRef, useState } from "react";
-import { Linking, ScrollView, View, Platform } from "react-native";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Linking, ScrollView, View } from "react-native";
+import { onThisDevice } from "@/lib/device-word";
 import { useRouter } from "expo-router";
 import {
   Bell,
@@ -28,6 +29,8 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import { useDataRole } from "@/session/tenant";
+import { useDefaultTeamId } from "@/session/default-team";
+import { useTeamName } from "@/session/team-name";
 import { haptics } from "@/lib/haptics";
 import {
   cancelManualAppointmentReminder,
@@ -62,6 +65,7 @@ import {
   type ReminderRow,
   type ReminderSource,
 } from "./device-reminders";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // СТРАНИЦА «УВЕДОМЛЕНИЯ» (Кабинет). Что в списке и почему строка
 // одна на источник — в шапке `device-reminders.ts`.
@@ -103,7 +107,13 @@ export function NotificationsScreen() {
   const { data: teams = [] } = useTeams();
   const isOwner = useDataRole().data === "owner";
   const [teamPick, setTeamPick] = useState<string | null>(null);
-  const team = teams.find((x) => x.id === teamPick) ?? teams[0] ?? null;
+  // Не тронули чип — открытый календарь, иначе первый видимый (`default-team.ts`).
+  const defaultTeamId = useDefaultTeamId(
+    useMemo(() => teams.map((x) => ({ id: x.id, tenantId: x.tenant_id })), [teams]),
+  );
+  const team = teams.find((x) => x.id === (teamPick ?? defaultTeamId)) ?? teams[0] ?? null;
+  // Команда, названная почтой, не печатается адресом — как в ленте календаря.
+  const teamName = useTeamName();
   useTeamNotifyPrefs();
   const save = useSaveTeamNotifyPrefs();
   const prefs = readTeamNotifyPrefs(team?.id);
@@ -198,13 +208,16 @@ export function NotificationsScreen() {
   return (
     <Screen edges={["top"]}>
       {/* Одна команда — ленты нет, имя команды в шапке: видно, чьи настройки. */}
-      <ScreenHeader title="Уведомления" subtitle={teams.length === 1 ? team?.name : undefined} />
+      <ScreenHeader
+        title="Уведомления"
+        subtitle={teams.length === 1 && team ? teamName(team.name) : undefined}
+      />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <SectionCard>
           <SettingsRow
             tile={SETTINGS_TILE.orange}
             icon={Bell}
-            title={Platform.OS === "android" ? "Уведомления на телефоне" : "Уведомления на iPhone"}
+            title={`Уведомления ${onThisDevice()}`}
             sub={permissionView?.sub}
             subColor={
               permission && remindersSilenced(permission, count)
@@ -228,7 +241,7 @@ export function NotificationsScreen() {
             <ScopeChips
               onCanvas
               seam={false}
-              items={teams.map((x) => ({ id: x.id, name: x.name, color: x.color }))}
+              items={teams.map((x) => ({ id: x.id, name: teamName(x.name), color: x.color }))}
               activeId={team?.id ?? null}
               onSelect={(id) => {
                 haptics.tap();
@@ -248,7 +261,7 @@ export function NotificationsScreen() {
                 sub={recordsLabel(prefs.records)}
                 onPress={() => setPicker("records")}
               />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.indigo}
                 icon={UserRound}
@@ -268,14 +281,14 @@ export function NotificationsScreen() {
                 title="Новые записи"
                 toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
               />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
                 icon={RefreshCw}
                 title="Переносы и изменения"
                 toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
               />
-              <Divider inset={56} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.red}
                 icon={CalendarX}
@@ -284,7 +297,7 @@ export function NotificationsScreen() {
               />
               {isOwner ? (
                 <>
-                  <Divider inset={56} />
+                  <Divider inset={SETTINGS_ROW_INSET} />
                   <SettingsRow
                     tile={SETTINGS_TILE.teal}
                     icon={Wallet}
@@ -339,7 +352,7 @@ export function NotificationsScreen() {
       <PickerSheet
         visible={picker === "records"}
         title="Напоминать о записях"
-        subtitle={team?.name}
+        subtitle={team ? teamName(team.name) : undefined}
         selectedId={prefs.records ? recordsLabel(prefs.records) : "off"}
         items={RECORD_REMINDER_OPTIONS.map((rule) => ({
           id: rule ? recordsLabel(rule) : "off",
@@ -357,7 +370,7 @@ export function NotificationsScreen() {
       <PickerSheet
         visible={picker === "clients"}
         title="Напоминать о клиентах"
-        subtitle={team?.name}
+        subtitle={team ? teamName(team.name) : undefined}
         selectedId={prefs.clientTime ?? "off"}
         items={CLIENT_TIME_OPTIONS.map((time) => ({
           id: time ?? "off",

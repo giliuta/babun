@@ -3,6 +3,7 @@
 // filter values that no longer exist.
 
 import type { ClientsFilter } from "../filter";
+import { liveRowOfTeams } from "../serving-teams";
 
 /** Склейка без дублей: первая строка с этим id побеждает (своя компания
  *  идёт первой). */
@@ -43,16 +44,31 @@ export function filterTagsFor<T extends { name: string; team_id?: string | null 
   if (teamChoice !== null) {
     return tags.filter((tag) => !tag.team_id || tag.team_id === teamChoice);
   }
+  // Без чипа — теги календарей ленты: тег команды в архиве (её чипа нет)
+  // вариантом фильтра не стоит.
+  const onRibbon = new Set(teams.map((tm) => tm.id));
+  const live = tags.filter((tag) => !tag.team_id || onRibbon.has(tag.team_id));
   const byName = new Map<string, number>();
-  for (const tag of tags) {
+  for (const tag of live) {
     const key = tag.name.trim().toLowerCase();
     byName.set(key, (byName.get(key) ?? 0) + 1);
   }
-  return tags.map((tag) => {
+  return live.map((tag) => {
     const shared = (byName.get(tag.name.trim().toLowerCase()) ?? 0) > 1;
     const teamName = tag.team_id ? teams.find((tm) => tm.id === tag.team_id)?.name : null;
     return shared && teamName ? { ...tag, name: `${tag.name} · ${teamName}` } : tag;
   });
+}
+
+/** МЕТКИ В ФИЛЬТРАХ — КАЛЕНДАРЕЙ ЛЕНТЫ: под чипом — его метки, без чипа —
+ *  метки всех календарей на ленте. Метки календаря в архиве, выключенные и
+ *  удалённые вариантом не стоят (`serving-teams.ts`); одно имя — один
+ *  вариант схлопывает `cityFacetOptions`. */
+export function filterLabelsFor<
+  T extends { team_id: string | null; is_active?: boolean | null; deleted_at?: string | null },
+>(labels: readonly T[], teams: readonly { id: string }[], teamChoice: string | null): T[] {
+  const ids = new Set(teamChoice !== null ? [teamChoice] : teams.map((tm) => tm.id));
+  return labels.filter((label) => liveRowOfTeams(label, ids));
 }
 
 /** Прунинг «призрачных» фильтров: если тег/команду/метку удалили, пока

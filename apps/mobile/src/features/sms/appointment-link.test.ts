@@ -29,6 +29,16 @@ describe("ссылка «Подтвердить / Отменить»", () => {
     assert.equal(parseAppointmentLink(null).state, "missing");
   });
 
+  test("прошедшая и отменённая — только состояние и шапка компании", () => {
+    // Сервер после визита деталей не отдаёт: страница рисует заголовок без строк записи.
+    const info = parseAppointmentLink({ state: "past", business_name: "Babun", logo_url: null });
+    assert.deepEqual(
+      [info.state, info.businessName, info.clientFirstName, info.date, info.time, info.address, info.services],
+      ["past", "Babun", "", null, null, null, []],
+    );
+    assert.equal(linkTitle(info), "Эта запись уже прошла");
+  });
+
   test("день словами и заголовок по состоянию", () => {
     assert.equal(dayWords("2026-09-25"), "Пятница, 25 сентября");
     assert.equal(dayWords(null), null);

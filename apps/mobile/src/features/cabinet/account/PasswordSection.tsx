@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Text } from "react-native";
-import { SectionCard } from "@/components/ui/SectionCard";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
@@ -12,14 +13,30 @@ import { passwordAccepted, passwordHint } from "@/components/auth/password-rule"
 import { passwordRefusal } from "@/features/cabinet/account-errors";
 import { PASSWORD_KEYBOARD } from "@/lib/keyboard";
 
-// ─── Смена пароля (web SecuritySection / PasswordBlock) ──────────────
-export function PasswordSection({ email }: { email: string | null }) {
+// ─── Смена пароля: лист с тремя полями, кнопка — в футере ───────────
+export function PasswordSheet({
+  visible,
+  onClose,
+  email,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  email: string | null;
+}) {
   const t = useThemeColors();
   const toast = useToast();
   const [currentPwd, setCurrentPwd] = useState("");
   const [pwd, setPwd] = useState("");
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setCurrentPwd("");
+      setPwd("");
+      setConfirm("");
+    }
+  }, [visible]);
 
   const pwdHint = passwordHint(pwd);
   const mismatch = confirm.length > 0 && pwd !== confirm;
@@ -67,10 +84,8 @@ export function PasswordSection({ email }: { email: string | null }) {
       }
       const { error } = await supabase.auth.updateUser({ password: pwd });
       if (error) throw new Error(passwordRefusal(error.message));
-      setCurrentPwd("");
-      setPwd("");
-      setConfirm("");
       toast("Пароль обновлён");
+      onClose();
     } catch (e) {
       const words = writeErrorWords(e, {
         failed: "Не удалось сменить пароль",
@@ -82,8 +97,30 @@ export function PasswordSection({ email }: { email: string | null }) {
     }
   };
 
+  // Набранные пароли случайным свайпом не стираются — сначала вопрос.
+  const guard = useGuardedClose({
+    dirty: currentPwd !== "" || pwd !== "" || confirm !== "",
+    busy: saving,
+    onClose,
+    message: "Набранные пароли не сохранятся.",
+  });
+
   return (
-    <SectionCard title="Безопасность" padded>
+    <BottomSheet
+      visible={visible && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
+      title="Сменить пароль"
+      avoidKeyboard
+      footer={
+        <Button
+          label="Сменить пароль"
+          onPress={() => void submit()}
+          disabled={!canSubmit}
+          loading={saving}
+        />
+      }
+    >
       <Field
         label="Текущий пароль"
         value={currentPwd}
@@ -131,17 +168,11 @@ export function PasswordSection({ email }: { email: string | null }) {
       {hint ? (
         <Text
           accessibilityLiveRegion="polite"
-          style={{ marginBottom: 8, fontSize: 13, lineHeight: 18, color: t.sub }}
+          style={{ fontSize: 13, lineHeight: 18, color: t.sub }}
         >
           {hint}
         </Text>
       ) : null}
-      <Button
-        label="Сменить пароль"
-        onPress={() => void submit()}
-        disabled={!canSubmit}
-        loading={saving}
-      />
-    </SectionCard>
+    </BottomSheet>
   );
 }

@@ -3,7 +3,6 @@ import { MessageSquare } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { LOW_BALANCE_CENTS, type SmsAccount } from "./sms-model";
@@ -11,8 +10,8 @@ import { euro } from "./sms-words";
 
 // КАБИНЕТ → SMS — ЧАСТИ СТРАНИЦЫ (с правильными тарифами и ценой SMS).
 //
-//   • БАЛАНС — компактно: сумма, «≈ N SMS», месяц; ниже €5 — «Пополните
-//     баланс» строкой (плашки над страницей нет);
+//   • БАЛАНС — компактно: сумма, «≈ N SMS», месяц; ниже €5 — «баланс на
+//     исходе» строкой (плашки над страницей нет, призыв — кнопкой внизу);
 //   • ТАРИФ — три лимита по длине: 1, 2 или 3 SMS и их цена.
 //   Календари — в «Истории SMS» выбором.
 //   Бонусов и скидок за крупное пополнение нет: платят полную сумму, сколько
@@ -22,7 +21,7 @@ import { euro } from "./sms-words";
 export const smsCount = (n: number): string => formatCountRu(n, ["SMS", "SMS", "SMS"]);
 
 /** Баланс — компактно: сумма и «≈ N SMS» слева, месяц
- *  справа. Ниже €5 — «Пополните баланс» цветом предупреждения. */
+ *  справа. Ниже €5 — «баланс на исходе» цветом предупреждения. */
 export function SmsBalanceCard({ account }: { account: SmsAccount }) {
   const t = useThemeColors();
   const owner = account.owner;
@@ -35,14 +34,15 @@ export function SmsBalanceCard({ account }: { account: SmsAccount }) {
   // печатал бы число сообщений — «€1,20 · 5 SMS» при цене €0,12 за SMS. Месяц —
   // в частях (сумма частей по командам); нет разбивки — число сообщений.
   const monthParts = owner.teams.reduce((sum, team) => sum + team.segments, 0) || owner.monthCount;
-  // В приложении из магазина «пополните» не говорим
-  // (`pay-here.ts`) — только состояние.
+  // СТРОКА ПОД СУММОЙ — СОСТОЯНИЕ, А НЕ ПРИЗЫВ. Что сделать, говорит кнопка
+  // «Пополнить баланс» внизу страницы; «пополните баланс» здесь её дублировало.
+  // В приложении из магазина кнопки нет — тем более только состояние.
   const line = debt
-    ? CAN_PAY_HERE ? "Долг — пополните баланс" : "Долг"
+    ? "Долг"
     : low
       ? left > 0
-        ? CAN_PAY_HERE ? `≈ ${smsCount(left)} · пополните баланс` : `≈ ${smsCount(left)} · баланс на исходе`
-        : CAN_PAY_HERE ? "Пополните баланс" : "Баланс на исходе"
+        ? `≈ ${smsCount(left)} · баланс на исходе`
+        : "Баланс на исходе"
       : `≈ ${smsCount(left)}`;
   return (
     <SectionCard title="Баланс">

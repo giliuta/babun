@@ -49,7 +49,7 @@ export function ReceiptPreviewSheet({
       scroll
       maxHeightRatio={0.9}
       footer={
-        <View style={{ paddingHorizontal: SIDE }}>
+        <View>
           <GradientButton label={actionLabel} loading={busy} onPress={onIssue} />
         </View>
       }

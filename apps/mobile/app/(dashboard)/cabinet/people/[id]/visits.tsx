@@ -132,7 +132,9 @@ export default function MasterWorkScreen() {
             <NavRow label="Отменено" value={String(s.cancelled)} separated />
           ) : null}
           <NavRow
-            label="Выручка"
+            // Получено по записям периода — не цена всех записей, будущие
+            // неоплаченные сюда не входят (`getPaidAmount`).
+            label="Получено"
             value={formatEUR(s.revenue)}
             valueColor={s.revenue > 0 ? t.success : undefined}
             separated

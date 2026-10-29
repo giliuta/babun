@@ -18,7 +18,7 @@ import { Divider } from "@/components/ui/Divider";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -297,7 +297,7 @@ export function CategoryEditorSheet({
       scroll
       title={editing ? "Категория" : `Новая категория · ${KIND_WORD[kind]}`}
       avoidKeyboard
-      footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
+      footer={picking ? undefined : (<View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button
             label={editing ? "Сохранить" : "Создать категорию"}
             disabled={!name.trim() || budget === undefined || saving}

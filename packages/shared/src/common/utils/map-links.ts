@@ -76,6 +76,32 @@ export function isLikelyUrl(input: string): boolean {
   );
 }
 
+// Карты, чьи ссылки открываем как есть. Пин присылает и клиент со страницы
+// без входа: чужая страница под видом карты открылась бы мастеру одним тапом
+// из «Маршрута». Тот же список держит сервер (`public.is_map_url`).
+const MAP_HOSTS: { host: RegExp; path?: RegExp }[] = [
+  { host: /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$/, path: /^\/maps(\/|$)/ },
+  { host: /^maps\.google\.[a-z]{2,3}(\.[a-z]{2})?$/ },
+  { host: /^maps\.app\.goo\.gl$/ },
+  { host: /^goo\.gl$/, path: /^\/maps(\/|$)/ },
+  { host: /^maps\.apple(\.com)?$/ },
+  { host: /^(www\.|ul\.)?waze\.com$/ },
+  { host: /^(www\.)?(openstreetmap|osm)\.org$/ },
+  { host: /^(www\.)?yandex\.(ru|com|by|kz|uz|com\.tr)$/, path: /^\/maps(\/|$)/ },
+  { host: /^maps\.yandex\.(ru|com)$/ },
+  { host: /^(www\.)?2gis\.(ru|com|kz|ae)$/ },
+];
+
+export function isTrustedMapUrl(input: string): boolean {
+  const raw = input.trim().toLowerCase();
+  const url = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
+  const m = /^https?:\/\/([^/?#]*)([^?#]*)/.exec(url);
+  // `user@host` открывает host после «@», а не то, что видно первым.
+  if (!m || !m[1] || m[1].includes("@")) return false;
+  const host = m[1].replace(/:\d*$/, "");
+  return MAP_HOSTS.some((h) => h.host.test(host) && (!h.path || h.path.test(m[2])));
+}
+
 export function parseAddress(input: string): ParsedAddress {
   const raw = input.trim();
   return {
@@ -115,10 +141,10 @@ export function buildMapUrl(
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
   }
 
-  // No coordinates — if it's a URL the Google button opens the link
-  // as-is (Google's apps resolve short URLs themselves). Apple and
-  // Waze fall back to a text query.
-  if (parsed?.isUrl && service === "google") {
+  // No coordinates — if it's a map URL the Google button opens the link
+  // as-is (Google's apps resolve short URLs themselves); any other URL is
+  // only searched for. Apple and Waze fall back to a text query.
+  if (parsed?.isUrl && service === "google" && isTrustedMapUrl(parsed.raw)) {
     return parsed.raw.startsWith("http") ? parsed.raw : `https://${parsed.raw}`;
   }
 

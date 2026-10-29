@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { parseBookingSettings, type BookingSettings } from "./online-booking";
 
 // ОНЛАЙН-ЗАПИСЬ В ШЕСТЕРЁНКЕ КАЛЕНДАРЯ — сеть владельца. Таблица страниц
-// закрыта; выключатель, ссылку и услуги читают и пишут три функции, и каждая
+// закрыта; выключатель, ссылку и услуги читают и пишут функции, и каждая
 // сама проверяет, что звонит владелец компании этого календаря. Ответ любой
 // записи — свежее состояние целиком: его и кладём в кэш.
 
@@ -47,6 +47,19 @@ export function useSetBookingService(teamId: string | null) {
         p_service: input.serviceId,
         p_online: input.online,
       });
+      if (error) throw new Error(error.message);
+      return parseBookingSettings(data);
+    },
+    onSuccess: (next) => qc.setQueryData(bookingSettingsKey(teamId), next),
+  });
+}
+
+/** Новая ссылка: старая сразу отвечает «не найдена» (`online_booking_new_link`). */
+export function useNewBookingLink(teamId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<BookingSettings> => {
+      const { data, error } = await supabase.rpc("online_booking_new_link", { p_team: teamId as string });
       if (error) throw new Error(error.message);
       return parseBookingSettings(data);
     },

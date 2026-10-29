@@ -35,6 +35,7 @@ import {
   invitationErrorMessage,
   isInvitationToken,
 } from "@/features/settings/invitation-flow";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ПРИГЛАШЕНИЕ ПО ССЫЛКЕ.
 //
@@ -312,9 +313,9 @@ export default function InvitationScreen() {
         {content}
       </ScrollView>
       {footer ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 8 }}>
+        <PageFooter>
           {footer}
-        </View>
+        </PageFooter>
       ) : null}
     </Screen>
   );

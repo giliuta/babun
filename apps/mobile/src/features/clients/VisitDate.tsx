@@ -67,7 +67,7 @@ export function PhoneVisitLine({
 /** То же словами — для VoiceOver. */
 export function visitMarkWords(mark: VisitMark): string {
   const date = formatShortDateRu(mark.date);
-  if (mark.kind === "unclosed") return `визит ${date} не закрыт`;
+  if (mark.kind === "unclosed") return `запись ${date} не закрыта`;
   if (mark.kind === "ahead") return `записан ${date}`;
-  return `последний визит ${date}`;
+  return `последняя запись ${date}`;
 }

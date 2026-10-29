@@ -1,6 +1,7 @@
 import { useTeams } from "@/features/reference/queries";
 import { liveTeamChoice, teamForNewClient } from "@/features/clients/team-scope";
 import { useClientsTeam } from "@/features/clients/team-pref";
+import { useClientTeamChoices } from "@/features/clients/use-client-team-choices";
 
 /** The team a new client goes to: the booking team, else the tab chip. */
 export function useNewClientTeam(
@@ -18,7 +19,9 @@ export function useNewClientTeam(
   // номера, поля карточки и отправитель SMS.
   const bookingTeam =
     team && (teamIds.length === 0 || teamIds.includes(team)) ? team : null;
+  // Без чипа — первая ВИДИМАЯ команда ленты, а не скрытая «My».
+  const { isVisible } = useClientTeamChoices();
   const newClientTeam =
-    bookingTeam ?? teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
+    bookingTeam ?? teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds, isVisible);
   return newClientTeam;
 }

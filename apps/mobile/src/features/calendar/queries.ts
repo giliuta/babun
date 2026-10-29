@@ -15,6 +15,7 @@ import {
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
+import { READ_RPCS } from "@/lib/write-requests";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
@@ -48,13 +49,22 @@ import {
  *  `READ_ONLY_VIEW_FIELD`, и выгрузка идёт клиентом хоста (иначе правка
  *  записи падала «update is not a function» и откатывалась). `select`
  *  отдаётся настоящему билдеру целиком — фильтры, порядок и страницы
- *  репозитория работают как есть; записи у вида нет. */
+ *  репозитория работают как есть; записи у вида нет.
+ *
+ *  `rpc` — ТОЛЬКО ФУНКЦИИ ЧТЕНИЯ (`READ_RPCS`). Сверка записей дельтой зовёт
+ *  отпечаток месяцев (`appointment_month_digest`); без `rpc` у вида вызов
+ *  падал TypeError, и сверка молча уходила в полное чтение (замер на QA-5
+ *  28.10). Функция записи видом не зовётся — отказ, а не тихий вызов. */
 export function readOnlyClient(base: typeof supabase = supabase): typeof supabase {
   return {
     [READ_ONLY_VIEW_FIELD]: true,
     from: (table: Parameters<typeof base.from>[0]) => ({
       select: (columns?: string) => base.from(table).select(columns),
     }),
+    rpc: (name: string, args?: Record<string, unknown>) =>
+      READ_RPCS.has(name)
+        ? (base.rpc as unknown as (n: string, a?: Record<string, unknown>) => unknown).call(base, name, args)
+        : Promise.resolve({ data: null, error: { message: `read-only view: ${name} is not a read`, code: "READ_ONLY" } }),
   } as unknown as typeof supabase;
 }
 

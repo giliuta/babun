@@ -1,118 +1,71 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import { SelectRow } from "@/components/ui/select-rows";
+import { whatLine, type RowAccount } from "@/features/finances/record-rows";
 import { useThemeColors } from "@/theme/colors";
 
-/** Строка операции — грамматика ленты «Финансов»: пилюля цвета знака,
- *  контекст над названием, сумма справа. */
-export function TxRow({
-  context,
-  title,
-  amount,
-  outflow,
-  separated,
-  onPress,
-}: {
-  context: string;
-  title: string;
-  amount: number;
-  outflow: boolean;
-  separated?: boolean;
-  onPress?: () => void;
-}) {
-  const t = useThemeColors();
-  const color = outflow ? t.danger : t.success;
-  const money = `${outflow ? "−" : ""}${formatEUR(Math.abs(amount))}`;
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={`${title}, ${outflow ? "списание" : "поступление"} ${formatEUR(Math.abs(amount))}`}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        minHeight: 56,
-        paddingLeft: 16,
-        paddingRight: 16,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-        backgroundColor: pressed && onPress ? t.pressed : "transparent",
-      })}
-    >
-      <View style={{ width: 6, height: 36, borderRadius: 999, backgroundColor: color }} />
-      <View style={{ flex: 1 }}>
-        {context ? (
-          <Text numberOfLines={1} style={{ fontSize: 12, color: t.faint }}>
-            {context}
-          </Text>
-        ) : null}
-        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-          {title}
-        </Text>
-      </View>
-      <Text style={{ fontSize: 16, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
-        {money}
-      </Text>
-    </Pressable>
-  );
-}
+// ЗАПИСЬ ПЛАНА ДНЯ — ПЛАШКОЙ ЛЕНТЫ «ФИНАНСОВ». Операции дня рисует сам
+// `RecordRowView` ленты (`day-rows.ts`); у записи без денег строки ленты нет,
+// поэтому плашка своя, но геометрия, подпись (`whatLine`: время · счёт ·
+// услуги) и подпись под суммой — те же: под долгом его возраст, как в ленте.
 
-/** Строка записи (долг, план) — грамматика списка должников: имя сверху,
- *  время и работа под ним, сумма справа. Долг — не транзакция, пилюли нет. */
+/** Строка записи (долг, план): клиент, время и услуги под ним, сумма справа. */
 export function RecordRow({
   name,
-  context,
+  time,
+  services,
+  accounts,
   amount,
   color,
   status,
-  separated,
+  caption,
+  icon,
   onPress,
 }: {
   name: string;
-  context: string;
+  time: string | null;
+  services: string[];
+  /** Счета, через которые прошла оплата записи, — как у строки ленты. */
+  accounts?: readonly RowAccount[];
   amount: number;
   color: string;
-  /** «оплачено» · «долг» · «ожидается» — словом под суммой, в плане дня. */
+  /** «оплачено» · «долг» · «ожидается» — для VoiceOver; глазу это говорят
+   *  цвет суммы и значок, как в ленте. */
   status?: string;
-  separated?: boolean;
+  /** Под суммой — то, что пишет лента: у долга его возраст. */
+  caption?: string;
+  icon: LucideIcon;
   onPress: () => void;
 }) {
   const t = useThemeColors();
+  const what = whatLine({ time, services, accounts });
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
+    <SelectRow
+      icon={icon}
+      color={color}
+      plain
+      title={name}
+      // Запись без услуг и без времени — тоже строка: тире держит второй ярус.
+      subtitle={what || "—"}
       accessibilityLabel={`${name}, ${status ? `${status} ` : ""}${formatEUR(amount)} — открыть запись`}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        minHeight: 56,
-        paddingHorizontal: 16,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-        backgroundColor: pressed ? t.pressed : "transparent",
-      })}
-    >
-      <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "500", color: t.ink }}>
-          {name}
-        </Text>
-        {context ? (
-          <Text numberOfLines={1} style={{ fontSize: 12, color: t.faint }}>
-            {context}
+      onPress={onPress}
+      trailing={
+        <View style={{ alignItems: "flex-end", flexShrink: 0, maxWidth: "45%" }}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}
+          >
+            {formatEUR(amount)}
           </Text>
-        ) : null}
-      </View>
-      <View style={{ alignItems: "flex-end" }}>
-        <Text style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
-          {formatEUR(amount)}
-        </Text>
-        {status ? (
-          <Text style={{ fontSize: 12, color: t.faint }}>{status}</Text>
-        ) : null}
-      </View>
-    </Pressable>
+          {caption ? (
+            <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={{ fontSize: 13, color: t.faint }}>
+              {caption}
+            </Text>
+          ) : null}
+        </View>
+      }
+    />
   );
 }

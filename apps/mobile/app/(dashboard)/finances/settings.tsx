@@ -36,6 +36,7 @@ import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-setti
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { useDeletedOperations } from "@/features/finances/deleted-operations";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ: выбрал сверху команду — и это полностью её
 // настройки.
@@ -164,7 +165,7 @@ export default function FinanceSettingsScreen() {
                   шестерёнке клиентов. */}
               {money.trash ? (
                 <>
-                  {money.accounts ? <Divider inset={56} /> : null}
+                  {money.accounts ? <Divider inset={SETTINGS_ROW_INSET} /> : null}
                   <SettingsRow
                     tile={SETTINGS_TILE.red}
                     icon={Trash2}
@@ -190,7 +191,7 @@ export default function FinanceSettingsScreen() {
             <SectionCard title="Категории">
               {categoryKinds.map(({ kind, title, icon, tile }, index) => (
                 <View key={kind}>
-                  {index > 0 ? <Divider inset={56} /> : null}
+                  {index > 0 ? <Divider inset={SETTINGS_ROW_INSET} /> : null}
                   <SettingsRow
                     tile={tile}
                     icon={icon}

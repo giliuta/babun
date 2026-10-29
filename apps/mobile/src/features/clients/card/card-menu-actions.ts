@@ -1,8 +1,8 @@
-import { Share } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { shareText } from "@/features/clients/client-share";
+import { shareMessage } from "@/features/clients/location-request-share";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";
 import { confirmThen } from "@/lib/confirm";
@@ -43,11 +43,10 @@ export function cardMenuActions(card: ClientCard, c: Client) {
     setMenuOpen(false);
     // Всё, что нужно бригаде: имя, телефон, каждый объект со ссылкой и
     // заметкой; реквизиты — по тому же праву, что их блок на странице.
-    try {
-      await Share.share({ message: shareText(c, { requisites: access.requisites.show }) });
-    } catch {
-      // user dismissed the share sheet — no-op.
-    }
+    // На десктопном вебе листа нет — текст уходит в буфер (`shareMessage`).
+    const outcome = await shareMessage(shareText(c, { requisites: access.requisites.show }));
+    if (outcome === "copied") toast("Скопировано");
+    else if (outcome === "failed") toast("Не удалось поделиться", "error");
   };
 
   // Чёрный список отменяется тем же тапом из тоста.

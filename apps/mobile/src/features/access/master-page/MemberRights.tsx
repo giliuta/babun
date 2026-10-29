@@ -95,6 +95,7 @@ export function MemberRights({
       onPick={writer.pick}
       area={rightsAreaOf(area)}
       lockedAll={manager.readOnly ?? undefined}
+      previewName={subtitle ?? undefined}
       onPreview={manager.canPreview ? () =>
         preview({
           blocks,

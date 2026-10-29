@@ -171,8 +171,8 @@ function RegisterScreen() {
           ref={emailRef}
           value={email}
           onChangeText={edit(setEmail)}
-          placeholder="Email"
-          accessibilityLabel="Email"
+          placeholder="Почта"
+          accessibilityLabel="Почта"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"

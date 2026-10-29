@@ -77,13 +77,13 @@ export function MirrorBanner({ inModal = false }: { inModal?: boolean } = {}) {
       <Eye color={t.onAccent} size={18} strokeWidth={2} />
       <View style={{ flex: 1 }}>
         <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.callout, color: t.onAccent }}>
-          {`Смотрите глазами: ${mirror.name}`}
+          {`Смотрите как ${mirror.name}`}
         </Text>
         <Text
           maxFontSizeMultiplier={1.3}
           style={{ ...TYPE.subhead, color: t.onAccent, opacity: 0.85 }}
         >
-          Права его, данные ваши
+          Права партнёра, данные ваши
         </Text>
       </View>
       <View

@@ -197,6 +197,56 @@ export function primaryLine(
   return objectTarget(loc);
 }
 
+/** Хвост, который не город: квартира, этаж, подъезд, офис — или короткое
+ *  число (номер дома или квартиры). */
+const NOT_A_PLACE =
+  /^(?:квартира|кв|этаж|эт|подъезд|под|офис|оф|корпус|корп|стр|apt|flat|floor|fl|unit|office|suite|#)(?=[\s.,#№\d]|$)|^\d{1,3}[a-zа-я]?$/i;
+const ZIP = /^\d{4,5}$/;
+
+/**
+ * АДРЕС ОДНОЙ СТРОКОЙ — НА ЧАСТИ. «Artemidos 1, Tala» целиком уходил в
+ * «улицу и дом»: город и индекс оставались пустыми, и маршрут, и уточнение,
+ * и список читали город как часть улицы. Строка разбирается тем же порядком,
+ * каким `composeAddress` её собирает: улица, [комплекс,] город [индекс].
+ * Индекс — 4–5 цифр в начале или в конце последней части («Limassol 4000»,
+ * «4000 Limassol») или отдельной частью. Не похоже на место («кв. 12», «5») —
+ * строка не разбирается, а остаётся улицей, как раньше.
+ */
+export function splitAddressLine(line: string): AddressParts | null {
+  const segments = line.split(",").map((part) => part.trim()).filter(Boolean);
+  if (segments.length < 2) return null;
+  const [street, ...rest] = segments;
+  let zip: string | undefined;
+  const lastSegment = rest[rest.length - 1]!;
+  if (ZIP.test(lastSegment)) {
+    zip = lastSegment;
+    rest.pop();
+  } else {
+    const atEnd = /^(.*\D)\s+(\d{4,5})$/.exec(lastSegment);
+    const atStart = /^(\d{4,5})\s+(\D.*)$/.exec(lastSegment);
+    if (atEnd) {
+      zip = atEnd[2];
+      rest[rest.length - 1] = atEnd[1]!.trim();
+    } else if (atStart) {
+      zip = atStart[1];
+      rest[rest.length - 1] = atStart[2]!.trim();
+    }
+  }
+  let city: string | undefined;
+  const candidate = rest[rest.length - 1];
+  if (candidate && !NOT_A_PLACE.test(candidate) && /\p{L}/u.test(candidate)) {
+    city = candidate;
+    rest.pop();
+  }
+  if (!city && !zip) return null;
+  // Между улицей и городом — только место (комплекс); квартира или этаж там
+  // значат, что строка — не «улица, город», и гадать дальше нельзя.
+  if (rest.some((part) => NOT_A_PLACE.test(part))) return null;
+  return (
+    cleanAddressParts({ street, complex: rest.join(", ") || undefined, city, zip }) ?? null
+  );
+}
+
 /**
  * Патч объекта из главной строки и уточнения — одним местом для добавления и
  * правки. Строка-ссылка уходит в пин, строка-текст — в «улица и дом»; части
@@ -215,10 +265,17 @@ export function objectPlacePatch(
   const pinValue = pin.trim();
   const pinUrl = isLikelyUrl(pinValue) ? pinValue : undefined;
   const keptPin = pinValue && !pinUrl ? (prev.mapUrl ?? "").trim() || undefined : undefined;
-  const parts = cleanAddressParts({
-    ...details,
-    street: lineIsUrl ? undefined : value || undefined,
-  });
+  // Строка «улица, город индекс» раскладывается по частям, если город и
+  // индекс не заданы в уточнении явно (см. `splitAddressLine`).
+  const split =
+    !lineIsUrl && value && !details.city?.trim() && !details.zip?.trim()
+      ? splitAddressLine(value)
+      : null;
+  const parts = cleanAddressParts(
+    split
+      ? { ...details, ...split, complex: details.complex?.trim() || split.complex }
+      : { ...details, street: lineIsUrl ? undefined : value || undefined },
+  );
   if (parts && hasAddressPlace(parts)) {
     return {
       address: composeAddress(parts),

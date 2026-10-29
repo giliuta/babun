@@ -80,13 +80,20 @@ export function bulkTagsOffered(
   clients: readonly Pick<Client, "team_id" | "tag_ids">[],
   mode: BulkTagMode,
   fallbackTeam: string | null,
+  /** Календари в архиве: их теги не ставятся (`serving-teams.ts`). Снять
+   *  уже стоящий — можно. */
+  archivedTeamIds: ReadonlySet<string> = new Set(),
 ): ClientTag[] {
   if (mode === "remove") {
     const present = new Set(clients.flatMap((c) => c.tag_ids ?? []));
     return tags.filter((tag) => present.has(tag.id));
   }
   const teams = new Set(clients.map((c) => teamOf(c, fallbackTeam)));
-  return tags.filter((tag) => !tag.hidden && (!tag.team_id || teams.has(tag.team_id)));
+  return tags.filter(
+    (tag) =>
+      !tag.hidden &&
+      (!tag.team_id || (teams.has(tag.team_id) && !archivedTeamIds.has(tag.team_id))),
+  );
 }
 
 export function tagEdits(

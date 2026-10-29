@@ -28,6 +28,32 @@ export async function copyLink(link: string): Promise<boolean> {
   }
 }
 
+/** ТЕКСТ ЦЕЛИКОМ — карточка клиента из строки списка и из «⋯». `Share.share`
+ *  react-native-web без `navigator.share` (десктопный браузер) молча
+ *  отказывал, и «Поделиться» не делало ничего; теперь там — буфер обмена.
+ *  Что вышло, говорит ответ — тост показывает зовущий. */
+export async function shareMessage(message: string): Promise<ShareOutcome> {
+  if (Platform.OS === "web") {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ text: message });
+        return "shared";
+      } catch (error) {
+        if ((error as { name?: string } | null)?.name === "AbortError") {
+          return "dismissed";
+        }
+      }
+    }
+    return (await copyLink(message)) ? "copied" : "failed";
+  }
+  try {
+    const result = await Share.share({ message });
+    return result.action === Share.dismissedAction ? "dismissed" : "shared";
+  } catch {
+    return "dismissed";
+  }
+}
+
 /** `text` — фраза БЕЗ ссылки: в браузере она и ссылка едут разными полями,
  *  на нативе склеиваются переводом строки. */
 export async function shareLink(text: string, link: string): Promise<ShareOutcome> {

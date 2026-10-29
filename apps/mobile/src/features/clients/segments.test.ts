@@ -12,7 +12,6 @@ import {
   segmentEvidence,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
-  sortClients,
 } from "./filter";
 
 function client(patch: Partial<Client> = {}): Client {
@@ -33,6 +32,7 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     unclosedVisits: 0,
     lastUnclosedDate: "",
     pastOpenRecords: 0,
+    lastPastOpenDate: "",
     upcomingRecords: 0,
     nextApt: null,
     nextAptDays: null,
@@ -123,24 +123,6 @@ describe("блоки статусов", () => {
   });
 });
 
-describe("ось «Ожидается»", () => {
-  test("сверху самые дорогие предстоящие работы, без ожиданий — в хвост", () => {
-    const list = [
-      client({ id: "мало" }),
-      client({ id: "нет" }),
-      client({ id: "много" }),
-    ];
-    const map = new Map([
-      ["мало", stats({ expectedRevenue: 120 })],
-      ["много", stats({ expectedRevenue: 900 })],
-    ]);
-    assert.deepEqual(
-      sortClients(list, map, "expected").map((c) => c.id),
-      ["много", "мало", "нет"],
-    );
-  });
-});
-
 describe("статусы после разбора 2026-08-07", () => {
   test("ритм зажат снизу и сверху: «раз в 1 день» не делает пропавшим за двое суток", () => {
     // Два выезда подряд дают медиану 1 — но тревожить раньше 28 дней нельзя.
@@ -186,11 +168,11 @@ describe("статусы после разбора 2026-08-07", () => {
   test("склонения в улике считают по-русски", () => {
     assert.equal(
       segmentEvidence(client(), ["loyal"], stats({ visits: 22 }), TODAY),
-      "22 визита",
+      "22 записи",
     );
     assert.equal(
       segmentEvidence(client(), ["unclosed"], stats({ unclosedVisits: 5 }), TODAY),
-      "5 визитов не закрыто",
+      "5 записей не закрыто",
     );
   });
 

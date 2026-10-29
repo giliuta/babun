@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -23,7 +23,16 @@ export function useListUiState(params: { openImport?: string; openContacts?: str
         today,
       ) ?? EMPTY_FILTER,
   );
+  // ПОЛНОЧЬ ПРИ ОТКРЫТОМ СПИСКЕ: набор — дневной, и новый день его не
+  // наследует. Без сброса вчерашний набор сохранялся бы под новой датой, а
+  // «Сегодня» в нём показывало бы вчера.
+  const filterDay = useRef(today);
   useEffect(() => {
+    if (filterDay.current !== today) {
+      filterDay.current = today;
+      setFilter(EMPTY_FILTER);
+      return;
+    }
     saveDayFilter(filter, today);
   }, [filter, today]);
   const [sheetOpen, setSheetOpen] = useState(false);

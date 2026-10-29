@@ -198,13 +198,9 @@ export function DeletedOperationsScreen() {
           <EmptyState state="loading" fill />
         )
       ) : rows.length === 0 ? (
-        // Пустой ящик говорит, что в нём бывает, — как соседние пустые экраны
-        // (заголовок и пояснение), а не одним словом.
-        <EmptyState
-          fill
-          title="Удалённых операций нет"
-          subtitle="Удалённая операция лежит здесь, пока её не вернут или не удалят насовсем"
-        />
+        // Пустое не объясняет (DESIGN-SYSTEM, LOCKED 08-27): одна формула
+        // на все корзины — «Удалённых N нет».
+        <EmptyState fill title="Удалённых операций нет" />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {days.map(([day, items]) => (

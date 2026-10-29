@@ -316,7 +316,7 @@ function SourceSheet({
       onExited={guard.onExited}
       title={isEdit ? "Источник" : "Новый источник"}
       avoidKeyboard
-      footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
+      footer={picking ? undefined : (<View>
           <Button
             label={isEdit ? "Сохранить" : "Создать источник"}
             disabled={!name.trim() || busy}

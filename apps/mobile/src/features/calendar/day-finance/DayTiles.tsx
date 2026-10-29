@@ -58,7 +58,8 @@ export function DayTiles({
             выглядели бы долгом — плитки нет. */}
         {showDebt ? (
           <SummaryToggle
-            label="Долг"
+            // Слово «Финансов»: та же плитка там — «Долги».
+            label="Долги"
             color={t.warning}
             value={formatEUR(money.debt)}
             quiet={moneySign(money.debt) === 0}

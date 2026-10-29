@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useCalendarVisibility } from "@/session/workspaces";
+import { useTeamName } from "@/session/team-name";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -62,12 +64,20 @@ const DOORS: readonly DoorSpec[] = [
   },
 ];
 
+/** Чип «Все» ленты выгрузки — не команда, а отсутствие фильтра. */
+const ALL_CHIP = "__all__";
+
 // Отступ разделителя: поле строки 16 + плитка 28 + зазор 12.
 const ROW_INSET = 56;
 
 export function DataExportScreen() {
   const role = useDataRole();
-  const { data: teams = [] } = useTeams();
+  const { data: allTeams = [] } = useTeams();
+  // Скрытые календари человек нигде, кроме шестерёнки, не видит — и в
+  // ленте выгрузки их нет (как в настройках клиентов и уведомлений).
+  const { isHidden } = useCalendarVisibility();
+  const teams = allTeams.filter((team) => !isHidden(team.tenant_id, team.id));
+  const teamName = useTeamName();
   const [selected, setSelected] = useState<string | null>(null);
   // Выбранная команда пропала из списка своих (удалена, доступ снят) — снова
   // «все»: выгружать по чужому или мёртвому id нельзя.
@@ -94,11 +104,17 @@ export function DataExportScreen() {
               <ScopeChips
                 onCanvas
                 seam={false}
-                items={teams.map((team) => ({ id: team.id, name: team.name, color: team.color }))}
-                activeId={teamId}
+                // «ВСЕ» — ЯВНЫМ ЧИПОМ. Выгрузка всего жила состоянием «ни один
+                // чип не тонирован», которое глазом не отличить от «ничего не
+                // выбрано»; контракт ленты — тонирован ровно один.
+                items={[
+                  { id: ALL_CHIP, name: "Все", color: null },
+                  ...teams.map((team) => ({ id: team.id, name: teamName(team.name), color: team.color })),
+                ]}
+                activeId={teamId ?? ALL_CHIP}
                 onSelect={(id) => {
                   haptics.tap();
-                  setSelected(teamId === id ? null : id);
+                  setSelected(id === ALL_CHIP ? null : id);
                 }}
               />
             </View>

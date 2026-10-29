@@ -191,7 +191,7 @@ export function paymentActions(
       toast(
         recordedToast({ kind, amount, already, accountName: account.name }),
         "success",
-        { label: "Снять", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
+        { label: "Отменить", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
       );
       // Ответ — обещанием, как у снятия выше: отказ слышен и после ухода.
       return record

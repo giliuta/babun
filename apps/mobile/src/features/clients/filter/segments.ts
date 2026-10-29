@@ -106,9 +106,9 @@ export const BIRTHDAY_DAYS = 14; // «Скоро день рождения»
  *  записи», «Так и не приехали». Читается подряд как перечень людей.
  *
  *  Под каждой строкой печатается ПРАВИЛО (SEGMENT_RULES) — без него
- *  «Постоянные» не говорит, сколько это визитов. */
+ *  «Постоянные» не говорит, сколько это записей. */
 export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
-  { key: "unclosed", label: "Визит не закрыт" },
+  { key: "unclosed", label: "Запись не закрыта" },
   { key: "debt", label: "Должники" },
   { key: "debtNoUpcoming", label: "Должники без новой записи" },
   { key: "silent", label: "Пропали" },
@@ -129,16 +129,18 @@ export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
  *  Цифры подставляются из тех же констант, что считает `matchesSegment`, —
  *  иначе смена порога сделает подпись ложью. */
 export const SEGMENT_RULES: Record<SegmentKey, string> = {
-  unclosed: "Дата визита прошла, а запись всё ещё «запланирована»",
-  debt: "Есть недоплата по завершённым визитам",
-  debtNoUpcoming: "Есть недоплата, и следующий визит не назначен",
+  unclosed: "Дата записи прошла, а она всё ещё «запланирована»",
+  // Долг — правилом `appointmentDebt`: выполненные с недоплатой, прошедшие,
+  // по которым не отчитались, и остаток инвойса, а не одни завершённые.
+  debt: "Не оплачены прошедшие записи или инвойс",
+  debtNoUpcoming: "Не оплачены прошедшие записи или инвойс, и новой записи нет",
   silent: "Не приезжает дольше своего обычного срока",
-  noUpcoming: "Визиты были, следующий не назначен",
+  noUpcoming: "Записи были, новой нет",
   reminderDue: "Вы поставили напоминание, и срок наступил",
   birthday: `День рождения в ближайшие ${BIRTHDAY_DAYS} дней`,
-  booked: "Есть назначенный визит впереди",
+  booked: "Есть запись впереди",
   neverCame: `Заведён ${NEW_DAYS}+ дней назад, ни разу не приезжал`,
-  loyal: `${LOYAL_VISITS} и больше завершённых визитов`,
+  loyal: `${LOYAL_VISITS} и больше завершённых записей`,
   blacklist: "Отмечен в чёрном списке",
 };
 
@@ -173,7 +175,7 @@ export function segmentEvidence(
     switch (o.key) {
       case "unclosed": {
         const n = s?.unclosedVisits ?? 0;
-        return `${n} ${countWordRu(n, "визит не закрыт", "визита не закрыты", "визитов не закрыто")}`;
+        return `${n} ${countWordRu(n, "запись не закрыта", "записи не закрыты", "записей не закрыто")}`;
       }
       case "silent": {
         const days = s?.lastVisitDays ?? 0;
@@ -195,10 +197,10 @@ export function segmentEvidence(
           ? `придёт ${s.nextApt.date.slice(8, 10)}.${s.nextApt.date.slice(5, 7)}`
           : null;
       case "neverCame":
-        return `заведён ${s?.ageDays ?? 0} дн. назад, визитов нет`;
+        return `заведён ${s?.ageDays ?? 0} дн. назад, записей нет`;
       case "loyal": {
         const n = s?.visits ?? 0;
-        return `${n} ${countWordRu(n, "визит", "визита", "визитов")}`;
+        return `${n} ${countWordRu(n, "запись", "записи", "записей")}`;
       }
       case "birthday": {
         const d = s?.birthdayInDays ?? 0;
@@ -301,7 +303,7 @@ export const FACET_SUBTITLES: Record<string, string> = {
   segment: "Можно выбрать несколько",
   city: "Любая из выбранных меток",
   tag: "Любой из выбранных тегов",
-  team: "Кто когда-либо обслуживал — по визитам",
+  team: "Кто когда-либо обслуживал — по записям",
   source: "Любой из выбранных источников",
   property: "По карточке и объектам клиента",
   sort: "Что окажется сверху списка",

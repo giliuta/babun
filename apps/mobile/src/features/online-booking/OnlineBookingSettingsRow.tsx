@@ -1,7 +1,6 @@
 import { useRouter, type Href } from "expo-router";
 import { CalendarCheck } from "lucide-react-native";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useBookingSettings } from "./online-booking-settings";
@@ -12,8 +11,10 @@ import { useBookingSettings } from "./online-booking-settings";
 //
 // СТРОКА ЕСТЬ, ТОЛЬКО КОГДА СЕРВЕР ОТВЕТИЛ. Пока функций онлайн-записи в базе
 // нет (или ответ ещё в пути), двери нет вовсе: дверь в страницу с ошибкой
-// хуже отсутствия двери.
-export function OnlineBookingSettingsRow({ teamId }: { teamId: string | null }) {
+// хуже отсутствия двери. Поэтому это ХУК, а не компонент: шестерёнка кладёт
+// строку в общую карточку (`SettingsGroup`) и шов рисует, только если строка
+// есть. `teamId: null` — запрос не идёт (не владелец).
+export function useOnlineBookingSettingsRow(teamId: string | null) {
   const router = useRouter();
   const data = useBookingSettings(teamId).data;
   if (!data) return null;
@@ -25,7 +26,6 @@ export function OnlineBookingSettingsRow({ teamId }: { teamId: string | null }) 
     : "Выключена";
 
   return (
-    <SectionCard>
       <SettingsRow
         tile={SETTINGS_TILE.indigo}
         icon={CalendarCheck}
@@ -39,6 +39,5 @@ export function OnlineBookingSettingsRow({ teamId }: { teamId: string | null }) 
           )
         }
       />
-    </SectionCard>
   );
 }

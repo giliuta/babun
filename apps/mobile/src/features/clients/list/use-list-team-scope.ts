@@ -22,7 +22,8 @@ import {
 } from "@/features/clients/team-scope";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { useAccessMapOf } from "@/features/clients/use-card-access";
-import { useTeams, type Team } from "@/features/reference/queries";
+import type { Team } from "@/features/reference/queries";
+import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 import { dataSpanOf } from "./list-derive";
 import type { ListTeam } from "./use-list-merge";
 
@@ -86,11 +87,7 @@ export function useListTeamScope({
   // правам), а выбрать их для выгрузки и рассылки нельзя (`selectable`).
   // КЛИЕНТЫ КОМАНД В АРХИВЕ ПОД «ВСЕ» НЕ СТОЯТ (`withoutArchivedTeams`):
   // чипа у архивной команды нет, и её «Тест» висели в общем списке ничьими.
-  const { data: companyTeams = [] } = useTeams({ includeInactive: true });
-  const archivedTeamIds = useMemo(
-    () => new Set(companyTeams.filter((tm) => !tm.is_active).map((tm) => tm.id)),
-    [companyTeams],
-  );
+  const archivedTeamIds = useArchivedTeamIds();
   const teamClients = useMemo(
     () =>
       teamChoice === ALL_TEAMS

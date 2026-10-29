@@ -1,6 +1,7 @@
 import { Linking } from "react-native";
 import {
   buildMapUrl,
+  isTrustedMapUrl,
   parseAddress,
   type MapService,
 } from "@babun/shared/common/utils/map-links";
@@ -18,14 +19,17 @@ import { MAP_SERVICES } from "@/features/clients/map-services";
 // был бы лишним тапом на каждом выезде.
 //
 // Приоритет цели: присланный клиентом пин (Location.mapUrl) выше текстового
-// адреса — на кипрских виллах текстовый адрес часто не прокладывается.
+// адреса — на кипрских виллах текстовый адрес часто не прокладывается. Пин
+// приходит и со страницы без входа, поэтому ссылку не с карты не открываем
+// вовсе: маршрут идёт по адресу.
 
 /** Что открывать: пин важнее текста. Пустая строка → маршрута нет. */
 export function routeTarget(
   mapUrl: string | null | undefined,
   address: string | null | undefined,
 ): string {
-  return (mapUrl || "").trim() || (address || "").trim();
+  const pin = (mapUrl || "").trim();
+  return (pin && isTrustedMapUrl(pin) ? pin : "") || (address || "").trim();
 }
 
 /** Карты, которые реально предлагаем, В ПОРЯДКЕ ПОЛЬЗОВАТЕЛЯ.
@@ -51,7 +55,7 @@ export function directRouteUrl(
   const clean = target.trim();
   if (!clean) return null;
   const parsed = parseAddress(clean);
-  if (parsed.isUrl && !parsed.coords) {
+  if (parsed.isUrl && !parsed.coords && isTrustedMapUrl(clean)) {
     return clean.startsWith("http") ? clean : `https://${clean}`;
   }
   const services = routeServices(enabled);

@@ -37,6 +37,10 @@ export interface ClientStats {
   /** Все прошедшие незакрытые записи, и без долга, — для вопроса «есть ли
    *  у клиента история» (удаление): запись на €0 — тоже запись. */
   pastOpenRecords: number;
+  /** YYYY-MM-DD самой поздней прошедшей незакрытой записи, и без долга, или
+   *  "". Строка списка ставит её дату серой: запись на €0 закрыть нечем, но
+   *  и пропускать её нельзя — она была последней. */
+  lastPastOpenDate: string;
   /** Неотменённые записи с сегодняшнего дня вперёд. Удаление клиента их не
    *  трогает — вопрос «Удалить клиента?» говорит, что они останутся. */
   upcomingRecords: number;
@@ -69,6 +73,7 @@ export const EMPTY_STATS: ClientStats = {
   unclosedVisits: 0,
   lastUnclosedDate: "",
   pastOpenRecords: 0,
+  lastPastOpenDate: "",
   upcomingRecords: 0,
   debt: 0,
   expectedRevenue: 0,

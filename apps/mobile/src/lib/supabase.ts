@@ -112,21 +112,55 @@ function fetchWithActiveTenant(
   );
 }
 
-export const supabase = createClient<Database>(url, key, {
-  global: { fetch: fetchWithActiveTenant },
-  auth: {
-    // Web uses supabase-js default (localStorage); native uses the Keychain
-    // adapter so tokens are encrypted at rest.
-    storage: Platform.OS === "web" ? undefined : (LargeSecureStore as never),
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// ОДИН КЛИЕНТ НА ПРОЦЕСС — В DEV ЭТО НЕ ДАНО.
+//
+// Fast Refresh исполняет этот модуль заново при каждой правке в цепочке его
+// импортов (`active-tenant`, `anon-guard`, …), и каждое исполнение заводило
+// НОВЫЙ клиент со своим таймером обновления токена и своим слушателем
+// AppState, а прежние продолжали жить. Все они обновляли один и тот же токен:
+// BabunDev слал по 20–40 `POST /auth/v1/token` за раз, ловил 429, и
+// проигравший терял сессию — дальше запросы уходили анонимом («permission
+// denied for table change_log»). Поэтому в dev
+// клиент живёт на `globalThis` и переживает перезапуск модуля, а свежая
+// обёртка fetch подставляется в него по ссылке. В боевой сборке модуль
+// исполняется один раз, и ветка `__DEV__` вырезается сборщиком.
+type DevSlot = {
+  client?: ReturnType<typeof createBabunClient>;
+  fetch?: typeof fetchWithActiveTenant;
+};
+const devSlot: DevSlot | null =
+  typeof __DEV__ !== "undefined" && __DEV__
+    ? ((globalThis as { __babunSupabase?: DevSlot }).__babunSupabase ??= {})
+    : null;
+if (devSlot) devSlot.fetch = fetchWithActiveTenant;
+
+function createBabunClient() {
+  return createClient<Database>(url as string, key as string, {
+    global: {
+      fetch: devSlot
+        ? (input: RequestInfo | URL, init?: RequestInit) =>
+            (devSlot.fetch ?? fetchWithActiveTenant)(input, init)
+        : fetchWithActiveTenant,
+    },
+    auth: {
+      // Web uses supabase-js default (localStorage); native uses the Keychain
+      // adapter so tokens are encrypted at rest.
+      storage: Platform.OS === "web" ? undefined : (LargeSecureStore as never),
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+const reused = devSlot?.client;
+export const supabase = reused ?? createBabunClient();
+if (devSlot) devSlot.client = supabase;
 
 // Supabase RN guidance: drive token auto-refresh by foreground state so we
-// don't refresh while backgrounded (and reconnect cleanly on resume).
-if (Platform.OS !== "web") {
+// don't refresh while backgrounded (and reconnect cleanly on resume). One
+// listener per client: a reused dev client already has its own.
+if (Platform.OS !== "web" && !reused) {
   AppState.addEventListener("change", (state) => {
     if (state === "active") {
       supabase.auth.startAutoRefresh();

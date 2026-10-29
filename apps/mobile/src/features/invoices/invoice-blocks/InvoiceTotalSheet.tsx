@@ -81,6 +81,7 @@ export function InvoiceTotalSheet({
     dirty: changed,
     title: "Закрыть без применения?",
     message: "Правки «Итого» не применятся.",
+    confirmLabel: "Закрыть",
     onClose: () => {
       if (was && changed) {
         onLinesRestore(was.lines);

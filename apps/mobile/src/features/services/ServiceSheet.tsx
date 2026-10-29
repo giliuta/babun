@@ -3,7 +3,7 @@ import { TemplateList, TemplatesHeaderButton } from "@/components/ui/TemplatePic
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { RowCaption } from "@/components/ui/card-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { type Service } from "@/features/services/queries";
 import { ServiceBufferBlock } from "./service-sheet/ServiceBufferBlock";
 import { ServiceNameBlock } from "./service-sheet/ServiceNameBlock";
@@ -54,7 +54,7 @@ export function ServiceSheet(props: ServiceSheetProps) {
       }
       footer={
         picking ? undefined : (
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
         <Button
           label={service ? "Сохранить" : "Создать услугу"}
           onPress={submit}

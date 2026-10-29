@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { DateSpinner } from "@/components/ui/DateSpinner";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import type { TransferView } from "./transfer-view";
 
@@ -22,7 +22,7 @@ export function renderTransferDateStep(v: TransferView) {
       onExited={guard.onExited}
       title={title}
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <GradientButton
             // Слово из словаря AGENTS 5.2: «Выбрать» кнопкой шторки не бывает.
             label="Применить"

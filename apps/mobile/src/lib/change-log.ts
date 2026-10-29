@@ -47,7 +47,9 @@ export {
 export function changeTitle(row: Pick<ChangeLogRow, "entity" | "meta" | "action" | "changes">): string {
   switch (row.entity) {
     case "member_access":
-      return "Права изменены";
+      // Снятое право — не выдача: у удалённой строки в meta уровень, которого
+      // больше нет, и «Права изменены · Прибыль: Видит» читалось как «дали».
+      return row.action === "delete" ? "Право снято" : "Права изменены";
     case "member_calendars":
       return row.action === "delete" ? "Доступ к календарю закрыт" : "Доступ к календарю открыт";
     case "tenant_members":
@@ -75,7 +77,7 @@ const SYSTEM_CATEGORY_LABELS = new Set([/* i18n-ignore */ "Услуги", /* i18
 
 /** Вторая строка: имя предмета и подпись — «Анастасия · 4 окт, 10:00»,
  *  «Топливо · €40». */
-export function changeSubject(row: Pick<ChangeLogRow, "entity" | "label" | "meta">): string {
+export function changeSubject(row: Pick<ChangeLogRow, "entity" | "label" | "meta" | "action">): string {
   const meta = row.meta ?? {};
   const parts: string[] = [];
   if (row.label) {
@@ -89,7 +91,7 @@ export function changeSubject(row: Pick<ChangeLogRow, "entity" | "label" | "meta
     const level = LEVEL_WORDS[String(meta.level ?? "")];
     // Заголовок блока прав пишет сервер по-русски (`server-keys.json`).
     const title = tDynamic(String(meta.block_title));
-    parts.push(level ? `${title}: ${level}` : title);
+    parts.push(level && row.action !== "delete" ? `${title}: ${level}` : title);
   }
   if (row.entity === "appointments" || row.entity === "appointment_photos") {
     const when = [meta.date ? shortDate(meta.date) : "", meta.time ? String(meta.time) : ""]

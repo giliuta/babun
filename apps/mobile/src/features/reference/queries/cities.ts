@@ -52,6 +52,33 @@ export function useCities(opts?: {
   });
 }
 
+// МЕТКИ ДЛЯ ВЫБОРА — ПРЕДСТАВЛЕНИЕ `cities_live`: без удалённых и без меток
+// календарей в архиве, под теми же правами строки, что `cities`. Ключ лежит
+// под `["cities"]`, поэтому любая правка меток перечитывает и его.
+export function useLiveCities() {
+  const { tenantId, client, ready } = useReferenceCompany();
+  return useQuery({
+    queryKey: ["cities", tenantId, "picker"] as const,
+    enabled: !!tenantId && ready,
+    queryFn: () => fetchLiveCities(client, tenantId as string),
+  });
+}
+
+export async function fetchLiveCities(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<City[]> {
+  const { data, error } = await client
+    // Представления нет в сгенерированных типах; строки те же, что у `cities`.
+    .from("cities_live" as "cities")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("position")
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /** Чтение городов ЧИСТОЙ функцией (см. `fetchTeams`). */
 export async function fetchCities(
   client: typeof supabase,

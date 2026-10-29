@@ -137,6 +137,7 @@ export function buildStats(
   let unclosedVisits = 0;
   let lastUnclosedDate = "";
   let pastOpenRecords = 0;
+  let lastPastOpenDate = "";
   let upcomingRecords = 0;
 
   for (const a of apts) {
@@ -186,6 +187,7 @@ export function buildStats(
     // жёлтым, как у должника, навсегда. В историю она всё равно входит.
     if (upcoming && a.date && a.date < today) {
       pastOpenRecords += 1;
+      if (a.date > lastPastOpenDate) lastPastOpenDate = a.date;
       if (owed > 0) {
         unclosedVisits += 1;
         if (a.date > lastUnclosedDate) lastUnclosedDate = a.date;
@@ -231,6 +233,7 @@ export function buildStats(
     unclosedVisits,
     lastUnclosedDate,
     pastOpenRecords,
+    lastPastOpenDate,
     upcomingRecords,
     ageDays: 0,
     birthdayInDays: null,

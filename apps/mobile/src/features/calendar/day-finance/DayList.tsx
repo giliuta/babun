@@ -3,13 +3,28 @@ import { View } from "react-native";
 import { getDebtAmount, type Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { DayExtra } from "@babun/shared/local/day-extras";
-import { RowGroup } from "@/components/ui/card-rows";
+import { RowGroupHeader } from "@/components/ui/card-rows";
+import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { humanDayYear } from "@/features/appointments/helpers";
+import { RecordRowView } from "@/features/finances/RecordRow";
+import type { RecordRow as FeedRow, RowAccount } from "@/features/finances/record-rows";
 import { useThemeColors } from "@/theme/colors";
-import { RecordRow, TxRow } from "./rows";
+import type { LucideIcon } from "lucide-react-native";
+import { HandCoins, CalendarClock } from "lucide-react-native";
+import { dayExtraRow, dayTxTone } from "./day-rows";
+import { RecordRow } from "./rows";
 import type { DayView } from "./types";
+
+export type RecordStatus = {
+  word: string;
+  amount: number;
+  color: string;
+  icon: LucideIcon;
+  /** Подпись под суммой — как у такой же строки ленты (возраст долга). */
+  caption?: string;
+};
 
 type PlanItem = { key: string; time: string; record?: Appointment; tx?: FinanceTransaction };
 
@@ -27,12 +42,13 @@ export function DayList({
   listTx,
   listExtras,
   clientName,
-  servicesOf,
+  serviceNames,
+  recordAccounts,
   recordStatus,
+  debtCaption,
   openRecord,
   swipeTx,
-  rowContext,
-  rowTitle,
+  txRow,
   rowAction,
   writesLegacySide,
   askRemoveLegacy,
@@ -47,113 +63,106 @@ export function DayList({
   listTx: FinanceTransaction[];
   listExtras: DayExtra[];
   clientName: (a: Appointment) => string;
-  servicesOf: (a: Appointment) => string;
-  recordStatus: (a: Appointment) => { word: string; amount: number; color: string };
+  serviceNames: (a: Appointment) => string[];
+  /** Счета оплат записи — подпись «время · счёт · услуги», как в ленте. */
+  recordAccounts: (a: Appointment) => readonly RowAccount[] | undefined;
+  recordStatus: (a: Appointment) => RecordStatus;
+  /** Возраст долга записи — подпись под суммой, как в ленте. */
+  debtCaption: (a: Appointment) => string;
   openRecord: (appointmentId: string) => void;
   swipeTx: (key: string, tx: FinanceTransaction, row: ReactElement) => ReactElement;
-  rowContext: (tx: FinanceTransaction) => string;
-  rowTitle: (tx: FinanceTransaction) => string;
+  /** Строка ленты «Финансов» для операции (`dayTxRow`). */
+  txRow: (tx: FinanceTransaction) => FeedRow | null;
   rowAction: (tx: FinanceTransaction) => (() => void) | undefined;
   writesLegacySide: (side: "income" | "expense") => boolean;
   askRemoveLegacy: (e: DayExtra) => void;
 }) {
   const t = useThemeColors();
+  // Операция — строкой ленты «Финансов», той же функцией: один заголовок,
+  // одна подпись, один цвет.
+  const txView = (key: string, tx: FinanceTransaction) => {
+    const row = txRow(tx);
+    if (!row) return null;
+    return swipeTx(
+      key,
+      tx,
+      <RecordRowView key={key} row={{ ...row, key }} tone={dayTxTone(tx)} onPress={rowAction(tx)} />,
+    );
+  };
   return listLoading ? (
     <EmptyState state="loading" />
   ) : listEmpty ? null : (
-    <RowGroup title={humanDayYear(ymd)}>
-      {view === "all"
-        ? dayPlan.map((item, i) =>
-            item.record ? (
-              <RecordRow
-                key={item.key}
-                name={clientName(item.record)}
-                context={[item.record.time_start, servicesOf(item.record)]
-                  .filter(Boolean)
-                  .join(" · ")}
-                amount={recordStatus(item.record).amount}
-                color={recordStatus(item.record).color}
-                status={recordStatus(item.record).word}
-                separated={i > 0}
-                onPress={() => openRecord(item.record!.id)}
-              />
-            ) : item.tx ? (
-              swipeTx(
-                item.key,
-                item.tx,
-                <TxRow
-                  key={item.key}
-                  context={rowContext(item.tx)}
-                  title={rowTitle(item.tx)}
-                  amount={item.tx.amount}
-                  outflow={item.tx.type === "expense" || item.tx.type === "refund"}
-                  separated={i > 0}
-                  onPress={rowAction(item.tx)}
-                />,
-              )
-            ) : null,
-          )
-        : null}
-      {listRecords.map((a, i) => (
-        <RecordRow
-          key={a.id}
-          name={clientName(a)}
-          context={[a.time_start, servicesOf(a)].filter(Boolean).join(" · ")}
-          // Остаток, а не итог — у обоих списков:
-          // плитка «Ожидается» складывает остатки, и запись €100 с
-          // предоплатой €30 стояла строкой €100 под плиткой €70.
-          amount={getDebtAmount(a)}
-          color={view === "debt" ? t.warning : t.sub}
-          separated={i > 0}
-          onPress={() => openRecord(a.id)}
-        />
-      ))}
-      {listTx.map((tx, i) =>
-        swipeTx(
-          tx.id,
-          tx,
-          <TxRow
-            key={tx.id}
-            context={rowContext(tx)}
-            title={rowTitle(tx)}
-            amount={tx.amount}
-            outflow={tx.type === "expense" || tx.type === "refund"}
-            separated={i > 0}
-            onPress={rowAction(tx)}
-          />,
-        ),
-      )}
-      {listExtras.map((e, i) => {
-        const row = (
-          <TxRow
-            context="Ручная операция"
-            title={e.name}
-            amount={e.amount}
-            outflow={e.kind === "expense"}
-            separated={i > 0 || listTx.length > 0 || (view === "all" && dayPlan.length > 0)}
+    // ПЛАШКИ С ВОЗДУХОМ, КАК В ЛЕНТЕ «ФИНАНСОВ», а не строки одной карточки:
+    // та же операция обязана выглядеть одинаково в обоих местах.
+    <View>
+      <RowGroupHeader title={humanDayYear(ymd)} />
+      <View style={{ paddingHorizontal: SELECT_SIDE, gap: 8 }}>
+        {view === "all"
+          ? dayPlan.map((item) => {
+              if (item.record) {
+                const status = recordStatus(item.record);
+                return (
+                  <RecordRow
+                    key={item.key}
+                    name={clientName(item.record)}
+                    time={item.record.time_start?.slice(0, 5) || null}
+                    services={serviceNames(item.record)}
+                    accounts={recordAccounts(item.record)}
+                    amount={status.amount}
+                    color={status.color}
+                    status={status.word}
+                    caption={status.caption}
+                    icon={status.icon}
+                    onPress={() => openRecord(item.record!.id)}
+                  />
+                );
+              }
+              return item.tx ? txView(item.key, item.tx) : null;
+            })
+          : null}
+        {listRecords.map((a) => (
+          <RecordRow
+            key={a.id}
+            name={clientName(a)}
+            time={a.time_start?.slice(0, 5) || null}
+            services={serviceNames(a)}
+            accounts={recordAccounts(a)}
+            // Остаток, а не итог — у обоих списков:
+            // плитка «Ожидается» складывает остатки, и запись €100 с
+            // предоплатой €30 стояла строкой €100 под плиткой €70.
+            amount={getDebtAmount(a)}
+            color={view === "debt" ? t.warning : t.sub}
+            caption={view === "debt" ? debtCaption(a) : undefined}
+            icon={view === "debt" ? HandCoins : CalendarClock}
+            onPress={() => openRecord(a.id)}
           />
-        );
-        // УДАЛЕНИЕ — СВАЙПОМ, ПРАВОЙ КРОМКОЙ (канон 9):
-        // крестик в строке был четвёртым способом удалить что-то в
-        // продукте и мишенью 36pt рядом с суммой.
-        // Стирает строку своей стороны: сервер пишет только её, а чужую
-        // сторону дня оставляет как была Старые строки
-        // `replace_day_extras` пускает правами «Финансов», а не
-        // «Доходом и расходом дня» — кнопка спрашивает то же.
-        return teamId && writesLegacySide(e.kind) ? (
-          <SwipeRow
-            key={e.id}
-            label="Удалить"
-            color={t.danger}
-            onAction={() => askRemoveLegacy(e)}
-            accessibilityLabel={`Удалить «${e.name}»`}
-          >
-            {row}
-          </SwipeRow>
-        ) : (
-          <View key={e.id}>{row}</View>
-        );
-      })}
-    </RowGroup>
+        ))}
+        {listTx.map((tx) => txView(tx.id, tx))}
+        {listExtras.map((e) => {
+          const row = <RecordRowView row={dayExtraRow(e, ymd)} tone={e.kind} />;
+          // УДАЛЕНИЕ — СВАЙПОМ, ПРАВОЙ КРОМКОЙ (канон 9):
+          // крестик в строке был четвёртым способом удалить что-то в
+          // продукте и мишенью 36pt рядом с суммой.
+          // Стирает строку своей стороны: сервер пишет только её, а чужую
+          // сторону дня оставляет как была Старые строки
+          // `replace_day_extras` пускает правами «Финансов», а не
+          // «Доходом и расходом дня» — кнопка спрашивает то же.
+          return teamId && writesLegacySide(e.kind) ? (
+            <SwipeRow
+              key={e.id}
+              radius={t.radius.input}
+              label="Удалить"
+              color={t.danger}
+              onAction={() => askRemoveLegacy(e)}
+              accessibilityLabel={`Удалить «${e.name}»`}
+            >
+              {row}
+            </SwipeRow>
+          ) : (
+            <View key={e.id}>{row}</View>
+          );
+        })}
+      </View>
+    </View>
   );
 }

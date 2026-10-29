@@ -36,3 +36,18 @@ describe("дата в строке клиента", () => {
     assert.equal(visitMark(undefined), null);
   });
 });
+
+describe("прошедшая запись без долга — серой датой, не пропускается", () => {
+  test("€0 позже последнего визита — её дата, серой", () => {
+    assert.deepEqual(
+      visitMark({ lastVisitDate: "2026-09-01", lastUnclosedDate: "", lastPastOpenDate: "2026-10-01", nextApt: null }),
+      { date: "2026-10-01", kind: "open" },
+    );
+  });
+  test("с долгом — по-прежнему янтарём", () => {
+    assert.equal(
+      visitMark({ lastVisitDate: "", lastUnclosedDate: "2026-10-01", lastPastOpenDate: "2026-10-01", nextApt: null })?.kind,
+      "unclosed",
+    );
+  });
+});

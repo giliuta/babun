@@ -12,7 +12,7 @@ import {
   SelectList,
   SelectRow,
 } from "@/components/ui/select-rows";
-import { GUTTER, ICON } from "@/components/ui/tokens";
+import { FOOTER_SIDE, ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -32,6 +32,7 @@ export function TagPickerSheet({
   visible,
   open,
   onSettings,
+  onCreateTag,
   tags,
   selected,
   onApply,
@@ -57,6 +58,9 @@ export function TagPickerSheet({
   onApply: (ids: string[]) => void;
   /** Шестерёнка в шапке — страница справочника тегов (как у метки). */
   onSettings?: () => void;
+  /** Пустой каталог — «Создать тег» футером шторки (не кнопкой внутри
+   *  пустоты — канон `EmptyState.action`). Нет — футера нет. */
+  onCreateTag?: () => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -107,7 +111,7 @@ export function TagPickerSheet({
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         shown.length > 0 ? (
-          <View style={{ paddingHorizontal: GUTTER }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             <Button
               label="Применить"
               onPress={() => {
@@ -115,6 +119,10 @@ export function TagPickerSheet({
                 onClose();
               }}
             />
+          </View>
+        ) : onCreateTag ? (
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
+            <Button label="Создать тег" onPress={onCreateTag} />
           </View>
         ) : undefined
       }
@@ -139,7 +147,7 @@ export function TagPickerSheet({
             />
           ))
         ) : (
-          <EmptyState title="В каталоге пока нет тегов" />
+          <EmptyState title="Тегов пока нет" />
         )}
       </SelectList>
     </BottomSheet>

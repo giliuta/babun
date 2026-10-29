@@ -6,6 +6,7 @@ import {
   type ReceiptDocument,
   type ReceiptLineItemsInput,
 } from "./receipt-document";
+import { PAPER } from "@/lib/paper/palette";
 
 // PDF ЧЕКА — ТА ЖЕ ТИПОГРАФИКА, ЧТО У ИНВОЙСА (`invoices/pdf.ts`), НО ЛИСТ
 // МЕНЬШЕ. Перечень услуг с ценой, по сути как инвойс, но не инвойс, —
@@ -47,25 +48,25 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
       margin: 0;
       display: flex;
       justify-content: center;
-      color: #172033;
-      background: #ffffff;
+      color: ${PAPER.ink};
+      background: ${PAPER.white};
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
       font-size: 12px;
       line-height: 1.45;
       -webkit-print-color-adjust: exact;
     }
-    .card { width: 100%; max-width: 380px; padding: 26px 26px 22px; border: 1px solid #e2e8f0; border-radius: 12px; }
-    .seller-name { font-size: 15px; font-weight: 750; color: #111827; }
-    .seller-line { margin-top: 2px; color: #64748b; font-size: 10.5px; }
-    .eyebrow { margin-top: 18px; color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
-    h1 { margin: 3px 0 16px; color: #111827; font-size: 21px; letter-spacing: -0.3px; }
-    .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid #e8edf3; }
-    .row .label { color: #64748b; }
-    .row .value { color: #111827; font-weight: 600; text-align: right; }
+    .card { width: 100%; max-width: 380px; padding: 26px 26px 22px; border: 1px solid ${PAPER.border}; border-radius: 12px; }
+    .seller-name { font-size: 15px; font-weight: 750; color: ${PAPER.ink}; }
+    .seller-line { margin-top: 2px; color: ${PAPER.muted}; font-size: 10.5px; }
+    .eyebrow { margin-top: 18px; color: ${PAPER.muted}; font-size: 9px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
+    h1 { margin: 3px 0 16px; color: ${PAPER.ink}; font-size: 21px; letter-spacing: -0.3px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid ${PAPER.line}; }
+    .row .label { color: ${PAPER.muted}; }
+    .row .value { color: ${PAPER.ink}; font-weight: 600; text-align: right; }
     .party { margin-top: 12px; }
-    .party-label { color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
-    .party-name { margin-top: 3px; color: #111827; font-size: 12px; font-weight: 700; }
-    .basis { margin-top: 10px; color: #111827; font-size: 11px; font-weight: 600; }
+    .party-label { color: ${PAPER.muted}; font-size: 9px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
+    .party-name { margin-top: 3px; color: ${PAPER.ink}; font-size: 12px; font-weight: 700; }
+    .basis { margin-top: 10px; color: ${PAPER.ink}; font-size: 11px; font-weight: 600; }
     .lines { width: 100%; margin-top: 14px; border-collapse: collapse; }
     /* МНОГОСТРАНИЧНЫЙ ЧЕК НЕ РВЁТСЯ ПОСРЕДИ СТРОКИ. Тридцать позиций уходят
        на вторую страницу, и без этих правил она начиналась без шапки таблицы,
@@ -73,21 +74,21 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
     thead { display: table-header-group; }
     tr { break-inside: avoid; page-break-inside: avoid; }
     .amount-wrap { break-inside: avoid; page-break-inside: avoid; }
-    .lines th { padding: 0 0 5px; border-bottom: 1px solid #cbd5e1; color: #64748b; font-size: 8.5px; font-weight: 700; letter-spacing: .5px; text-align: left; text-transform: uppercase; }
+    .lines th { padding: 0 0 5px; border-bottom: 1px solid ${PAPER.ruleStrong}; color: ${PAPER.muted}; font-size: 8.5px; font-weight: 700; letter-spacing: .5px; text-align: left; text-transform: uppercase; }
     .lines th.number { text-align: right; }
-    .lines td { padding: 6px 0; border-bottom: 1px solid #e8edf3; vertical-align: top; font-size: 10.5px; }
-    .lines .line-title { color: #111827; font-weight: 600; }
+    .lines td { padding: 6px 0; border-bottom: 1px solid ${PAPER.line}; vertical-align: top; font-size: 10.5px; }
+    .lines .line-title { color: ${PAPER.ink}; font-weight: 600; }
     .lines .number { text-align: right; white-space: nowrap; }
-    .lines .total-cell { color: #111827; font-weight: 700; }
-    .amount-wrap { margin: 16px 0 4px; padding: 14px 16px; border-radius: 12px; background: #f6f8fb; }
-    .total-row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; color: #64748b; font-size: 11px; }
-    .total-row strong { color: #111827; font-weight: 600; }
+    .lines .total-cell { color: ${PAPER.ink}; font-weight: 700; }
+    .amount-wrap { margin: 16px 0 4px; padding: 14px 16px; border-radius: 12px; background: ${PAPER.fill}; }
+    .total-row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; color: ${PAPER.muted}; font-size: 11px; }
+    .total-row strong { color: ${PAPER.ink}; font-weight: 600; }
     .amount-row { display: flex; justify-content: space-between; align-items: baseline; }
-    .amount-row.with-totals-above { margin-top: 8px; padding-top: 10px; border-top: 1px dashed #d9e0e9; }
-    .amount-label { color: #64748b; font-size: 11px; }
-    .amount-value { color: #111827; font-size: 22px; font-weight: 800; }
-    .stamp { margin-top: 20px; padding-top: 14px; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
-    .stamp.void { color: #b42318; }
+    .amount-row.with-totals-above { margin-top: 8px; padding-top: 10px; border-top: 1px dashed ${PAPER.ruleDashed}; }
+    .amount-label { color: ${PAPER.muted}; font-size: 11px; }
+    .amount-value { color: ${PAPER.ink}; font-size: 22px; font-weight: 800; }
+    .stamp { margin-top: 20px; padding-top: 14px; border-top: 1px dashed ${PAPER.ruleStrong}; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+    .stamp.void { color: ${PAPER.red}; }
   </style>
 </head>
 <body>

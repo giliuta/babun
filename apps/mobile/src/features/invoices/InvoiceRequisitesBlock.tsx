@@ -21,7 +21,7 @@ import { notify } from "@/lib/notify";
 import { InvoiceNumberRow, type InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
 import { DocMetaRow } from "@/components/blocks/DocMetaRow";
 import { useThemeColors } from "@/theme/colors";
-import { ICON } from "@/components/ui/tokens";
+import { FOOTER_SIDE, ICON } from "@/components/ui/tokens";
 
 // БЛОК «РЕКВИЗИТЫ» ИНВОЙСА — ЧЕМ ПОДПИСАН ДОКУМЕНТ.
 //
@@ -134,7 +134,7 @@ export function InvoiceRequisitesBlock({
         padded={false}
         scroll
         footer={
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             <GradientButton
               label="Добавить реквизиты"
               onPress={() => {

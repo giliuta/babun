@@ -14,7 +14,6 @@ const ROW_FILES = [
   "src/features/calendar/agenda/AgendaRow.tsx",
   "src/features/calendar/agenda/EventRow.tsx",
   "src/features/access/PeopleRows.tsx",
-  "app/(dashboard)/cabinet/people/index.tsx",
   "src/features/services/price-list/ServicePriceRow.tsx",
   "src/features/clients/ClientRow.tsx",
 ];

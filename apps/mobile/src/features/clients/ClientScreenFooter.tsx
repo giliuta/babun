@@ -1,6 +1,7 @@
 import { Keyboard, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PAGE_FOOTER_PADDING } from "@/components/ui/PageFooter";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 
@@ -52,14 +53,18 @@ export function ClientScreenFooter({
   return (
     <View
       style={{
-        paddingHorizontal: 14,
-        paddingTop: 8,
+        // Поля — канон `PageFooter` (20 / 8 / 10): кнопка клиента стоит
+        // там же, где кнопки остальных страниц, а не на 6pt шире.
+        paddingHorizontal: PAGE_FOOTER_PADDING.horizontal,
+        paddingTop: PAGE_FOOTER_PADDING.top,
         // Клавиатура iOS уже включает полосу home-индикатора: с её отступом
         // под кнопкой висели лишние ~34pt пустоты (тот же закон, что у
-        // футера листов, DS §5).
-        // Над таб-баром — те же 10pt, что у футеров остальных экранов вкладок
-        // (услуги, категории, метки).
-        paddingBottom: keyboardShown ? 8 : overTabBar ? 10 : insets.bottom + 8,
+        // футера листов, DS §5). Над таб-баром низ уже занят им — ровно 10;
+        // без таб-бара футер сам платит вырез, как `PageFooter standalone`.
+        paddingBottom:
+          keyboardShown || overTabBar
+            ? PAGE_FOOTER_PADDING.bottom
+            : Math.max(insets.bottom, PAGE_FOOTER_PADDING.bottom),
         backgroundColor: t.canvas,
         borderTopWidth: 1,
         borderTopColor: t.separator,

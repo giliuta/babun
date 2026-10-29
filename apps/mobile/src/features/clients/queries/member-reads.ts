@@ -1,6 +1,8 @@
 import { rowToClient } from "@babun/shared/db/repositories/clients";
+import type { Json } from "@babun/shared/db/database.types";
 import type { Client } from "@babun/shared/local/clients";
 import { supabase } from "@/lib/supabase";
+import { readClientWindow, type ListRpc } from "./client-window";
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
 import {
@@ -9,17 +11,18 @@ import {
   type MemberContactsAnswer,
 } from "@/session/member-contacts";
 
+/** Вызов — методом клиента: `rpc` без своего `this` теряет клиента. */
+const rpcOf = (client: typeof supabase): ListRpc =>
+  (name, args) => (client as unknown as { rpc: ListRpc }).rpc(name, args);
+
 /** Клиент — параметром: прогрев чужой компании зовёт ту же функцию клиентом,
  *  привязанным к ней (`bind-tenant.ts`). */
 export async function listMasterClientsSafe(
   client: typeof supabase,
   clientId?: string,
 ): Promise<Client[]> {
-  const { data, error } = await client.rpc("list_master_clients_safe", {
-    ...(clientId ? { p_client_id: clientId } : {}),
-  });
-  if (error) throw new Error(`listMasterClientsSafe: ${error.message}`);
-  return (data ?? []).map(masterClientJsonToClient);
+  const rows = await readClientWindow(rpcOf(client), "list_master_clients_safe", clientId);
+  return rows.map((row) => masterClientJsonToClient(row as Json));
 }
 
 /** Ответ окна — строка клиента в JSON плюс `tag_ids`: разбирается тем же
@@ -97,10 +100,6 @@ export async function listMemberClients(
   client: typeof supabase,
   clientId?: string,
 ): Promise<Client[]> {
-  const { data, error } = await client.rpc(
-    "list_member_clients",
-    clientId ? { p_client_id: clientId } : undefined,
-  );
-  if (error) throw new Error(`listMemberClients: ${error.message}`);
-  return (data ?? []).map(memberClientJsonToClient);
+  const rows = await readClientWindow(rpcOf(client), "list_member_clients", clientId);
+  return rows.map(memberClientJsonToClient);
 }

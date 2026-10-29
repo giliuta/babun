@@ -1,5 +1,6 @@
 import { Image, Text, View } from "react-native";
 import type { DocumentParty, InvoiceDocument } from "@/lib/paper/document";
+import { PAPER } from "@/lib/paper/palette";
 
 // БУМАГА ИНВОЙСА — ТА ЖЕ, ЧТО УЙДЁТ КЛИЕНТУ.
 //
@@ -18,16 +19,8 @@ import type { DocumentParty, InvoiceDocument } from "@/lib/paper/document";
 //
 // Тап-зон у бумаги нет: правят блоки формы, а бумага показывает итог.
 
-/** Цвета бумаги — свои, не темы приложения: документ белый всегда. */
-const PAPER = {
-  ink: "#111827",
-  body: "#374151",
-  muted: "#6b7280",
-  line: "#e5e7eb",
-  head: "#f3f4f6",
-  green: "#047857",
-  red: "#b91c1c",
-} as const;
+// Цвета бумаги — общие чернила документов (`lib/paper/palette.ts`): белый
+// лист всегда, и тот же, что у чека и PDF.
 
 const COL = { qty: 44, price: 74, amount: 84 } as const;
 
@@ -39,7 +32,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
   return (
     <View
       style={{
-        backgroundColor: "#ffffff",
+        backgroundColor: PAPER.white,
         borderRadius: 6,
         paddingHorizontal: 20,
         paddingTop: 16,
@@ -95,7 +88,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
           borderColor: PAPER.line,
         }}
       >
-        <View style={{ flexDirection: "row", backgroundColor: PAPER.head }}>
+        <View style={{ flexDirection: "row", backgroundColor: PAPER.fill }}>
           <Text style={[head, { flex: 1, textAlign: "left" }]}>{doc.dict.lineTitle}</Text>
           <Text style={[head, { width: COL.qty }]}>{doc.dict.qty}</Text>
           <Text style={[head, { width: COL.price }]}>

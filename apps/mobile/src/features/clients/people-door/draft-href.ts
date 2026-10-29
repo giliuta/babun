@@ -8,7 +8,7 @@ import type { DraftLinkParams } from "@/features/clients/useClientDraft";
 export function newClientDraftHref(
   pathname: string,
   scope: { tenantId: string; isActive: boolean } | null,
-  params: DraftLinkParams & { split?: string },
+  params: DraftLinkParams & { split?: string; team?: string },
 ): Href {
   return pathname === "/client"
     ? { pathname: "/client", params: { id: "new", ...params } }

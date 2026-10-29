@@ -6,7 +6,7 @@ import { stepAllowed } from "@/session/partner-manager";
 import { emptyMasterDraft, parentBlocksOf, visibleLevel } from "./master-draft";
 import { offeredBlocks } from "./rights-copy";
 import { draftWithRole } from "./role-draft";
-import { ROLE_PRESETS, matchRole, rolePreset, roleAllowed, roleChanges, roleLevel } from "./role-presets";
+import { ROLE_PRESETS, matchRole, rolePreset, roleAllowed, roleChanges, roleLevel, roleSummary } from "./role-presets";
 import { rightsSections, withMemberChanges } from "./rights-rows";
 
 // РОЛЬ → ПОЛОЖЕНИЯ. Реестр — снимок `access_blocks` боевой базы:
@@ -232,6 +232,26 @@ describe("выдача ролью", () => {
 
   test("пустые права — «Своя», а не «Мастер»", () => {
     assert.equal(matchRole(REGISTRY, readerOf(emptyMap()), TEAM), null);
+  });
+
+  test("роль с чипа команды не трогает аккаунт; аккаунт — отдельной частью", () => {
+    const team = roleChanges(REGISTRY, rolePreset("director"), TEAM, readerOf(emptyMap()), "team") ?? [];
+    assert.ok(team.length > 0);
+    assert.ok(team.every((change) => change.team_id === TEAM), "с чипа — только права этой команды");
+    const account = roleChanges(REGISTRY, rolePreset("director"), TEAM, readerOf(emptyMap()), "account") ?? [];
+    assert.ok(account.some((change) => change.block === "company.partners"), "«Партнёры» — в части аккаунта");
+    assert.ok(account.every((change) => change.team_id === null));
+    // Роль команды узнаётся по правам команды, даже если аккаунт другой.
+    const onlyTeam = withMemberChanges(emptyMap(), REGISTRY, team);
+    assert.equal(matchRole(REGISTRY, readerOf(onlyTeam), TEAM), "director");
+  });
+
+  test("строка списка «Партнёры»: одна роль во всех командах — её имя, разные — «Своя»", () => {
+    const director = applied(emptyMap(), "director");
+    assert.equal(roleSummary(REGISTRY, readerOf(director), [TEAM]), "Директор");
+    // Во второй команде прав нет — роли разные.
+    assert.equal(roleSummary(REGISTRY, readerOf(director), [TEAM, OTHER]), "Своя");
+    assert.equal(roleSummary(REGISTRY, readerOf(director), []), null);
   });
 
   test("строки страницы после роли говорят её словами", () => {

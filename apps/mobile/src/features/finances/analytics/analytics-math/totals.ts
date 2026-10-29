@@ -118,8 +118,10 @@ export interface WorkTotals {
   /** Сколько по ним ещё не пришло — долг записи (`getDebtAmount`), как у
    *  плитки «Долги»: переплата одной записи не гасит долг другой. */
   owed: number;
-  /** Средний чек — работ на одну запись. */
+  /** Средний чек — на одну оплаченную запись с суммой (`checkRecords`). */
   averageCheck: number;
+  /** Сколько записей вошло в средний чек: сумма больше нуля и долга нет. */
+  checkRecords: number;
   minutes: number;
   /** Работ на час; `null` — часов нет. */
   perHour: number | null;
@@ -140,11 +142,22 @@ export function workTotals(
   let paid = 0;
   let owed = 0;
   let minutes = 0;
+  // СРЕДНИЙ ЧЕК — ПО ОПЛАЧЕННЫМ ЗАПИСЯМ С СУММОЙ. Делённый на все записи,
+  // он брал в знаменатель визиты на €0 (осмотр, гарантия), а в числитель —
+  // неоплаченную установку: €6 920 / 39 = €177, чека такого не платил никто.
+  let checked = 0;
+  let checks = 0;
   for (const a of records) {
-    if (a.payment_status !== "refunded") worked += cents(a.total_amount ?? 0);
+    const total = a.payment_status !== "refunded" ? cents(a.total_amount ?? 0) : 0;
+    worked += total;
     paid += cents(getPaidAmount(a));
     const invoiced = invoicing?.byAppointment.get(a.id);
-    owed += cents(invoiced !== undefined ? invoiced : getDebtAmount(a));
+    const debt = cents(invoiced !== undefined ? invoiced : getDebtAmount(a));
+    owed += debt;
+    if (total > 0 && debt <= 0) {
+      checked += total;
+      checks += 1;
+    }
     minutes += recordMinutes(a);
   }
   const n = records.length;
@@ -153,7 +166,8 @@ export function workTotals(
     worked: euros(worked),
     paid: euros(paid),
     owed: euros(owed),
-    averageCheck: n > 0 ? Math.round(worked / n) / 100 : 0,
+    averageCheck: checks > 0 ? Math.round(checked / checks) / 100 : 0,
+    checkRecords: checks,
     minutes,
     perHour: minutes > 0 ? Math.round((worked / (minutes / 60))) / 100 : null,
   };

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { shownVersion, updateSummary, versionSummary } from "./about";
+import { shownVersion, updateSummary, versionSummary, webVersionSummary } from "./about";
 
 describe("shownVersion", () => {
   test("на телефоне — версия магазина, а не внутренняя (06.10, выпуск в магазины)", () => {
@@ -86,5 +86,17 @@ describe("updateSummary", () => {
       updateSummary({ enabled: true, embedded: false, createdAt: null }, now),
       "Версия из сборки",
     );
+  });
+});
+
+describe("webVersionSummary", () => {
+  test("сайт — одно число и дата выпуска", () => {
+    const at = new Date(2026, 9, 28, 16, 10);
+    assert.match(webVersionSummary("v1.8.33", at, at.getTime()), /^v1\.8\.33 · .+ в 16:10$/);
+  });
+
+  test("без даты сборки — только версия", () => {
+    assert.equal(webVersionSummary("v1.8.33", null, Date.now()), "v1.8.33");
+    assert.equal(webVersionSummary("v1.8.33", new Date("nope"), Date.now()), "v1.8.33");
   });
 });

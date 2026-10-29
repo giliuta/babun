@@ -1,6 +1,44 @@
-import { Text, TextInput, View, type TextInputProps } from "react-native";
-import type { ReactNode } from "react";
-import { useThemeColors } from "@/theme/colors";
+import { Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
+import { useState, type ReactNode, type Ref } from "react";
+import { useThemeColors, type ThemeColors } from "@/theme/colors";
+
+/** ВЫСОТА ПОЛЯ ВВОДА — DS §3: «Input 52». */
+export const INPUT_HEIGHT = 52;
+/** Кольцо фокуса — DS §5: «focused 1.5px accent inset ring». */
+export const INPUT_RING = 1.5;
+
+/** РАМКА ПОЛЯ ВВОДА — ОДНА НА ПРОДУКТ (DS §1, §7). Заливка `t.fill` — та
+ *  самая «inset input», без обводки: «DON'T use 1px borders». Поля жили
+ *  белыми с волоском по краю в 48pt — чужие и на странице, и в листе. В
+ *  фокусе — кольцо акцентом по той же рамке; без фокуса оно прозрачное, и
+ *  поле не прыгает на полтора пункта при вводе. Браузерную рамку фокуса
+ *  (второй синий, прямые углы) снимает `global.css`. */
+export function inputFrame(t: ThemeColors, focused: boolean): ViewStyle {
+  return {
+    minHeight: INPUT_HEIGHT,
+    borderRadius: t.radius.input,
+    borderCurve: "continuous",
+    backgroundColor: t.fill,
+    borderWidth: INPUT_RING,
+    borderColor: focused ? t.accent : "transparent",
+  };
+}
+
+/** Фокус поля для кольца: свои обработчики поля зовутся как прежде. */
+export function useInputFocus(props: Pick<TextInputProps, "onFocus" | "onBlur">) {
+  const [focused, setFocused] = useState(false);
+  return {
+    focused,
+    onFocus: ((e) => {
+      setFocused(true);
+      props.onFocus?.(e);
+    }) as NonNullable<TextInputProps["onFocus"]>,
+    onBlur: ((e) => {
+      setFocused(false);
+      props.onBlur?.(e);
+    }) as NonNullable<TextInputProps["onBlur"]>,
+  };
+}
 
 /** ЯРЛЫК ПОЛЯ — ОДНА ТИПОГРАФИКА НА ВСЕ ПОЛЯ. В одном листе
  *  создания счёта стояли три ярлыка тремя разными наборами (14/500, 12/500,
@@ -37,6 +75,7 @@ export function Field({
   accessibilityLabel,
   trailing,
   leading,
+  inputRef,
   ...inputProps
 }: {
   label: string;
@@ -50,6 +89,8 @@ export function Field({
    *  (`NameColorField`): одна строка одним блоком, а не подпись над голым
    *  вводом. Первый носитель — почта в «Пригласить мастера». */
   leading?: ReactNode;
+  /** Поле наружу — экран возвращает в него курсор (почта нового партнёра). */
+  inputRef?: Ref<TextInput>;
 } & TextInputProps) {
   const t = useThemeColors();
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ. Без этого правка «60» на «40» даёт
@@ -58,9 +99,10 @@ export function Field({
   const numeric =
     inputProps.keyboardType === "decimal-pad" ||
     inputProps.keyboardType === "number-pad";
-  const framed = Boolean(trailing || leading);
+  const focus = useInputFocus(inputProps);
   const input = (
     <TextInput
+      ref={inputRef}
       accessibilityLabel={accessibilityLabel ?? label}
       placeholderTextColor={t.placeholder}
       selectionColor={t.accent}
@@ -68,24 +110,17 @@ export function Field({
       selectTextOnFocus={numeric}
       style={[
         {
-          minHeight: 48,
-          paddingHorizontal: framed ? 0 : 16,
+          flex: 1,
+          minHeight: INPUT_HEIGHT - 2 * INPUT_RING,
           paddingVertical: 12,
           fontSize: 15,
           color: t.ink,
-          ...(framed ? { flex: 1 } : null),
         },
-        framed
-          ? null
-          : {
-              borderRadius: t.radius.input,
-              borderCurve: "continuous",
-              borderWidth: 1,
-              borderColor: t.separator,
-            },
         style,
       ]}
       {...inputProps}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
     />
   );
   return (
@@ -93,25 +128,16 @@ export function Field({
       {/* Пустая подпись — поле под шапкой листа, которая уже его назвала
           («Новая почта»): третий раз то же слово не печатаем. */}
       {label ? <FieldLabel text={label} /> : null}
-      {framed ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            borderRadius: t.radius.input,
-            borderCurve: "continuous",
-            borderWidth: 1,
-            borderColor: t.separator,
-            paddingHorizontal: 16,
-          }}
-        >
-          {leading ? <View style={{ marginRight: 12 }}>{leading}</View> : null}
-          {input}
-          {trailing}
-        </View>
-      ) : (
-        input
-      )}
+      <View
+        style={[
+          inputFrame(t, focus.focused),
+          { flexDirection: "row", alignItems: "center", paddingHorizontal: 16 - INPUT_RING },
+        ]}
+      >
+        {leading ? <View style={{ marginRight: 12 }}>{leading}</View> : null}
+        {input}
+        {trailing}
+      </View>
       {error ? (
         <Text
           accessibilityRole="alert"

@@ -72,6 +72,60 @@ export async function listAppointments(
   return rows.map((r) => rowToAppointment(r));
 }
 
+/** DELTA — rows changed after `sinceIso` (`updated_at >`), paged in a stable
+ *  (updated_at, id) order. Feeds the incremental resync
+ *  (`appointmentsCached/incremental.ts`); deletions are NOT here — the month
+ *  digest catches those. */
+export async function listAppointmentsChangedSince(
+  supabase: DbSupabase,
+  tenantId: string,
+  sinceIso: string,
+): Promise<Appointment[]> {
+  const rows: Row[] = [];
+  for (let offset = 0; ; offset += APPOINTMENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .gt("updated_at", sinceIso)
+      .order("updated_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + APPOINTMENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listAppointmentsChangedSince: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < APPOINTMENT_PAGE_SIZE) break;
+  }
+  return rows.map((r) => rowToAppointment(r));
+}
+
+/** Rows whose `date` (text «YYYY-MM-DD») lies in [from, to], paged by id.
+ *  A diverged digest month is re-read with it; the first load reads the
+ *  window around today with it before the full history. */
+export async function listAppointmentsInDateRange(
+  supabase: DbSupabase,
+  tenantId: string,
+  from: string,
+  to: string,
+): Promise<Appointment[]> {
+  const rows: Row[] = [];
+  for (let offset = 0; ; offset += APPOINTMENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .gte("date", from)
+      .lte("date", to)
+      .order("id", { ascending: true })
+      .range(offset, offset + APPOINTMENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listAppointmentsInDateRange: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < APPOINTMENT_PAGE_SIZE) break;
+  }
+  return rows.map((r) => rowToAppointment(r));
+}
+
 /** Single appointment by id. Photos NOT included — caller fetches
  *  them via listPhotosForAppointment (STORY-049 decision A9). */
 export async function getAppointment(

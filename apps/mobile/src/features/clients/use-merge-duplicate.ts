@@ -27,6 +27,7 @@ import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
 import { clientKeys } from "@/lib/client-query-keys";
 import { mergeClientsOnServer } from "@/features/clients/merge-clients-rpc";
+import { dropClientReminder, syncClientReminder } from "@/features/clients/reminders";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
@@ -118,6 +119,14 @@ export function useMergeDuplicate({
       // визиты на нём переезжают на объект основной.
       const { remap } = mergeLocations(fresh, dupRow);
       await mergeClientsOnServer({ primaryId: primary.id, duplicateId: dupRow.id, patch, remap });
+      // «НАПОМНИТЬ» ДУБЛЯ — НЕ О УДАЛЁННОЙ КАРТОЧКЕ. Уведомление локальное:
+      // дубль ушёл в «Удалённые клиенты», а его пуш в срок открыл бы удалённую
+      // карточку. Сервер (20261028201000) переносит дату основной, если у неё
+      // своей нет, — здесь то же для уведомления телефона.
+      void dropClientReminder(dupRow.id);
+      if (!fresh.reminder_at && dupRow.reminder_at) {
+        void syncClientReminder({ ...fresh, ...patch, reminder_at: dupRow.reminder_at });
+      }
       // Сервер переписал строки мимо кэша телефона: визиты, файлы, долги и
       // «Удалённые записи» перечитываются, дубль уходит из списка.
       for (const key of [
@@ -149,7 +158,7 @@ export function useMergeDuplicate({
     const blocker = !dup
       ? "Карточка дубля не загрузилась — объединить пока нельзя"
       : !dupAppts.isSuccess
-        ? "Визиты дубля не загрузились — объединить пока нельзя"
+        ? "Записи дубля не загрузились — объединить пока нельзя"
         : mergeBlocker(primary, dup, peopleIdsOf(members, sourceScope?.role === "owner")) ??
           paidVisitsBlocker(dupAppts.data ?? []);
     if (blocker || !dup) {
@@ -162,7 +171,7 @@ export function useMergeDuplicate({
       "Объединить карточки?",
       {
         // Архива клиентов нет: дубль уходит в «Удалённые клиенты».
-        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
+        message: `Данные и записи «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
         confirmLabel: "Объединить",
       },
       () => void merge(dup),

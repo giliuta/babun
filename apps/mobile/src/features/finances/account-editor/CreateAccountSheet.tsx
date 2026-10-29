@@ -14,7 +14,7 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
 import { setTourReady, tourEvent } from "@/components/tour/tour-store";
 import { TourTarget } from "@/components/tour/TourTarget";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { SIGNED_NUMBER_KEYBOARD } from "@/lib/keyboard";
 import { notify } from "@/lib/notify";
@@ -45,7 +45,7 @@ const noop = () => {};
 // тип выводится из значка (`kindForIcon`), пустой выбор — касса.
 // НАЛОГА И ВАЛЮТЫ У СЧЁТА НЕТ: VAT решает «Итого» записи, валюта — компании.
 //
-// Причины отказа — системным окном по нажатию, как «Применить» у правки, а не
+// Причины отказа — системным окном по нажатию, как «Сохранить» у правки, а не
 // серой строкой над кнопкой: подписей под строками и над кнопкой в шторках
 // нет.
 export function CreateAccountSheet({
@@ -206,7 +206,7 @@ export function CreateAccountSheet({
         title="Новый счёт"
         maxHeightRatio={ACCOUNT_SHEET_RATIO}
         footer={
-          <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE, paddingTop: 8 }}>
             <GradientButton
               label="Добавить команду"
               onPress={() => {
@@ -237,8 +237,8 @@ export function CreateAccountSheet({
       maxHeightRatio={ACCOUNT_SHEET_RATIO}
       footer={
         // Лист без полей (`padded={false}`): отступ у кнопки свой — тот же,
-        // что у «Применить» в листе правки.
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
+        // что у «Сохранить» в листе правки.
+        <View style={{ paddingHorizontal: FOOTER_SIDE, paddingTop: 8 }}>
           <TourTarget id="account.create-submit" shape="control">
             <GradientButton
               label="Добавить счёт"

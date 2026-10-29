@@ -23,7 +23,11 @@ describe("отказ сервера по правке клиента — сло�
     assert.equal(clientWriteRefusal({ code: "42501", hint: "block:clients.create" }), "Нет права заводить клиентов");
     assert.equal(
       clientWriteRefusal({ code: "23503", hint: "client:tag_other_team" }),
-      "Тег другой команды этому клиенту не поставить",
+      "Этот тег — другого календаря: клиенту ставятся теги только его календарей",
+    );
+    assert.equal(
+      clientWriteRefusal({ code: "42501", hint: "client:people_other_team" }),
+      "Этот человек — клиент другого календаря: связать можно только клиентов одного календаря",
     );
   });
   test("закрытый номер — сначала открыть", () => {

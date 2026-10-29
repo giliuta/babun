@@ -12,8 +12,15 @@ export function sanitizePhoneInput(raw: string): string {
   // нет: вставка «Имя ⏎ +357 99 …» из мессенджера иначе оставляла в поле
   // только «+», а номер терялся (AsYouType обрывается на переводе строки).
   const s = (raw ?? "").replace(/[\n\r\t]+/g, " ").replace(/[^\d+() -]/g, "");
+  // «+» ПОСЛЕ НАБРАННОГО НАЧИНАЕТ НОМЕР ЗАНОВО. Пустое поле рождается с кодом
+  // страны команды («+357 »), и человек с английским номером печатает свой
+  // код прямо за ним: «+357 +44 7911…». Выбросить второй «+» значило склеить
+  // «+35744…» — номер не распознавался, и правка пропадала. Набранный «+»
+  // заменяет всё, что стояло перед ним.
+  const restart = s.lastIndexOf("+");
+  const from = restart > 0 ? s.slice(restart) : s;
   // «+» осмыслен только первым символом — внутри номера это мусор.
-  const plus = s.trimStart().startsWith("+");
-  const body = s.replace(/\+/g, "");
+  const plus = from.trimStart().startsWith("+");
+  const body = from.replace(/\+/g, "");
   return plus ? `+${body}` : body;
 }

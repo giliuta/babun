@@ -260,7 +260,7 @@ export function CalendarPreview({
     case "calendar.cancel":
       return (
         <PreviewFrame state={actions.cancel ? "can" : "cannot"}>
-          <AppointmentMenuPreview color={teamColor} tile={tile} items={["Отменить визит", "Удалить"]} />
+          <AppointmentMenuPreview color={teamColor} tile={tile} items={["Отменить запись", "Удалить"]} />
         </PreviewFrame>
       );
     case "calendar.events": {

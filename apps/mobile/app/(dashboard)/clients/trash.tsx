@@ -10,8 +10,7 @@ import {
   DeletedOn,
   HiddenClientsScreen,
 } from "@/features/clients/HiddenClientsScreen";
-import { useCurrentRole } from "@/session/tenant";
-import { useThemeColors } from "@/theme/colors";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { Screen } from "@/components/ui/Screen";
@@ -42,14 +41,17 @@ export default function ClientTrashScreenRoute() {
 }
 
 function ClientTrashScreen() {
-  const t = useThemeColors();
   const trashed = useTrashedClients();
   const restore = useRestoreClient();
   const erase = useDeleteClientForever();
   // «Удалить насовсем» разрешено только владельцу (гейт в самой мутации).
   // Показывать его диспетчеру значит обещать действие, которое ответит
   // отказом, — предлагать нужно только то, что человек может сделать.
-  const role = useCurrentRole().data;
+  // РОЛЬ — КОМПАНИИ ОТКРЫТОГО СПИСКА, а не активной: полка читается по ней
+  // (`useTrashedClients`), и по роли активной компании владелец чужой базы
+  // видел бы «Удалить насовсем», которое ответит отказом.
+  const scope = useClientsScopeOrNull();
+  const role = scope ? (scope.kind === "own" ? scope.role : "member") : undefined;
   const isOwner = role === "owner";
 
   // ПОЛКА СВОЕЙ БАЗЫ — ТОЛЬКО ВЛАДЕЛЬЦУ (так же решает RLS). Партнёр по ссылке
@@ -72,12 +74,8 @@ function ClientTrashScreen() {
       // «30 дней»; строка тратила два места на одну мысль.
       caption={(c) => DeletedOn(c.deleted_at)}
       trailing={(c) => <DaysLeft purgeAt={c.purge_at} />}
-      empty={{
-        icon: <Trash2 color={t.faint} size={40} strokeWidth={1.5} />,
-        title: "Пусто",
-        subtitle:
-          "Удалённые клиенты лежат здесь — отсюда их можно вернуть. Без записей и денег клиент стирается через 30 дней.",
-      }}
+      // Пустое не объясняет: одна формула на все корзины — «Удалённых N нет».
+      empty={{ title: "Удалённых клиентов нет" }}
       actions={(client) => [
         {
           id: "restore",

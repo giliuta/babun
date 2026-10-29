@@ -25,7 +25,9 @@ export function SectionEyebrow({ children }: { children: string }) {
         fontSize: 11,
         fontWeight: "700",
         letterSpacing: 0.6,
-        color: t.faint,
+        // ИМЯ ГРУППЫ — ПОЛНЫЙ ЧЁРНЫЙ (DS §1 «серого нет»): оно называет
+        // раздел. Тише — подпись строки (13/500 `t.sub`), а не название.
+        color: t.ink,
       }}
     >
       {capsText(children)}

@@ -82,6 +82,11 @@ export function VisitRow({
   const hue = useRecordColor(a, team?.color, today) || t.accent;
   const teamName = team ? (team.is_active ? team.name : `${team.name} · в архиве`) : "";
   const time = a.time_start ? a.time_start.slice(0, 5) : "";
+  // ПРОШЕДШАЯ НЕЗАКРЫТАЯ ЗАПИСЬ — НЕ ВИЗИТ (`isVisit`): в ленте она стоит с
+  // пометкой, чтобы число визитов над лентой сходилось с тем, что в ней видно.
+  const unclosed =
+    a.status !== "cancelled" && a.status !== "completed" && !!a.date && a.date < today;
+  const sub = [time, unclosed ? "не закрыта" : ""].filter(Boolean).join(" · ");
   return (
     <SelectRow
       icon={statusIcon(status.kind)}
@@ -89,8 +94,10 @@ export function VisitRow({
       // Фон — белый, цвет записи — только у плитки.
       plain
       title={teamName || "Запись"}
-      subtitle={time || undefined}
-      accessibilityLabel={[visitDay(a.date), time, teamName, status.label].filter(Boolean).join(", ")}
+      subtitle={sub || undefined}
+      accessibilityLabel={[visitDay(a.date), time, teamName, unclosed ? "не закрыта" : "", status.label]
+        .filter(Boolean)
+        .join(", ")}
       onPress={onPress ?? noop}
       trailing={
         showMoney ? (

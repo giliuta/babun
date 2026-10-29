@@ -33,7 +33,7 @@ export function AccountMoneyGroup({
 }: {
   account: AccountWithBalance;
   accounts: readonly AccountWithBalance[];
-  /** Правка в черновик листа: на сервер — по «Применить». */
+  /** Правка в черновик листа: на сервер — по «Сохранить». */
   stage: StageAccount;
   /** Идёт другая правка счёта — переключатель ждёт её ответа. */
   busy: boolean;

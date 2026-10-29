@@ -2,7 +2,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Platform, View } from "react-native";
 import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NoticeBar } from "@/components/ui/NoticeBar";
-import { WEB_BUILD_CHECK_MS, bundleIdOf, isNewBuild, runningBundleId } from "./web-build";
+import {
+  WEB_BUILD_CHECK_MS,
+  bundleIdOf,
+  dropStaleServiceWorkers,
+  isNewBuild,
+  runningBundleIds,
+} from "./web-build";
 
 // «ДОСТУПНА НОВАЯ ВЕРСИЯ» В ВЕБЕ. Правило — `web-build.ts`. Сверка — при
 // возврате на вкладку и раз в десять минут, пока она открыта. Перезагрузка —
@@ -13,8 +19,8 @@ function useNewWebBuild(): boolean {
   const [fresh, setFresh] = useState(false);
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    const running = runningBundleId(document.scripts);
-    if (!running) return;
+    const running = runningBundleIds(document.scripts);
+    if (running.length === 0) return;
     let alive = true;
     const check = () => {
       if (document.visibilityState === "hidden") return;
@@ -43,6 +49,11 @@ function useNewWebBuild(): boolean {
  *  появления плашки — React пересоздал бы весь экран вместе с набранным. */
 export function WebUpdateShell({ children }: { children: ReactNode }) {
   const fresh = useNewWebBuild();
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined") return;
+    const cacheStore = typeof caches === "undefined" ? undefined : caches;
+    void dropStaleServiceWorkers(navigator.serviceWorker, cacheStore).catch(() => {});
+  }, []);
   const insets = useSafeAreaInsets();
   return (
     <>

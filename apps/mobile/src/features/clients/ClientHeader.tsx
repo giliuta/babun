@@ -138,7 +138,8 @@ export default function ClientHeader({
       if (!e164) {
         haptics.warning();
         toast("Номер не распознан — проверьте код страны", "error");
-        return;
+        // Набранное остаётся в строке — поправить, а не набирать заново.
+        return false;
       }
       update({ phone: next, phone_e164: e164 });
     },

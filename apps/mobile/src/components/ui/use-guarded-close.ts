@@ -18,6 +18,7 @@ export function useGuardedClose({
   onClose,
   message,
   title = "Закрыть без сохранения?",
+  confirmLabel = "Не сохранять",
 }: {
   dirty: boolean;
   /** Идёт запись — закрывать нельзя вовсе. */
@@ -27,6 +28,9 @@ export function useGuardedClose({
   message: string;
   /** Сам вопрос — у листа с «Применить» он про применение, а не сохранение. */
   title?: string;
+  /** Кнопка ухода. «Не сохранять» — те же слова, что у формы записи и
+   *  карточки клиента; свой вопрос (про применение) несёт свою кнопку. */
+  confirmLabel?: string;
 }) {
   const [hidden, setHidden] = useState(false);
   const askOnExit = useRef(false);
@@ -44,7 +48,7 @@ export function useGuardedClose({
     askOnExit.current = false;
     void confirmAction(title, {
       message,
-      confirmLabel: "Закрыть",
+      confirmLabel,
       destructive: true,
     }).then((ok) => {
       if (ok) {

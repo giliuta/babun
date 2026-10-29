@@ -150,3 +150,15 @@ describe("анатомия шторки выбора", () => {
     );
   });
 });
+
+describe("строка шторки — цвет сущности только у плитки", () => {
+  test("фон строки не красится цветом сущности: покой rowFill, выбор — акцент", () => {
+    const source = read("./select-rows.tsx");
+    const start = source.indexOf("backgroundColor: selected");
+    assert.ok(start > 0, "фон строки SelectRow не найден");
+    const background = source.slice(start, source.indexOf("})}", start));
+    assert.doesNotMatch(background, /\$\{color\}/, "тинт сущности вернулся в фон строки");
+    assert.match(background, /selected\s*\?\s*`\$\{t\.accent\}14`/);
+    assert.match(background, /t\.rowFill/);
+  });
+});

@@ -3,13 +3,14 @@ import { View } from "react-native";
 import { Check, MailCheck, Send, UserRound, type LucideIcon } from "lucide-react-native";
 
 import { FieldRow } from "@/components/ui/card-rows";
+import { Field } from "@/components/ui/Field";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { GUTTER } from "@/components/ui/tokens";
 import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import type { ContactHolder } from "@/features/clients/contact-fields";
-import { CONTACT_COLUMN } from "@/features/clients/contact-column";
+import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import { useDefaultCountry } from "@/features/reference/default-country";
 import { usePhoneField } from "@/features/clients/use-phone-country";
 import { useThemeColors } from "@/theme/colors";
@@ -98,30 +99,48 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
   commitOnLeave.current = p.onNameCommit;
   useEffect(() => () => commitOnLeave.current?.(), []);
 
-  // Новый партнёр и ждущее приглашение — только почта: имя и
+  // Новый партнёр и ждущее приглашение — почта и, по желанию, имя;
   // телефон он ведёт сам в своём профиле.
   if (p.emailOnly) {
     return (
       <SectionCard title="Партнёр" padded={false}>
-        <FieldRow
-          stacked
-          hideLabel
-          big
-          label="Почта"
-          placeholder="Почта"
-          value={p.identity.email}
-          live={p.emailEditable}
-          readOnly={!p.emailEditable}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoFocus={p.emailEditable && p.autoFocusName}
-          inputRef={p.refs?.email}
-          inputColor={danger}
-          valueColor={danger}
-          trailing={p.emailState === "valid" ? check : null}
-          onEditEnd={p.onEmailEditEnd}
-          onSave={p.onEmailChange ?? noop}
-        />
+        {/* ПОЧТА — ПОЛЕ ФОРМЫ, А НЕ СТРОКА КАРТОЧКИ. Здесь её вводят с нуля,
+            и строка `FieldRow` без рамки на вебе была голым вводом в 20px
+            высотой: не видно, куда печатать. Поле — то же, что у пароля и
+            почты аккаунта (`Field`, DS «Input 52»). */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          <Field
+            label=""
+            accessibilityLabel="Почта"
+            placeholder="Почта"
+            value={p.identity.email}
+            editable={p.emailEditable}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="email"
+            autoFocus={p.emailEditable && p.autoFocusName}
+            inputRef={p.refs?.email}
+            style={danger ? { color: danger } : undefined}
+            trailing={p.emailState === "valid" ? check : null}
+            onChangeText={p.onEmailChange ?? noop}
+            onBlur={p.onEmailEditEnd}
+          />
+          {/* ИМЯ — ПО ЖЕЛАНИЮ, ЕСЛИ ЕГО МОЖНО ВПИСАТЬ. Без имени ждущее
+              приглашение в списке называлось почтой; сервер имя принимает
+              (`p_full_name`). Своё имя партнёр потом ведёт сам в профиле. */}
+          {p.emailEditable && p.onNameChange ? (
+            <Field
+              label=""
+              accessibilityLabel="Имя"
+              placeholder="Имя"
+              value={p.identity.name}
+              autoCapitalize="words"
+              onChangeText={p.onNameChange}
+            />
+          ) : null}
+        </View>
       </SectionCard>
     );
   }
@@ -168,7 +187,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {(p.editable || p.identity.phone) && !p.live ? (
           <FieldRow
             label="Телефон"
-            column={CONTACT_COLUMN}
+            column={PERSON_COLUMN}
             separated
             tabular
             seed={phoneField.seed}
@@ -205,7 +224,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {p.hideEmail ? null : (
           <FieldRow
             separated
-            column={CONTACT_COLUMN}
+            column={PERSON_COLUMN}
             label="Почта"
             placeholder="Почта"
             value={p.identity.email}
@@ -227,7 +246,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {p.accountSeen ? (
           <FieldRow
             label="Вход"
-            column={CONTACT_COLUMN}
+            column={PERSON_COLUMN}
             separated
             readOnly
             noCopy

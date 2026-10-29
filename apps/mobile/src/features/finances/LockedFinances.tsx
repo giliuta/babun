@@ -17,6 +17,7 @@ import { RecordRowsPanel } from "./RecordRowsPanel";
 import { defaultPeriod } from "@/lib/period";
 import type { RecordRow } from "./record-rows";
 import { ICON } from "@/components/ui/tokens";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // «ФИНАНСЫ» БЕЗ ДОСТУПА — ТА ЖЕ СТРАНИЦА, ТОЛЬКО СЕРАЯ: не «раздел недоступен».
 // В финансах можно выбирать команды; на команде, которая недоступна, доход,
@@ -153,9 +154,9 @@ export function LockedFinances() {
 
       {/* Кнопка на своём месте и серая: страница та же, что у владельца, и
           действие в ней просто закрыто — «нажал, а там ошибка» не бывает. */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+      <PageFooter>
         <GradientButton label="Добавить операцию" onPress={NOOP} disabled />
-      </View>
+      </PageFooter>
     </Screen>
   );
 }

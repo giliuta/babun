@@ -46,8 +46,14 @@ const CLIENT_ACTION_REFUSALS: Record<string, string> = {
 export function clientWriteRefusal(error: PostgrestErrorLike): string | null {
   const hint = error.hint ?? "";
   if (hint === "access:contacts_closed") return "Сначала откройте номер";
-  // Партнёр ставит только теги команды клиента.
-  if (hint === "client:tag_other_team") return "Тег другой команды этому клиенту не поставить";
+  // Тег и «Люди» — только из календарей, обслуживающих клиента: его своя
+  // команда и команды его записей, без архива.
+  if (hint === "client:tag_other_team") {
+    return "Этот тег — другого календаря: клиенту ставятся теги только его календарей";
+  }
+  if (hint === "client:people_other_team") {
+    return "Этот человек — клиент другого календаря: связать можно только клиентов одного календаря";
+  }
   if (hint.startsWith("block:")) {
     const key = hint.slice("block:".length);
     if (CLIENT_ACTION_REFUSALS[key]) return CLIENT_ACTION_REFUSALS[key];

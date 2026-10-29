@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { createBlankClient } from "../clients";
-import { clientSearchRank, matchesClient, rankClientMatches } from "./client-search";
+import { createBlankClient, type Client } from "../clients";
+import { clientMatchEvidence, clientSearchRank, matchesClient, rankClientMatches } from "./client-search";
 
 function client(
   id: string,
@@ -219,5 +219,47 @@ describe("греческое, русское и латинское написа�
   test("разные имена не склеиваются", () => {
     assert.equal(matchesClient(client("m", { full_name: "Мария" }), "Николай"), false);
     assert.equal(matchesClient(client("e", { full_name: "Elena" }), "Andreas"), false);
+  });
+});
+
+describe("поиск: знаки, цифры адреса, транслит, код страны", () => {
+  const c = (id: string, patch: Partial<Client>) => createBlankClient({ id, full_name: "Тест", ...patch });
+  test("запрос из одного «+» или «(» не опустошает список", () => {
+    assert.equal(matchesClient(c("a", {}), "+"), true);
+    assert.equal(matchesClient(c("a", {}), "("), true);
+    assert.equal(rankClientMatches([c("a", {}), c("b", {})], "+").length, 2);
+  });
+  test("«Makarios 8020» не ловит чужой номер с 8020", () => {
+    const street = c("s", { address: "Makarios 8020" });
+    const phoneOnly = c("p", { phone: "+357 99 808 020" });
+    assert.equal(matchesClient(street, "Makarios 8020"), true);
+    assert.equal(matchesClient(phoneOnly, "Makarios 8020"), false);
+  });
+  test("транслит — по имени и адресу, не по заметкам", () => {
+    assert.equal(matchesClient(c("n", { full_name: "Ivan" }), "Иван"), true);
+    assert.equal(matchesClient(c("a", { address: "Makariou" }), "Макариу"), true);
+    const note = c("x", { full_name: "Пётр", notes: [{ id: "1", text: "Ivan", created_at: "2026-01-01" }] });
+    assert.equal(matchesClient(note, "Иван"), false);
+    assert.equal(matchesClient(note, "Ivan"), true);
+  });
+  test("номер с кодом страны находит доп. номер без кода", () => {
+    const extra = c("e", { phones: [{ id: "p1", number: "99 123 456", label: "", name: "" }] });
+    assert.equal(matchesClient(extra, "+357 99 123 456"), true);
+    assert.equal(matchesClient(extra, "+357 99 123 457"), false);
+  });
+});
+
+describe("улика поиска — поле, по которому нашёлся клиент", () => {
+  const c = (patch: Partial<Client>) => createBlankClient({ id: "u", full_name: "Мария", ...patch });
+  test("по адресу и по заметке — называет поле", () => {
+    assert.equal(clientMatchEvidence(c({ address: "Makarios 8" }), "makarios"), "Адрес: Makarios 8");
+    assert.equal(
+      clientMatchEvidence(c({ notes: [{ id: "1", text: "код ворот 42", created_at: "2026-01-01" }] }), "ворот"),
+      "Заметка: код ворот 42",
+    );
+  });
+  test("по имени или номеру — без улики", () => {
+    assert.equal(clientMatchEvidence(c({ address: "Мариуполь" }), "мари"), null);
+    assert.equal(clientMatchEvidence(c({ phone: "+357 99 123 456" }), "99123456"), null);
   });
 });

@@ -21,6 +21,7 @@ import { AccountScopeProvider, useAccountGate, useAccountName } from "@/session/
 import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ, — В КАБИНЕТЕ ПАРТНЁРА: здесь идут все
 // разрешения пригласившего, а всё остальное остаётся у самого человека, чтобы
@@ -143,14 +144,14 @@ function InvitedAccountBlock({
         {/* Команды этого аккаунта, в которых человек работает, — словами:
             сами они живут в ленте календаря. */}
         <SettingsRow
-          tile="neutral"
+          tile={SETTINGS_TILE.purple}
           icon={Users}
           title="Команды"
           sub={teamNames.length > 0 ? teamNames.join(" · ") : undefined}
         />
         {rows.map((row) => (
           <Fragment key={row.key}>
-            <Divider inset={48} />
+            <Divider inset={SETTINGS_ROW_INSET} />
             {row.node}
           </Fragment>
         ))}

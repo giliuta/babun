@@ -10,7 +10,7 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { AmountBlock } from "../AmountBlock";
 import { accountIcon } from "../account-ui";
@@ -75,7 +75,7 @@ export function renderTransferFormStep(v: TransferView) {
       scroll
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE, gap: 8 }}>
           {(failure ?? reason ?? warning) ? (
             <Text
               accessibilityLiveRegion="polite"

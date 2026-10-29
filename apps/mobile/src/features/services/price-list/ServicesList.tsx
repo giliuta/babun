@@ -11,6 +11,7 @@ import { useThemeColors } from "@/theme/colors";
 import { ServiceSheet } from "@/features/services/ServiceSheet";
 import { ROW_H, ServicePriceRow } from "./ServicePriceRow";
 import { useServicesList } from "./use-services-list";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // УСЛУГИ — ПРАЙС-ЛИСТ, А НЕ КАРТОТЕКА: просто выбирается услуга, свайп вправо
 // и свайп влево.
@@ -142,7 +143,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           операцию, «Клиенты» — клиента. Она стоит всегда, а не только на
           пустом экране: заводить услуги приходят пачкой. */}
       {readOnly ? null : (
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+      <PageFooter>
         {/* ПРАЙС БЕЗ БРИГАДЫ ВЕДЁТ НЕ В СТЕНУ. Услуга принадлежит ровно одной
             команде, а команд нет у 17 тенантов из 19: человек набирал имя,
             цену и минуты и упирался в серую кнопку «Создать», которая не
@@ -169,7 +170,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
             setEditing({ mode: "create" });
           }}
         />
-      </View>
+      </PageFooter>
       )}
 
       <ServiceSheet

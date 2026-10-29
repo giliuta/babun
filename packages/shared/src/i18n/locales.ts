@@ -6,7 +6,8 @@
 // never be translated.
 //
 // Russian is the source language: its "dictionary" is the source text itself.
-// Adding a language = a row here + `dict/<code>.json` + a case in runtime.ts.
+// Adding a language = a row here + `dict/<code>.json` + a case in
+// dict-source.ts and dict-source.web.ts.
 
 export type UiLocale = "ru" | "en" | "bg" | "el" | "uk" | "de" | "es";
 

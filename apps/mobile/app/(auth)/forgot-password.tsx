@@ -45,8 +45,8 @@ export default function ForgotPasswordScreen() {
             setEmail(v);
             if (error) setError(null);
           }}
-          placeholder="Email"
-          accessibilityLabel="Email"
+          placeholder="Почта"
+          accessibilityLabel="Почта"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"

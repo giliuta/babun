@@ -9,6 +9,7 @@ import {
   routeAddress,
   composeDetails,
   objectPlacePatch,
+  splitAddressLine,
   primaryLine,
   withoutStreet,
   addressLines,
@@ -194,12 +195,37 @@ describe("главная строка и уточнение", () => {
     assert.equal(patch.address, "Лимасол");
   });
 
-  test("строка-текст без уточнения — это «улица и дом»", () => {
-    assert.deepEqual(objectPlacePatch("Ул. 5, Лимассол", {}, ""), {
-      address: "Ул. 5, Лимассол",
-      addressParts: { street: "Ул. 5, Лимассол" },
+  test("строка-текст без уточнения — «улица и дом»; «улица, город» раскладывается", () => {
+    assert.deepEqual(objectPlacePatch("Ул. 5", {}, ""), {
+      address: "Ул. 5",
+      addressParts: { street: "Ул. 5" },
       mapUrl: undefined,
     });
+    // С8: «Artemidos 1, Tala» уходил в улицу целиком, город был пустым.
+    assert.deepEqual(objectPlacePatch("Ул. 5, Лимассол", {}, ""), {
+      address: "Ул. 5, Лимассол",
+      addressParts: { street: "Ул. 5", city: "Лимассол" },
+      mapUrl: undefined,
+    });
+    // Город, заданный в уточнении явно, строкой не перебивается.
+    assert.equal(objectPlacePatch("Artemidos 1, Tala", { city: "Paphos" }, "").addressParts?.street, "Artemidos 1, Tala");
+  });
+
+  test("разбор строки адреса: улица, [комплекс,] город [индекс]", () => {
+    assert.deepEqual(splitAddressLine("Artemidos 1, Tala"), { street: "Artemidos 1", city: "Tala" });
+    assert.deepEqual(splitAddressLine("Makariou 12, Sunny Court, Limassol 4000"), {
+      street: "Makariou 12",
+      complex: "Sunny Court",
+      city: "Limassol",
+      zip: "4000",
+    });
+    assert.deepEqual(splitAddressLine("Makariou 12, 4000 Limassol"), { street: "Makariou 12", city: "Limassol", zip: "4000" });
+    assert.deepEqual(splitAddressLine("Makariou 12, Limassol, 4000"), { street: "Makariou 12", city: "Limassol", zip: "4000" });
+    // Не место — строка остаётся улицей.
+    assert.equal(splitAddressLine("Ленина 5, кв 12"), null);
+    assert.equal(splitAddressLine("Ленина 5, кв. 12, Москва"), null);
+    assert.equal(splitAddressLine("Makariou 12, 5"), null);
+    assert.equal(splitAddressLine("Makariou 12"), null);
   });
 
   test("строка-ссылка без уточнения — прежний разбор одной строки", () => {

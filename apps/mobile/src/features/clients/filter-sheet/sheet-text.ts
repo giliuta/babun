@@ -141,9 +141,9 @@ export function periodSplit(
       ? periodDates({ preset: "custom", from: spanFrom, to: spanTo })
       : null;
   const periodName = period ? periodLabel(period) : "Всё время";
-  const datesLabel = period
-    ? periodDates(period)
-    : (allSpanDates ?? "—");
+  // «ВСЁ ВРЕМЯ» — БЕЗ ДАТ РЯДОМ: охват данных справа читался как выбранный
+  // период. Правая половина — дверь к колёсам, и подписана она словом.
+  const datesLabel = period ? periodDates(period) : "Даты";
   const draftFrom =
     period?.from ??
     (dataFrom && dataFrom < todayYmd

@@ -24,8 +24,12 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "access_company",
   "account_balances",
   "appointment_link_lookup",
+  // Отпечаток записей по месяцам для сверки календаря (20261028180000): `stable`.
+  "appointment_month_digest",
   // Оплаты тарифа в Кабинете (20261004085616): `stable`.
   "cabinet_tariff_payments",
+  // Сводка «есть ли работа» по командам для «Тарифа» (20261028154000): `stable`.
+  "calendar_work_summary",
   "current_tenant_profile_safe",
   "current_user_role",
   "invitation_preview",
@@ -134,6 +138,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "onboarding_done",
   // Онлайн-запись (20261027141700): заявка заказчика и выключатели владельца — `volatile`.
   "online_booking_create",
+  "online_booking_new_link",
   "online_booking_set",
   "online_booking_set_service",
   "patch_master_profile",

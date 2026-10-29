@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { previewLabel } from "./preview-label";
+import { ScrollView } from "react-native";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -16,6 +17,7 @@ import type { RightsArea } from "./master-draft";
 import type { LevelReader } from "./rights-rows";
 import type { RightsFocus } from "./rights-focus";
 import { teamLevels, viewSections } from "./rights-view-sections";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 export type { RightsFocus };
 
@@ -65,6 +67,7 @@ export function MasterRightsView({
   onPick,
   area,
   onPreview,
+  previewName,
   title = "Права",
   onlyCalendar = false,
   onlyCompany = false,
@@ -100,8 +103,10 @@ export function MasterRightsView({
   onPick: (block: AccessBlock, level: AccessLevel, teamId: string | null) => void;
   /** Раздел, с которого открыли страницу, — к нему и прокручиваем. */
   area?: RightsArea;
-  /** «Посмотреть его глазами»: включает зеркало и уводит в продукт. */
+  /** «Посмотреть как {Имя}»: включает зеркало и уводит в продукт. */
   onPreview?: () => void;
+  /** Имя того, чьими правами смотрим, — для кнопки зеркала. */
+  previewName?: string;
 }) {
   const t = useThemeColors();
   const scrollRef = useRef<ScrollView>(null);
@@ -182,9 +187,9 @@ export function MasterRightsView({
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ СТРАНИЦЫ — ВНИЗУ (канон 7.1): посмотреть, что
           из этого выйдет. */}
       {onPreview ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
-          <GradientButton label="Посмотреть его глазами" onPress={onPreview} />
-        </View>
+        <PageFooter>
+          <GradientButton label={previewLabel(previewName)} onPress={onPreview} />
+        </PageFooter>
       ) : null}
     </Screen>
   );

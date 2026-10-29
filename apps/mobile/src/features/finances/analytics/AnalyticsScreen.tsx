@@ -120,7 +120,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     moneySign(money.income) < 0 ? t.danger : t.success,
     moneyPending || moneySign(money.income) === 0,
   );
-  const checkTile = tile("check", "Средний чек", formatEUR(work.averageCheck), t.ink, work.records === 0);
+  const checkTile = tile("check", "Средний чек", formatEUR(work.averageCheck), t.ink, work.checkRecords === 0);
 
   const listEnd = { paddingBottom: 96 };
   const panelBody =

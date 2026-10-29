@@ -1,4 +1,5 @@
 import { Text, View, Pressable } from "react-native";
+import { previewLabel } from "./preview-label";
 import { CalendarRange, ChevronRight, Eye } from "lucide-react-native";
 
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
@@ -12,7 +13,7 @@ import { useThemeColors } from "@/theme/colors";
 // БЛОК «КОМАНДЫ» НА СТРАНИЦЕ СОТРУДНИКА (в одной команде он может видеть
 // клиентов, в другой — нет). Строка на каждую его команду: плитка цвета, имя и сводка прав В ЭТОЙ
 // команде; тап — права команды, свайп — «Убрать» из неё. Внизу — «Добавить в
-// команду» и «Посмотреть его глазами».
+// команду» и «Посмотреть как {Имя}».
 
 export function EmployeeTeamsBlock({
   teams,
@@ -21,6 +22,7 @@ export function EmployeeTeamsBlock({
   onRemoveTeam,
   onAddTeam,
   onMirror,
+  mirrorName,
 }: {
   /** Его команды, первая — домашняя. */
   teams: readonly Team[];
@@ -32,6 +34,8 @@ export function EmployeeTeamsBlock({
   /** Нет — двери «Добавить в команду» нет (все команды уже его). */
   onAddTeam?: () => void;
   onMirror?: () => void;
+  /** Имя для подписи «Посмотреть как …». */
+  mirrorName?: string;
 }) {
   const t = useThemeColors();
   return (
@@ -61,7 +65,7 @@ export function EmployeeTeamsBlock({
       ) : null}
       {onMirror ? (
         <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-          <ChooseRow compact icon={Eye} label="Посмотреть его глазами" onPress={onMirror} />
+          <ChooseRow compact icon={Eye} label={previewLabel(mirrorName)} onPress={onMirror} />
         </View>
       ) : null}
     </SectionCard>

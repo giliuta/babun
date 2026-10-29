@@ -384,8 +384,8 @@ describe("сценарий г-б: новый человек со связью", 
     assert.match(src, /onCreate=\{onCreateLinked\}/, "страница не отдаёт шторке создание");
     assert.match(
       src,
-      /router\.push\(draftHref\(draftLinkParams\(c\.id, link, prefill\)\)\)/,
-      "черновик открывается без связи или без набранного в поиске",
+      /router\.push\(\s*draftHref\(\{ \.\.\.draftLinkParams\(c\.id, link, prefill\), \.\.\.\(c\.team_id \? \{ team: c\.team_id \} : \{\}\) \}\),?\s*\)/,
+      "черновик открывается без связи, без набранного в поиске или не в команде группы",
     );
     assert.match(
       src,
@@ -695,7 +695,11 @@ describe("общий список без чипа — все команды, н�
       list(),
       /teamChoice === ALL_TEAMS\s*\?\s*withoutArchivedTeams\(clients, archivedTeamIds, appointments\)\s*:\s*clientsOfTeam\(/,
     );
-    assert.match(list(), /useTeams\(\{ includeInactive: true \}\)/);
+    assert.match(list(), /const archivedTeamIds = useArchivedTeamIds\(\)/);
+    assert.match(
+      readModuleSource(resolve(here, "use-archived-teams.ts")),
+      /useTeams\(\{ includeInactive: true \}\)[\s\S]*!tm\.is_active/,
+    );
   });
   test("выбор и массовые действия — только своя база", () => {
     assert.match(list(), /const visible = useMemo\(\s*\(\) => result\.filtered\.filter\(\(c\) => !guestOf\.has\(c\.id\)\)/);

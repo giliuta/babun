@@ -51,7 +51,7 @@ describe("экран приглашения", () => {
   test("кнопки — только в футере внизу, в карточке сообщения кнопки нет", () => {
     assert.match(
       screen,
-      /\{footer \? \( <View style=\{\{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 8 \}\}> \{footer\} <\/View> \) : null\}/,
+      /\{footer \? \( <PageFooter> \{footer\} <\/PageFooter> \) : null\}/,
     );
     const card = screen.slice(screen.indexOf("function MessageCard"));
     assert.doesNotMatch(card, /Button/);

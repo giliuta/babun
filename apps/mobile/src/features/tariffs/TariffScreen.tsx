@@ -11,8 +11,9 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useToast } from "@/components/ui/Toast";
-import { GUTTER, TYPE } from "@/components/ui/tokens";
+import { GUTTER, TYPE, SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { useAccountGate, useAccountName, useAccountScope } from "@/session/account-scope";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useTeams } from "@/features/reference/queries";
@@ -180,17 +181,19 @@ export function TariffScreen() {
       <ScreenHeader title="Тариф" subtitle={!owner || scope.foreign ? (accountName ?? undefined) : undefined} />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionCard>
+          {/* Плитка — та же, что у «Тарифа» в корне Кабинета: дверь и
+              страница узнаются одним пятном. */}
           <SettingsRow
-            tile="neutral"
+            tile={SETTINGS_TILE.blue}
             icon={BadgeCheck}
             title={state.tier ? tierName(state.tier) : "—"}
             sub={tariffStatus(state, periodEnd, CAN_PAY_HERE)}
           />
           {overLimit ? (
             <>
-              <Divider inset={48} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
-                tile="neutral"
+                tile={SETTINGS_TILE.indigo}
                 icon={Layers}
                 title="Рабочие команды"
                 sub={`Работают ${working.size} из ${live.length}`}
@@ -200,9 +203,9 @@ export function TariffScreen() {
           ) : null}
           {CAN_PAY_HERE && owner && state.paid && !state.forever ? (
             <>
-              <Divider inset={48} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
-                tile="neutral"
+                tile={SETTINGS_TILE.green}
                 icon={CreditCard}
                 title="Управление подпиской"
                 onPress={paying ? undefined : () => void manage()}
@@ -221,7 +224,11 @@ export function TariffScreen() {
             selected={selected === card.tier}
             mark={
               current === card.tier
-                ? state.trial
+                ? state.forever
+                  ? // Выдан навсегда: «Ваш» рядом с ценой читалось как своя
+                    // цена, хотя этот аккаунт не платит ничего.
+                    "Навсегда"
+                  : state.trial
                   ? "Пробный"
                   : // Партнёру тариф не «его» — аккаунта, который пригласил.
                     owner
@@ -287,17 +294,17 @@ function TierTile({
       accessibilityRole="radio"
       accessibilityState={{ selected: on }}
       // Цены — только там, где за тариф можно заплатить (`pay-here.ts`).
-      accessibilityLabel={CAN_PAY_HERE ? `${card.name}, ${card.monthly} в месяц` : card.name}
+      accessibilityLabel={CAN_PAY_HERE && !forever ? `${card.name}, ${card.monthly} в месяц` : card.name}
       onPress={onPress}
       style={{
         marginHorizontal: GUTTER,
         marginTop: 8,
         borderRadius: t.radius.card,
         borderCurve: "continuous",
-        backgroundColor: t.surface,
+        // ВЫБРАННЫЙ — ТИНТОМ, БЕЗ РАМКИ 2pt: рамка была единственной на
+        // продукт; выбор везде говорит заливкой (канон шторки выбора).
+        backgroundColor: on ? `${t.accent}14` : t.surface,
         boxShadow: t.cardShadow,
-        borderWidth: 2,
-        borderColor: on ? t.accent : "transparent",
         paddingHorizontal: 16,
         paddingVertical: 14,
         gap: 10,
@@ -309,7 +316,7 @@ function TierTile({
           <Text style={{ ...TYPE.subhead, color: t.accent }}>{mark}</Text>
         ) : null}
         <View style={{ flex: 1 }} />
-        {CAN_PAY_HERE ? (
+        {CAN_PAY_HERE && !forever ? (
           <>
             <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>
               {card.monthly}
@@ -326,13 +333,13 @@ function TierTile({
           </View>
         ))}
       </View>
-      {CAN_PAY_HERE ? (
+      {/* Выданному навсегда цены не печатаем вовсе: ни за месяц, ни за год —
+          это не его счёт. */}
+      {CAN_PAY_HERE && !forever ? (
         <View style={{ gap: 2 }}>
-          {forever ? null : (
-            <Text style={{ ...TYPE.subhead, color: t.ink }}>
-              {`Рабочих календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
-            </Text>
-          )}
+          <Text style={{ ...TYPE.subhead, color: t.ink }}>
+            {`Рабочих календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
+          </Text>
           <Text style={{ ...TYPE.subhead, color: t.faint }}>
             {`За год — ${card.yearlyMonthly} за календарь в месяц`}
           </Text>

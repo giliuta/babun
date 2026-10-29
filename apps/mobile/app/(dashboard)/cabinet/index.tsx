@@ -40,11 +40,13 @@ import { useMemberQueue } from "@/lib/member-queue/use-member-queue";
 import { useTenantId } from "@/lib/tenant";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { TourScrollProvider, TourTarget } from "@/components/tour/TourTarget";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
@@ -55,6 +57,8 @@ import { LanguageRow } from "@/features/cabinet/LanguageRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { useCurrentRole } from "@/session/tenant";
+import { useMirror } from "@/session/mirror-state";
+import { thisDeviceTitle } from "@/lib/device-word";
 import { confirmAndSignOut } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -76,6 +80,10 @@ export default function CabinetHome() {
   // таблиц, сотрудник — отложенные вызовы дверей сервера.
   const showSync = role === "owner" || role === "dispatcher" || role === "master";
   // Прокрутка — для обучения: строки внизу оно докручивает на вид.
+  // В ЗЕРКАЛЕ ВХОДА И ВЫХОДА НЕТ: сессия ваша, поэтому «Вход и безопасность»
+  // показывал бы почту и пароль владельца, а «Выйти» разлогинил бы владельца
+  // (выход сеть пропускает и в зеркале — `write-requests.ts`).
+  const mirror = useMirror();
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
 
@@ -109,22 +117,22 @@ export default function CabinetHome() {
             за свой (`OwnAccountSection`). */}
         <OwnAccountSection />
 
-        <SectionEyebrow>Этот телефон</SectionEyebrow>
+        <SectionEyebrow>{thisDeviceTitle()}</SectionEyebrow>
         <SectionCard>
           <TourTarget id="cabinet.notifications">
             <NotificationsRow />
           </TourTarget>
-          <Divider inset={48} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <TourTarget id="cabinet.languages">
             <LanguageRow />
           </TourTarget>
           {showSync ? (
             <>
-              <Divider inset={48} />
+              <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
-                // Своего пигмента у синхронизации нет: зелёный уже носят
-                // «Приглашения», и два одинаковых якоря на экране глаз спутает.
-                tile="neutral"
+                // Бирюза — не зелёный: зелёный уже носят «Приглашения», и два
+                // одинаковых якоря на экране глаз спутает.
+                tile={SETTINGS_TILE.teal}
                 icon={RefreshCw}
                 title="Синхронизация"
                 sub={syncDepth > 0 ? "Ждут отправки" : "Все изменения на сервере"}
@@ -138,21 +146,23 @@ export default function CabinetHome() {
 
         <SectionEyebrow>Аккаунт</SectionEyebrow>
         <SectionCard>
-          <TourTarget id="cabinet.account">
-            <SettingsRow
-              // Своего пигмента у безопасности в словаре `SETTINGS_TILE` нет:
-              // голый глиф, как у «Часового пояса».
-              tile="neutral"
-              icon={Shield}
-              title="Вход и безопасность"
-              sub="Пароль, устройства, удаление аккаунта"
-              onPress={() => router.push("/cabinet/account")}
-            />
-          </TourTarget>
-          <Divider inset={48} />
+          {mirror ? null : (
+            <>
+              <TourTarget id="cabinet.account">
+                <SettingsRow
+                  tile={SETTINGS_TILE.blue}
+                  icon={Shield}
+                  title="Вход и безопасность"
+                  sub="Пароль, устройства, удаление аккаунта"
+                  onPress={() => router.push("/cabinet/account")}
+                />
+              </TourTarget>
+              <Divider inset={SETTINGS_ROW_INSET} />
+            </>
+          )}
           {/* ПОМОЩЬ — частые вопросы и связь с поддержкой. */}
           <HelpRow />
-          <Divider inset={48} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <AboutRow />
         </SectionCard>
 
@@ -160,13 +170,15 @@ export default function CabinetHome() {
             (`confirmAndSignOut` → `scope: "local"`, всегда с вопросом —
             стираются напоминания этого телефона). Выход со всех устройств —
             явной строкой в «Вход и безопасность». */}
-        <SectionCard className="mt-4">
-          <ActionRow
-            label="Выйти из аккаунта"
-            tone="danger"
-            onPress={() => void confirmAndSignOut()}
-          />
-        </SectionCard>
+        {mirror ? null : (
+          <SectionCard className="mt-4">
+            <ActionRow
+              label="Выйти из аккаунта"
+              tone="danger"
+              onPress={() => void confirmAndSignOut()}
+            />
+          </SectionCard>
+        )}
       </ScrollView>
       </TourScrollProvider>
     </Screen>

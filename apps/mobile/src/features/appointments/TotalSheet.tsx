@@ -12,6 +12,7 @@ import { useThemeColors } from "@/theme/colors";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { ColumnHeader, ServiceLine } from "./total-sheet/ServiceLine";
 import { clampedDiscountText } from "./total-sheet/line-math";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // ДЕНЬГИ ЗАПИСИ ОДНИМ ЛИСТОМ: «Итого» открывает снизу вверх шторку, где
 // прописаны каждая услуга, их количество, правка с «Применить» и скидки (в евро
@@ -161,7 +162,7 @@ export function TotalSheet({
       avoidKeyboard
       maxHeightRatio={0.8}
       footer={
-        <View style={{ paddingHorizontal: SIDE }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={apply} />
         </View>
       }

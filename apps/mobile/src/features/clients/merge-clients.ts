@@ -123,7 +123,7 @@ export function paidVisitsBlocker(
       (visit.paid_amount ?? 0) > 0,
   ).length;
   if (paid === 0) return null;
-  const count = formatCountRu(paid, ["оплаченный визит", "оплаченных визита", "оплаченных визитов"]);
+  const count = formatCountRu(paid, ["оплаченная запись", "оплаченные записи", "оплаченных записей"]);
   return `У дубля ${count} — клиента у них не сменить, пока оплата не возвращена. Объединить пока нельзя`;
 }
 

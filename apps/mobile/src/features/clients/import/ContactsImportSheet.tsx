@@ -10,7 +10,7 @@ import {
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useDefaultCountry } from "@/features/reference/default-country";
@@ -43,8 +43,9 @@ try {
 
 /** Есть ли доступ к адресной книге в ЭТОЙ сборке. Строку в настройках
  *  показываем только тогда: кнопка, которая ничего не делает, хуже её
- *  отсутствия (в старом дев-билде нативного модуля просто нет). */
-export const CONTACTS_AVAILABLE = Contacts !== null;
+ *  отсутствия (в старом дев-билде нативного модуля просто нет). На вебе
+ *  модуль грузится заглушкой, а книги телефона у браузера нет — строки нет. */
+export const CONTACTS_AVAILABLE = Contacts !== null && Platform.OS !== "web";
 
 export function ContactsImportSheet({
   visible,
@@ -235,7 +236,7 @@ export function ContactsImportSheet({
       maxHeightRatio={SELECT_SHEET_RATIO}
       scroll
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           {denied && CONTACTS_AVAILABLE ? (
             // После «Больше не спрашивать» системного окна второй раз нет —
             // дверь в настройки Babun, как у камеры (lib/camera-denied.ts).

@@ -97,7 +97,11 @@ function ClientRowView({
   // вперёд — серым; записей нет — ничего. Правило — `visit-mark.ts`.
   const mark = showLast ? visitMark(stats) : null;
   const markColor =
-    mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
+    mark?.kind === "unclosed"
+      ? t.warning
+      : mark?.kind === "ahead" || mark?.kind === "open"
+        ? t.sub
+        : t.accent;
   const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
   const phoneShown = cardFields.phone && client.phone.trim() !== "";
   // Место номера — под самый длинный номер при крупном тексте телефона
@@ -114,11 +118,11 @@ function ClientRowView({
     client.phone ?? "",
     !mark
       ? ""
-      : mark.kind === "unclosed"
-        ? `визит ${formatShortDateRu(mark.date)} не закрыт`
+      : mark.kind === "unclosed" || mark.kind === "open"
+        ? `запись ${formatShortDateRu(mark.date)} не закрыта`
         : mark.kind === "ahead"
           ? `записан ${formatShortDateRu(mark.date)}`
-          : `последний визит ${formatShortDateRu(mark.date)}`,
+          : `последняя запись ${formatShortDateRu(mark.date)}`,
     evidence ?? "",
   ]
     .filter(Boolean)

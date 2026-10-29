@@ -90,15 +90,18 @@ export function withoutArchivedTeams<T extends Pick<Client, "id" | "team_id">>(
   );
 }
 
-/** Команда нового клиента: выбранная в ленте, иначе первая команда.
- *  Прямая офлайн-запись умолчания сервера не знает, поэтому пусто уходит
- *  только у компании без команд. */
+/** Команда нового клиента: выбранная в ленте, иначе первая ВИДИМАЯ по
+ *  порядку ленты. Скрытый в ленте календарь клиента не получает: без чипа
+ *  клиент уходил в скрытую «My», и в списке его не было видно. Все скрыты —
+ *  первая. Прямая офлайн-запись умолчания сервера не знает, поэтому пусто
+ *  уходит только у компании без команд. */
 export function teamForNewClient(
   choice: ClientsTeamChoice,
   teamIds: readonly string[],
+  isVisible: (teamId: string) => boolean = () => true,
 ): string | null {
   if (choice !== ALL_TEAMS && teamIds.includes(choice)) return choice;
-  return teamIds[0] ?? null;
+  return teamIds.find(isVisible) ?? teamIds[0] ?? null;
 }
 
 /** Ссылка «Создать клиента» с командой чипа. Без `team` карточка выбирала

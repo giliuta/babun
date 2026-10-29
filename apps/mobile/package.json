@@ -1,7 +1,7 @@
 {
   "name": "mobile",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index",
   "private": true,
   "scripts": {
     "start": "expo start",
@@ -13,7 +13,7 @@
     "ios:prod:verify": "bun run ios:prod:prebuild && bun run ios:prod:build",
     "android": "expo run:android",
     "web": "expo start --web",
-    "build:web": "expo export --platform web --output-dir dist",
+    "build:web": "EXPO_PUBLIC_WEB_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ) expo export --platform web --output-dir dist",
     "build:ios": "eas build --platform ios --profile production",
     "build:android": "eas build --platform android --profile production",
     "submit:ios": "eas submit --platform ios --latest",

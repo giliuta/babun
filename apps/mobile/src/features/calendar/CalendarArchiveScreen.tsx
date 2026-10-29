@@ -3,7 +3,7 @@ import { ScrollView } from "react-native";
 import { ArchiveRestore, Trash2 } from "lucide-react-native";
 import { money } from "@babun/shared/common/utils/money";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { NavRow, RowCaption } from "@/components/ui/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -30,7 +30,7 @@ import { useCalendarDelete } from "./useCalendarDelete";
 //
 // Строка календаря говорит, что лежит вместе с ним: записи, счета и деньги
 // на них. Тап открывает тот же канонический лист действий, что у архива
-// клиентов: «Вернуть в ленту» и красное «Удалить навсегда». Кнопок в самом
+// клиентов: «Вернуть в ленту» и красное «Удалить насовсем». Кнопок в самом
 // списке нет (никаких кнопок внутри контента).
 
 export function CalendarArchiveScreen() {
@@ -83,15 +83,15 @@ export function CalendarArchiveScreen() {
     return measure(calendar.id, appointmentsQuery.data ?? [])
       .then((impact) =>
         confirmThen(
-          `Удалить «${calendar.name}» навсегда?`,
+          `Удалить «${calendar.name}» насовсем?`,
           {
             message: eraseCalendarMessage(impact),
-            confirmLabel: "Удалить навсегда",
+            confirmLabel: "Удалить насовсем",
             destructive: true,
           },
           () =>
             erase.mutate(calendar.id, {
-              onSuccess: () => toast(`«${calendar.name}» удалён навсегда`, "success"),
+              onSuccess: () => toast(`«${calendar.name}» удалён насовсем`, "success"),
               onError: (e) => {
                 const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Календарь не удалён" });
                 notify(words.title, words.subtitle);
@@ -134,11 +134,9 @@ export function CalendarArchiveScreen() {
           }}
         />
       ) : rows.length === 0 ? (
-        <EmptyState
-          fill
-          title="Архив пуст"
-          subtitle="Сюда попадают удалённые календари. Отсюда их можно вернуть или удалить навсегда."
-        />
+        // Пустое состояние — одна строка, формулой корзин: что здесь лежит и
+        // что его нет (канон пустых состояний).
+        <EmptyState fill title="Удалённых календарей нет" />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
           <SectionEyebrow>Календари</SectionEyebrow>
@@ -149,11 +147,13 @@ export function CalendarArchiveScreen() {
                 separated={index > 0}
                 label={calendar.name}
                 value={archivedCalendarCaption(calendar, (amount) => money(amount))}
+                tabular
                 onPress={() => open(calendar)}
               />
             ))}
           </SectionCard>
-          <RowCaption text="Записи этих календарей видны в карточках клиентов. Вернуть календарь или удалить навсегда — нажатием на него." />
+          {/* Абзаца под карточкой нет (DS: «объясняшек под карточками нет»):
+              что делает тап, говорит сама шторка календаря. */}
         </ScrollView>
       )}
 
@@ -175,7 +175,7 @@ export function CalendarArchiveScreen() {
                 },
                 {
                   id: "erase",
-                  label: "Удалить навсегда",
+                  label: "Удалить насовсем",
                   icon: Trash2,
                   color: t.danger,
                   onPress: () => {

@@ -82,7 +82,7 @@ describe("шторка «Финансы дня»", () => {
     );
     has(
       sheet,
-      `return teamId && writesLegacySide(e.kind) ? ( <SwipeRow key={e.id} label="Удалить"`,
+      `return teamId && writesLegacySide(e.kind) ? ( <SwipeRow key={e.id} radius={t.radius.input} label="Удалить"`,
       "свайп",
     );
     assert.match(sheet, /onAction=\{\(\) => askRemoveLegacy\(e\)\}/);

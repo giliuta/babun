@@ -8,7 +8,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { LoopWheelColumn, TimeWheelPair } from "@/components/ui/TimeWheel";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -103,7 +103,7 @@ export function SelfReminderSheet({
       padded={false}
       scroll
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button
             label="Напомнить"
             disabled={!customValid}

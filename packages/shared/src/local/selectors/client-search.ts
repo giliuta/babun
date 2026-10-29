@@ -87,47 +87,79 @@ function normalizeSearchable(input: string): string {
   return foldSound(translit.replace(/[^a-z0-9]/g, ""));
 }
 
-function clientHaystacks(client: Client): {
+/** Буквально, без транслита и «звучания»: заметка «Ivan» не должна ловить
+ *  запрос «Иван» — транслит нужен имени и адресу, которые пишут кто как. */
+function normalizePlain(input: string): string {
+  return stripMarks(input.toLowerCase()).replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+interface Haystacks {
+  /** Имя и адрес — с транслитом и ключом звучания. */
   normalized: string[];
+  /** Остальные поля — буквально. */
+  plain: string[];
+  /** Цифры номеров и прочих полей, от 4 цифр. */
   digits: string[];
-} {
+  /** Цифры номеров телефона — для номера, набранного с кодом страны. */
+  phones: string[];
+}
+
+function clientHaystacks(client: Client): Haystacks {
   const normalized: string[] = [];
+  const plain: string[] = [];
   const digits: string[] = [];
-  const push = (s: string | null | undefined) => {
-    if (!s) return;
-    normalized.push(normalizeSearchable(s));
+  const phones: string[] = [];
+  const pushDigits = (s: string) => {
     const d = normalizeDigits(s);
     if (d.length >= 4) digits.push(d);
   };
-  push(client.full_name);
-  push(client.phone);
+  // ТРАНСЛИТ — ТОЛЬКО ИМЕНИ И АДРЕСУ: их пишут то кириллицей, то латиницей.
+  const pushName = (s: string | null | undefined) => {
+    if (!s) return;
+    normalized.push(normalizeSearchable(s));
+    pushDigits(s);
+  };
+  const push = (s: string | null | undefined) => {
+    if (!s) return;
+    plain.push(normalizePlain(s));
+    pushDigits(s);
+  };
+  const pushPhone = (s: string | null | undefined) => {
+    if (!s) return;
+    push(s);
+    const d = normalizeDigits(s);
+    if (d.length >= 6) phones.push(d);
+  };
+  pushName(client.full_name);
+  pushPhone(client.phone);
   // Канонический номер: у клиентов из CSV и контактов `phone`
   // лежит без кода страны, а строка списка показывает номер с ним — вставка
   // показанного «+357 99 123 456» в поиск не находила того же клиента.
-  push(client.phone_e164);
+  pushPhone(client.phone_e164);
   push(client.email);
-  push(client.sms_name);
-  push(client.whatsapp_phone);
+  pushName(client.sms_name);
+  pushPhone(client.whatsapp_phone);
   push(client.telegram_username);
   push(client.instagram_username);
   push(client.comment);
-  push(client.address);
-  push(client.city);
+  pushName(client.address);
+  // Метка — название места, как адрес: «Limassol» находит «Лимассол».
+  pushName(client.city);
   // STORY-085: клиент находится по реквизитам — юридическому имени и VAT.
   // Люди карточки — сами клиенты и находятся своими строками.
-  push(client.legal_name);
+  pushName(client.legal_name);
   push(client.vat_number);
   // …и по ВСЕМ наборам, а не только по основному-зеркалу (у
   // компании два набора, иначе поиск по VAT второго клиента не находил).
   for (const set of client.requisites ?? []) {
-    push(set.legal_name);
+    pushName(set.legal_name);
     push(set.vat_number);
     push(set.reg_number);
   }
   for (const note of client.notes ?? []) push(note.text);
   for (const p of client.phones ?? []) {
-    push(p.number);
-    push(p.name);
+    pushPhone(p.number);
+    pushName(p.name);
     push(p.label);
   }
   for (const unit of client.equipment ?? []) {
@@ -136,7 +168,7 @@ function clientHaystacks(client: Client): {
     push(unit.model);
   }
   for (const loc of client.locations ?? []) {
-    push(loc.address);
+    pushName(loc.address);
     push(loc.label);
     push(loc.note);
     for (const unit of loc.equipment ?? []) {
@@ -145,7 +177,13 @@ function clientHaystacks(client: Client): {
       push(unit.model);
     }
   }
-  return { normalized, digits };
+  return { normalized, plain, digits, phones };
+}
+
+/** В запросе нет ни буквы, ни цифры («+», «(») — искать нечего: список
+ *  остаётся целым, а не пустеет на первом знаке номера. */
+function isEmptyQuery(q: string): boolean {
+  return normalizePlain(q).length === 0;
 }
 
 /** `extra` — чужие слова, по которым клиента тоже находят: имя карточки, в
@@ -159,7 +197,7 @@ export function matchesClient(
   extra: readonly string[] = [],
 ): boolean {
   const q = rawQuery.trim();
-  if (!q) return true;
+  if (!q || isEmptyQuery(q)) return true;
 
   // Cache-worthy per call: we stringify the client haystacks once per
   // invocation. The caller loops through `clients` so keeping this here
@@ -172,7 +210,7 @@ export function matchesClient(
   // «Иван Сидоров» не находил «Иван Петрович Сидоров», а «Петров Иван» —
   // «Иван Петров». Теперь, если целиком не нашлось, каждое слово обязано
   // найтись где-то у клиента (имя, город, номер — в любом поле).
-  const words = q.split(/\s+/).filter((w) => normalizeSearchable(w).length > 0);
+  const words = q.split(/\s+/).filter((w) => normalizePlain(w).length > 0);
   if (words.length < 2) return false;
   return words.every((w) => matchesPiece(w, hay, extraNorm));
 }
@@ -190,13 +228,13 @@ export function matchesClient(
  */
 export function clientSearchRank(client: Client, rawQuery: string): 0 | 1 | 2 {
   const q = rawQuery.trim();
-  if (!q) return 2;
+  if (!q || isEmptyQuery(q)) return 2;
   const name = normalizeSearchable(client.full_name ?? "");
   const qNorm = normalizeSearchable(q);
   const qDigits = normalizeDigits(q);
   if (qNorm && name.startsWith(qNorm)) return 0;
   if (qDigits.length >= 4) {
-    for (const phone of [client.phone, client.phone_e164]) {
+    for (const phone of [client.phone, client.phone_e164, ...(client.phones ?? []).map((p) => p.number)]) {
       if (phone && normalizeDigits(phone).includes(qDigits)) return 0;
     }
   }
@@ -208,7 +246,7 @@ export function clientSearchRank(client: Client, rawQuery: string): 0 | 1 | 2 {
 
 /** Найденные — по `clientSearchRank`, внутри ступени порядок сохраняется. */
 export function rankClientMatches<T extends Client>(list: readonly T[], rawQuery: string): T[] {
-  if (!rawQuery.trim()) return [...list];
+  if (!rawQuery.trim() || isEmptyQuery(rawQuery)) return [...list];
   return list
     .map((c, i) => ({ c, i, r: clientSearchRank(c, rawQuery) }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
@@ -217,11 +255,16 @@ export function rankClientMatches<T extends Client>(list: readonly T[], rawQuery
 
 function matchesPiece(
   piece: string,
-  hay: { normalized: string[]; digits: string[] },
+  hay: Haystacks,
   extraNorm: readonly string[],
 ): boolean {
   const qNorm = normalizeSearchable(piece);
-  const qDigits = normalizeDigits(piece);
+  const qPlainText = normalizePlain(piece);
+  // ЦИФРЫ ИЩУТСЯ ТОЛЬКО В ЗАПРОСЕ БЕЗ БУКВ. «Makarios 8020» — это адрес, и
+  // «8020» из него не должен ловить каждого, у кого 8020 в номере: слово
+  // «8020» отдельно ищется ниже, вместе с «Makarios».
+  const hasLetters = /\p{L}/u.test(piece);
+  const qDigits = hasLetters ? "" : normalizeDigits(piece);
   // «00» — тот же международный выход, что «+»: номер, вставленный как
   // «0035799123456», не находил «+357 99 123 456».
   const qPlain = qDigits.length >= 10 && qDigits.startsWith("00") ? qDigits.slice(2) : qDigits;
@@ -237,13 +280,69 @@ function matchesPiece(
       if (d.includes(qDigits) || d.includes(qPlain)) return true;
       if (qLocal && d.endsWith(qLocal)) return true;
     }
+    // НОМЕР С КОДОМ СТРАНЫ находит номер, сохранённый без кода: «+357 99 123
+    // 456» — доп. номер «99 123 456» того же человека.
+    for (const d of hay.phones) {
+      if (d.length >= 7 && qPlain.length > d.length && qPlain.endsWith(d)) return true;
+    }
+  }
+  if (qNorm.length > 0) {
+    for (const s of hay.normalized) {
+      if (s.includes(qNorm)) return true;
+    }
+  }
+  if (qPlainText.length > 0) {
+    for (const s of hay.plain) {
+      if (s.includes(qPlainText)) return true;
+    }
   }
   if (qNorm.length === 0) return false;
-  for (const s of hay.normalized) {
-    if (s.includes(qNorm)) return true;
-  }
   for (const word of extraNorm) {
     if (word.includes(qNorm)) return true;
   }
   return false;
+}
+
+/** ПОЧЕМУ КЛИЕНТ НАШЁЛСЯ, ЕСЛИ НЕ ПО ИМЕНИ И НЕ ПО НОМЕРУ: «Адрес: Makarios 8»,
+ *  «Заметка: код ворот 42». Без этой строки человек видит в выдаче имя, в
+ *  котором набранного нет, и думает, что поиск сломан. Нашёлся по имени или
+ *  номеру, или слова запроса разошлись по разным полям — `null`. */
+export function clientMatchEvidence(client: Client, rawQuery: string): string | null {
+  const q = rawQuery.trim();
+  if (!q || isEmptyQuery(q)) return null;
+  if (clientSearchRank(client, q) < 2) return null;
+  const fields: [label: string, value: string | null | undefined, sound: boolean][] = [
+    ["Адрес", client.address, true],
+    ["Метка", client.city, true],
+    ...(client.locations ?? []).flatMap((loc): [string, string | null | undefined, boolean][] => [
+      ["Адрес", loc.address, true],
+      ["Объект", loc.label, false],
+      ["Объект", loc.note, false],
+    ]),
+    ...(client.phones ?? []).flatMap((p): [string, string | null | undefined, boolean][] => [
+      ["Доп. номер", p.number, false],
+      ["Контакт", p.name, true],
+    ]),
+    ["Почта", client.email, false],
+    ["Имя для SMS", client.sms_name, true],
+    ["Реквизиты", client.legal_name, true],
+    ["Реквизиты", client.vat_number, false],
+    ["Комментарий", client.comment, false],
+    ...(client.notes ?? []).map((n): [string, string, boolean] => ["Заметка", n.text, false]),
+  ];
+  const words = q.split(/\s+/).filter((w) => normalizePlain(w).length > 0);
+  for (const [label, value, sound] of fields) {
+    if (!value?.trim()) continue;
+    const digits = normalizeDigits(value);
+    const hay: Haystacks = {
+      normalized: sound ? [normalizeSearchable(value)] : [],
+      plain: sound ? [] : [normalizePlain(value)],
+      digits: digits.length >= 4 ? [digits] : [],
+      phones: label === "Доп. номер" && digits.length >= 6 ? [digits] : [],
+    };
+    const hit =
+      matchesPiece(q, hay, []) || (words.length > 1 && words.every((w) => matchesPiece(w, hay, [])));
+    if (hit) return `${label}: ${value.trim().replace(/\s+/g, " ")}`;
+  }
+  return null;
 }

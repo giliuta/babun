@@ -1,57 +1,65 @@
 import { Pressable, Text, View } from "react-native";
 import { Mail } from "lucide-react-native";
-import { getInitials } from "@babun/shared/local/masters";
 import type { Database } from "@babun/shared/db/database.types";
 
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 
 import { waitSubtitle } from "./invitation-wait";
-import type { CalendarMember } from "@/session/access-queries";
 import { LIST_ROW } from "@/components/ui/tokens";
 
-// СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах»: кто уже с доступом и кто
-// ещё не ответил на приглашение. Ритм тот же, что у карточки мастера на экране:
-// один список не должен выглядеть тремя.
+// СТРОКИ ЛЮДЕЙ в «Партнёрах»: кто уже с доступом, карточки мастеров и кто
+// ещё не ответил на приглашение. Ритм один: один список не должен выглядеть
+// тремя.
 
 type Invitation = Database["public"]["Tables"]["invitations"]["Row"];
 
-/** Человек с доступом к календарю. Тап открывает его карточку. */
-export function MemberRow({
-  member,
-  tint,
+/** Человек в списке — с доступом к календарю или карточка мастера: кружок
+ *  инициалов цветом его команды, имя, подпись. `muted` — в архиве: кружок и
+ *  текст бледные. Тап открывает его карточку. */
+export function PersonRow({
+  name,
+  initials,
   sub,
+  tint,
+  muted = false,
+  accessibilityLabel,
   onPress,
 }: {
-  member: CalendarMember;
-  tint: string;
-  /** Вторая строка вместо почты — например, его команды. */
+  name: string;
+  initials: string;
   sub?: string;
+  tint: string;
+  muted?: boolean;
+  accessibilityLabel: string;
   onPress: () => void;
 }) {
   const t = useThemeColors();
+  const circle = muted ? t.faint : tint;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${member.name}, права доступа`}
+      accessibilityLabel={accessibilityLabel}
       className="flex-row items-center px-4 py-3 active:opacity-60"
     >
       <View
         className="mr-3 h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: tint }}
+        style={{ backgroundColor: circle }}
       >
-        <Text style={{ fontSize: 14, fontWeight: "700", color: readableForeground(tint) }}>
-          {getInitials(member.name)}
+        <Text style={{ fontSize: 14, fontWeight: "700", color: readableForeground(circle) }}>
+          {initials}
         </Text>
       </View>
       <View className="flex-1">
-        <Text style={{ ...LIST_ROW.name, color: t.ink }} numberOfLines={1}>
-          {member.name}
+        <Text style={{ ...LIST_ROW.name, color: muted ? t.faint : t.ink }} numberOfLines={1}>
+          {name}
         </Text>
-        <Text style={{ ...LIST_ROW.sub, color: t.sub }} numberOfLines={1}>
-          {sub || member.email}
-        </Text>
+        {sub ? (
+          <Text style={{ ...LIST_ROW.sub, color: muted ? t.faint : t.sub }} numberOfLines={1}>
+            {sub}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );

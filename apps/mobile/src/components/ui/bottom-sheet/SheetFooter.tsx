@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardShown } from "@/lib/keyboard";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 /** Подвал листа — ЕДИНСТВЕННОЕ место, где лист платит нижний безопасный
  *  отступ. Отдельным компонентом, чтобы подписка на клавиатуру жила только у
@@ -12,7 +12,12 @@ import { GUTTER } from "@/components/ui/tokens";
  *
  *  Под клавиатурой отступ меньше: её кадр на iOS уже включает полосу
  *  home-индикатора, и обе высоты вместе давали ~34pt пустоты, которые потолок
- *  листа отбирал у содержимого. */
+ *  листа отбирал у содержимого.
+ *
+ *  Бока — `FOOTER_SIDE`, те же 20, что у кнопки внизу страницы: лист и
+ *  страница кончаются одной и той же кнопкой. Лист без полей (`padded={false}`)
+ *  ставит их у своей обёртки сам — тем же числом, а лист с полями своей
+ *  обёртки с полями не заводит: вместе выходило 32–36. */
 export function SheetFooter({
   children,
   padded,
@@ -25,7 +30,7 @@ export function SheetFooter({
   return (
     <View
       style={{
-        paddingHorizontal: padded ? GUTTER : 0,
+        paddingHorizontal: padded ? FOOTER_SIDE : 0,
         paddingBottom: keyboardShown ? 12 : Math.max(insets.bottom, 16),
       }}
     >

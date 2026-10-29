@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldRow, RowCaption } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useClientsCapabilities } from "@/session/company-scope";
@@ -114,9 +114,9 @@ export function RequisitesSheet({
       maxHeightRatio={0.92}
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button
-            label={set ? "Применить" : "Добавить реквизиты"}
+            label={set ? "Сохранить" : "Добавить реквизиты"}
             loading={saving}
             disabled={!typed || saving}
             onPress={async () => {

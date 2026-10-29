@@ -14,6 +14,7 @@ test("строка «Рабочих календарей — сумма в ме�
   assert.match(screen, /forever=\{state\.forever\}/);
   const line = screen.indexOf("`Рабочих календарей: ${calendars}");
   assert.ok(line > 0, "строка счёта пропала со страницы совсем");
-  const guard = screen.lastIndexOf("{forever ? null : (", line);
-  assert.ok(guard > 0 && line - guard < 200, "строка счёта показывается без проверки «навсегда»");
+  // Весь блок цен под тарифом гаснет у «навсегда» (`CAN_PAY_HERE && !forever`).
+  const guard = screen.lastIndexOf("CAN_PAY_HERE && !forever ? (", line);
+  assert.ok(guard > 0 && line - guard < 300, "строка счёта показывается без проверки «навсегда»");
 });

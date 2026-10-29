@@ -10,6 +10,9 @@ import {
   LinkPickerSheet,
   type LinkDraft,
 } from "@/features/clients/LinkPickerSheet";
+import { useAppointments } from "@/features/calendar/queries";
+import { linkableToGroup } from "@/features/clients/serving-teams";
+import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 
 // ДВЕРЬ СВЯЗИ СТРАНИЦЫ КЛИЕНТА — шторка выбора человека с готовым вопросом
 // (STORY-086). Ход «лист → шторка → связь» и что делать с выбором — в
@@ -47,6 +50,15 @@ export function LinkDoor({
   onExited: () => void;
 }) {
   const { data: directory = [] } = useClients();
+  // ПРЕДЛАГАЕМ ТОЛЬКО ТЕХ, КОГО ОБСЛУЖИВАЕТ КОМАНДА ГРУППЫ (`linkableToGroup`):
+  // иное сервер отбивает (`client:people_other_team`), и человек упёрся бы
+  // в отказ уже после выбора.
+  const { data: appointments = [] } = useAppointments();
+  const archivedTeamIds = useArchivedTeamIds();
+  const candidates = useMemo(
+    () => linkableToGroup(group, directory, appointments, archivedTeamIds),
+    [group, directory, appointments, archivedTeamIds],
+  );
   // Строки считаются ОДИН раз на справочник: шторка спрашивает `linkFor`
   // трижды на строку (подпись, её наличие, озвучка) и заново на каждую букву
   // поиска — у владельца это сотни имён.
@@ -65,6 +77,7 @@ export function LinkDoor({
       visible={visible}
       title={ask.title}
       group={group}
+      clients={candidates}
       role={ask.role}
       locationId={ask.locationId}
       linkFor={linkFor}

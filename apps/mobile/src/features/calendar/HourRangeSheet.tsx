@@ -13,6 +13,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { TimeRangePicker } from "@/components/ui/TimeWheel";
 import { haptics } from "@/lib/haptics";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // Пара границ «С … До …» одним нижним листом — диалект «Своего периода»
 // финансов (PeriodWheelsModal): сегмент С|До выбирает границу, ниже она
@@ -172,7 +173,7 @@ export function HourRangeSheet({
       onClose={onClose}
       title={title}
       footer={
-        <View className="px-5">
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={apply} />
         </View>
       }

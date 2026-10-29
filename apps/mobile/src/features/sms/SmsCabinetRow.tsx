@@ -17,15 +17,20 @@ export function SmsCabinetRow({ tenantId }: { tenantId?: string } = {}) {
   const router = useRouter();
   const data = useSmsAccount().data;
   const owner = data?.owner;
+  const warning = balanceWarning(data, CAN_PAY_HERE);
+  // ПУСТОЙ БАЛАНС — СЛОВАМИ, А НЕ ГОЛЫМ «€0»: ноль справа читался как цена
+  // строки. Где платить можно (`CAN_PAY_HERE`), подпись говорит, что сделать;
+  // в приложении из магазина остаётся тихий ноль.
+  const empty = !!owner && owner.balanceCents === 0 && !warning && CAN_PAY_HERE;
   return (
     <SettingsRow
       tile={SETTINGS_TILE.green}
       icon={MessageSquare}
       title="SMS"
-      value={owner ? euro(owner.balanceCents) : undefined}
-      sub={balanceWarning(data, CAN_PAY_HERE) ?? undefined}
-      valueColor={balanceWarning(data, CAN_PAY_HERE) ? t.warning : undefined}
-      valueQuiet={!owner || (owner.balanceCents === 0 && !balanceWarning(data, CAN_PAY_HERE))}
+      value={owner && !empty ? euro(owner.balanceCents) : undefined}
+      sub={warning ?? (empty ? "Пополните баланс" : undefined)}
+      valueColor={warning ? t.warning : undefined}
+      valueQuiet={!owner || (owner.balanceCents === 0 && !warning)}
       onPress={() => router.push((tenantId ? accountHref("/cabinet/sms", tenantId) : "/cabinet/sms") as Href)}
     />
   );

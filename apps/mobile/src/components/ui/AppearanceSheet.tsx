@@ -8,7 +8,7 @@ import { IconPicker } from "@/components/ui/IconPicker";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SELECT_SHEET_RATIO } from "@/components/ui/select-rows";
 import { readableTextOnColor } from "@/components/ui/color-contrast";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { iconPreset, type IconPreset } from "@/components/ui/icon-set";
 import { useThemeColors } from "@/theme/colors";
 import { PICKER_RADIUS } from "./picker-grid";
@@ -146,7 +146,7 @@ export function AppearanceSheet({
       scroll
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={onClose} />
         </View>
       }

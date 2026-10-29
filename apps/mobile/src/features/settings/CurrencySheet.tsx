@@ -116,7 +116,7 @@ export function CurrencySheet({
       // Поиск — ввод: без подъёма результаты уходили под клавиатуру.
       avoidKeyboard
       footer={
-        <View className="px-5">
+        <View>
           <Button
             label="Применить"
             onPress={() => {

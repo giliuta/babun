@@ -1,11 +1,5 @@
-import { type ReactNode, type RefObject } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type TextInput,
-} from "react-native";
+import { cloneElement, isValidElement, type ReactElement, type ReactNode, type RefObject } from "react";
+import { Pressable, ScrollView, Text, type TextInput } from "react-native";
 import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { MoreHorizontal, Users } from "lucide-react-native";
 
@@ -20,6 +14,7 @@ import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
 import { AREA_TITLE } from "@/session/access-map";
+import { useTeamName } from "@/session/team-name";
 import {
   levelTone,
   type AreaLevel,
@@ -32,6 +27,7 @@ import {
   type EmployeeAccessLine,
   type EmployeeContacts,
 } from "./EmployeeIdentityBlock";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // КАРТОЧКА МАСТЕРА — ОДНО ТЕЛО НА ТРИ СЛУЧАЯ. Новый мастер, ждущее приглашение и сотрудник рисуются
 // этим телом; что правится и куда пишется, решает вызывающий режим.
@@ -155,7 +151,7 @@ export interface MasterCardViewProps {
   /** Итог прав человека в команде выжимкой через точку (строка команды).
    *  Есть — строка команды открывает её права. */
   teamLine?: (teamId: string) => string;
-  /** «Посмотреть его глазами» — строкой в блоке «Доступ». */
+  /** «Посмотреть как {Имя}» — строкой в блоке «Доступ». */
   onMirror?: () => void;
   /** Блоки ниже прав: «Работа», «Личное». */
   children?: ReactNode;
@@ -208,6 +204,29 @@ export function MasterCardView(p: MasterCardViewProps) {
   // и лента встаёт на своё место.
   const noTeams = !!p.teamChips && !p.teams.some((team) => p.teamIds.includes(team.id));
 
+  const teamName = useTeamName();
+  const ribbon =
+    p.teamChips && !noTeams ? (
+      <ScopeChips
+        // В ПОРЯДКЕ КОМАНД КОМПАНИИ, как лента настроек календаря: одна и та
+        // же команда стоит на одном месте в обеих лентах.
+        items={p.teams
+          .filter((team) => p.teamIds.includes(team.id))
+          .map((team) => ({ id: team.id, name: teamName(team.name), color: team.color }))}
+        activeId={p.teamChips.activeId}
+        onSelect={p.teamChips.onSelect}
+        seam={false}
+        trailing={p.teamChips.onAdd ? <ChipsAddButton onPress={p.teamChips.onAdd} /> : undefined}
+      />
+    ) : null;
+  // ЛЕНТА — ВНУТРИ «ДОСТУПА» (`AccessSectionsCard.chips`): она выбирает,
+  // чьи права в блоке, и больше ничего на странице. Наверху она стоит, только
+  // если блока доступа нет (права ещё едут).
+  const ribbonInAccess = !!ribbon && isValidElement(p.teamRights);
+  const teamRights = ribbonInAccess
+    ? cloneElement(p.teamRights as ReactElement<{ chips?: ReactNode }>, { chips: ribbon })
+    : (p.teamRights ?? null);
+
   return (
     <Screen edges={["top"]}>
       {/* Шов под шапкой один — при ленте его несёт она. */}
@@ -216,20 +235,9 @@ export function MasterCardView(p: MasterCardViewProps) {
         subtitle={p.subtitle}
         onBack={p.onBack}
         right={p.headerRight}
-        seam={!p.teamChips || noTeams}
+        seam={!ribbon || ribbonInAccess}
       />
-      {p.teamChips && !noTeams ? (
-        <ScopeChips
-          // В ПОРЯДКЕ КОМАНД КОМПАНИИ, как лента настроек календаря: одна и та
-          // же команда стоит на одном месте в обеих лентах.
-          items={p.teams
-            .filter((team) => p.teamIds.includes(team.id))
-            .map((team) => ({ id: team.id, name: team.name, color: team.color }))}
-          activeId={p.teamChips.activeId}
-          onSelect={p.teamChips.onSelect}
-          trailing={p.teamChips.onAdd ? <ChipsAddButton onPress={p.teamChips.onAdd} /> : undefined}
-        />
-      ) : null}
+      {ribbon && !ribbonInAccess ? ribbon : null}
       <KeyboardLift
         style={{ flex: 1 }}
       >
@@ -250,7 +258,7 @@ export function MasterCardView(p: MasterCardViewProps) {
           {/* КОМАНДЫ — ПРАВА ПО КАЖДОЙ КОМАНДЕ: строка на
               команду со сводкой её прав, тап — права этой команды. Карточка
               без аккаунта показывает команды без сводки: прав у неё нет. */}
-          {p.teamRights ?? null}
+          {teamRights}
           {p.showCalendars && !p.teamChips ? (
             <EmployeeTeamsBlock
               teams={chosen}
@@ -259,6 +267,7 @@ export function MasterCardView(p: MasterCardViewProps) {
               onRemoveTeam={p.onDetachCalendar}
               onAddTeam={openCalendars && anyUnchosen ? openCalendars : undefined}
               onMirror={p.onMirror}
+              mirrorName={p.identity.name}
             />
           ) : null}
 
@@ -288,9 +297,9 @@ export function MasterCardView(p: MasterCardViewProps) {
             10 снизу. Внутри `KeyboardAvoidingView` — кнопка едет над
             клавиатурой, а не прячется под ней. */}
         {p.footer ? (
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <PageFooter>
             {p.footer}
-          </View>
+          </PageFooter>
         ) : null}
       </KeyboardLift>
     </Screen>

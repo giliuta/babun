@@ -8,7 +8,7 @@ import { useClientsSources } from "@/features/clients/sources";
 import { useGuestSources } from "@/features/clients/guest-sources";
 import { useClientsSort, useSetClientsSort } from "@/features/clients/sort-pref";
 import { useAppointments } from "@/features/calendar/queries";
-import { useCities, useTeams } from "@/features/reference/queries";
+import { useLiveCities, useTeams } from "@/features/reference/queries";
 
 /** Where the list reads from: its own company plus the companies that opened
  *  their clients to this person («гости»), and the writers rows use. */
@@ -34,7 +34,8 @@ export function useListSources() {
   const { data: ownTags = [], isSuccess: tagsReady } = useClientTags();
   const { data: ownAppointments = [] } = useAppointments();
   const { data: ownTeams = [] } = useTeams();
-  const { data: cities = [], isSuccess: citiesReady } = useCities();
+  // Метки фильтра — из `cities_live` (без удалённых и архивных календарей).
+  const { data: cities = [], isSuccess: citiesReady } = useLiveCities();
   // Сортировка — персистентная настройка списка (первая строка листа
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
   const { data: sort = DEFAULT_SORT } = useClientsSort();

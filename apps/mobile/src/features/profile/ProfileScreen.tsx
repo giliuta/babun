@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { ScrollView, Text } from "react-native";
 
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
-import { FieldRow } from "@/components/ui/card-rows";
+import { ColumnDoorRow, FieldRow } from "@/components/ui/card-rows";
+import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -13,7 +13,6 @@ import { birthdayText } from "@/features/cabinet/person-card";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useDefaultCountry } from "@/features/reference/default-country";
 import { usePhoneField } from "@/features/clients/use-phone-country";
-import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
@@ -34,7 +33,6 @@ import { phoneToSave, profileFromMetadata } from "./profile";
 //     нет SMS) и почта — только показанием, менять её здесь нельзя.
 /** Колонка подписей шире, чем у клиента (96): «День рождения» в 96 не
  *  влезает, а колонка на странице одна на все блоки. */
-const PROFILE_COLUMN = 124;
 
 export function ProfileScreen() {
   const t = useThemeColors();
@@ -65,47 +63,6 @@ export function ProfileScreen() {
     },
   });
 
-  const door = (label: string, value: string, placeholder: string, onPress: () => void, separated?: boolean) => (
-    <View>
-      {separated ? (
-        <View style={{ height: 1, marginLeft: 16 + PROFILE_COLUMN, backgroundColor: t.separator }} />
-      ) : null}
-      <Pressable
-        onPress={() => {
-          haptics.tap();
-          onPress();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={value ? `${label}, ${value}` : label}
-        style={({ pressed }) => ({
-          flexDirection: "row",
-          alignItems: "center",
-          minHeight: 44,
-          paddingLeft: 16,
-          paddingRight: 12,
-          paddingVertical: 2,
-          opacity: pressed ? 0.6 : 1,
-        })}
-      >
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ width: PROFILE_COLUMN, fontSize: 15, color: t.caption, paddingRight: 8 }}
-        >
-          {label}
-        </Text>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 17, color: value ? t.ink : t.placeholder }}
-        >
-          {value || placeholder}
-        </Text>
-        <ChevronRight color={t.faint} size={16} strokeWidth={1.75} />
-      </Pressable>
-    </View>
-  );
-
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Профиль" />
@@ -113,26 +70,27 @@ export function ProfileScreen() {
         <SectionCard title="Личное">
           <FieldRow
             label="Имя"
-            column={PROFILE_COLUMN}
+            column={PERSON_COLUMN}
             value={profile.name}
             placeholder="Имя"
             autoCapitalize="words"
             onSave={(value) => void save({ full_name: value })}
           />
-          {door(
-            "День рождения",
-            birthdayText(profile.birthday),
-            "Дата",
-            () => setBirthdayOpen(true),
-            true,
-          )}
+          <ColumnDoorRow
+            separated
+            label="День рождения"
+            value={birthdayText(profile.birthday)}
+            placeholder="Дата"
+            column={PERSON_COLUMN}
+            onPress={() => setBirthdayOpen(true)}
+          />
         </SectionCard>
 
         {ownAccount ? (
           <SectionCard title="Аккаунт">
             <FieldRow
               label="Название"
-              column={PROFILE_COLUMN}
+              column={PERSON_COLUMN}
               value={accountName}
               placeholder="Название"
               autoCapitalize="words"
@@ -152,7 +110,7 @@ export function ProfileScreen() {
               тихий код страны, который меняется тапом. */}
           <FieldRow
             label="Телефон"
-            column={PROFILE_COLUMN}
+            column={PERSON_COLUMN}
             tabular
             seed={phoneField.seed}
             value={phoneField.value}
@@ -171,7 +129,7 @@ export function ProfileScreen() {
             separated
             readOnly
             label="Почта"
-            column={PROFILE_COLUMN}
+            column={PERSON_COLUMN}
             value={email}
             placeholder="Почта"
             onSave={() => {}}

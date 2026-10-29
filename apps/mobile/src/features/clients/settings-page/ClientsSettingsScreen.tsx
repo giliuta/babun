@@ -19,6 +19,8 @@ import { useTeams } from "@/features/reference/queries";
 import { useTenantId } from "@/lib/tenant";
 import { SettingsBody } from "./SettingsBody";
 import { useTeamName } from "@/session/team-name";
+import { useDefaultTeamId } from "@/session/default-team";
+import { useCalendarVisibility } from "@/session/workspaces";
 
 // «Настройки клиентов» page: the team ribbon on top, the body of the picked
 // team below (`SettingsBody`). The route `clients/settings.tsx` wraps it in
@@ -73,10 +75,18 @@ export function ClientsSettingsScreen() {
   }, [caps.manage, routeScope, ownTeams, guests.list, activeTenantId, activeMap, foreignMaps]);
   const teamName = useTeamName();
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const { isHidden } = useCalendarVisibility();
+  // Команда списка клиентов — если она не скрыта; дальше общее правило
+  // (`default-team.ts`): открытый календарь → первый видимый.
+  const defaultTeamId = useDefaultTeamId(
+    useMemo(() => ribbon.map((tm) => ({ id: tm.id, tenantId: tm.scope.tenantId })), [ribbon]),
+  );
+  const listEntry =
+    listTeam && listTeam !== ALL_TEAMS ? ribbon.find((tm) => tm.id === listTeam) : undefined;
   const entry =
     ribbon.find((tm) => tm.id === pickedTeam) ??
-    (listTeam && listTeam !== ALL_TEAMS ? ribbon.find((tm) => tm.id === listTeam) : undefined) ??
-    ribbon[0] ??
+    (listEntry && !isHidden(listEntry.scope.tenantId, listEntry.id) ? listEntry : undefined) ??
+    ribbon.find((tm) => tm.id === defaultTeamId) ??
     null;
 
   return (

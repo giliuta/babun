@@ -19,6 +19,7 @@ import { useGridProps } from "./use-grid-props";
 import { useQuickEvents } from "./use-quick-events";
 import { useRecordActions } from "./use-record-actions";
 import { useRecordColors } from "./use-record-colors";
+import { useRecordCopyLink } from "./use-record-copy-link";
 import { useRecordNaming } from "./use-record-naming";
 import { useReminderReconcile } from "./use-reminder-reconcile";
 import { useSlotNotice } from "./use-slot-notice";
@@ -59,6 +60,7 @@ export function useCalendarController() {
   const firstCalendar = useFirstCalendar(listed);
   const actions = useRecordActions(listed);
   const acting = { ...listed, ...actions, ...firstCalendar };
+  useRecordCopyLink(acting);
   const quick = useQuickEvents(acting);
   const headerNav = useCalendarHeaderNav(acting);
   const grid = useCalendarGrid(acting);

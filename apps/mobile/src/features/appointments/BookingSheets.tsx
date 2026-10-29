@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 const EVENT_COLORS = PRESET_COLOR_VALUES;
 /** Боковое поле листов: они идут `padded={false}`, поля ставим сами — одно
@@ -71,7 +72,7 @@ export function TeamMasterSheet({
       scroll
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
-        <View style={{ paddingHorizontal: SIDE }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={onClose} />
         </View>
       }
@@ -179,7 +180,7 @@ export function ColorSheet({
       padded={false}
       footer={
         commitOnPick ? undefined : (
-        <View style={{ paddingHorizontal: SIDE }}>
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           {/* «ПРИМЕНИТЬ» ВНИЗУ, А НЕ «ГОТОВО» В УГЛУ ШАПКИ. Цвет виден сразу — вся страница за листом уже
               подсвечена им, — поэтому кнопка только закрывает. */}
           <Button label="Применить" onPress={onClose} />

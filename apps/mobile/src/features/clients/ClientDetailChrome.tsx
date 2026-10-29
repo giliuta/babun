@@ -40,6 +40,8 @@ interface ClientDetailChromeProps {
   onDelete: () => void;
   /** Заголовок меню — имя клиента, как у долгого нажатия в списке. */
   menuTitle?: string;
+  /** Имя в шапке, когда карточка с именем уехала вверх; нет — «Клиент». */
+  scrolledTitle?: string | null;
   /** «Напомнить» и «В чёрный список» — «Меню клиента». */
   canEdit?: boolean;
   /** «Удалить» — «Удаление клиента». */
@@ -53,6 +55,8 @@ interface ClientDetailChromeProps {
    *  (STORY-086, сценарий ж). Пункт есть, только когда страница его передала:
    *  а передаёт она его, лишь когда выносить есть что (`canSplitClient`). */
   onSplit?: () => void;
+  /** «Сменить команду» — только владелец своей базы; нет — пункта нет. */
+  onChangeTeam?: () => void;
   /** Меню ушло и его окно снято — отсюда поднимается следующая шторка
    *  (iOS не показывает вторую модалку, пока первая не ушла). */
   onMenuExited?: () => void;
@@ -72,10 +76,12 @@ export function ClientDetailChrome({
   onToggleBlacklist,
   onDelete,
   menuTitle,
+  scrolledTitle,
   canEdit = true,
   canDelete = false,
   onMerge,
   onSplit,
+  onChangeTeam,
   onMenuExited,
 }: ClientDetailChromeProps) {
   const t = useThemeColors();
@@ -95,6 +101,7 @@ export function ClientDetailChrome({
     onShare,
     onMerge,
     onSplit,
+    onChangeTeam,
     onToggleBlacklist: canEdit ? onToggleBlacklist : undefined,
     onDelete: canDelete ? onDelete : undefined,
   });
@@ -104,7 +111,7 @@ export function ClientDetailChrome({
           архитектуре, как везде, — заголовок посередине. Своя шапка держала бы
           заголовок слева и 16-м кеглем. */}
       <ScreenHeader
-        title={draft ? "Новый клиент" : "Клиент"}
+        title={draft ? "Новый клиент" : scrolledTitle || "Клиент"}
         backTourId="client.back"
         // Пока идёт запись, «назад» молчит: уход посреди сохранения терял бы
         // правку, которую строка ещё не донесла.

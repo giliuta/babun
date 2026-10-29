@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import type { DebtDirection } from "@babun/shared/local/finance/debt";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
@@ -12,6 +12,7 @@ import type { AccountWithBalance } from "./accounts";
 import { accountsFooterAction, TRANSFER_NEEDS_SECOND } from "./accounts-footer";
 import type { HomeView } from "./FinanceOverview";
 import { TransferSheet } from "./TransferSheet";
+import { PageFooter } from "@/components/ui/PageFooter";
 
 // ГЛАВНОЕ ДЕЙСТВИЕ «ФИНАНСОВ» СЛЕДУЕТ ЗА ОТКРЫТОЙ ПАНЕЛЬЮ.
 // Кнопка стоит на одном месте — том же, что «Создать клиента» на
@@ -166,7 +167,7 @@ export function FinancesFooter({
 
   return (
     <>
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 6 }}>
+      <PageFooter gap={6}>
         {/* ПРИЧИНА — СЛОВАМИ НАД КНОПКОЙ, как в «Финансах дня»: серая кнопка
             без объяснения читается как поломка. */}
         {shownReason ? (
@@ -179,7 +180,7 @@ export function FinancesFooter({
           </Text>
         ) : null}
         <TourTarget id="finances.action" shape="control">{button}</TourTarget>
-      </View>
+      </PageFooter>
       <TransferSheet
         visible={transferOpen}
         onClose={() => setTransferOpen(false)}

@@ -133,6 +133,8 @@ const trashHistory = norm(readFileSync(join(MIGRATIONS_DIR, TRASH_HISTORY), "utf
 // ВЫДАЧА СПИСКА КЛИЕНТОВ — В ЖУРНАЛ: `list_member_clients` — обёртка с
 // журналом, а тело TAG_ORDER живёт как `list_member_clients_rows` без правок.
 const DISCLOSURES = "20261027225327_client_list_disclosure_journal.sql";
+// Списки партнёра и мастера — страницами (Н4): тело то же, хвост `offset/limit`.
+const PAGED_LISTS = "20261028200000_member_client_lists_paged.sql";
 
 // МЁРТВЫЕ ВЕТКИ: «правка клиента целиком» — только владелец (у блока «Клиенты»
 // нет ступени «Меняет»), ветка «номер в день записи» снята со всех дверей.
@@ -201,10 +203,16 @@ describe("сервер: клиенты по уровням", () => {
     assert.equal(lastDefiner("member_trash_client"), DELETE_RIGHT, "member_trash_client переопределён позже");
     assert.equal(lastDefiner("client_history_never_purges"), TRASH_HISTORY, "client_history_never_purges переопределён позже");
     assert.equal(lastDefiner("client_has_history"), TRASH_HISTORY, "client_has_history переопределён позже");
-    assert.equal(lastDefiner("list_member_clients"), DISCLOSURES, "list_member_clients переопределён позже");
+    assert.ok(
+      [DISCLOSURES, PAGED_LISTS].includes(lastDefiner("list_member_clients")),
+      "list_member_clients переопределён позже",
+    );
     assert.equal(lastDefiner("list_member_clients_rows"), "", "тело TAG_ORDER под именем list_member_clients_rows переписано");
+    assert.ok(
+      [ANY_TEAM_CLIENT, PAGED_LISTS].includes(lastDefiner("list_master_clients_safe")),
+      "list_master_clients_safe переопределён позже",
+    );
     for (const fn of [
-      "list_master_clients_safe",
       "member_appointment_copy",
       "member_appointment_update",
       "member_client_bookable",

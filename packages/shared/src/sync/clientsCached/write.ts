@@ -162,6 +162,27 @@ export async function createClient(
 
 // ─── Write — update ───────────────────────────────────────────────
 
+// ПРАВКИ ОДНОГО КЛИЕНТА — ПО ОЧЕРЕДИ (035, «Страница клиентов», С10).
+// Защита версий берёт `updated_at` из кэша и отказывает, если на сервере
+// строка новее («изменили на другом устройстве»). Две быстрые правки одной
+// карточки (номер, потом объект) обе брали ту же версию: первая сохранялась
+// и двигала версию, вторая видела «новее» и отказывала — хотя новее её
+// собственная правка. Теперь правка ждёт предыдущую правку ЭТОГО клиента
+// (вместе с её перечиткой в кэш) и берёт уже свежую версию. Разные клиенты
+// друг друга не ждут; сбой предыдущей очередь не останавливает.
+const clientWriteChains = new Map<string, Promise<unknown>>();
+
+export function serializeClientWrite<T>(id: string, run: () => Promise<T>): Promise<T> {
+  const previous = clientWriteChains.get(id) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(run);
+  const tail = next.catch(() => undefined);
+  clientWriteChains.set(id, tail);
+  void tail.then(() => {
+    if (clientWriteChains.get(id) === tail) clientWriteChains.delete(id);
+  });
+  return next;
+}
+
 export async function updateClient(
   supabase: DbSupabase,
   id: string,
@@ -170,6 +191,16 @@ export async function updateClient(
   opts?: CachedWriteOptions,
 ): Promise<Client> {
   assertWritesAllowed("updateClient");
+  return serializeClientWrite(id, () => updateClientNow(supabase, id, patch, tenantId, opts));
+}
+
+async function updateClientNow(
+  supabase: DbSupabase,
+  id: string,
+  patch: Partial<Client>,
+  tenantId: string,
+  opts?: CachedWriteOptions,
+): Promise<Client> {
   refuseOfflineWrite(opts);
   // Snapshot existing cached row for conflict-detection sentinel.
   const existing = await readCachedClient(id, tenantId);

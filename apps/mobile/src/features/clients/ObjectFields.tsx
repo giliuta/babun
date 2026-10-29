@@ -3,6 +3,7 @@ import { Text, TextInput, View } from "react-native";
 import { MapPinned, Send, Settings2, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { useClientsCapabilities } from "@/session/company-scope";
+import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 import { FieldRow } from "@/components/ui/card-rows";
 import { iconPreset } from "@/components/ui/icon-set";
 import { SelectRow } from "@/components/ui/select-rows";
@@ -75,9 +76,19 @@ export function useObjectTypeOptions(
 ): string[] {
   // ТОЛЬКО СПРАВОЧНИК КОМАНДЫ (каждый сам создаёт свой тип): ни стандартного набора, ни типов, подсмотренных на объектах.
   const { data: labelPresets = [] } = useLocationLabels(teamId);
+  // Календарь в архиве никого не обслуживает: его типы не предлагаются
+  // (`serving-teams.ts`) — ни клиенту этой команды, ни клиенту без команды.
+  const archivedTeamIds = useArchivedTeamIds();
   return useMemo(
-    () => objectTypeVocabulary(labelPresets.map((preset) => preset.name)),
-    [labelPresets],
+    () =>
+      teamId && archivedTeamIds.has(teamId)
+        ? []
+        : objectTypeVocabulary(
+            labelPresets
+              .filter((preset) => !preset.teamId || !archivedTeamIds.has(preset.teamId))
+              .map((preset) => preset.name),
+          ),
+    [labelPresets, teamId, archivedTeamIds],
   );
 }
 

@@ -14,7 +14,7 @@ type SaveAccount = (
   errorTitle: string,
 ) => Promise<boolean>;
 
-/** Правка в черновик листа: на сервер уходит только по «Применить». */
+/** Правка в черновик листа: на сервер уходит только по «Сохранить». */
 export type StageAccount = (patch: Partial<AccountDraft>) => void;
 
 /**

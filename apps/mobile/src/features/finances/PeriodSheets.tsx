@@ -5,7 +5,7 @@ import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
+import { FOOTER_SIDE, ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import {
@@ -215,7 +215,7 @@ export function PeriodWheelsModal({
       onClose={onClose}
       title="Свой период"
       footer={
-        <View className="px-5">
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
           <Button label="Применить" onPress={apply} />
         </View>
       }

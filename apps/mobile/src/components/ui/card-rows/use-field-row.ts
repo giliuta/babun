@@ -67,9 +67,13 @@ export function useFieldRow({
   const latest = useRef({ text, value, live: !!live, onSave, onEditEnd, typedOf });
   latest.current = { text, value, live: !!live, onSave, onEditEnd, typedOf };
   const commit = () => {
-    setEditing(false);
     const cur = latest.current;
-    if (!cur.live && cur.typedOf(cur.text) !== cur.value) cur.onSave(cur.typedOf(cur.text));
+    const typed = cur.typedOf(cur.text);
+    // ОТКАЗ НЕ СТИРАЕТ НАБРАННОЕ. Закрытая правка показывает сохранённое
+    // значение, и отклонённый номер («Номер не распознан») пропадал целиком —
+    // его набирали заново. Отклонённое остаётся в поле для правки.
+    const rejected = !cur.live && typed !== cur.value && cur.onSave(typed) === false;
+    setEditing(rejected);
     cur.onEditEnd?.();
   };
   useEffect(

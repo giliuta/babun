@@ -33,15 +33,35 @@ export type BulkEditOutcome =
 /** Сервер принимает не больше пятисот клиентов за раз. */
 const BATCH_LIMIT = 500;
 
+/** Пачка больше пятисот уходит ПОРЦИЯМИ по пятьсот, одна за другой, и итог
+ *  складывается. Отказ первой порции — отказ всей пачки (ничего не
+ *  изменено); отказ поздней — уже изменённое остаётся, а не дошедшие до
+ *  сервера считаются пропущенными: «изменено 500, пропущено 120» честнее,
+ *  чем «не удалось» при половине сделанного. */
 export async function bulkEditOnServer(
   tenantId: string,
   edits: readonly BulkEdit[],
 ): Promise<BulkEditOutcome> {
   if (edits.length === 0) return { kind: "done", result: { changed: [], skipped: 0, unchanged: 0 } };
   if (!isOnline()) return { kind: "offline" };
-  if (edits.length > BATCH_LIMIT) {
-    return { kind: "failed", error: new Error(`За раз — не больше ${BATCH_LIMIT} клиентов`) };
+  const total: BulkEditResult = { changed: [], skipped: 0, unchanged: 0 };
+  for (let from = 0; from < edits.length; from += BATCH_LIMIT) {
+    const part = await bulkEditPart(tenantId, edits.slice(from, from + BATCH_LIMIT));
+    if (part.kind !== "done") {
+      if (from === 0) return part;
+      return { kind: "done", result: { ...total, skipped: total.skipped + edits.length - from } };
+    }
+    total.changed.push(...part.result.changed);
+    total.skipped += part.result.skipped;
+    total.unchanged += part.result.unchanged;
   }
+  return { kind: "done", result: total };
+}
+
+async function bulkEditPart(
+  tenantId: string,
+  edits: readonly BulkEdit[],
+): Promise<BulkEditOutcome> {
   // Клиент, привязанный к компании списка: чужая компания, открытая в
   // календаре, не должна получить эту пачку своим заголовком.
   const rpc = tenantBoundClient(tenantId) as unknown as BulkRpc;

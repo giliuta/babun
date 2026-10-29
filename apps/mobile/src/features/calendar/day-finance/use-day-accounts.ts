@@ -39,6 +39,14 @@ export function useDayAccounts({
     () => new Map((accountsQuery.data ?? []).map((a) => [a.id, a])),
     [accountsQuery.data],
   );
+  // Счета в порядке плиток — имена в строке операции встают как в ленте.
+  const accounts = useMemo(
+    () =>
+      [...(accountsQuery.data ?? [])].sort(
+        (a, b) => a.position - b.position || a.name.localeCompare(b.name),
+      ),
+    [accountsQuery.data],
+  );
   const accountOrder = useMemo(
     () =>
       (accountsQuery.data ?? [])
@@ -57,5 +65,5 @@ export function useDayAccounts({
   }, [view, incomeRows, expenseRows, accountOrder]);
   const splitTileW = Math.floor((screenW - 32 - TILE_GAP * 2) / 3);
 
-  return { accountById, accountPick, setAccountPick, split, splitTileW };
+  return { accounts, accountById, accountPick, setAccountPick, split, splitTileW };
 }

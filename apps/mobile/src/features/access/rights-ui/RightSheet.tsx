@@ -5,7 +5,7 @@ import { AlertTriangle } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
-import { ICON } from "@/components/ui/tokens";
+import { FOOTER_SIDE, ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
@@ -118,7 +118,7 @@ export function RightSheet({
       scroll
       footer={
         block ? (
-          <View className="px-5">
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             <Button label="Применить" onPress={apply} />
           </View>
         ) : undefined

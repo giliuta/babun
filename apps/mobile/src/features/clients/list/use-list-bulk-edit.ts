@@ -12,6 +12,7 @@ import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import type { ClientsCapabilities, ClientsScope } from "@/session/clients-company";
 import { useClientSources } from "@/features/clients/acquisition-sources";
 import { bulkEditOnServer } from "@/features/clients/bulk-edit-rpc";
+import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 import {
   applyBulkEdit,
   bulkResultWords,
@@ -74,6 +75,7 @@ export function useListBulkEdit({
   const tenantId = scope?.tenantId ?? null;
   // Клиент компании без команд читает источники и теги первой — как карточка.
   const fallbackTeam = ownTeams[0]?.id ?? null;
+  const archivedTeamIds = useArchivedTeamIds();
 
   // Дверь пачки есть у того, кто правит карточки; у кого из выбранных правка
   // положена — решает право по полю у каждого (`canBulkEdit`).
@@ -187,11 +189,11 @@ export function useListBulkEdit({
     if (!pick) return;
     const choice = await chooseOption(`Теги выбранным: ${pick.allowed.length}`, [
       { label: "Поставить теги" },
-      { label: "Снять теги", destructive: true },
+      { label: "Убрать теги", destructive: true },
     ]);
     if (choice === null) return;
     const mode: BulkTagMode = choice === 0 ? "add" : "remove";
-    if (bulkTagsOffered(tags, pick.allowed, mode, fallbackTeam).length === 0) {
+    if (bulkTagsOffered(tags, pick.allowed, mode, fallbackTeam, archivedTeamIds).length === 0) {
       toast(mode === "remove" ? "У выбранных нет тегов" : "Тегов пока нет — заведите их в настройках клиентов", "info");
       return;
     }
@@ -227,7 +229,7 @@ export function useListBulkEdit({
 
   const sheetTags =
     bulkSheet?.kind === "tags"
-      ? bulkTagsOffered(tags, bulkSheet.clients, bulkSheet.mode, fallbackTeam)
+      ? bulkTagsOffered(tags, bulkSheet.clients, bulkSheet.mode, fallbackTeam, archivedTeamIds)
       : [];
   const sheetSources =
     bulkSheet?.kind === "source" ? bulkSourceOptions(sources, bulkSheet.clients, fallbackTeam) : [];

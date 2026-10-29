@@ -6,6 +6,7 @@ import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useCompanyMembers } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
@@ -213,22 +214,9 @@ export function HistoryScreen() {
           keyExtractor={(item) => item.key}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: 24, paddingTop: 4 }}
-          renderSectionHeader={({ section }) => (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{
-                paddingHorizontal: GUTTER + 4,
-                paddingTop: 16,
-                paddingBottom: 6,
-                fontSize: 13,
-                fontWeight: "600",
-                letterSpacing: 0.4,
-                color: t.sub,
-              }}
-            >
-              {section.title}
-            </Text>
-          )}
+          // Шапка дня — тот же заголовок группы, что у всех разделов
+          // (Caption 11/700 капсом, `SectionEyebrow`), а не своя подпись 13.
+          renderSectionHeader={({ section }) => <SectionEyebrow>{section.title}</SectionEyebrow>}
           renderItem={({ item, index, section }) => (
             <View
               style={{

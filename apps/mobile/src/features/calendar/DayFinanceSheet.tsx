@@ -1,7 +1,9 @@
 import { useBookingBlocks } from "@/features/appointments/booking-prefs";
 import { useRecordBlocks } from "@/features/appointments/useRecordRights";
 import { Text, useWindowDimensions, View } from "react-native";
+import { useMemo } from "react";
 import { useRouter } from "expo-router";
+import { CalendarClock, HandCoins, TrendingUp } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount, getPaidAmount } from "@babun/shared/local/appointments";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -14,6 +16,9 @@ import {
 import { useClients } from "@/features/clients/queries";
 import { OperationSheet } from "@/features/finances/OperationSheet";
 import { useFinanceCategories, useRefundTotals } from "@/features/finances/queries";
+import { useInvoices } from "@/features/finances/invoices-queries";
+import { appointmentServiceNames, debtAge } from "@/features/finances/record-rows";
+import { useMasters } from "@/features/reference/queries/masters";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { accessGate, moneyKey } from "@/session/my-access";
@@ -23,7 +28,8 @@ import { useCurrentRole } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { AccountSplit } from "./day-finance/AccountSplit";
 import { dayList } from "./day-finance/day-list";
-import { DayList } from "./day-finance/DayList";
+import { DayList, type RecordStatus } from "./day-finance/DayList";
+import { dayTxRow, recordAccountTags } from "./day-finance/day-rows";
 import { DayTiles } from "./day-finance/DayTiles";
 import type { DayView } from "./day-finance/types";
 import { useDayAccounts } from "./day-finance/use-day-accounts";
@@ -160,7 +166,7 @@ export function DayFinanceSheet({
     categories,
   });
 
-  const { accountById, accountPick, setAccountPick, split, splitTileW } = useDayAccounts({
+  const { accounts, accountById, accountPick, setAccountPick, split, splitTileW } = useDayAccounts({
     shownYmd,
     teamId,
     view,
@@ -171,6 +177,29 @@ export function DayFinanceSheet({
 
   const clientName = (a: Appointment) =>
     (a.client_id ? nameById.get(a.client_id) : null) || a.comment?.trim() || "Без имени";
+  // СТРОКА ОПЕРАЦИИ — СТРОКА ЛЕНТЫ «ФИНАНСОВ»: те же справочники, что у
+  // ленты, — клиент заголовком, «время · счёт · услуги» подписью, получатель
+  // выплаты, номер инвойса. Окно — этот день: оплата записи другого дня
+  // подписана «за 1 октября».
+  const people = useMasters({ includeInactive: true }).data;
+  const invoices = useInvoices().data;
+  const rowRefs = useMemo(
+    () => ({
+      appointments: [],
+      clients,
+      services,
+      categories,
+      accounts,
+      people: people ?? [],
+      window: { from: ymd, to: ymd },
+      invoices: invoices ?? [],
+    }),
+    [clients, services, categories, accounts, people, ymd, invoices],
+  );
+  const catalog = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
+  const serviceNames = (a: Appointment) => appointmentServiceNames(a, catalog);
+  const recordAccounts = (a: Appointment) => recordAccountTags(a.id, incomeRows, accounts);
+  const debtCaption = (a: Appointment) => debtAge(a.date, businessToday);
   const servicesOf = (a: Appointment) =>
     (a.services ?? []).map((s) => s.serviceName).filter(Boolean).join(", ");
 
@@ -183,8 +212,6 @@ export function DayFinanceSheet({
     openOperation,
     openRecord,
     askRemoveLegacy,
-    rowTitle,
-    rowContext,
     rowAction,
     swipeTx,
   } = useDayFinanceActions({
@@ -194,13 +221,11 @@ export function DayFinanceSheet({
     router,
     teamId,
     shownYmd,
-    ymd,
     legacyExtras,
     setExtras,
     apptById,
     recordOf,
     servicesOf,
-    nameById,
     categoryName,
     role,
     myAccess,
@@ -225,13 +250,15 @@ export function DayFinanceSheet({
     setView((current) => (current === next ? "all" : next));
   };
 
-  // Статус записи в плане дня: оплачено · долг · ожидается.
-  const recordStatus = (a: Appointment): { word: string; amount: number; color: string } => {
-    if (!paymentSeen) return { word: "сумма", amount: Number(a.total_amount) || 0, color: t.sub };
+  // Статус записи в плане дня: оплачено · долг · ожидается — словом под
+  // суммой и значком плашки (доход, монеты долга, визит).
+  const recordStatus = (a: Appointment): RecordStatus => {
+    if (!paymentSeen) return { word: "сумма", amount: Number(a.total_amount) || 0, color: t.sub, icon: CalendarClock };
     const debt = getDebtAmount(a);
-    if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success };
-    if (debtRecords.some((d) => d.id === a.id)) return { word: "долг", amount: debt, color: t.warning };
-    return { word: "ожидается", amount: debt, color: t.sub };
+    if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success, icon: TrendingUp };
+    if (debtRecords.some((d) => d.id === a.id))
+      return { word: "долг", amount: debt, color: t.warning, icon: HandCoins, caption: debtCaption(a) };
+    return { word: "ожидается", amount: debt, color: t.sub, icon: CalendarClock };
   };
 
   const cta: { label: string; onPress: () => void; open: boolean } =
@@ -319,12 +346,13 @@ export function DayFinanceSheet({
             listTx={listTx}
             listExtras={listExtras}
             clientName={clientName}
-            servicesOf={servicesOf}
+            serviceNames={serviceNames}
+            recordAccounts={recordAccounts}
+            debtCaption={debtCaption}
             recordStatus={recordStatus}
             openRecord={openRecord}
             swipeTx={swipeTx}
-            rowContext={rowContext}
-            rowTitle={rowTitle}
+            txRow={(tx) => dayTxRow(tx, rowRefs, recordOf(tx))}
             rowAction={rowAction}
             writesLegacySide={writesLegacySide}
             askRemoveLegacy={askRemoveLegacy}

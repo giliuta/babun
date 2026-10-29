@@ -6,7 +6,7 @@ import type { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { iconPreset } from "@/components/ui/icon-set";
-import { GUTTER } from "@/components/ui/tokens";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useBusinessNow } from "@/features/appointments/business-now";
@@ -36,7 +36,7 @@ export function DebtSheetFooter({
 }) {
   const th = useThemeColors();
   return (
-    <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+    <View style={{ paddingHorizontal: FOOTER_SIDE, gap: 8 }}>
       {/* Причина «Смотрит» вытесняет остальные: пока права нет, ни сумма,
           ни клиент кнопку не оживят. */}
       {!canWrite ? (

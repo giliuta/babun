@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { DateSpinner } from "@/components/ui/DateSpinner";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 
@@ -19,6 +20,12 @@ import { useThemeColors } from "@/theme/colors";
 // Здесь физика периода: лист снизу, колесо-спиннер, «Применить». Значение
 // применяется кнопкой, а не на каждый щелчок — колесо проезжает через
 // промежуточные даты, и живая запись слала бы их все.
+//
+// АНАТОМИЯ — КАНОН ЛИСТА, как у «Своего периода»: заголовок пропом `title`
+// (внутри жеста грабера, с ролью заголовка), барабан в теле, «Применить» и
+// «Убрать дату» — в `footer`. Свою шапку и кнопку внутри тела этот лист
+// рисовал сам: заголовок не тянул лист вниз, а кнопка стояла не на месте
+// кнопок остальных листов и без их нижнего отступа.
 
 export function DateWheelSheet({
   visible,
@@ -58,54 +65,45 @@ export function DateWheelSheet({
   }, [visible, value, seed]);
 
   return (
-    <BottomSheet padded={false} visible={visible} onClose={onClose}>
-      <View style={{ paddingHorizontal: 20, paddingBottom: 28, paddingTop: 4 }}>
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          style={{
-            marginBottom: 4,
-            fontSize: 17,
-            fontWeight: "600",
-            color: t.ink,
-            textAlign: "center",
-          }}
-        >
-          {title}
-        </Text>
-
-        <View style={{ alignItems: "center" }}>
-          <DateSpinner
-            value={parseYMD(draft)}
-            maximumDate={maximumDate ? parseYMD(maximumDate) : undefined}
-            minimumDate={minimumDate ? parseYMD(minimumDate) : undefined}
-            onChange={(next) => setDraft(formatYMD(next))}
-          />
-        </View>
-
-        <Button label="Применить" onPress={() => onApply(draft)} />
-
-        {onClear && clearLabel ? (
-          <Pressable
-            onPress={onClear}
-            accessibilityRole="button"
-            accessibilityLabel={clearLabel}
-            style={({ pressed }) => ({
-              marginTop: 8,
-              minHeight: 48,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.danger }}
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      title={title}
+      footer={
+        <View style={{ paddingHorizontal: FOOTER_SIDE }}>
+          <Button label="Применить" onPress={() => onApply(draft)} />
+          {onClear && clearLabel ? (
+            <Pressable
+              onPress={onClear}
+              accessibilityRole="button"
+              accessibilityLabel={clearLabel}
+              style={({ pressed }) => ({
+                marginTop: 4,
+                minHeight: 48,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.6 : 1,
+              })}
             >
-              {clearLabel}
-            </Text>
-          </Pressable>
-        ) : null}
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 15, fontWeight: "600", color: t.danger }}
+              >
+                {clearLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      }
+    >
+      <View style={{ alignItems: "center", paddingHorizontal: 20, paddingBottom: 8 }}>
+        <DateSpinner
+          value={parseYMD(draft)}
+          maximumDate={maximumDate ? parseYMD(maximumDate) : undefined}
+          minimumDate={minimumDate ? parseYMD(minimumDate) : undefined}
+          onChange={(next) => setDraft(formatYMD(next))}
+        />
       </View>
     </BottomSheet>
   );

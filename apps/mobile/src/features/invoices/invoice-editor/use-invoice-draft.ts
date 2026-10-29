@@ -200,7 +200,7 @@ export function useInvoiceDraft({
   const appointmentId = existing ? existing.appointment_id : prefill?.appointmentId ?? null;
   // Первая команда — сразу при рождении, а не эффектом после: иначе форма
   // запоминала себя без команды, и пустой счёт при «назад» спрашивал
-  // «Черновик не сохранён».
+  // «Закрыть без сохранения?».
   const initialTeamId = existing
     ? existing.brigade_id ?? teams[0]?.id ?? null
     : seed?.teamId ?? prefill?.teamId ?? teams[0]?.id ?? null;

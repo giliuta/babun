@@ -93,7 +93,7 @@ describe("periodSplit", () => {
     const s = periodSplit(null, null, null, now);
     assert.equal(s.allSpanDates, null);
     assert.equal(s.periodName, "Всё время");
-    assert.equal(s.datesLabel, "—");
+    assert.equal(s.datesLabel, "Даты");
     assert.equal(s.draftFrom, "2026-10-01");
     assert.equal(s.draftTo, "2026-10-13");
   });
@@ -101,7 +101,8 @@ describe("periodSplit", () => {
   test("all time spans data in both directions around today", () => {
     const s = periodSplit(null, "2026-03-02", "2026-12-20", now);
     assert.equal(s.allSpanDates, "02.03.26 – 20.12.26");
-    assert.equal(s.datesLabel, "02.03.26 – 20.12.26");
+    // Рядом со «Всё время» дат нет — только дверь к колёсам.
+    assert.equal(s.datesLabel, "Даты");
     assert.equal(s.draftFrom, "2026-03-02");
   });
 

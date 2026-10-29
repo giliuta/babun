@@ -21,11 +21,12 @@ import {
 import { forgetOtherDevices, forgetThisDevice } from "@/lib/push-device";
 import {
   LAST_USER_KEY,
+  clearQueriesLeftBySignOut,
   consumeSignedOutOnPurpose,
   wipeTenantScopedData,
 } from "./auth-clear/wipe";
 
-export { wipeTenantScopedData } from "./auth-clear/wipe";
+export { clearQueriesLeftBySignOut, wipeTenantScopedData } from "./auth-clear/wipe";
 
 // Wipe device-local data when this device must no longer see the previous
 // account's data. Originally ported from the Next.js web app's
@@ -150,7 +151,7 @@ export async function signOutScopeAndWipe(
     await forgetThisDevice();
     const { error } = await supabase.auth.signOut({ scope });
     if (error) throw new Error(error.message);
-    await wipeTenantScopedData();
+    await wipeTenantScopedData({ afterSignOut: true });
   } finally {
     release();
     if (intentionalSignOutBarrier === barrier) {
@@ -224,6 +225,9 @@ export async function handleAuthEvent(
   // Тот же человек после выхода: сессия ещё не опубликована, на экране
   // логин, значит всё, что без подписчиков, — хвост вышедших страниц.
   // Удаление гасит и повторы запросов, отбитых заслонкой в том окне.
+  // Отложенная чистка «Выйти» — тоже здесь, если до входа дерево так и не
+  // показало логин.
+  clearQueriesLeftBySignOut();
   if (consumeSignedOutOnPurpose()) {
     if (prev === next) queryClient.removeQueries({ type: "inactive" });
   }

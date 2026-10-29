@@ -28,7 +28,10 @@ export function ObjectMapPanel({
     <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
       <MapPicker
         value={value}
-        follow={follow}
+        // Точка, поставленная рукой, главнее текста адреса: правка адреса
+        // уточняет название места, а не отменяет точку, — карта остаётся на
+        // ней. За геокодером она едет, пока точки нет.
+        follow={pinCoords ? null : follow}
         onChange={onPick}
       />
       {pinCoords ? (

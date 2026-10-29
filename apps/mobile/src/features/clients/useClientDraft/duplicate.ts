@@ -5,9 +5,22 @@ import { listClients as listClientsCached } from "@babun/shared/sync/clientsCach
 import { findMemberClientByPhone } from "@/features/clients/queries/member-reads";
 import type { ClientsCompanyKind } from "@/session/clients-company";
 import { tryToE164 } from "@/lib/phone";
+import { phoneTail } from "@/features/clients/merge-clients";
 
 /** Database client the draft writes through (own or a bound tenant). */
 type DraftDb = Parameters<typeof findClientByPhoneE164>[0];
+
+/** Чей доп. номер совпадает с номером черновика (`phones[].number`) — по
+ *  хвосту в 8 цифр, как у слияния; удалённые не в счёт. */
+export function extraNumberOwner(list: readonly Client[], e164: string): Client | null {
+  const tail = phoneTail(e164);
+  if (tail.length < 8) return null;
+  return (
+    list.find(
+      (c) => !c.deleted_at && (c.phones ?? []).some((p) => phoneTail(p.number) === tail),
+    ) ?? null
+  );
+}
 
 /** Phone dedupe of the draft: a debounced lookup of the typed number. */
 export function useDraftDuplicate({
@@ -57,11 +70,21 @@ export function useDraftDuplicate({
     // (ниже, `isPhoneTakenError`).
     if (scopeKind === "member") return null;
     try {
-      return (await findClientByPhoneE164(draftClient, key, tenantId)) ?? null;
+      const main = await findClientByPhoneE164(draftClient, key, tenantId);
+      if (main) return main;
+      // ДОП. НОМЕРА — ТОЖЕ ДУБЛЬ: «99 123 456» у Марии вторым номером, и
+      // новый клиент с этим номером — тот же человек. Индекс базы их не
+      // видит, поэтому сверяем по копии на телефоне тем же хвостом номера,
+      // что у слияния (`phoneTail`).
+      try {
+        return extraNumberOwner(await listClientsCached(draftClient, tenantId), key);
+      } catch {
+        return null;
+      }
     } catch {
       try {
         const cached = await listClientsCached(draftClient, tenantId);
-        return sameNumber(cached);
+        return sameNumber(cached) ?? extraNumberOwner(cached, key);
       } catch {
         // Ни сети, ни кэша — создать разрешаем, финальный арбитр всё равно
         // UNIQUE-индекс в базе (23505 обрабатывается ниже).

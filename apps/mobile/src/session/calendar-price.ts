@@ -40,6 +40,18 @@ export function paidCalendarCount(liveTeamIds: readonly string[], withWork: Read
   return liveTeamIds.filter((id) => withWork.has(id)).length;
 }
 
+/** Строка сводки `calendar_work_summary`: живой календарь и есть ли в нём
+ *  работа — по тем же `CALENDAR_WORK_SOURCES`, одним вызовом. */
+export type CalendarWorkRow = { team_id: string; has_work: boolean };
+
+/** Сколько живых календарей платят — по сводке сервера. */
+export function paidFromSummary(rows: readonly CalendarWorkRow[]): number {
+  return paidCalendarCount(
+    rows.map((row) => row.team_id),
+    new Set(rows.filter((row) => row.has_work).map((row) => row.team_id)),
+  );
+}
+
 /** Ровно то, что нужно от клиента базы, чтобы спросить «есть ли строка»:
  *  клиент Supabase этому удовлетворяет, тест — подставляет свой. */
 export interface WorkQuery {

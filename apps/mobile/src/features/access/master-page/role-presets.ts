@@ -9,8 +9,12 @@ import type { LevelReader } from "./rights-rows";
 // разошлись с ролью, и на странице стоит «Своя».
 //
 // Права аккаунта («Кабинет»: тариф, SMS, история, «Партнёры») одни на все
-// команды человека, поэтому роль ставит и их: понизить директора до мастера
-// и оставить ему «Партнёров» значило бы оставить директора.
+// команды человека. Роль, выбранная на ЧИПЕ одной команды, ставит только
+// права этой команды: молча менять аккаунт с чипа значило бы, что «Мастер»
+// в Команде 2 снимает «Партнёров», выданных ему как директору Команды 1.
+// Права аккаунта ставятся отдельным шагом с явным вопросом (`TeamRoleRow`):
+// понизить директора до мастера и оставить ему «Партнёров» значило бы
+// оставить директора — поэтому вопрос задаётся, а не пропускается.
 //
 // Положения ролей:
 //   • «Мастер» — работает по записям команды: видит их, клиента и объект,
@@ -27,6 +31,15 @@ import type { LevelReader } from "./rights-rows";
 // умолчанием реестра — «скрыт»: новая дверь не открывается сама.
 
 export type RoleKey = "master" | "lead" | "director";
+
+/** Какие права роль ставит: команды (с чипа), аккаунта (отдельный шаг) или все. */
+export type RolePart = "team" | "account" | "all";
+
+/** Входит ли блок в эту часть роли. */
+export function inRolePart(block: Pick<AccessBlock, "scope">, part: RolePart): boolean {
+  if (part === "all") return true;
+  return (block.scope === "calendar") === (part === "team");
+}
 
 export interface RolePreset {
   key: RoleKey;
@@ -249,7 +262,9 @@ export function matchRole(
   teamId: string | null,
 ): RoleKey | null {
   if (teamId === null) return null;
-  const own = roleBlocks(blocks);
+  // Роль команды узнаётся по правам команды: права аккаунта общие на все
+  // его команды и ставятся отдельно.
+  const own = roleBlocks(blocks).filter((block) => inRolePart(block, "team"));
   const role = ROLE_PRESETS.find((preset) =>
     own.every(
       (block) => levelOf(block, block.scope === "calendar" ? teamId : null) === roleLevel(preset, block),
@@ -265,9 +280,10 @@ export function roleChanges(
   role: RolePreset,
   teamId: string | null,
   levelOf: LevelReader,
+  part: RolePart = "all",
 ): AccessChange[] | null {
   if (teamId === null) return null;
-  const changes = roleBlocks(blocks).flatMap((block): AccessChange[] => {
+  const changes = roleBlocks(blocks).filter((block) => inRolePart(block, part)).flatMap((block): AccessChange[] => {
     const team = block.scope === "calendar" ? teamId : null;
     const level = roleLevel(role, block);
     return levelOf(block, team) === level ? [] : [{ block: block.key, team_id: team, level }];
@@ -284,10 +300,25 @@ export function roleAllowed(
   teamId: string | null,
   levelOf: LevelReader,
   stepAllowed: (block: AccessBlock, teamId: string | null, level: AccessLevel) => boolean,
+  part: RolePart = "all",
 ): boolean {
-  const changes = roleChanges(blocks, role, teamId, levelOf) ?? [];
+  const changes = roleChanges(blocks, role, teamId, levelOf, part) ?? [];
   return changes.every((change) => {
     const block = blocks.find((candidate) => candidate.key === change.block);
     return block ? stepAllowed(block, change.team_id, change.level) : false;
   });
+}
+
+/** РОЛЬ В СТРОКЕ СПИСКА «ПАРТНЁРЫ»: одна роль во всех его командах — её
+ *  имя; разные или руками — «Своя». Команд нет — `null`. */
+export function roleSummary(
+  blocks: readonly AccessBlock[],
+  levelOf: LevelReader,
+  teamIds: readonly string[],
+): string | null {
+  if (teamIds.length === 0) return null;
+  const keys = teamIds.map((teamId) => matchRole(blocks, levelOf, teamId));
+  const first = keys[0];
+  if (first && keys.every((key) => key === first)) return rolePreset(first).title;
+  return CUSTOM_ROLE_WORD;
 }

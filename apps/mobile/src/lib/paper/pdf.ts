@@ -4,6 +4,7 @@ import {
   type InvoiceDocument,
   type IssuedDocumentInput,
 } from "./document";
+import { PAPER } from "@/lib/paper/palette";
 
 // PDF — ЭТО ТОТ ЖЕ ДОКУМЕНТ, ЧТО НА ЭКРАНЕ.
 //
@@ -75,8 +76,8 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      color: #374151;
-      background: #ffffff;
+      color: ${PAPER.body};
+      background: ${PAPER.white};
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
       font-size: 13px;
       line-height: 1.45;
@@ -86,38 +87,38 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
     .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; margin-bottom: 18px; }
     .logo { max-width: 120px; max-height: 120px; }
     .doc { text-align: right; }
-    h1 { margin: 0 0 8px; color: #111827; font-size: 30px; font-weight: 800; letter-spacing: 0.3px; }
-    .doc-line { color: #6b7280; font-size: 14px; margin-top: 2px; }
+    h1 { margin: 0 0 8px; color: ${PAPER.ink}; font-size: 30px; font-weight: 800; letter-spacing: 0.3px; }
+    .doc-line { color: ${PAPER.muted}; font-size: 14px; margin-top: 2px; }
     .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 26px; }
-    .eyebrow { color: #374151; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
-    .party-name { margin: 10px 0 4px; color: #111827; font-size: 17px; font-weight: 700; }
-    .detail { color: #374151; margin-top: 2px; overflow-wrap: anywhere; }
-    table.lines { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; }
+    .eyebrow { color: ${PAPER.body}; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+    .party-name { margin: 10px 0 4px; color: ${PAPER.ink}; font-size: 17px; font-weight: 700; }
+    .detail { color: ${PAPER.body}; margin-top: 2px; overflow-wrap: anywhere; }
+    table.lines { width: 100%; border-collapse: collapse; border: 1px solid ${PAPER.line}; }
     thead { display: table-header-group; }
     tr { break-inside: avoid; page-break-inside: avoid; }
-    .lines th { padding: 12px; background: #f3f4f6; border: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-weight: 600; text-align: right; }
+    .lines th { padding: 12px; background: ${PAPER.fill}; border: 1px solid ${PAPER.line}; color: ${PAPER.ink}; font-size: 14px; font-weight: 600; text-align: right; }
     .lines th:first-child { text-align: left; }
-    .lines td { padding: 12px; font-size: 14px; border: 1px solid #e5e7eb; vertical-align: top; }
-    .line-title { color: #111827; font-weight: 600; font-size: 15px; }
+    .lines td { padding: 12px; font-size: 14px; border: 1px solid ${PAPER.line}; vertical-align: top; }
+    .line-title { color: ${PAPER.ink}; font-weight: 600; font-size: 15px; }
     .col-qty { width: 56px; }
     .col-money { width: 124px; }
     .lines th { white-space: nowrap; }
     .number { text-align: right; white-space: nowrap; }
     .totals { margin-left: auto; margin-top: 8px; border-collapse: collapse; }
     .totals td { padding: 3px 12px; font-size: 14px; }
-    .total-label { text-align: right; color: #374151; }
-    .total-value { min-width: 124px; text-align: right; font-weight: 600; color: #111827; white-space: nowrap; }
-    .grand td { padding: 10px 12px; font-size: 17px; font-weight: 700; color: #111827; }
-    .grand .total-value { border: 1px solid #e5e7eb; }
+    .total-label { text-align: right; color: ${PAPER.body}; }
+    .total-value { min-width: 124px; text-align: right; font-weight: 600; color: ${PAPER.ink}; white-space: nowrap; }
+    .grand td { padding: 10px 12px; font-size: 17px; font-weight: 700; color: ${PAPER.ink}; }
+    .grand .total-value { border: 1px solid ${PAPER.line}; }
     .section { margin-top: 26px; break-inside: avoid; }
     .section .eyebrow { margin-bottom: 6px; }
-    .note { white-space: pre-wrap; color: #374151; margin-top: 2px; }
+    .note { white-space: pre-wrap; color: ${PAPER.body}; margin-top: 2px; }
     table.payments { width: 100%; border-collapse: collapse; }
-    .payments td { padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
-    .payment { color: #047857; font-weight: 700; }
-    .refund { color: #b91c1c; font-weight: 700; }
-    .footer { margin-top: 40px; color: #9ca3af; font-size: 11px; text-align: right; }
-    .muted { color: #6b7280; }
+    .payments td { padding: 6px 0; border-bottom: 1px solid ${PAPER.line}; }
+    .payment { color: ${PAPER.green}; font-weight: 700; }
+    .refund { color: ${PAPER.red}; font-weight: 700; }
+    .footer { margin-top: 40px; color: ${PAPER.faint}; font-size: 11px; text-align: right; }
+    .muted { color: ${PAPER.muted}; }
     .small { margin-top: 2px; font-size: 12px; font-weight: 400; }
   </style>
 </head>

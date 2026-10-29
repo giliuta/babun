@@ -9,6 +9,7 @@ import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { useAppointments } from "@/features/calendar/queries";
 import { useActorChanges, useCanReadHistory } from "@/lib/use-change-log";
 import type { Master } from "@/features/reference/queries";
@@ -27,9 +28,13 @@ export function MasterWorkBlock({
   card,
   teamIds,
   userId,
+  teamName,
 }: {
   card: Master;
   teamIds: readonly string[];
+  /** Команда чипа, когда блок считает её одну, — в заголовок: иначе
+   *  «44 записи» читались бы итогом всех его команд. */
+  teamName?: string | null;
   /** Аккаунт партнёра — строка «История изменений». Нет — строки нет. */
   userId?: string | null;
 }) {
@@ -59,14 +64,16 @@ export function MasterWorkBlock({
   // СТРОКИ — КАК «ДОСТУП» И «ЛИЧНОЕ» НА ЭТОЙ ЖЕ СТРАНИЦЕ: плитка, название, значение второй
   // строкой — длинное «3 записи в октябре · €167» больше не режется справа.
   return (
-    <SectionCard title="Работа" padded={false}>
+    <SectionCard title={teamName ? `Работа · ${teamName}` : "Работа"} padded={false}>
       {/* Одна дверь: итоги периода и записи — на одной странице. Выручка —
           числом в той же строке, а не второй строкой с той же дверью. */}
       <SettingsRow
         tile={SETTINGS_TILE.blue}
         icon={CalendarDays}
         title="Записи"
-        sub={received > 0 ? `${workLine(work)} · ${formatEUR(received)}` : workLine(work)}
+        // «Получено», а не голая сумма: считаются деньги, уже принятые по
+        // записям месяца, — будущие и неоплаченные в неё не входят.
+        sub={received > 0 ? `${workLine(work)} · получено ${formatEUR(received)}` : workLine(work)}
         onPress={() =>
           router.push(
             `/cabinet/people/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
@@ -75,9 +82,10 @@ export function MasterWorkBlock({
       />
       {canReadHistory && userId ? (
         <>
-          <Divider inset={48} />
+          <Divider inset={SETTINGS_ROW_INSET} />
           <SettingsRow
-            tile={SETTINGS_TILE.purple}
+            // Бирюза — как строка «История изменений» в Кабинете и в превью прав.
+            tile={SETTINGS_TILE.teal}
             icon={History}
             title="История изменений"
             sub={changesValue ?? undefined}

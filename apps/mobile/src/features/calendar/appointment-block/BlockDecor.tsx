@@ -121,8 +121,8 @@ export function LiveTimeBadge({ liveStart }: { liveStart: string }) {
 // НАКЛАДКА — КРАСНЫМ. Две рабочие записи на одно время — то, что
 // диспетчер обязан увидеть сразу: белое «+1» читалось как «тут ещё что-то»,
 // а не «здесь две бригады в одно время».
-/** Заливка значка накладки — красный «опасности» продукта. */
-const CLASH_FILL = "#D92D20";
+// Заливка значка накладки — красный «опасности» продукта, токеном `danger`:
+// свой #D92D20 был вторым красным рядом с `danger` (пачка 5, Д14).
 
 export function DeckBadge({
   deckMore,
@@ -135,6 +135,7 @@ export function DeckBadge({
   color: string;
   clash?: boolean;
 }) {
+  const t = useThemeColors();
   return (
     <View
       pointerEvents="none"
@@ -151,7 +152,7 @@ export function DeckBadge({
         borderRadius: 8,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: clash ? CLASH_FILL : "rgba(255,255,255,0.92)",
+        backgroundColor: clash ? t.danger : "rgba(255,255,255,0.92)",
         borderWidth: clash ? 1 : 0,
         borderColor: "#FFFFFF",
       }}

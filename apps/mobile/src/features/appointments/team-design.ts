@@ -40,7 +40,9 @@ export type TeamBlockKey =
   | "client_labels"
   | "client_personal"
   // «Тег» отдельно от «Метки».
-  | "client_tags";
+  | "client_tags"
+  // Блок SMS карточки клиента.
+  | "client_sms";
 
 /** Упорядоченный набор «что предлагать»: включённые и полный порядок. */
 interface TeamOrderedSet {

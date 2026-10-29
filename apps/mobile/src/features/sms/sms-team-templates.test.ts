@@ -58,12 +58,12 @@ describe("шаблоны SMS команды", () => {
     const w = (p: Partial<TemplateDraft>) => whenWords({ trigger: "manual", hours: null, atTime: null, months: null, ...p });
     assert.equal(w({}), "Только вручную");
     assert.equal(w({ trigger: "created" }), "Сразу после записи");
-    assert.equal(w({ trigger: "before", hours: 24 }), "За сутки до визита");
-    assert.equal(w({ trigger: "before", hours: 48 }), "За 2 дня до визита");
-    assert.equal(w({ trigger: "before", hours: 3 }), "За 3 часа до визита");
+    assert.equal(w({ trigger: "before", hours: 24 }), "За сутки до записи");
+    assert.equal(w({ trigger: "before", hours: 48 }), "За 2 дня до записи");
+    assert.equal(w({ trigger: "before", hours: 3 }), "За 3 часа до записи");
     assert.equal(w({ trigger: "day_before", atTime: "18:00" }), "Накануне в 18:00");
-    assert.equal(w({ trigger: "after", hours: 2 }), "Через 2 часа после визита");
-    assert.equal(w({ trigger: "repeat", months: 6 }), "Через 6 месяцев после визита");
+    assert.equal(w({ trigger: "after", hours: 2 }), "Через 2 часа после окончания записи");
+    assert.equal(w({ trigger: "repeat", months: 6 }), "Через 6 месяцев после окончания записи");
     assert.equal(w({ trigger: "cancelled" }), "При отмене записи");
   });
 
@@ -92,8 +92,8 @@ describe("шаблоны SMS команды", () => {
     assert.equal(draftProblem(ready({})), null);
     assert.equal(draftProblem(ready({ name: "  " })), "Назовите шаблон");
     assert.equal(draftProblem(ready({ body: "" })), "Напишите текст");
-    assert.equal(draftProblem(ready({ trigger: "before", hours: null })), "Выберите, за сколько до визита");
-    assert.equal(draftProblem(ready({ trigger: "before", hours: 200 })), "Выберите, за сколько до визита");
+    assert.equal(draftProblem(ready({ trigger: "before", hours: null })), "Выберите, за сколько до записи");
+    assert.equal(draftProblem(ready({ trigger: "before", hours: 200 })), "Выберите, за сколько до записи");
     assert.equal(draftProblem(ready({ trigger: "day_before", atTime: "25:00" })), "Выберите время накануне");
     assert.equal(draftProblem(ready({ trigger: "repeat", months: 0 })), "Выберите, через сколько месяцев");
     assert.equal(draftProblem(ready({ sendFrom: 21, sendTo: 8 })), "Окно отправки: «с» раньше, чем «до»");

@@ -6,7 +6,6 @@ import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import type { DayExtra } from "@babun/shared/local/day-extras";
 import { Trash2 } from "lucide-react-native";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { humanDay } from "@/features/appointments/helpers";
 import type { useSetDayExtras } from "@/features/calendar/queries";
 import { useDeleteTransaction, useRefundTotals } from "@/features/finances/queries";
 import { deleteOperationAlert } from "@/features/finances/account-alerts";
@@ -29,13 +28,11 @@ export function useDayFinanceActions({
   router,
   teamId,
   shownYmd,
-  ymd,
   legacyExtras,
   setExtras,
   apptById,
   recordOf,
   servicesOf,
-  nameById,
   categoryName,
   role,
   myAccess,
@@ -47,13 +44,11 @@ export function useDayFinanceActions({
   router: ReturnType<typeof useRouter>;
   teamId: string | null;
   shownYmd: string | null;
-  ymd: string;
   legacyExtras: DayExtra[];
   setExtras: ReturnType<typeof useSetDayExtras>;
   apptById: Map<string, Appointment>;
   recordOf: (tx: FinanceTransaction) => Appointment | undefined;
   servicesOf: (a: Appointment) => string;
-  nameById: Map<string, string>;
   categoryName: Map<string, string>;
   role: ReturnType<typeof useCurrentRole>["data"];
   myAccess: ReturnType<typeof useMyAccess>["data"];
@@ -112,22 +107,6 @@ export function useDayFinanceActions({
       return names || tx.notes || cat || (tx.type === "refund" ? "Возврат" : "Поступление");
     }
     return cat || tx.notes || "Расход";
-  };
-  const rowContext = (tx: FinanceTransaction): string => {
-    const appt = recordOf(tx);
-    // Оплата записи ДРУГОГО дня (предоплата за завтра): время — её, а не
-    // записи, и день записи словами — иначе строка выглядит визитом сегодня.
-    const foreign = appt && appt.date !== ymd ? appt : null;
-    const time = (foreign ? null : appt?.time_start) || tx.occurred_time || "";
-    if (tx.type === "income" || tx.type === "refund") {
-      const who = tx.client_id ? nameById.get(tx.client_id) ?? "" : "";
-      const forDay = foreign
-        ? `${tx.appointment_payment_kind === "prepayment" ? "предоплата" : "оплата"} за ${humanDay(foreign.date).replace(/^\S+ /, "")}`
-        : "";
-      return [time, who, forDay].filter(Boolean).join(" · ");
-    }
-    const cat = tx.category_id ? categoryName.get(tx.category_id) : null;
-    return [time, cat && tx.notes ? tx.notes : ""].filter(Boolean).join(" · ");
   };
   const rowAction = (tx: FinanceTransaction): (() => void) | undefined => {
     if (tx.appointment_id) {
@@ -198,6 +177,7 @@ export function useDayFinanceActions({
     canDeleteTx(tx) ? (
       <SwipeRow
         key={key}
+        radius={t.radius.input}
         label="Удалить"
         color={t.danger}
         icon={Trash2}
@@ -220,7 +200,6 @@ export function useDayFinanceActions({
     openRecord,
     askRemoveLegacy,
     rowTitle,
-    rowContext,
     rowAction,
     swipeTx,
   };

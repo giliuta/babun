@@ -54,7 +54,7 @@ const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   Перенести: { icon: CalendarClock, color: SETTINGS_TILE.indigo },
   Копировать: { icon: Copy, color: SETTINGS_TILE.teal },
   Цвет: { icon: Palette, color: SETTINGS_TILE.purple },
-  "Отменить визит": { icon: Ban, color: SETTINGS_TILE.yellow },
+  "Отменить запись": { icon: Ban, color: SETTINGS_TILE.yellow },
   Восстановить: { icon: RotateCcw, color: SETTINGS_TILE.green },
   "Открыть запись": { icon: ExternalLink, color: SETTINGS_TILE.blue },
   "Открыть событие": { icon: ExternalLink, color: SETTINGS_TILE.blue },
@@ -80,7 +80,7 @@ export function ActionMenuSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  // ПОДМЕНЮ ЖДЁТ, ПОКА УЕДЕТ МЕНЮ. Пункт «Отменить визит» открывает «Причину
+  // ПОДМЕНЮ ЖДЁТ, ПОКА УЕДЕТ МЕНЮ. Пункт «Отменить запись» открывает «Причину
   // отмены» той же шторкой; пока первая уезжает, iOS второе окно не
   // показывает — подменю просто не появлялось (поймано на симуляторе).
   // Поэтому новое меню, пришедшее во время ухода, ждёт `onExited`.

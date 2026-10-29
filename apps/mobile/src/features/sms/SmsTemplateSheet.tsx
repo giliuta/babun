@@ -321,7 +321,7 @@ export function SmsTemplateSheet({
         {auto && (termKind || usesWindow(draft.trigger)) ? (
           <SectionCard title="Срок">
             {draft.trigger === "before" ? (
-              <ValueRow label="За сколько до визита" value={hoursValue(draft.hours)} onPress={() => openTerm("before")} />
+              <ValueRow label="За сколько до записи" value={hoursValue(draft.hours)} onPress={() => openTerm("before")} />
             ) : null}
             {draft.trigger === "after" ? (
               <ValueRow label="Через сколько после" value={hoursValue(draft.hours)} onPress={() => openTerm("after")} />

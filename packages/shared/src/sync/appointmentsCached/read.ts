@@ -22,6 +22,13 @@ import { cacheSignature } from "../revalidate-events";
 import { createRevalidator } from "../revalidator";
 import { ColdOfflineCacheMissError } from "../cache-errors";
 import { makeCachedRow, rowToAppointment } from "./rows";
+import {
+  appointmentDeltaSyncOn,
+  incrementalAppointmentRows,
+  listFirstLoadWindow,
+  newestUpdatedAt,
+  writeAppointmentCursor,
+} from "./incremental";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -43,6 +50,13 @@ export async function listAppointments(
     // Счётчик — ДО запроса: правка, легшая в кэш, пока список ехал, старше
     // снимка не бывает (`cacheLocalWriteSeq`).
     const writeSeq = cacheLocalWriteSeq("appointments");
+    // ПЕРВАЯ ЗАГРУЗКА ЗА ВЫКЛЮЧАТЕЛЕМ: окно ±2 месяца — сразу на экран, полная
+    // история — фоновой сверкой, и в кэш пишет только она (`incremental.ts`).
+    if (appointmentDeltaSyncOn()) {
+      const around = await listFirstLoadWindow(supabase, tenantId);
+      void revalidateAppointments(supabase, tenantId);
+      return around;
+    }
     const fresh = await repoListAppointments(supabase, tenantId);
     await refreshCacheFromSupabase(supabase, tenantId, fresh, writeSeq).catch(() => {});
     return fresh;
@@ -61,8 +75,14 @@ export async function listAppointments(
   }
 }
 
-const appointmentsRevalidator = createRevalidator<DbSupabase>("appointments", (sb, tenantId) =>
-  refreshCacheFromSupabase(sb, tenantId),
+/** Окно, в котором вызов после изменившей кэш сверки считается её эхом
+ *  (событие → перечитка экрана) и в сеть не идёт (`revalidator.ts`). */
+const APPOINTMENTS_SETTLE_MS = 5_000;
+
+const appointmentsRevalidator = createRevalidator<DbSupabase>(
+  "appointments",
+  (sb, tenantId) => refreshCacheFromSupabase(sb, tenantId),
+  { settleMs: APPOINTMENTS_SETTLE_MS, writeStamp: () => cacheLocalWriteSeq("appointments") },
 );
 const revalidateAppointments = appointmentsRevalidator.revalidate;
 
@@ -121,8 +141,27 @@ async function refreshCacheFromSupabase(
     void kickReplayer({ supabase });
     return false;
   }
-  const appts = domain ?? (await repoListAppointments(supabase, tenantId));
-  const rows = appts.map((a) => makeCachedRow(a, tenantId));
+  // За выключателем — дельта + отпечаток месяцев вместо полного чтения;
+  // `null` (нет снимка, метки, функции на сервере или сбой) — полное чтение.
+  const incremental =
+    !domain && appointmentDeltaSyncOn()
+      ? await incrementalAppointmentRows(
+          supabase,
+          tenantId,
+          await safeCacheReadAppointments(tenantId),
+        ).catch(() => null)
+      : null;
+  let rows: CachedAppointmentData[];
+  let cursor: string | null;
+  if (incremental) {
+    rows = incremental.rows;
+    cursor = incremental.cursor;
+  } else {
+    const appts = domain ?? (await repoListAppointments(supabase, tenantId));
+    rows = appts.map((a) => makeCachedRow(a, tenantId));
+    // Метка дельты — по строкам сервера, до неотправленных вставок ниже.
+    cursor = newestUpdatedAt(rows);
+  }
   const cachedRows = await safeCacheReadAppointments(tenantId);
   // ЗАПИСЬ, НЕ ДОШЕДШАЯ ДО СЕРВЕРА, С СЕТКИ НЕ ПРОПАДАЕТ. Её
   // вставка, отклонённая навсегда (например, клиента с этим номером успели
@@ -145,7 +184,10 @@ async function refreshCacheFromSupabase(
   for (const cached of cachedRows) {
     if (unsentIds.has(cached.id) && !serverIds.has(cached.id)) rows.push(cached);
   }
-  if (sameRows(cachedRows, rows)) return false;
+  if (sameRows(cachedRows, rows)) {
+    await writeAppointmentCursor(tenantId, cursor);
+    return false;
+  }
   const before = cacheSignature(cachedRows);
   const replaced = await cacheReplaceTenant("appointments", tenantId, rows, {
     unlessLocalWriteSince: writeSeq,
@@ -154,6 +196,7 @@ async function refreshCacheFromSupabase(
     appointmentsRevalidator.markStale(tenantId);
     return false;
   }
+  await writeAppointmentCursor(tenantId, cursor);
   const after = cacheSignature(rows);
   return before !== after;
 }

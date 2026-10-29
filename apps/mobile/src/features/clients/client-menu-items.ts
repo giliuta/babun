@@ -1,4 +1,4 @@
-import { Ban, Bell, CalendarPlus, Check, Merge, Share2, Split, Trash2 } from "lucide-react-native";
+import { ArrowLeftRight, Ban, Bell, CalendarPlus, Check, Merge, Share2, Split, Trash2 } from "lucide-react-native";
 
 import type { PickerSheetItem } from "@/components/ui/PickerSheet";
 import type { ThemeColors } from "@/theme/colors";
@@ -26,6 +26,7 @@ interface ClientMenuHandlers {
   onSelectMany?: () => void;
   onMerge?: () => void;
   onSplit?: () => void;
+  onChangeTeam?: () => void;
   onToggleBlacklist?: () => void;
   onDelete?: () => void;
 }
@@ -53,6 +54,9 @@ export function clientMenuItems(
       : null,
     handlers.onSplit
       ? { id: "split", label: "Разделить клиента", icon: Split, color: t.accent, onPress: handlers.onSplit }
+      : null,
+    handlers.onChangeTeam
+      ? { id: "team", label: "Сменить команду", icon: ArrowLeftRight, color: t.accent, onPress: handlers.onChangeTeam }
       : null,
     handlers.onToggleBlacklist
       ? {

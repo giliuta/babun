@@ -20,6 +20,7 @@ import { RequisitesSheet } from "@/features/clients/RequisitesSheet";
 import { RequisitesRow } from "@/features/clients/blocks/RequisitesBlock";
 import { useRequisitesWriter } from "@/features/clients/use-requisites-writer";
 import { useThemeColors } from "@/theme/colors";
+import { FOOTER_SIDE } from "@/components/ui/tokens";
 
 // БЛОК «РЕКВИЗИТЫ КЛИЕНТА» ИНВОЙСА — КАК БЛОК «ОБЪЕКТ».
 //
@@ -133,7 +134,7 @@ export function InvoiceClientRequisitesBlock({
         padded={false}
         scroll
         footer={
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: FOOTER_SIDE }}>
             <GradientButton
               label="Добавить реквизиты"
               onPress={() => {

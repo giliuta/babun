@@ -47,7 +47,7 @@ export type CardAccess = Record<CardBlockKey | "card", BlockAccess>;
 
 /** Выключатели команды клиента («Карточка клиента»). */
 export type TeamBlocksOn = Record<
-  "note" | "people" | "objects" | "labels" | "tags" | "personal" | "files" | "requisites",
+  "note" | "people" | "objects" | "labels" | "tags" | "personal" | "files" | "requisites" | "sms",
   boolean
 >;
 
@@ -120,7 +120,7 @@ export function cardAccess({
     money: block(true, "clients.history", caps.money, false),
     // SMS клиента — свой блок: «Видит» — история, «Меняет» —
     // отправка с карточки, «Присылать SMS» и имя для SMS.
-    sms: block(true, "clients.sms"),
+    sms: block(teamOn.sms, "clients.sms"),
   };
 }
 

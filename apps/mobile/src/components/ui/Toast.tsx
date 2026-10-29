@@ -31,6 +31,17 @@ const ToastCtx = createContext<
 
 export const useToast = () => useContext(ToastCtx);
 
+/** ТОСТ ИЗ-ЗА ПРЕДЕЛОВ ДЕРЕВА. Сетка ошибок мутаций, sync-runtime и выход
+ *  зовут сообщение не из компонента (`lib/notify.ts`); смонтированный
+ *  `ToastProvider` даёт им свою полосу. Нет хоста — `false`, зовущий решает
+ *  сам. */
+let hostShow: ((message: string, type: ToastType, ms: number) => void) | null = null;
+export function toastOutsideTree(message: string, type: ToastType, ms: number): boolean {
+  if (!hostShow) return false;
+  hostShow(message, type, ms);
+  return true;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
@@ -62,8 +73,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     });
   }, [opacity, reducedMotion, translateY]);
 
-  const show = useCallback(
-    (raw: string, type: ToastType = "success", action?: ToastAction) => {
+  const showFor = useCallback(
+    (raw: string, type: ToastType, action: ToastAction | undefined, ms: number) => {
       // Текст тоста часто приходит с сервера (`error.message` из функции
       // базы) — сборка его не переводила, переводим при показе.
       const message = tDynamic(raw);
@@ -87,11 +98,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ]).start();
       }
       if (timer.current) clearTimeout(timer.current);
-      // С кнопкой держим дольше — человеку нужно успеть передумать.
-      timer.current = setTimeout(hide, action ? 5000 : 2200);
+      timer.current = setTimeout(hide, ms);
     },
     [hide, opacity, reducedMotion, translateY],
   );
+  const show = useCallback(
+    (raw: string, type: ToastType = "success", action?: ToastAction) =>
+      // С кнопкой держим дольше — человеку нужно успеть передумать.
+      showFor(raw, type, action, action ? 5000 : 2200),
+    [showFor],
+  );
+  useEffect(() => {
+    const own = (message: string, type: ToastType, ms: number) => showFor(message, type, undefined, ms);
+    hostShow = own;
+    return () => {
+      if (hostShow === own) hostShow = null;
+    };
+  }, [showFor]);
 
   useEffect(
     () => () => {

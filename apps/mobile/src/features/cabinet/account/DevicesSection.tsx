@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { ActionRow } from "@/components/ui/card-rows";
+import { LogOut, MonitorSmartphone } from "lucide-react-native";
+import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { signOutScopeAndWipe, unsentChangesNow } from "@/lib/auth-clear";
 import { forgetOtherDevices } from "@/lib/push-device";
 import { supabase } from "@/lib/supabase";
@@ -70,9 +74,10 @@ export function DevicesSection() {
     );
   };
 
-  // СТРОКИ — КАНОНИЧЕСКИЕ `ActionRow`: выход с других устройств и со всех.
-  // Строки «Это устройство · В сети» нет — она не читала ничего и была
-  // одинаковой и офлайн, и с протухшим входом.
+  // СТРОКИ — `SettingsRow` с плиткой, как вся страница: выход с других
+  // устройств и со всех. Пока идёт выход, строки не нажимаются. Строки «Это
+  // устройство · В сети» нет — она не читала ничего и была одинаковой и
+  // офлайн, и с протухшим входом.
   const askOthers = () =>
     confirmThen(
       "Выйти на других устройствах",
@@ -85,13 +90,23 @@ export function DevicesSection() {
     );
   return (
     <SectionCard title="Устройства">
-      <ActionRow label="Выйти на других устройствах" dimmed={busy} onPress={askOthers} />
-      <ActionRow
-        separated
-        label="Выйти со всех устройств"
-        tone="danger"
-        dimmed={busy}
-        onPress={() => void signOutEverywhere()}
+      <SettingsRow
+        tile={SETTINGS_TILE.indigo}
+        icon={MonitorSmartphone}
+        title="Выйти на других устройствах"
+        sub="Это устройство останется в системе"
+        onPress={busy ? undefined : askOthers}
+      />
+      <Divider inset={SETTINGS_ROW_INSET} />
+      {/* Два выхода — одно действие разной ширины, поэтому одна плитка:
+          красный не отличал их, а пугал. Насколько далеко идёт второй,
+          говорит его подпись и вопрос перед выходом. */}
+      <SettingsRow
+        tile={SETTINGS_TILE.indigo}
+        icon={LogOut}
+        title="Выйти со всех устройств"
+        sub="Включая это устройство"
+        onPress={busy ? undefined : () => void signOutEverywhere()}
       />
     </SectionCard>
   );

@@ -28,7 +28,7 @@ interface RecordLifecycleInput {
   onTrashed?: (apt: Appointment) => void;
 }
 
-/** Отмена визита, возврат в план и удаление — одна дорога для меню записи в
+/** Отмена записи, возврат в план и удаление — одна дорога для меню записи в
  *  календаре и для «⋯» на её странице: вопросы, деньги и тосты одинаковые. */
 export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecycleInput) {
   const updateAppt = useQuietUpdateAppointment();
@@ -42,13 +42,13 @@ export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecyc
   const canDelete = (apt: Appointment) => !keptForMoneyHistory(apt, invoicedIds.has(apt.id));
 
   /** Отмена и возврат в план — одна дорога с откатом из тоста. Причины
-   *  отмены нет: визит отменяется одним тапом, а прежняя причина у старой
+   *  отмены нет: запись отменяется одним тапом, а прежняя причина у старой
    *  записи стирается при «Восстановить». */
   const setCancelled = (apt: Appointment, cancel: boolean) => {
     const to: Appointment["status"] = cancel ? "cancelled" : "scheduled";
     const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
     // У отмены с деньгами в тосте нет «Отменить»: сервер уже вернул оплату
-    // клиенту, и откат вернул бы визит неоплаченным — это решение человек
+    // клиенту, и откат вернул бы запись неоплаченной — это решение человек
     // принимает осознанно через «Восстановить» с вопросом, а не тапом по тосту.
     const undoable = to !== "cancelled" || !holdsMoney(apt);
     updateAppt.mutate(
@@ -86,7 +86,7 @@ export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecyc
   };
 
   /** «Восстановить» отменённую. Если при отмене оплата вернулась клиенту,
-   *  визит вернётся неоплаченным — человек узнаёт это до, а не после. */
+   *  запись вернётся неоплаченной — человек узнаёт это до, а не после. */
   const restoreCancelled = (apt: Appointment) => {
     if (apt.payment_status !== "refunded") {
       setCancelled(apt, false);
@@ -101,18 +101,18 @@ export function useRecordLifecycle({ toast, onStatus, onTrashed }: RecordLifecyc
     });
   };
 
-  /** «Отменить визит» — сразу, без причины. Отмена визита с деньгами — это
+  /** «Отменить запись» — сразу, без причины. Отмена записи с деньгами — это
    *  возврат: сервер сам возвращает клиенту всю полученную оплату, поэтому о
-   *  ней — вопрос с суммой, а вернуть визит потом можно уже без оплаты. */
+   *  ней — вопрос с суммой, а вернуть запись потом можно уже без оплаты. */
   const cancelVisit = (apt: Appointment) => {
     if (!holdsMoney(apt)) {
       setCancelled(apt, true);
       return;
     }
     const paid = getPaidAmount(apt);
-    void confirmAction("Отменить визит с оплатой?", {
+    void confirmAction("Отменить запись с оплатой?", {
       message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Запись можно будет вернуть — уже без оплаты.`,
-      confirmLabel: "Отменить визит",
+      confirmLabel: "Отменить запись",
       destructive: true,
     }).then((ok) => {
       if (ok) setCancelled(apt, true);
