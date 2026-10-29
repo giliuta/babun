@@ -6397,12 +6397,15 @@ export type Database = {
         Returns: Json[]
       }
       list_master_clients_safe: {
-        Args: { p_client_id?: string }
+        Args: { p_client_id?: string; p_limit?: number; p_offset?: number }
         Returns: Json[]
       }
       list_master_services_safe: { Args: never; Returns: Json[] }
       list_member_access: { Args: { p_user_id: string }; Returns: Json }
-      list_member_clients: { Args: { p_client_id?: string }; Returns: Json[] }
+      list_member_clients: {
+        Args: { p_client_id?: string; p_limit?: number; p_offset?: number }
+        Returns: Json[]
+      }
       list_member_clients_rows: {
         Args: { p_client_id?: string }
         Returns: Json[]

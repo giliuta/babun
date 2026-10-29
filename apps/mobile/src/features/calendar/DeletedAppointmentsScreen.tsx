@@ -29,6 +29,7 @@ import {
   useEraseDeletedAppointment,
   useRestoreAppointment,
 } from "./deleted-appointments";
+import { useTeamName } from "@/session/team-name";
 
 // «УДАЛЁННЫЕ ЗАПИСИ» — КАК «УДАЛЁННЫЕ ОПЕРАЦИИ». Дверь — шестерёнка
 // календаря; страница — выбранного там календаря (`?team=`).
@@ -55,6 +56,8 @@ interface TrashRow {
 }
 
 export function DeletedAppointmentsScreen() {
+  // Имя команды — правилом показа (`useTeamName`): почта адресом не печатается.
+  const showTeamName = useTeamName();
   const t = useThemeColors();
   const toast = useToast();
   const { team } = useLocalSearchParams<{ team?: string }>();
@@ -169,7 +172,7 @@ export function DeletedAppointmentsScreen() {
     <Screen>
       <ScreenHeader
         title="Удалённые записи"
-        subtitle={teamRow?.name}
+        subtitle={teamRow ? showTeamName(teamRow.name) : undefined}
         fallbackHref={(team ? `/calendar?team=${encodeURIComponent(team)}` : "/calendar") as Href}
       />
       {deleted.data === undefined ? (

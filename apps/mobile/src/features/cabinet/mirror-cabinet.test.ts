@@ -21,11 +21,11 @@ describe("Кабинет в зеркале", () => {
     assert.match(source, /\{mirror \? null : \(\s*<SectionCard className="mt-4">\s*<ActionRow\s+label="Выйти из аккаунта"/);
   });
 
-  test("карта сверху — того, за кем смотрят, без фактов и без двери в профиль", () => {
+  test("карта сверху — того, за кем смотрят, без почты и без двери в профиль", () => {
     const source = read("./PersonCard.tsx");
     assert.match(source, /const door = mirror \? undefined : onPress;/);
-    const view = personCardView({ user_metadata: { full_name: "Иван" } }, null);
+    const view = personCardView({ user_metadata: { full_name: "Иван" } });
     assert.equal(view.title, "Иван");
-    assert.deepEqual(view.facts, []);
+    assert.deepEqual(view.lines, []);
   });
 });

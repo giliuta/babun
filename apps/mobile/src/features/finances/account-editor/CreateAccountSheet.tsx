@@ -208,7 +208,7 @@ export function CreateAccountSheet({
         footer={
           <View style={{ paddingHorizontal: FOOTER_SIDE, paddingTop: 8 }}>
             <GradientButton
-              label="Добавить команду"
+              label="Создать календарь"
               onPress={() => {
                 onClose();
                 // Экран команд открывается ПОСЛЕ отъезда листа: окно поверх

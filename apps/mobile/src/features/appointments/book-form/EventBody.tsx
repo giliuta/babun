@@ -12,6 +12,7 @@ import { haptics } from "@/lib/haptics";
 import { KEYBOARD_SETTLE_MS } from "./book-constants";
 import { inOrder } from "./in-order";
 import { EventObjectBlock } from "./EventObjectBlock";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { BookModel } from "./use-book-form";
 
 /** ── Событие ── team and label, time, then the event's blocks in order. */
@@ -152,31 +153,36 @@ export function EventBody({ form }: { form: BookModel }) {
             {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                 его же ставит составитель чека. Своя разметка у записи и у события
                 разошлась бы. */}
-            {/* БЕЗ ТАРИФА КЛИЕНТОВ НЕТ: блока нет (клиента без тарифа не добавить); уже
-                выбранный прежде клиент остаётся виден. */}
-            {evShowClient && can.showClient && (workInPlan || client) ? (
-              <SmsComposeProvider context={recordSmsContext}>
-                <ClientBlock
-                  client={client}
-                  stats={clientStats}
-                  deletedName={deletedClientName}
-                  onPick={can.editClient ? pickClientOrOpenCard : undefined}
-                  pickOpensCard={moneyHoldsClient}
-                  onOpenCard={openClientCard}
-                  onClear={can.editClient ? clearClient : undefined}
-                  note={
-                    clientNoteOn ? (
-                      <InlineNoteField
-                        note={clientNote}
-                        placeholder="Заметка клиента"
-                        accessibilityLabel="Заметка клиента"
-                        maxLength={500}
-                        readOnly={!clientNoteWritable}
-                      />
-                    ) : undefined
-                  }
-                />
-              </SmsComposeProvider>
+            {/* БЕЗ ТАРИФА — ВИДНО, НО СЕРО: клиента без тарифа не записать, и тап
+                говорит это плашкой тарифа (как «Сохранить» в записи). Спрятанный
+                блок не объяснял бы, чего не хватает. Тариф — аккаунта
+                календаря события (`usePlanAllows`: форма пишет только в
+                календари открытого аккаунта). */}
+            {evShowClient && can.showClient ? (
+              <TariffLocked locked={!workInPlan}>
+                <SmsComposeProvider context={recordSmsContext}>
+                  <ClientBlock
+                    client={client}
+                    stats={clientStats}
+                    deletedName={deletedClientName}
+                    onPick={can.editClient ? pickClientOrOpenCard : undefined}
+                    pickOpensCard={moneyHoldsClient}
+                    onOpenCard={openClientCard}
+                    onClear={can.editClient ? clearClient : undefined}
+                    note={
+                      clientNoteOn ? (
+                        <InlineNoteField
+                          note={clientNote}
+                          placeholder="Заметка клиента"
+                          accessibilityLabel="Заметка клиента"
+                          maxLength={500}
+                          readOnly={!clientNoteWritable}
+                        />
+                      ) : undefined
+                    }
+                  />
+                </SmsComposeProvider>
+              </TariffLocked>
             ) : null}
           </>
         ),

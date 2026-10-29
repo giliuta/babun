@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, usePathname, useRouter, type Href } from "expo-router";
 import { BadgeCheck, EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-native";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -56,6 +56,9 @@ type Editing = { mode: "create" } | { mode: "edit"; template: SmsTeamTemplate } 
 export function SmsTeamScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  // Страница открыта из настроек календаря: двери ведут в стек календаря, а
+  // не в Кабинет (чужая вкладка).
+  const inCalendar = usePathname().startsWith("/calendar");
   const params = useLocalSearchParams<{ team?: string }>();
   const { data: teams = [] } = useTeams({ display: true });
   const team = teams.find((x) => x.id === params.team) ?? teams[0];
@@ -156,7 +159,9 @@ export function SmsTeamScreen() {
                   : undefined)
               }
               subColor={balanceWarning(account.data, CAN_PAY_HERE) ? t.warning : undefined}
-              onPress={() => router.push("/cabinet/sms" as Href)}
+              // Из настроек календаря — дверь своего стека (`/calendar/sms-balance`):
+              // адрес Кабинета уводил во вкладку «Кабинет».
+              onPress={() => router.push((inCalendar ? "/calendar/sms-balance" : "/cabinet/sms") as Href)}
             />
           </SectionCard>
 

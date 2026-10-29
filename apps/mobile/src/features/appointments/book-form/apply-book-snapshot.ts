@@ -39,6 +39,8 @@ export function applyBookSnapshot(
   d.setEventTypeId(s.eventTypeId);
   d.setEventNotes(s.eventNotes);
   d.setEventAddress(s.eventAddress);
+  d.setEventPlacePin(s.eventPlacePin ?? "");
+  d.setEventPlaceNote(s.eventPlaceNote ?? "");
   d.setAllDay(s.allDay);
   d.setColorOverride(s.colorOverride);
   d.setCity(s.city);

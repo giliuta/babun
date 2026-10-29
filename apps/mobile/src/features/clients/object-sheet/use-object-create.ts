@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, type TextInput } from "react-native";
-import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import type { ObjectFieldsValue } from "@/features/clients/ObjectFields";
-import { hasAddressPlace, objectPlacePatch } from "@/features/clients/object-address";
+import { isPlaceReady, objectPlacePatch } from "@/features/clients/object-address";
 import { snapObjectType } from "@/features/clients/object-types";
 import { haptics } from "@/lib/haptics";
 
@@ -88,10 +87,7 @@ export function useObjectCreate({
   // Объект существует, когда есть адрес, части с «где» ИЛИ отмеченная точка:
   // по пину команда доедет даже без единого слова адреса — на кипрских виллах
   // это обычное дело.
-  const ready =
-    draft.target.trim().length > 0 ||
-    hasAddressPlace(draft.parts) ||
-    isLikelyUrl(draft.pin.trim());
+  const ready = isPlaceReady(draft);
 
   const add = async (): Promise<boolean> => {
     // Засов СИНХРОННЫЙ: между тапом и появлением `saving` есть кадр, в который

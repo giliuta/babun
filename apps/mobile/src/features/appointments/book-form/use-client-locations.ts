@@ -15,7 +15,7 @@ interface ClientLocationsInput {
   setAddress: Dispatch<SetStateAction<string>>;
 }
 
-/** Objects the record (its client's) and the event (anyone's) choose from. */
+/** Objects the record and the event choose from — only their client's. */
 export function useClientLocations({
   client,
   clients,
@@ -37,18 +37,20 @@ export function useClientLocations({
   const selectedLocation =
     clientLocations.find((l) => l.id === locationId) ?? null;
 
-  // ОБЪЕКТ СОБЫТИЯ: С КЛИЕНТОМ — ЕГО ОБЪЕКТЫ, БЕЗ КЛИЕНТА — ЛЮБОЙ.
-  // Событие не обязано иметь клиента: «съездить посмотреть дом» — это объект
-  // без человека. Выбран клиент — список сужается до его объектов, и
-  // объект закрепляется за ним; нет клиента — выбирают из объектов всех
-  // клиентов, и под каждым подписано, чей он. Новый объект заводится только
-  // клиенту (`openEventObjectAdd`): своей таблицы у объекта нет.
+  // ОБЪЕКТ СОБЫТИЯ: С КЛИЕНТОМ — ТОЛЬКО ЕГО ОБЪЕКТЫ, БЕЗ КЛИЕНТА — НИЧЬИ.
+  // Список «объекты всех клиентов» открывал событию чужие адреса — те же
+  // карточки других календарей, что изоляция клиентов прячет везде. Без
+  // клиента объект заводится в самом событии (`event-place.ts`), а не
+  // выбирается из чужих карточек.
+  //
+  // Общий пул остаётся только для ЧТЕНИЯ старых событий: где уже стоит
+  // объект чужого клиента, он показывается как есть, а не теряется.
   const eventLocationPool = useMemo(
     () => eventLocationRows(clients, client, clientLocations),
     [clients, client, clientLocations],
   );
   const eventPickPool = useMemo(
-    () => (client ? eventLocationPool.filter((row) => row.ownerId === client.id) : eventLocationPool),
+    () => (client ? eventLocationPool.filter((row) => row.ownerId === client.id) : []),
     [client, eventLocationPool],
   );
   const eventLocationEntry =

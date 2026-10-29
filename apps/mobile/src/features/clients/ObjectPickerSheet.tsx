@@ -41,7 +41,6 @@ export function ObjectPickerSheet({
   visible,
   locations,
   selectedId,
-  ownerNameFor,
   onSelect,
   onDeselect,
   onAdd,
@@ -50,10 +49,6 @@ export function ObjectPickerSheet({
   visible: boolean;
   locations: readonly Location[];
   selectedId: string | null;
-  /** Чей объект — третьей строкой. Событие выбирает объект БЕЗ клиента,
-   *  и без имени владельца три «Дома» подряд
-   *  неразличимы. У записи клиент уже выбран — там подписи нет. */
-  ownerNameFor?: (location: Location) => string | null;
   onSelect: (location: Location) => void;
   /** Повторный тап по выбранному снимает выбор. */
   onDeselect?: () => void;
@@ -81,10 +76,10 @@ export function ObjectPickerSheet({
       !searchable || !needle
         ? ordered
         : ordered.filter((loc) =>
-            [loc.address, loc.label, loc.note, ownerNameFor?.(loc)]
+            [loc.address, loc.label, loc.note]
               .some((v) => (v ?? "").toLowerCase().includes(needle)),
           ),
-    [ordered, searchable, needle, ownerNameFor],
+    [ordered, searchable, needle],
   );
   return (
     <BottomSheet
@@ -133,7 +128,6 @@ export function ObjectPickerSheet({
           const lines = addressLines(loc);
           const title = lines.main || "Адрес не указан";
           const subtitle = [type?.name, lines.detail].filter(Boolean).join(" · ");
-          const owner = ownerNameFor?.(loc) ?? null;
           const chosen = loc.id === selectedId;
           return (
             <SelectRow
@@ -142,9 +136,8 @@ export function ObjectPickerSheet({
               color={type?.color ?? undefined}
               title={title}
               subtitle={subtitle || undefined}
-              hint={owner || undefined}
               selected={chosen}
-              accessibilityLabel={[title, subtitle, owner].filter(Boolean).join(", ")}
+              accessibilityLabel={[title, subtitle].filter(Boolean).join(", ")}
               onPress={() => {
                 if (onDeselect && chosen) onDeselect();
                 else onSelect(loc);

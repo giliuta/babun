@@ -1,17 +1,17 @@
-import { View } from "react-native";
 import { MapPin } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ChooseRow } from "@/components/ui/ChooseRow";
-import { FieldRow } from "@/components/ui/card-rows";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
-import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { InlineNoteField } from "@/components/blocks/InlineNoteField";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
+import { hasEventPlace, placeAsLocation } from "./event-place";
 import type { BookModel } from "./use-book-form";
 
-/** Block «Объект» of an event: any client's object, or an old free address. */
+/** Block «Объект» of an event: its client's object, or the event's own. */
 export function EventObjectBlock({ form }: { form: BookModel }) {
   const {
     t,
@@ -21,7 +21,12 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
     eventLocationEntry,
     eventAddress,
     setEventAddress,
+    eventPlacePin,
+    setEventPlacePin,
+    eventPlaceNote,
+    setEventPlaceNote,
     setObjectPicker,
+    setPlaceSheet,
     clientObjectsWritable,
     setObjectEdit,
     clientId,
@@ -32,144 +37,130 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
     openEventObjectAdd,
     teamId,
   } = form;
-  return (
-    <>
-      {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН, И КАК В ЗАПИСИ:
-          сначала клиент, потом его объект. Объект без клиента вставал в
-          событие ничьим — в записи так нельзя, и в событии тоже.
+  if (!evShowObject || !can.showObject) return null;
 
-          Своё поле «Адрес или ссылка на карту» с вольным адресом не из базы
-          не знало бы ни кода ворот, ни маршрута, ни того, что на этот же дом
-          ездят записями. Поэтому событие берёт НАСТОЯЩИЙ объект — ту же
-          строку `ObjectRow`, что на карточке клиента и в записи.
+  // ОБЪЕКТ СОБЫТИЯ — ДВА ВИДА, ОДНА СТРОКА `ObjectRow`:
+  //   • С КЛИЕНТОМ — только объект ЭТОГО клиента (выбор из его объектов,
+  //     нет объектов — сразу его форма добавления);
+  //   • БЕЗ КЛИЕНТА — объект самого события (`event-place.ts`): форма
+  //     открывается сразу, без списка, и в базу клиентов он не пишется.
+  // Объекта «любого клиента» в событии нет: список всех объектов открывал
+  // чужие адреса. Старое событие, где такой уже стоит, показывает его как
+  // есть — только читать, данные не теряются.
+  const place = { address: eventAddress, pin: eventPlacePin, note: eventPlaceNote };
+  const ownPlace = !eventLocationEntry && hasEventPlace(place);
+  const foreign = !!eventLocationEntry && eventLocationEntry.ownerId !== clientId;
+  const removePlace = () => {
+    setEventAddress("");
+    setEventPlacePin("");
+    setEventPlaceNote("");
+    haptics.tap();
+  };
+  const openPlace = () => {
+    haptics.tap();
+    setPlaceSheet(true);
+  };
 
-          Без клиента строка «Выбрать объект» сперва открывает выбор
-          клиента и говорит, зачем он нужен.
-
-          Прежний вольный адрес старого события НЕ ТЕРЯЕТСЯ: пока
-          объект не выбран, он стоит тем же полем и уезжает в патч. */}
-      {evShowObject &&
-      can.showObject &&
-      // Объект — всегда объект клиента: без тарифа его не завести.
-      ((workInPlan && can.editObject) || eventLocationEntry || eventAddress.trim()) ? (
-        <SectionCard title="Объект">
-          {eventLocationEntry ? (
-            <>
-              <ObjectRow
-                loc={eventLocationEntry.loc}
-                showNote={false}
-                // Тап — выбор другого объекта, удержание — правка этого (как у клиента
-                // переход в карточку; кружка «…» нет).
-                onPress={
-                  can.editObject
-                    ? () => {
-                        setObjectPicker(true);
-                        haptics.tap();
-                      }
-                    : undefined
-                }
-                onLongPress={
-                  can.editObject && clientObjectsWritable
-                    ? () => {
-                        haptics.tap();
-                        setObjectEdit(true);
-                      }
-                    : undefined
-                }
-                longPressLabel="Правка объекта"
+  const block = (
+    <SectionCard title="Объект">
+      {eventLocationEntry ? (
+        <>
+          <ObjectRow
+            loc={eventLocationEntry.loc}
+            showNote={false}
+            teamId={teamId}
+            // Тап — выбор другого объекта клиента, удержание — правка этого.
+            onPress={
+              can.editObject && !foreign
+                ? () => {
+                    setObjectPicker(true);
+                    haptics.tap();
+                  }
+                : undefined
+            }
+            onLongPress={
+              can.editObject && clientObjectsWritable && !foreign
+                ? () => {
+                    haptics.tap();
+                    setObjectEdit(true);
+                  }
+                : undefined
+            }
+            longPressLabel="Правка объекта"
+          />
+          {/* Старое событие с объектом другого клиента: чей он — строкой под
+              ним, иначе «Дом» ничего не говорит о том, куда едут. Новых
+              таких выборов нет. */}
+          {foreign ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ paddingHorizontal: 16, paddingBottom: 8, fontSize: 13, color: t.faint }}
+            >
+              {`Объект клиента: ${eventLocationEntry.ownerName}`}
+            </Text>
+          ) : null}
+          <InlineNoteField
+            note={eventObjectNote}
+            placeholder="Заметка объекта"
+            accessibilityLabel="Заметка объекта"
+            readOnly={!clientObjectsWritable || foreign}
+          />
+        </>
+      ) : ownPlace ? (
+        // Свой объект события: тап — правка той же формой, смахнуть — убрать.
+        can.editObject ? (
+          <SwipeRow
+            label="Убрать"
+            color={t.danger}
+            onAction={removePlace}
+            accessibilityLabel="Убрать объект"
+          >
+            <ObjectRow loc={placeAsLocation(place)} teamId={teamId} onPress={openPlace} />
+          </SwipeRow>
+        ) : (
+          <ObjectRow loc={placeAsLocation(place)} teamId={teamId} />
+        )
+      ) : (
+        <>
+          {/* «ЖДЁМ АДРЕС» — и у события: ссылка клиенту уже ушла, ответа
+              ещё нет. */}
+          {pendingRequests.map((request, i) => (
+            <LocationRequestRow
+              key={request.id}
+              request={request}
+              separated={i > 0}
+              onPress={() => void requestActions.menu(request)}
+            />
+          ))}
+          {/* ОДНА КНОПКА: у клиента с объектами — выбор (добавить — в
+              футере выбора), без объектов — сразу добавление; без клиента —
+              сразу форма объекта события. Без права менять объект двери нет. */}
+          {can.editObject ? (
+            clientId && eventPickPool.length > 0 ? (
+              <ChooseRow
+                icon={MapPin}
+                label="Выбрать объект"
+                hint="Открывает объекты клиента"
+                onPress={() => {
+                  setObjectPicker(true);
+                  haptics.tap();
+                }}
               />
-              {/* Чей объект — строкой под ним, когда это не клиент
-                  события: иначе «Дом» ничего не говорит о том, куда
-                  едут. */}
-              {eventLocationEntry.ownerId !== clientId ? (
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    paddingHorizontal: 16,
-                    paddingBottom: 8,
-                    fontSize: 13,
-                    color: t.faint,
-                  }}
-                >
-                  {`Объект клиента: ${eventLocationEntry.ownerName}`}
-                </Text>
-              ) : null}
-              <InlineNoteField
-                note={eventObjectNote}
-                placeholder="Заметка объекта"
-                accessibilityLabel="Заметка объекта"
-                readOnly={!clientObjectsWritable}
+            ) : (
+              <ChooseRow
+                icon={MapPin}
+                label="Добавить объект"
+                hint={clientId ? "Заводит первый объект клиента" : "Открывает форму объекта"}
+                onPress={openEventObjectAdd}
               />
-            </>
-          ) : (
-            <>
-              {/* «ЖДЁМ АДРЕС» — И У СОБЫТИЯ. Ссылка
-                  клиенту уже отправлена, ответа ещё нет — в записи об
-                  этом говорила строка, а событие молчало: та же ссылка,
-                  тот же клиент, но узнать о ней было негде. */}
-              {pendingRequests.map((request, i) => (
-                <LocationRequestRow
-                  key={request.id}
-                  request={request}
-                  separated={i > 0}
-                  onPress={() => void requestActions.menu(request)}
-                />
-              ))}
-              {/* Вольный адрес прежнего события — только пока объекта
-                  нет: у нового события поля не будет вовсе. Маршрут по нему —
-                  та же кнопка, что у строки объекта: адрес без объекта всё
-                  равно место, куда едут. */}
-              {eventAddress.trim() ? (
-                <FieldRow
-                  label="Адрес"
-                  hideLabel
-                  value={eventAddress}
-                  placeholder="Адрес или ссылка на карту"
-                  stacked
-                  multiline
-                  live
-                  readOnly={!can.editObject}
-                  trailing={<ObjectRouteButton address={eventAddress} teamId={teamId} />}
-                  onSave={setEventAddress}
-                />
-              ) : null}
-              {/* ОДНА КНОПКА, А НЕ ДВЕ («выбрать объект» и «добавить объект» вместе —
-                  неправильно; как в клиентах). «Добавить объект»
-                  живёт в футере листа выбора — там, куда идут, когда
-                  нужного объекта нет. Пустой справочник — единственный
-                  случай, когда выбирать нечего и дверь сразу ведёт к
-                  добавлению. Без права менять объект двери нет вовсе. */}
-              {can.editObject ? (
-                <View
-                  style={{
-                    borderTopWidth: eventAddress.trim() ? 1 : 0,
-                    borderTopColor: t.separator,
-                  }}
-                >
-                  {eventPickPool.length > 0 ? (
-                    <ChooseRow
-                      icon={MapPin}
-                      label="Выбрать объект"
-                      hint={clientId ? "Открывает объекты клиента" : "Открывает объекты всех клиентов"}
-                      onPress={() => {
-                        setObjectPicker(true);
-                        haptics.tap();
-                      }}
-                    />
-                  ) : (
-                    <ChooseRow
-                      icon={MapPin}
-                      label="Добавить объект"
-                      hint="Заводит первый объект"
-                      onPress={openEventObjectAdd}
-                    />
-                  )}
-                </View>
-              ) : null}
-            </>
-          )}
-        </SectionCard>
-      ) : null}
-    </>
+            )
+          ) : null}
+        </>
+      )}
+    </SectionCard>
   );
+
+  // БЕЗ ТАРИФА — ВИДНО, НО СЕРО: тап — плашка тарифа, как у «Сохранить» в
+  // записи. Блок не прячется: спрятанное не объясняет, чего не хватает.
+  return workInPlan ? block : <TariffLocked locked>{block}</TariffLocked>;
 }

@@ -1,12 +1,13 @@
 import { locationAddressForBooking } from "@babun/shared/local/clients";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
-import { ObjectSheet } from "@/features/clients/ObjectSheet";
+import { ObjectSheet, PlaceSheet } from "@/features/clients/ObjectSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import type { BookModel } from "./use-book-form";
+import { hasEventPlace, placeFormValue, placeFromForm } from "./event-place";
 import { SETTLED_STAYS, settledVisit } from "@/features/calendar/home/appointment-rules";
 
 /** Sheets that pick what the record is about: time, object, client, services. */
@@ -42,8 +43,15 @@ export function BookPickSheets({ form }: { form: BookModel }) {
     objectPicker,
     setObjectPicker,
     kind,
-    eventLocationPool,
     eventPickPool,
+    placeSheet,
+    setPlaceSheet,
+    eventAddress,
+    setEventAddress,
+    eventPlacePin,
+    setEventPlacePin,
+    eventPlaceNote,
+    setEventPlaceNote,
     clientLocations,
     pickLocation,
     clientObjectsWritable,
@@ -146,14 +154,43 @@ export function BookPickSheets({ form }: { form: BookModel }) {
             });
             setLocationId(added.id);
             setAddress(locationAddressForBooking(added));
+            // Событию — и его адрес-снимок: объект клиента заменяет объект
+            // самого события.
+            if (kind === "event") {
+              setEventAddress(locationAddressForBooking(added));
+              setEventPlacePin("");
+              setEventPlaceNote("");
+            }
             toast("Объект сохранён");
           }}
           onClose={() => setObjectSheet(false)}
         />
       ) : null}
+      {/* ОБЪЕКТ СОБЫТИЯ БЕЗ КЛИЕНТА — своя форма, сразу, без списка: он
+          живёт в самом событии (`event-place.ts`). Тап по стоящему — правка
+          той же формой. */}
+      {kind === "event" ? (
+        <PlaceSheet
+          visible={placeSheet}
+          initial={
+            !locationId && hasEventPlace({ address: eventAddress, pin: eventPlacePin, note: eventPlaceNote })
+              ? placeFormValue({ address: eventAddress, pin: eventPlacePin, note: eventPlaceNote })
+              : null
+          }
+          onApply={(value) => {
+            const place = placeFromForm(value);
+            setLocationId(null);
+            setEventAddress(place.address);
+            setEventPlacePin(place.pin);
+            setEventPlaceNote(place.note);
+            haptics.tap();
+          }}
+          onClose={() => setPlaceSheet(false)}
+        />
+      ) : null}
       {/* Выбор/замена объекта; «Добавить объект» в его футере открывает лист
-          добавления, когда этот уже уехал. У записи список — объекты её
-          клиента; у события — объекты клиента, а без клиента — всех. */}
+          добавления, когда этот уже уехал. И у записи, и у события список —
+          ТОЛЬКО объекты их клиента: объектов «всех клиентов» в выборе нет. */}
       <ObjectPickerSheet
         visible={objectPicker}
         locations={
@@ -162,13 +199,6 @@ export function BookPickSheets({ form }: { form: BookModel }) {
             : clientLocations
         }
         selectedId={locationId}
-        ownerNameFor={
-          kind === "event"
-            ? (loc) =>
-                eventLocationPool.find((row) => row.loc.id === loc.id)?.ownerName ??
-                null
-            : undefined
-        }
         onSelect={(loc) => pickLocation(loc.id)}
         onDeselect={() => {
           setLocationId(null);

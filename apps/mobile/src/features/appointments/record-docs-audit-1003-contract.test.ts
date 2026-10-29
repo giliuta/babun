@@ -24,9 +24,12 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("маршрут вольного адреса события — общей кнопкой карт", () => {
     // Записи и события открываются одной страницей /book; адрес без объекта
     // ведёт в карты той же кнопкой, что строка объекта, а не ссылкой Apple.
+    // Свой объект события — та же строка `ObjectRow`, у которой маршрут —
+    // общая кнопка карт (`ObjectRouteButton`).
     const body = src("appointments/book-form/EventObjectBlock.tsx");
     assert.doesNotMatch(body, /maps\.apple\.com/);
-    assert.match(body, /trailing=\{<ObjectRouteButton address=\{eventAddress\} teamId=\{teamId\} \/>\}/);
+    assert.match(body, /<ObjectRow loc=\{placeAsLocation\(place\)\} teamId=\{teamId\}/);
+    assert.match(src("clients/blocks/objects-block/ObjectRow.tsx"), /<ObjectRouteButton/);
   });
 
   test("повтор SMS — той же командой и на тот же номер", () => {

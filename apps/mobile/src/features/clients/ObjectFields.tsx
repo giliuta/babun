@@ -101,6 +101,7 @@ export function ObjectFields({
   onCommit,
   addressRef,
   teamId = null,
+  noType = false,
 }: {
   value: ObjectFieldsValue;
   typeOptions: string[];
@@ -120,6 +121,9 @@ export function ObjectFields({
   addressRef?: Ref<TextInput>;
   /** Команда клиента — вид типа из её справочника. */
   teamId?: string | null;
+  /** Без блока «Тип объекта»: объект события без клиента хранится в самом
+   *  событии, и типа у него держать негде. */
+  noType?: boolean;
 }) {
   const t = useThemeColors();
   // Без выноса: у сотрудника чужой компании адрес и заметку объекта
@@ -182,31 +186,33 @@ export function ObjectFields({
           два модальных окна в одном кадре — лист под ними тускнел, и «назад»
           уводило не туда (канон AGENTS 5.1, из листа — раскрывашкой). Дверь
           в «Типы объектов» — последней строкой того же списка. */}
-      <ReferenceBlock
-        // ФОРМА В ШТОРКЕ — плотно, чтобы тип объекта не выпадал из размера.
-        // Вид выбранного — тот же, что у категории; тише только воздух.
-        dense
-        title="Тип объекта"
-        emptyIcon={Tag}
-        emptyLabel="Выбрать тип объекта"
-        emptyHint="Открывает список типов объектов"
-        // Метка без типа в справочнике (тип удалили) — «не выбрано»: объект
-        // без типа, как и в строке объекта (`findObjectType`).
-        value={
-          typePreset
-            ? {
-                name: typePreset.name,
-                color: typePreset?.color ?? null,
-                Icon: iconPreset(typePreset?.icon),
-              }
-            : null
-        }
-        onPress={() => {
-          haptics.tap();
-          setTypeSheetOpen((open) => !open);
-        }}
-      />
-      {typeSheetOpen ? (
+      {noType ? null : (
+        <ReferenceBlock
+          // ФОРМА В ШТОРКЕ — плотно, чтобы тип объекта не выпадал из размера.
+          // Вид выбранного — тот же, что у категории; тише только воздух.
+          dense
+          title="Тип объекта"
+          emptyIcon={Tag}
+          emptyLabel="Выбрать тип объекта"
+          emptyHint="Открывает список типов объектов"
+          // Метка без типа в справочнике (тип удалили) — «не выбрано»: объект
+          // без типа, как и в строке объекта (`findObjectType`).
+          value={
+            typePreset
+              ? {
+                  name: typePreset.name,
+                  color: typePreset?.color ?? null,
+                  Icon: iconPreset(typePreset?.icon),
+                }
+              : null
+          }
+          onPress={() => {
+            haptics.tap();
+            setTypeSheetOpen((open) => !open);
+          }}
+        />
+      )}
+      {typeSheetOpen && !noType ? (
         <View style={{ paddingHorizontal: 12, paddingBottom: 4, gap: 8 }}>
           {typeOptions.length === 0 ? (
             <Text style={{ paddingHorizontal: 4, fontSize: 13, color: t.sub }}>

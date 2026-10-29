@@ -181,7 +181,6 @@ export function useBookForm() {
     client,
     teamId,
     setTeamId,
-    toast,
     router,
   });
   const notes = useRecordNotes({
@@ -299,6 +298,8 @@ export function useBookForm() {
     eventTypeId: draft.eventTypeId,
     eventNotes: draft.eventNotes,
     eventAddress: draft.eventAddress,
+    eventPlacePin: draft.eventPlacePin,
+    eventPlaceNote: draft.eventPlaceNote,
     eventUrl: draft.eventUrl,
     eventReminderOffset: draft.eventReminderOffset,
     repeat: draft.repeat,

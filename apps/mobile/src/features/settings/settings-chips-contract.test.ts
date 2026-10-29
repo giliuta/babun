@@ -34,7 +34,7 @@ test("настройки финансов — та же лента, что на�
 test("в настройках чужой команды — «Выйти из команды», а не удаление", () => {
   const src = gear();
   assert.match(src, /const canLeave = role != null && role !== "owner";/);
-  assert.match(src, /\{team && tenantId && canLeave \? \(/);
+  assert.match(src, /\bteam && tenantId && canLeave \? \(/);
   assert.match(src, /leaveCalendar\.mutate\(\s*\{ tenantId, teamId: team\.id \}/);
   assert.match(src, /\{rows\.any \|\| canLeave \? \(/);
   const hook = readFileSync(resolve(here, "leave-calendar.ts"), "utf8");

@@ -290,3 +290,13 @@ export function objectPlacePatch(
     addressParts: parts,
   };
 }
+
+/** Есть ли у формы объекта «куда ехать»: адрес, части с «где» или точка.
+ *  Без этого объект не объект — кнопка записи серая. */
+export function isPlaceReady(value: { target: string; parts: AddressParts; pin: string }): boolean {
+  return (
+    value.target.trim().length > 0 ||
+    hasAddressPlace(value.parts) ||
+    isLikelyUrl(value.pin.trim())
+  );
+}
