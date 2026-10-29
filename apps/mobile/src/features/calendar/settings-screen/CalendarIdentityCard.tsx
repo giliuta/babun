@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { TourTarget } from "@/components/tour/TourTarget";
 
 // ИМЯ И ЦВЕТ КАЛЕНДАРЯ ПРАВЯТСЯ ПРЯМО В СТРОКЕ, без нижнего листа с кнопкой «Применить» и без шеврона,
 // раскрывающего палитру: это лишний шаг ради двух правок, которые правятся на
-// месте. Карточка И ЕСТЬ редактор: имя пишется в строке и сохраняется,
-// когда из него уходят, точка слева открывает палитру поверх экрана.
+// месте. Строка И ЕСТЬ редактор: имя пишется в строке и сохраняется,
+// когда из него уходят, точка слева открывает палитру поверх экрана. Карточку
+// даёт группа «Календарь» (`SettingsGroup`), своей у строки нет.
 export function CalendarIdentityCard({
   team,
   onPatch,
@@ -43,7 +43,6 @@ export function CalendarIdentityCard({
   };
 
   return (
-    <SectionCard>
       <TourTarget id="settings.name">
       <NameColorField
         bare
@@ -56,6 +55,5 @@ export function CalendarIdentityCard({
         onColorChange={(hex) => onPatch({ color: hex })}
       />
       </TourTarget>
-    </SectionCard>
   );
 }
