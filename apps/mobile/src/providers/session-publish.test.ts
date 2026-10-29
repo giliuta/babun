@@ -67,7 +67,9 @@ describe("публикация сессии", () => {
     const source = readFileSync(resolve(here, "SessionProvider.tsx"), "utf8");
     assert.match(
       source,
-      /setSession\(\(prev\) =>\s*shouldPublishSession\(event, prev, next\) \? next : prev,?\s*\)/,
+      // Сессия первого шага двухфакторного входа не публикуется вовсе
+      // (`lib/mfa/assurance.ts`) — остальное решает это правило.
+      /setSession\(\(prev\) =>\s*pending \? null : shouldPublishSession\(event, prev, next\) \? next : prev,?\s*\)/,
     );
   });
 });
