@@ -5,7 +5,7 @@ import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 
-/** The calendars ribbon on top of the settings, with «Добавить» pinned right. */
+/** The calendars ribbon on top of the settings, with «Создать» pinned right. */
 export function CalendarChipsBar({ screen }: { screen: CalendarSettingsState }) {
   const t = useThemeColors();
   const { router, gearChips, team, rows, canNewTeam, setCreateOpen, setOfferOpen, saveCalendarOrder, tenantId } =
@@ -30,13 +30,13 @@ export function CalendarChipsBar({ screen }: { screen: CalendarSettingsState }) 
       trailing={rows.addCalendar ? (
         <Pressable
           // ЛИМИТ КОМАНД ТАРИФА: Соло — одна, Про — 5, Макс — 50.
-          // Сверх — «Добавить» серое, тап поднимает плашку про тариф.
+          // Сверх — «Создать» серое, тап поднимает плашку про тариф.
           // Сверх оплаченного — предложение «Новый календарь»:
           // цена, итог и «Оплатить» / пробный, а не плашка про тариф.
           onPress={() => (canNewTeam ? setCreateOpen(true) : setOfferOpen(true))}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Добавить календарь"
+          accessibilityLabel="Создать календарь"
           style={({ pressed }: { pressed: boolean }) => ({
             minHeight: 44,
             justifyContent: "center",
@@ -47,7 +47,7 @@ export function CalendarChipsBar({ screen }: { screen: CalendarSettingsState }) 
             maxFontSizeMultiplier={1.2}
             style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
           >
-            Добавить
+            Создать
           </Text>
         </Pressable>
       ) : undefined}

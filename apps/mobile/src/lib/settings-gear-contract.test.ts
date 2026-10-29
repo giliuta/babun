@@ -51,4 +51,14 @@ describe("шестерёнки календаря, клиентов и фина�
     assert.match(calendar, /title="Настройки календаря"/);
     assert.doesNotMatch(calendar, /title="Календарь"/);
   });
+
+  test("календарь заводят словом «Создать», а не «Добавить» (словарь кнопок «Создать N»)", () => {
+    const bar = src("src/features/calendar/settings-screen/CalendarChipsBar.tsx");
+    assert.match(bar, />\s*Создать\s*</);
+    assert.match(bar, /accessibilityLabel="Создать календарь"/);
+    assert.doesNotMatch(bar, />\s*Добавить\s*<|"Добавить календарь"/);
+    const account = src("src/features/finances/account-editor/CreateAccountSheet.tsx");
+    assert.doesNotMatch(account, /"Добавить команду"/);
+    assert.match(account, /label="Создать календарь"/);
+  });
 });
