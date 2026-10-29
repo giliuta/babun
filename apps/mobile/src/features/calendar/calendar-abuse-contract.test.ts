@@ -452,8 +452,9 @@ describe("повторный аудит календаря 03.10", () => {
       resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
       resolve(here, "settings-screen"),
     );
-    assert.match(gear, /latest\.current = \{ draft, teamName: team\.name, onPatch \};/);
-    assert.match(gear, /if \(trimmed && trimmed !== teamName\) patch\(\{ name: trimmed \}\);/);
+    assert.match(gear, /latest\.current = \{ draft, real: team\.name, shown, onPatch \};/);
+    // Дописывается только правка: не настоящее имя и не показанное правилом показа.
+    assert.match(gear, /if \(trimmed && trimmed !== real && trimmed !== was\) patch\(\{ name: trimmed \}\);/);
     assert.match(gear, /latest\.current\.draft = null;\s*setDraft\(null\);/);
   });
 

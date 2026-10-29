@@ -61,4 +61,16 @@ describe("шестерёнки календаря, клиентов и фина�
     assert.doesNotMatch(account, /"Добавить команду"/);
     assert.match(account, /label="Создать календарь"/);
   });
+
+  test("имя календаря в шестерёнке — правилом показа, почта на экран не выходит", () => {
+    const card = src("src/features/calendar/settings-screen/CalendarIdentityCard.tsx");
+    assert.match(card, /const shown = teamName\(team\.name\);/);
+    assert.match(card, /const name = draft \?\? shown;/);
+    // Пишется только правка человека, не показанное имя вместо настоящего.
+    assert.match(card, /const trimmed = draft\?\.trim\(\);/);
+    assert.match(card, /trimmed !== team\.name && trimmed !== shown/);
+    const rows = src("src/features/calendar/settings-screen/CalendarTeamRows.tsx");
+    assert.match(rows, /title=\{teamName\(team\.name\)\}/);
+    assert.doesNotMatch(rows, /title=\{team\.name\}/);
+  });
 });
