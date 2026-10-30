@@ -139,7 +139,7 @@ describe("изоляция типов объекта события", () => {
   });
   test("сервер: тип только живой команды записи, удалённый тип снимается", () => {
     const sql = readFileSync(
-      resolve(here, "../../../../../../supabase/parked/20261030120000_event_place_object_type.sql"),
+      resolve(here, "../../../../../../supabase/migrations/20261030120000_event_place_object_type.sql"),
       "utf8",
     );
     assert.match(sql, /references public\.location_labels \(tenant_id, id\)\s+on delete set null \(address_object_type_id\)/);

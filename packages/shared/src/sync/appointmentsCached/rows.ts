@@ -63,6 +63,7 @@ export function makeServerRow(
     address_note: input.address_note ?? "",
     address_lat: input.address_lat ?? null,
     address_lng: input.address_lng ?? null,
+    address_object_type_id: input.address_object_type_id ?? null,
     cancel_reason: input.cancel_reason ?? null,
     source: input.source ?? null,
     is_online_booking: input.is_online_booking ?? false,
@@ -131,6 +132,7 @@ export function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointme
   if (patch.address_note !== undefined) out.address_note = patch.address_note;
   if (patch.address_lat !== undefined) out.address_lat = patch.address_lat;
   if (patch.address_lng !== undefined) out.address_lng = patch.address_lng;
+  if (patch.address_object_type_id !== undefined) out.address_object_type_id = patch.address_object_type_id;
   if (patch.cancel_reason !== undefined) out.cancel_reason = patch.cancel_reason;
   if (patch.source !== undefined) out.source = patch.source;
   if (patch.is_online_booking !== undefined) out.is_online_booking = patch.is_online_booking;
