@@ -4,10 +4,10 @@
 // POST /functions/v1/stripe-webhook
 //
 // ⚠️ EXTERNAL CALLER, AND IT IS THE BILLING SOURCE OF TRUTH.
-// This handler is the ONLY writer of tenants.plan / .subscription_status /
-// .stripe_subscription_id / .trial_ends_at / .current_period_end. If it
-// stops receiving events, subscriptions silently drift out of sync — no
-// error appears anywhere in the product.
+// This handler is the ONLY writer of `calendar_subscriptions` (the
+// subscription, status and paid-until of every calendar) and of
+// `tenants.stripe_customer_id`. If it stops receiving events, subscriptions
+// silently drift out of sync — no error appears anywhere in the product.
 //
 // CUTOVER IS NOT CODE-ONLY. Artem must, in the Stripe Dashboard:
 //   1. Add this URL as a webhook endpoint (same event types as today).
@@ -24,12 +24,14 @@
 // service key. STRIPE_PRICE_PRO / STRIPE_PRICE_BUSINESS — only for the old
 // Pro/Business prices, if any subscription still runs on them.
 //
-// ТАРИФЫ «СОЛО · ПРО · МАКС» (01.10). Подписку оформляет `tariff-checkout`;
-// тариф подписки — метка её цены (`metadata.tier`, `lookup_key`
-// babun_<tier>_<period>), аккаунт — метка самой подписки
-// (`metadata.tenant_id`). В Stripe у этого вебхука должны быть включены
-// события `customer.subscription.created/updated/deleted`,
-// `invoice.payment_succeeded/failed` и `checkout.session.completed`.
+// ТАРИФ — У КАЛЕНДАРЯ. Подписку оформляет `tariff-checkout`, у каждого
+// календаря своя; тариф подписки — метка её цены (`metadata.tier`,
+// `lookup_key` babun_calendar_<period>), аккаунт и календарь — метки самой
+// подписки (`metadata.tenant_id`, `metadata.team_id`). В Stripe у этого
+// вебхука должны быть включены события
+// `customer.subscription.created/updated/deleted`,
+// `invoice.payment_succeeded/failed`, `invoice.upcoming` и
+// `checkout.session.completed`.
 //
 // PORTING NOTES vs the Next route:
 //   * `constructEvent` → `constructEventAsync`. Deno has no Node crypto
@@ -43,7 +45,6 @@
 import { serviceClient } from "../_shared/service-client.ts";
 import { json } from "../_shared/http.ts";
 import { duplicateVerdict, LIVE_TARIFF_STATUSES } from "../_shared/tariff-duplicates.ts";
-import { paidCalendars } from "../_shared/paid-calendars.ts";
 // `npm:`, а не `esm.sh`: сборка esm.sh тянула node-совместимость Deno std, и
 // она на каждое событие писала в логи «event loop error:
 // Deno.core.runMicrotasks() is not supported» — настоящий сбой вебхука в
@@ -61,15 +62,20 @@ type SubStatus =
   | "canceled"
   | "incomplete";
 
-interface ReconcileFields {
-  plan?: Tier;
+/** Поля аккаунта, которые пишет вебхук: только клиент Stripe — карта одна
+ *  на все календари аккаунта. */
+interface AccountFields {
   stripe_customer_id?: string;
-  subscription_status?: SubStatus | null;
-  stripe_subscription_id?: string | null;
-  trial_ends_at?: string | null;
-  current_period_end?: string | null;
-  /** Календарей в подписке (цена за календарь, 12.10). */
-  paid_calendars?: number | null;
+}
+
+/** Строка `calendar_subscriptions` — подписка календаря, как она есть в
+ *  Stripe СЕЙЧАС. */
+interface CalendarRow {
+  stripe_subscription_id: string;
+  status: SubStatus;
+  period: "month" | "year";
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
 }
 
 function priceToTier(price: Stripe.Price | undefined): Tier {
@@ -113,97 +119,135 @@ function mapSubscriptionStatus(s: string): SubStatus {
 
 const unixToIso = (unix: number): string => new Date(unix * 1000).toISOString();
 
-/** Поля аккаунта из подписки, как она есть в Stripe СЕЙЧАС. */
-function fieldsOfSubscription(sub: Stripe.Subscription): ReconcileFields {
+function rowOfSubscription(sub: Stripe.Subscription): CalendarRow {
   const item = sub.items?.data?.[0];
-  const status = mapSubscriptionStatus(sub.status);
-  const ended = sub.status === "canceled" || sub.status === "incomplete_expired";
-  const update: ReconcileFields = {
-    plan: ended ? "free" : priceToTier(item?.price),
-    subscription_status: status,
-    stripe_subscription_id: ended ? null : sub.id,
-    paid_calendars: ended ? null : (item?.quantity ?? null),
-  };
-  const withPeriod = sub as unknown as {
-    current_period_end?: number | null;
-    trial_end?: number | null;
-  };
+  // Цена не наша (опечатка в секрете, чужой товар) — подписка не даёт
+  // доступа, как бы ни называлась её стадия в Stripe.
+  const status = priceToTier(item?.price) === "free" ? "incomplete" : mapSubscriptionStatus(sub.status);
+  const withPeriod = sub as unknown as { current_period_end?: number | null };
+  // Новые версии API держат конец периода у позиции подписки.
   const periodEnd =
     withPeriod.current_period_end ??
     (item as unknown as { current_period_end?: number | null } | undefined)?.current_period_end;
-  if (typeof periodEnd === "number") update.current_period_end = unixToIso(periodEnd);
-  update.trial_ends_at =
-    !ended && typeof withPeriod.trial_end === "number" ? unixToIso(withPeriod.trial_end) : null;
-  return update;
+  return {
+    stripe_subscription_id: sub.id,
+    status,
+    period: item?.price?.recurring?.interval === "year" ? "year" : "month",
+    current_period_end: typeof periodEnd === "number" ? unixToIso(periodEnd) : null,
+    cancel_at_period_end: sub.cancel_at_period_end === true,
+  };
 }
 
 const LIVE_STATUSES = LIVE_TARIFF_STATUSES;
 
-/** ПРАВДА О ПОДПИСКЕ — ИЗ STRIPE, А НЕ ИЗ СОБЫТИЯ (аудит 03.10).
+/** Календарь подписки: метка `team_id`; без неё — строка, где эта подписка
+ *  уже записана (подписка, перенесённая с аккаунта, метки не несёт); без
+ *  строки — единственный живой календарь аккаунта. Иначе — неизвестно. */
+async function calendarOfSubscription(
+  // deno-lint-ignore no-explicit-any
+  sbs: any,
+  tenantId: string,
+  sub: Stripe.Subscription,
+): Promise<string | null> {
+  const tagged = sub.metadata?.team_id;
+  if (typeof tagged === "string" && tagged) return tagged;
+  const { data: row } = await sbs
+    .from("calendar_subscriptions")
+    .select("team_id")
+    .eq("tenant_id", tenantId)
+    .eq("stripe_subscription_id", sub.id)
+    .maybeSingle();
+  if (typeof row?.team_id === "string") return row.team_id;
+  const { data: teams, error } = await sbs
+    .from("teams")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  if (error) throw new Error(`calendars unreadable: ${error.code ?? "?"}`);
+  return teams?.length === 1 ? (teams[0].id as string) : null;
+}
+
+/** ПРАВДА О ПОДПИСКЕ — ИЗ STRIPE, А НЕ ИЗ СОБЫТИЯ.
  *
  *  Stripe не обещает порядок событий, а повтор после 5xx приходит позже
- *  новых. Раньше событие применялось как есть: старое `updated(active)`
- *  после `deleted` возвращало тариф по отменённой подписке, `deleted` ЛЮБОЙ
- *  подписки клиента обнулял тариф при живой другой. Теперь на каждое
- *  событие подписки или её счёта подписка перечитывается, и применяется
- *  только если это текущая подписка аккаунта (или её нет), либо текущая уже
- *  не живая, а эта — живая и новее. */
-async function subscriptionTruth(
+ *  новых: старое `updated(active)` после `deleted` вернуло бы тариф по
+ *  отменённой подписке. Поэтому на каждое событие подписки или её счёта
+ *  подписка перечитывается и пишется в строку СВОЕГО календаря — только если
+ *  это его текущая подписка (или её нет), либо текущая уже не живая, а эта —
+ *  живая. Подписки разных календарей друг друга не трогают. */
+async function reconcileCalendar(
   event: Stripe.Event,
   stripe: Stripe,
   // deno-lint-ignore no-explicit-any
   sbs: any,
   tenantId: string,
-): Promise<ReconcileFields | null> {
+): Promise<void> {
   const obj = event.data.object as unknown as Record<string, unknown>;
   const subId = event.type.startsWith("customer.subscription.")
     ? (typeof obj.id === "string" ? obj.id : null)
     : idOf(obj.subscription) ??
       idOf((obj.parent as { subscription_details?: { subscription?: unknown } } | undefined)?.subscription_details?.subscription);
-  if (!subId) return null;
-
-  const { data: tenant } = await sbs
-    .from("tenants")
-    .select("stripe_subscription_id")
-    .eq("id", tenantId)
-    .maybeSingle();
-  const current = (tenant?.stripe_subscription_id as string | null | undefined) ?? null;
+  if (!subId) return;
 
   const fresh = await stripe.subscriptions.retrieve(subId);
-  const freshLive = LIVE_STATUSES.has(fresh.status);
-  if (!current || current === subId) return fieldsOfSubscription(fresh);
+  const teamId = await calendarOfSubscription(sbs, tenantId, fresh);
+  if (!teamId) {
+    console.error("stripe webhook: subscription without calendar", { tenant: tenantId, subscription: subId });
+    return;
+  }
 
-  // Событие про ДРУГУЮ подписку, не текущую у аккаунта.
-  if (!freshLive) return null; // чужая мёртвая подписка тариф не трогает
-  let currentSub: Stripe.Subscription | null = null;
-  try {
-    currentSub = await stripe.subscriptions.retrieve(current);
-  } catch {
-    currentSub = null; // текущей в Stripe нет — переходим на живую
+  const { data: row, error: rowError } = await sbs
+    .from("calendar_subscriptions")
+    .select("stripe_subscription_id")
+    .eq("tenant_id", tenantId)
+    .eq("team_id", teamId)
+    .maybeSingle();
+  if (rowError) throw new Error(`calendar subscription unreadable: ${rowError.code ?? "?"}`);
+  const current = (row?.stripe_subscription_id as string | null | undefined) ?? null;
+
+  if (current && current !== subId) {
+    // Событие про ДРУГУЮ подписку этого календаря, не записанную.
+    if (!LIVE_STATUSES.has(fresh.status)) return; // чужая мёртвая подписка тариф не трогает
+    let currentSub: Stripe.Subscription | null = null;
+    try {
+      currentSub = await stripe.subscriptions.retrieve(current);
+    } catch {
+      currentSub = null; // записанной в Stripe нет — переходим на живую
+    }
+    const verdict = duplicateVerdict({ tenantId, teamId, current: currentSub, fresh });
+    switch (verdict.kind) {
+      case "ignore":
+        return;
+      case "cancel":
+        // Тариф остаётся на записанной подписке, вторую снимаем.
+        await refundAndCancelDuplicate(stripe, verdict.subscriptionId, tenantId, current);
+        return;
+      case "alarm":
+        console.error("stripe webhook: two live subscriptions of one calendar, second without tags", {
+          tenant: tenantId,
+          calendar: teamId,
+          current,
+          other: fresh.id,
+        });
+        if (!verdict.adopt) return;
+        break;
+      case "adopt":
+        break;
+    }
   }
-  const verdict = duplicateVerdict({ tenantId, current: currentSub, fresh });
-  switch (verdict.kind) {
-    case "adopt":
-      return fieldsOfSubscription(fresh);
-    case "ignore":
-      return null;
-    case "cancel":
-      // Тариф остаётся на записанной подписке, вторую снимаем.
-      await refundAndCancelDuplicate(stripe, verdict.subscriptionId, tenantId, current);
-      return null;
-    case "alarm":
-      console.error("stripe webhook: two live subscriptions, second without tenant tag", {
-        tenant: tenantId,
-        current,
-        other: fresh.id,
-      });
-      return verdict.adopt ? fieldsOfSubscription(fresh) : null;
-  }
+
+  const { error: upsertError } = await sbs
+    .from("calendar_subscriptions")
+    .upsert(
+      { tenant_id: tenantId, team_id: teamId, ...rowOfSubscription(fresh), updated_at: new Date().toISOString() },
+      { onConflict: "tenant_id,team_id" },
+    );
+  if (upsertError) throw new Error(upsertError.message ?? "calendar subscription upsert failed");
 }
 
-/** ВТОРАЯ ПОДПИСКА ТОГО ЖЕ АККАУНТА — ДВОЙНАЯ ОПЛАТА: возвращаем её первый
+/** ВТОРАЯ ПОДПИСКА ТОГО ЖЕ КАЛЕНДАРЯ — ДВОЙНАЯ ОПЛАТА: возвращаем её первый
  *  платёж и отменяем её сразу, без пересчёта. Человек нажал «Оплатить»
- *  дважды, а не купил два тарифа: подписка одна на аккаунт, и
+ *  дважды, а не купил два тарифа: подписка одна на календарь, и
  *  `tariff-checkout` меняет живую, а не заводит вторую.
  *
  *  ПОРЯДОК — СНАЧАЛА ВОЗВРАТ, ПОТОМ ОТМЕНА. Сбой любого шага — исключение,
@@ -248,61 +292,15 @@ async function refundAndCancelDuplicate(
   });
 }
 
-function computeUpdate(event: Stripe.Event): ReconcileFields | null {
-  switch (event.type) {
-    case "customer.subscription.created":
-    case "customer.subscription.updated": {
-      const sub = event.data.object as Stripe.Subscription;
-      const item = sub.items?.data?.[0];
-      const update: ReconcileFields = {
-        plan: priceToTier(item?.price),
-        subscription_status: mapSubscriptionStatus(sub.status),
-        stripe_subscription_id: sub.id,
-        paid_calendars: item?.quantity ?? null,
-      };
-      const withPeriod = sub as unknown as {
-        current_period_end?: number | null;
-        trial_end?: number | null;
-      };
-      // Новые версии API держат конец периода у позиции подписки.
-      const periodEnd =
-        withPeriod.current_period_end ??
-        (item as unknown as { current_period_end?: number | null } | undefined)?.current_period_end;
-      if (typeof periodEnd === "number") {
-        update.current_period_end = unixToIso(periodEnd);
-      }
-      update.trial_ends_at =
-        typeof withPeriod.trial_end === "number"
-          ? unixToIso(withPeriod.trial_end)
-          : null;
-      return update;
-    }
-    // Оплата тарифа на странице Stripe: запомнить клиента Stripe аккаунта —
-    // по нему находятся события подписки без меток.
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const customer = idOf(session.customer);
-      if (session.mode !== "subscription" || session.metadata?.kind !== "tariff" || !customer) return null;
-      return { stripe_customer_id: customer };
-    }
-    case "customer.subscription.deleted":
-      return {
-        plan: "free",
-        subscription_status: "canceled",
-        stripe_subscription_id: null,
-        trial_ends_at: null,
-        paid_calendars: null,
-      };
-    case "invoice.payment_succeeded":
-      return { subscription_status: "active" };
-    case "invoice.payment_failed":
-      return { subscription_status: "past_due" };
-    case "customer.subscription.trial_will_end":
-      // Notification-only (3 days out). No tenant mutation.
-      return null;
-    default:
-      return null;
-  }
+/** Что событие меняет у АККАУНТА. Оплата на странице Stripe — запомнить
+ *  клиента Stripe аккаунта: по нему находятся события подписки без меток,
+ *  на него же оформляются подписки остальных календарей. */
+function accountUpdate(event: Stripe.Event): AccountFields | null {
+  if (event.type !== "checkout.session.completed") return null;
+  const session = event.data.object as Stripe.Checkout.Session;
+  const customer = idOf(session.customer);
+  if (session.mode !== "subscription" || session.metadata?.kind !== "tariff" || !customer) return null;
+  return { stripe_customer_id: customer };
 }
 
 /** Аккаунт ещё существует. Метка на подписке переживает удаление аккаунта:
@@ -555,13 +553,12 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
   }
 }
 
-/** СВЕРКА ЧИСЛА КАЛЕНДАРЕЙ ПЕРЕД СЧЁТОМ (цена за календарь, 12.10).
- *  Приложение после создания или архива календаря само зовёт
- *  `tariff-checkout` (sync), но из приложения магазина и без сети этот шаг
- *  пропадает. Перед каждым счётом (`invoice.upcoming`) количество в подписке
- *  ставится по живым календарям с работой — без доплаты сегодня; так же
- *  календарь, где появилась первая запись, становится платным. */
-async function syncCalendarsBeforeInvoice(
+/** АРХИВНЫЙ КАЛЕНДАРЬ НЕ ПЛАТИТ СЛЕДУЮЩИЙ ПЕРИОД. Отмену в конце срока
+ *  ставит `tariff-checkout` (sync) сразу после архива, но из приложения без
+ *  сети этот шаг пропадает. Перед каждым счётом (`invoice.upcoming`)
+ *  подписка календаря, которого больше нет среди живых, отменяется — счёт не
+ *  выставится. */
+async function releaseArchivedBeforeInvoice(
   event: Stripe.Event,
   stripe: Stripe,
   // deno-lint-ignore no-explicit-any
@@ -574,23 +571,28 @@ async function syncCalendarsBeforeInvoice(
     idOf(obj.subscription) ??
     idOf((obj.parent as { subscription_details?: { subscription?: unknown } } | undefined)?.subscription_details?.subscription);
   if (!subId) return;
-  const { data: tenant } = await sbs
-    .from("tenants")
-    .select("plan_override, stripe_subscription_id")
-    .eq("id", tenantId)
+  const { data: row, error: rowError } = await sbs
+    .from("calendar_subscriptions")
+    .select("team_id")
+    .eq("tenant_id", tenantId)
+    .eq("stripe_subscription_id", subId)
     .maybeSingle();
-  if (!tenant || tenant.plan_override || tenant.stripe_subscription_id !== subId) return;
-  const sub = await stripe.subscriptions.retrieve(subId);
-  const item = sub.items?.data?.[0];
-  if (!item || !/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return;
-  // Платят календари с работой; не прочли — исключение, 5xx и повтор от
-  // Stripe, а не счёт за один.
-  const live = await paidCalendars(sbs, tenantId);
-  if (item.quantity === live) return;
-  await stripe.subscriptions.update(subId, {
-    items: [{ id: item.id, quantity: live }],
-    proration_behavior: "none",
-  });
+  if (rowError) throw new Error(`calendar subscription unreadable: ${rowError.code ?? "?"}`);
+  if (!row) return;
+  const { data: team, error: teamError } = await sbs
+    .from("teams")
+    .select("is_active")
+    .eq("tenant_id", tenantId)
+    .eq("id", row.team_id)
+    .maybeSingle();
+  // Не прочли — исключение, 5xx и повтор от Stripe, а не отмена живого.
+  if (teamError) throw new Error(`calendar unreadable: ${teamError.code ?? "?"}`);
+  if (team?.is_active === true) return;
+  await stripe.subscriptions.cancel(
+    subId,
+    { prorate: false, invoice_now: false },
+    { idempotencyKey: `babun-archived-cancel-${subId}` },
+  );
 }
 
 Deno.serve(async (req: Request) => {
@@ -678,15 +680,14 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    if (tenantIdHint) await syncCalendarsBeforeInvoice(event, stripe, sbs, tenantIdHint);
     if (tenantIdHint) {
+      await releaseArchivedBeforeInvoice(event, stripe, sbs, tenantIdHint);
       const bySubscription =
         event.type.startsWith("customer.subscription.") && event.type !== "customer.subscription.trial_will_end"
         || event.type === "invoice.payment_succeeded"
         || event.type === "invoice.payment_failed";
-      const update = bySubscription
-        ? await subscriptionTruth(event, stripe, sbs, tenantIdHint)
-        : computeUpdate(event);
+      if (bySubscription) await reconcileCalendar(event, stripe, sbs, tenantIdHint);
+      const update = accountUpdate(event);
       if (update) {
         const { error: updateErr } = await sbs.from("tenants").update(update).eq("id", tenantIdHint);
         if (updateErr) throw new Error(updateErr.message ?? "tenants update failed");

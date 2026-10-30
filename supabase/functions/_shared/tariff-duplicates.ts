@@ -1,11 +1,13 @@
-// ОДНА ПОДПИСКА НА АККАУНТ — правила, общие для `tariff-checkout` (не дать
+// ОДНА ПОДПИСКА НА КАЛЕНДАРЬ — правила, общие для `tariff-checkout` (не дать
 // оформить вторую) и `stripe-webhook` (снять вторую, если всё же прошла).
 //
 // Вторая подписка рождается без злого умысла: две вкладки оплаты, «Назад →
 // Оплатить ещё раз», владелец и партнёр одновременно. Пока вебхук не записал
-// первую оплату в аккаунт, `tariff-checkout` видит «подписки нет» и открывает
-// новую страницу Stripe; оплачены обе — и обе списывают каждый месяц, а в
-// аккаунте видна одна.
+// первую оплату календаря, `tariff-checkout` видит «подписки нет» и
+// открывает новую страницу Stripe; оплачены обе — и обе списывают каждый
+// месяц, а у календаря видна одна. Подписки РАЗНЫХ календарей одного
+// аккаунта — не дубли: клиент Stripe у них общий, различает метка
+// `team_id`.
 //
 // Модуль без импортов и без Deno: его читают и функции, и тесты приложения.
 
@@ -37,12 +39,19 @@ export function liveSubscriptionOf(subs: readonly SubscriptionLite[]): Subscript
   );
 }
 
-/** Открытые страницы оплаты ТАРИФА этого клиента. Новая страница их гасит:
+/** Открытые страницы оплаты ЭТОГО КАЛЕНДАРЯ. Новая страница их гасит:
  *  старая вкладка, оплаченная после новой, завела бы вторую подписку.
- *  Страницы SMS (`mode: payment`) не трогаем — у них своя оплата. */
-export function openTariffSessions(sessions: readonly CheckoutSessionLite[]): string[] {
+ *  Страницы других календарей и SMS (`mode: payment`) не трогаем — у них
+ *  своя оплата. */
+export function openTariffSessions(sessions: readonly CheckoutSessionLite[], teamId: string): string[] {
   return sessions
-    .filter((s) => s.status === "open" && s.mode === "subscription" && s.metadata?.kind === "tariff")
+    .filter(
+      (s) =>
+        s.status === "open" &&
+        s.mode === "subscription" &&
+        s.metadata?.kind === "tariff" &&
+        s.metadata?.team_id === teamId,
+    )
     .map((s) => s.id);
 }
 
@@ -62,8 +71,8 @@ function fingerprint(text: string): string {
  *  бы по старому ключу ту самую страницу, которую сам и погасил. */
 export function checkoutIdempotencyKey(parts: {
   tenantId: string;
+  teamId: string;
   priceId: string;
-  quantity: number;
   trialEnd: number | null;
   returnUrl: string;
   superseded: readonly string[];
@@ -73,8 +82,8 @@ export function checkoutIdempotencyKey(parts: {
   return [
     "babun-tariff",
     parts.tenantId,
+    parts.teamId,
     parts.priceId,
-    String(parts.quantity),
     String(parts.trialEnd ?? 0),
     String(minute),
     fingerprint([...parts.superseded].sort().join(",")),
@@ -83,32 +92,35 @@ export function checkoutIdempotencyKey(parts: {
 }
 
 export type DuplicateVerdict =
-  /** Аккаунт переходит на эту подписку (текущей нет или она не живая). */
+  /** Календарь переходит на эту подписку (текущей нет или она не живая). */
   | { kind: "adopt" }
   /** Событие тариф не трогает. */
   | { kind: "ignore" }
-  /** Вторая живая подписка того же аккаунта: вернуть деньги и отменить. */
+  /** Вторая живая подписка того же календаря: вернуть деньги и отменить. */
   | { kind: "cancel"; subscriptionId: string }
-  /** Две живые, но вторая заведена не нашей оплатой (без метки аккаунта) —
-   *  руками не трогаем, только тревога; аккаунт берёт более новую, как
-   *  раньше. */
+  /** Две живые, но вторая заведена не нашей оплатой этого календаря (без
+   *  меток аккаунта и календаря) — руками не трогаем, только тревога;
+   *  календарь берёт более новую. */
   | { kind: "alarm"; adopt: boolean };
 
-/** Что делать с событием про подписку `fresh`, когда у аккаунта записана
+/** Что делать с событием про подписку `fresh`, когда у календаря записана
  *  ДРУГАЯ подписка `current` (null — её нет в Stripe).
  *
- *  Подписка одна на аккаунт: `tariff-checkout` меняет живую, а не заводит
- *  вторую. Поэтому вторая живая подписка с меткой этого аккаунта — всегда
- *  двойная оплата. Остаётся та, что уже записана: на неё смотрят экран и
- *  сверка календарей. */
+ *  Подписка одна на календарь: `tariff-checkout` меняет живую, а не заводит
+ *  вторую. Поэтому вторая живая подписка с метками этого аккаунта и этого
+ *  календаря — всегда двойная оплата. Остаётся та, что уже записана: на неё
+ *  смотрит экран. */
 export function duplicateVerdict(input: {
   tenantId: string;
+  teamId: string;
   current: SubscriptionLite | null;
   fresh: SubscriptionLite;
 }): DuplicateVerdict {
-  const { tenantId, current, fresh } = input;
+  const { tenantId, teamId, current, fresh } = input;
   if (!LIVE_TARIFF_STATUSES.has(fresh.status)) return { kind: "ignore" };
   if (!current || !LIVE_TARIFF_STATUSES.has(current.status)) return { kind: "adopt" };
-  if (fresh.metadata?.tenant_id === tenantId) return { kind: "cancel", subscriptionId: fresh.id };
+  if (fresh.metadata?.tenant_id === tenantId && fresh.metadata?.team_id === teamId) {
+    return { kind: "cancel", subscriptionId: fresh.id };
+  }
   return { kind: "alarm", adopt: fresh.created > current.created };
 }

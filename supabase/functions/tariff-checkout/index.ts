@@ -1,47 +1,47 @@
-// tariff-checkout — ОПЛАТА ЗА КАЛЕНДАРИ НА СТРАНИЦЕ STRIPE (владелец 12.10:
-// «цена за календарь», €9.99 в месяц / €7.99 при оплате за год; люди
-// бесплатно). Оплата — не через Apple, а в браузере.
+// tariff-checkout — ОПЛАТА КАЛЕНДАРЯ НА СТРАНИЦЕ STRIPE: €9,99 в месяц или
+// €7,99 в месяц при оплате за год; люди бесплатно. Оплата — не через Apple,
+// а в браузере.
 //
-// Подписка одна на аккаунт: одна цена «календарь», количество — живые
-// календари аккаунта, в которых есть работа (запись, операция, SMS);
-// календарь только с событиями бесплатен. Добавили или убрали календарь — количество меняется со
-// следующего платежа (`proration_behavior: none`): действие "sync" после
-// создания/архива и сверка вебхуком перед счётом (`invoice.upcoming`).
-// Старые клиенты шлют `tier` solo/pro/max — любой означает «календари».
+// ПОДПИСКА — У КАЛЕНДАРЯ. Каждый календарь платит своей подпиской (одна
+// цена «календарь», количество 1), поэтому один можно оплатить, а другой нет.
+// Клиент Stripe один на аккаунт: карта и «Управление подпиской» общие на все
+// его календари. Какая подписка у какого календаря — `calendar_subscriptions`
+// (пишет вебхук по метке `metadata.team_id`).
 //
-// Что умеет (поле `action`):
-//   • "checkout" (по умолчанию) — подписка на выбранный тариф. Подписки ещё
-//     нет — открывает Stripe Checkout и отдаёт адрес. Подписка уже есть —
-//     меняет в ней тариф (пересчёт за остаток периода делает Stripe) и
-//     отвечает `{ changed: true }`. Идёт свой пробный период — списание
-//     начнётся в его последний день, а не сегодня: 14 дней — без оплаты.
-//   • "sync" — количество календарей в живой подписке = живым календарям.
+// Что умеет (поле `action`, календарь — `team_id`):
+//   • "checkout" (по умолчанию) — оплата календаря. Подписки у календаря ещё
+//     нет — открывает Stripe Checkout и отдаёт адрес. Есть — меняет её период
+//     (месяц ↔ год) и отвечает `{ changed: true }`. Идёт пробный аккаунта —
+//     списание начнётся в его последний день, а не сегодня.
+//   • "sync" — подписки следом за календарями: календарь ушёл в архив или
+//     удалён — его подписка отменяется в конце оплаченного срока; вернули из
+//     архива до конца срока — отмена снимается (только та, что поставили мы
+//     по архиву, а не та, что владелец сделал сам). Без `team_id` — все
+//     календари аккаунта.
 //   • "portal" — страница Stripe «Управление подпиской»: карта, счета,
 //     отмена. Её нужно один раз включить в Stripe (Settings → Billing →
 //     Customer portal); пока не включена — отвечаем `portal_not_configured`.
 //
 // Тариф на нашей стороне меняет НЕ эта функция, а вебхук `stripe-webhook`
-// по событиям подписки (`customer.subscription.*`): цена несёт метку
-// (`metadata.tier` = max, `lookup_key` babun_calendar_<period>), количество —
-// `paid_calendars`. Цены заводятся здесь сами при первой оплате — в Stripe
-// руками ничего создавать не нужно. Людей не считаем: партнёры бесплатно.
+// по событиям подписки (`customer.subscription.*`). Цены заводятся здесь
+// сами при первой оплате — в Stripe руками ничего создавать не нужно.
 //
 // Кто зовёт: владелец аккаунта (JWT + `x-babun-tenant`); аккаунт и роль
 // отвечает сама база (`current_tenant_id`, `current_user_role`). Партнёр с
-// правом «Тариф: Оплачивает» (`cabinet.tariff`, владелец 04.10) только
-// оформляет и оплачивает тариф, пока подписки нет: сменить тариф в живой
-// подписке и открыть «Управление подпиской» — списания с карты владельца —
-// может лишь сам владелец. Имя аккаунта стоит на странице оплаты.
+// правом «Тариф: Оплачивает» (`cabinet.tariff`) только оформляет оплату
+// календаря, у которого подписки нет: сменить период живой подписки и
+// открыть «Управление подпиской» — списания с карты владельца — может лишь
+// сам владелец. Имя календаря и аккаунта стоит на странице оплаты.
 // Секреты: STRIPE_SECRET_KEY (заводит владелец) и служебный ключ проекта.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { keyFromEnv, serviceClient } from "../_shared/service-client.ts";
 import { json as jsonResponse } from "../_shared/http.ts";
-import { paidCalendars } from "../_shared/paid-calendars.ts";
 import {
   checkoutIdempotencyKey,
   liveSubscriptionOf,
   openTariffSessions,
+  LIVE_TARIFF_STATUSES,
   type CheckoutSessionLite,
   type SubscriptionLite,
 } from "../_shared/tariff-duplicates.ts";
@@ -186,14 +186,15 @@ Deno.serve(async (request: Request) => {
   try {
     body = await request.json();
   } catch {
-    // пустое тело — ниже отказ по тарифу
+    // пустое тело — ниже отказ по календарю
   }
   const action = body.action === "portal" ? "portal" : body.action === "sync" ? "sync" : "checkout";
   const back = safeReturn(body.return_url);
+  const teamId = typeof body.team_id === "string" && body.team_id ? body.team_id : null;
 
   const { data: tenant, error: tenantError } = await service
     .from("tenants")
-    .select("id, name, stripe_customer_id, stripe_subscription_id, subscription_status, plan_override, trial_tier, trial_ends_at")
+    .select("id, name, stripe_customer_id, plan_override, trial_tier, trial_ends_at")
     .eq("id", tenantId)
     .maybeSingle();
   if (tenantError || !tenant) return json(404, { error: "tenant_not_found" });
@@ -216,58 +217,86 @@ Deno.serve(async (request: Request) => {
       }
     }
 
-    const live = ["active", "trialing", "past_due"].includes(String(tenant.subscription_status ?? ""));
-    // Платят только календари с работой (`_shared/paid-calendars.ts`).
-    const liveNow = await paidCalendars(service, tenantId);
-    // Предложение «Новый календарь» платит и за тот, что заводят: живые + 1,
-    // не больше (12.10). Сверка «sync» ставит ровно живые.
-    const asked = Number(body.calendars);
-    const quantity =
-      action === "checkout" && Number.isFinite(asked) && asked > liveNow ? Math.min(asked, liveNow + 1) : liveNow;
-
-    // СВЕРКА КОЛИЧЕСТВА: календарь добавили или убрали — подписка следом,
-    // со следующего платежа (владелец 12.10), без доплаты сегодня.
+    // ПОДПИСКИ СЛЕДОМ ЗА КАЛЕНДАРЯМИ. Архивный или удалённый календарь не
+    // должен платить следующий период: его подписка отменяется в конце
+    // оплаченного — без возврата и без доплаты. Метка `cancelled_by=archive`
+    // отличает нашу отмену от отмены владельцем в «Управлении подпиской»:
+    // вернули календарь — снимаем только свою.
     if (action === "sync") {
-      if (tenant.plan_override || !live || !tenant.stripe_subscription_id) return json(200, { synced: false });
-      const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
-      const item = (sub.items as { data?: { id: string; quantity?: number; price?: { lookup_key?: string | null } }[] } | undefined)?.data?.[0];
-      if (!item) return json(409, { error: "subscription_without_items" });
-      // Количество — только у цены «за календарь». Старая подписка Соло · Про ·
-      // Макс стоит фиксированно: её количество, поднятое до числа календарей,
-      // умножило бы плоскую цену (тот же сторож, что у вебхука).
-      if (!/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return json(200, { synced: false });
-      if (item.quantity === quantity) return json(200, { synced: true, quantity });
-      await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
-        "items[0][id]": item.id,
-        "items[0][quantity]": String(quantity),
-        proration_behavior: "none",
-      });
-      return json(200, { synced: true, quantity });
+      let rowsQuery = service
+        .from("calendar_subscriptions")
+        .select("team_id, stripe_subscription_id, status")
+        .eq("tenant_id", tenantId)
+        .in("status", [...LIVE_TARIFF_STATUSES]);
+      if (teamId) rowsQuery = rowsQuery.eq("team_id", teamId);
+      const [{ data: rows, error: rowsError }, { data: teams, error: teamsError }] = await Promise.all([
+        rowsQuery,
+        service.from("teams").select("id, is_active").eq("tenant_id", tenantId),
+      ]);
+      if (rowsError || teamsError) throw new Error("sync: calendars unreadable");
+      const active = new Set((teams ?? []).filter((t) => t.is_active !== false).map((t) => t.id as string));
+      let changed = 0;
+      for (const row of rows ?? []) {
+        const subId = row.stripe_subscription_id as string;
+        const sub = await stripe(stripeKey, "GET", `subscriptions/${subId}`);
+        const archived = !active.has(row.team_id as string);
+        const ours = (sub.metadata as Record<string, string> | undefined)?.cancelled_by === "archive";
+        if (archived && sub.cancel_at_period_end !== true) {
+          await stripe(stripeKey, "POST", `subscriptions/${subId}`, {
+            cancel_at_period_end: "true",
+            "metadata[cancelled_by]": "archive",
+          });
+          changed += 1;
+        } else if (!archived && sub.cancel_at_period_end === true && ours) {
+          await stripe(stripeKey, "POST", `subscriptions/${subId}`, {
+            cancel_at_period_end: "false",
+            "metadata[cancelled_by]": "",
+          });
+          changed += 1;
+        }
+      }
+      return json(200, { synced: true, changed });
     }
 
-    // Период называет страница «Тариф» (месяц или год). Без него — у живой
-    // подписки её же период: «Новый календарь» не знает, как платят, и без
-    // этого перевёл бы годовую подписку на помесячную цену.
-    const chosen: Period | null = body.period === "year" ? "year" : body.period === "month" ? "month" : null;
+    if (!teamId) return json(400, { error: "team_required" });
     if (tenant.plan_override) return json(409, { error: "forever" });
+    const { data: team } = await service
+      .from("teams")
+      .select("id, name, is_active")
+      .eq("tenant_id", tenantId)
+      .eq("id", teamId)
+      .maybeSingle();
+    if (!team || team.is_active === false) return json(404, { error: "calendar_not_found" });
 
-    // ПОДПИСКА УЖЕ ЕСТЬ — ПЕРЕВОДИМ ЕЁ НА ЦЕНУ ЗА КАЛЕНДАРЬ И ЧИСЛО
-    // КАЛЕНДАРЕЙ, А НЕ ЗАВОДИМ ВТОРУЮ (старые подписки Соло · Про · Макс).
-    if (live && tenant.stripe_subscription_id) {
+    // Период называет страница тарифа (месяц или год). Без него — у живой
+    // подписки её же период: годовая не превращается в помесячную.
+    const chosen: Period | null = body.period === "year" ? "year" : body.period === "month" ? "month" : null;
+
+    const { data: row } = await service
+      .from("calendar_subscriptions")
+      .select("stripe_subscription_id, status")
+      .eq("tenant_id", tenantId)
+      .eq("team_id", teamId)
+      .maybeSingle();
+
+    // ПОДПИСКА У КАЛЕНДАРЯ УЖЕ ЕСТЬ — МЕНЯЕМ ЕЁ ПЕРИОД, А НЕ ЗАВОДИМ ВТОРУЮ.
+    if (row && LIVE_TARIFF_STATUSES.has(String(row.status))) {
       // Смена в живой подписке меняет списания с карты владельца.
       if (!owner) return json(409, { error: "owner_only_change" });
-      const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
+      const subId = row.stripe_subscription_id as string;
+      const sub = await stripe(stripeKey, "GET", `subscriptions/${subId}`);
       const item = (sub.items as {
         data?: { id: string; quantity?: number; price?: { id?: string; recurring?: { interval?: string } | null } }[];
       } | undefined)?.data?.[0];
       if (!item) return json(409, { error: "subscription_without_items" });
       const period: Period = chosen ?? (item.price?.recurring?.interval === "year" ? "year" : "month");
       const priceId = await priceFor(stripeKey, period);
-      if (item.price?.id === priceId && item.quantity === quantity) return json(200, { changed: false });
-      await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
+      if (item.price?.id === priceId && item.quantity === 1) return json(200, { changed: false });
+      await stripe(stripeKey, "POST", `subscriptions/${subId}`, {
         "items[0][id]": item.id,
         "items[0][price]": priceId,
-        "items[0][quantity]": String(quantity),
+        "items[0][quantity]": "1",
+        "metadata[team_id]": teamId,
         proration_behavior: "none",
       });
       return json(200, { changed: true });
@@ -283,20 +312,21 @@ Deno.serve(async (request: Request) => {
       if (typeof smsCustomer === "string" && smsCustomer) customer = smsCustomer;
     }
     if (customer) {
-      // ВТОРОЙ ПОДПИСКИ НЕ БЫВАЕТ. «Подписки нет» здесь — слово аккаунта, а
-      // его пишет вебхук: между оплатой и событием Stripe проходят секунды, и
-      // второе «Оплатить» в это окно оформило бы вторую подписку. Правда — в
-      // Stripe: живая подписка уже есть — оплата прошла, тариф вот-вот
-      // придёт (ответ тот же, что у смены тарифа: приложение перечитает
-      // аккаунт). Подписок у клиента единицы — хватает одной страницы.
-      const subs = await stripe(stripeKey, "GET", "subscriptions", { customer, status: "all", limit: "20" });
-      if (liveSubscriptionOf((subs.data as SubscriptionLite[] | undefined) ?? [])) {
-        return json(200, { changed: true });
-      }
-      // Старая открытая страница оплаты, оплаченная после новой, тоже завела
-      // бы вторую подписку — гасим её до того, как открыть новую.
-      const open = await stripe(stripeKey, "GET", "checkout/sessions", { customer, status: "open", limit: "20" });
-      for (const id of openTariffSessions((open.data as CheckoutSessionLite[] | undefined) ?? [])) {
+      // ВТОРОЙ ПОДПИСКИ У КАЛЕНДАРЯ НЕ БЫВАЕТ. «Подписки нет» здесь — слово
+      // базы, а его пишет вебхук: между оплатой и событием Stripe проходят
+      // секунды, и второе «Оплатить» в это окно оформило бы вторую подписку.
+      // Правда — в Stripe: живая подписка с меткой этого календаря уже есть —
+      // оплата прошла, тариф вот-вот придёт.
+      const subs = await stripe(stripeKey, "GET", "subscriptions", { customer, status: "all", limit: "100" });
+      const ofCalendar = ((subs.data as SubscriptionLite[] | undefined) ?? []).filter(
+        (s) => s.metadata?.team_id === teamId,
+      );
+      if (liveSubscriptionOf(ofCalendar)) return json(200, { changed: true });
+      // Старая открытая страница оплаты этого календаря, оплаченная после
+      // новой, тоже завела бы вторую подписку — гасим её до того, как открыть
+      // новую. Страницы других календарей не трогаем.
+      const open = await stripe(stripeKey, "GET", "checkout/sessions", { customer, status: "open", limit: "100" });
+      for (const id of openTariffSessions((open.data as CheckoutSessionLite[] | undefined) ?? [], teamId)) {
         superseded.push(id);
         try {
           await stripe(stripeKey, "POST", `checkout/sessions/${id}/expire`);
@@ -322,23 +352,28 @@ Deno.serve(async (request: Request) => {
       await service.from("tenants").update({ stripe_customer_id: customer }).eq("id", tenantId);
     }
 
+    const calendarName = String(team.name ?? "").trim() || "Календарь";
+    const accountName = String(tenant.name ?? "").trim() || "Babun";
     const form: Record<string, string> = {
       mode: "subscription",
       customer,
       "line_items[0][price]": priceId,
-      "line_items[0][quantity]": String(quantity),
+      "line_items[0][quantity]": "1",
       client_reference_id: tenantId,
       "metadata[kind]": "tariff",
       "metadata[tenant_id]": tenantId,
+      "metadata[team_id]": teamId,
       "metadata[tier]": PAID_TIER,
       "subscription_data[metadata][tenant_id]": tenantId,
+      "subscription_data[metadata][team_id]": teamId,
       "subscription_data[metadata][tier]": PAID_TIER,
+      "subscription_data[description]": `Календарь «${calendarName}»`,
       success_url: `${back}?tariff=paid`,
       cancel_url: `${back}?tariff=cancelled`,
-      // За какой аккаунт платят — прямо на странице оплаты (04.10).
-      "custom_text[submit][message]": `Календари аккаунта «${String(tenant.name ?? "").trim() || "Babun"}»`,
+      // За какой календарь и какой аккаунт платят — прямо на странице оплаты.
+      "custom_text[submit][message]": `Календарь «${calendarName}» · ${accountName}`,
     };
-    // Идёт свой пробный — списание с его последнего дня (Stripe требует
+    // Идёт пробный аккаунта — списание с его последнего дня (Stripe требует
     // запас не меньше двух суток; ближе к концу — платим сразу).
     const trialEnd = tenant.trial_ends_at ? Date.parse(String(tenant.trial_ends_at)) : NaN;
     if (tenant.trial_tier && Number.isFinite(trialEnd) && trialEnd - Date.now() > 49 * 3600 * 1000) {
@@ -348,8 +383,8 @@ Deno.serve(async (request: Request) => {
     // проверки выше вместе — ключ идемпотентности отдаёт им одну страницу.
     const idempotencyKey = checkoutIdempotencyKey({
       tenantId,
+      teamId,
       priceId,
-      quantity,
       trialEnd: form["subscription_data[trial_end]"] ? Number(form["subscription_data[trial_end]"]) : null,
       returnUrl: back,
       superseded,
