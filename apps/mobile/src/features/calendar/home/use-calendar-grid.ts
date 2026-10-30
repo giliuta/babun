@@ -19,7 +19,7 @@ import {
 } from "@/features/reference/team-schedule";
 import type { BookingServiceRef } from "@/features/appointments/booking-selection";
 import { SETTLED_STAYS, placementRefusal, placementTeam, settledVisit } from "./appointment-rules";
-import { sheetBandResolver, workBandResolver } from "./work-band";
+import { workBandResolver } from "./work-band";
 import type { CalendarClock } from "./use-calendar-clock";
 import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarScope } from "./use-calendar-scope";
@@ -75,22 +75,6 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
   // а объект globalWork пересобирается на каждый рендер.
   const workStartMin = globalWork.start * 60;
   const workEndMin = globalWork.end * 60;
-
-  // Рабочая полоса дня для листа записи — тот же резолвер и фолбэк, что
-  // красят серый wash сетки (DayColumn): подсветка «вне рабочих часов» в
-  // колесе никогда не противоречит серому на сетке. Поэтому без явных
-  // рабочих часов (нет ни графика команды, ни настройки) сигнала НЕТ —
-  // сетка в этом случае wash не рисует, и колесо не должно гадать
-  // дефолтами 6–22 из globalWork.
-  const sheetBandFor = useMemo(
-    () =>
-      sheetBandResolver(
-        workBandFor,
-        calSettings?.workStartHour,
-        calSettings?.workEndHour,
-      ),
-    [workBandFor, calSettings?.workStartHour, calSettings?.workEndHour],
-  );
 
   // Видимое окно: «Часы календаря» из настроек, а при «Автоматически» —
   // ВЫВОДИТСЯ из рабочих часов просматриваемых дней; в обоих режимах
@@ -242,7 +226,7 @@ export function useCalendarGrid(deps: UseCalendarGridDeps) {
 
   return {
     bufferMinutes, teamScheduleQuery, teamSchedule, upsertSchedule, workBandFor,
-    globalWork, sheetBandFor, visStartHour, visEndHour, scrollToHour, moveWindowMin,
+    globalWork, visStartHour, visEndHour, scrollToHour, moveWindowMin,
     freeSlotsFor, moveLimit,
   };
 }

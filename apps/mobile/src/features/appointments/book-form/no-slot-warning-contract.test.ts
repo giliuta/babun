@@ -48,3 +48,28 @@ test("ни один файл записи не пишет слов прежни�
     for (const w of words) assert.ok(!src.includes(`"${w}`) && !src.includes(`\`${w}`), `${f}: «${w}»`);
   }
 });
+
+test("«Оплата» не просит «…изменена — сохраните»: скажет тост на тап", () => {
+  const caption = read("../payment-draft/caption.ts");
+  assert.doesNotMatch(caption, /— сохраните/);
+  assert.doesNotMatch(caption, /billUnsaved|clientUnsaved|slotUnsaved/);
+  const actions = read("../payment-block/payment-actions.ts");
+  assert.match(actions, /сначала сохраните запись/, "тап по плитке по-прежнему объясняет");
+});
+
+test("лист нового слота — ровный барабан, без янтаря и подписи", () => {
+  const sheet = read("../../calendar/BookSlotSheet.tsx");
+  assert.doesNotMatch(sheet, /t\.warning|activeColor|offStateAt|captionFor|bandFor/);
+  assert.doesNotMatch(sheet, /["`](Вне рабочих часов|Попадает на перерыв)/);
+});
+
+test("тап по сетке и перенос — без вопросов и предупреждений", () => {
+  const place = read("../../calendar/home/slot-placement.ts");
+  assert.doesNotMatch(place, /setNotice|Это время уже прошло|captionFor/);
+  assert.match(place, /setSlotDraft\(\{ date: dateYmd, time: timeStart \}\);/);
+  assert.equal(existsSync(resolve(here, "../../calendar/home/use-slot-notice.ts")), false);
+  assert.equal(existsSync(resolve(here, "../../calendar/CalendarNotice.tsx")), false);
+  const move = read("../../calendar/home/reschedule.ts");
+  assert.doesNotMatch(move, /findOverlap|findBufferClash|scheduleWarning|Пересечение с/);
+  assert.match(move, /toast\(\[what, sms\]\.filter\(Boolean\)\.join\("\. "\), "success",/);
+});

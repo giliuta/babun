@@ -39,37 +39,3 @@ export function workBandResolver(
     };
   };
 }
-
-/** Band for the booking sheet: the team band, else the explicit global work
- *  hours, else no signal at all. */
-export function sheetBandResolver(
-  workBandFor: WorkBandFor | undefined,
-  workStartHour: number | null | undefined,
-  workEndHour: number | null | undefined,
-): WorkBandFor {
-  return (ymd: string): WorkBand | null | undefined => {
-    const band = workBandFor?.(ymd);
-    // null (выходной) проходит как есть; undefined → настройка часов.
-    if (band !== undefined) return band;
-    const ws = workStartHour;
-    const we = workEndHour;
-    if (ws == null || we == null) return undefined;
-    return { startMin: ws * 60, endMin: we * 60 };
-  };
-}
-
-/** Soft warning for a record placed at [startMin, endMin) on a day with this
- *  band: day off, a break, or outside working hours. */
-export function scheduleWarning(
-  band: WorkBand | null | undefined,
-  startMin: number,
-  endMin: number,
-): string | null {
-  return band === null
-    ? "Нерабочий день команды"
-    : band?.breaks?.some((b) => startMin < b.endMin && endMin > b.startMin)
-      ? "Попадает на перерыв"
-      : band && (startMin < band.startMin || endMin > band.endMin)
-        ? "Вне рабочих часов"
-        : null;
-}
