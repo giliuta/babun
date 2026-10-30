@@ -86,16 +86,15 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "finance.settings_categories_income",
   "finance.settings_categories_expense",
   "finance.settings_categories_debts",
+  "finance.settings_requisites",
   "finance.settings_currency",
 ];
 
-/** Права «Кабинета» — строкой блока аккаунта в Кабинете партнёра.
- *  «Реквизиты» — здесь же: их строка живёт в Кабинете. */
+/** Права «Кабинета» — строкой блока аккаунта в Кабинете партнёра. */
 export const CABINET_PREVIEW_KEYS: readonly string[] = [
   "cabinet.tariff",
   "cabinet.tariff_payments",
   "cabinet.sms",
-  "finance.settings_requisites",
   "cabinet.history",
   "company.partners",
 ];

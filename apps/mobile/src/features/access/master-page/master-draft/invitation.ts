@@ -92,7 +92,7 @@ export function draftFromInvitation(row: Readonly<Record<string, unknown>>): Mas
   };
 }
 
-/** Ждущее приглашение открывается по `/cabinet/people/invite-<uuid>`.
+/** Ждущее приглашение открывается по `/calendar/partners/invite-<uuid>`.
  *  Двоеточие в сегменте ломает разбор диплинка, поэтому дефис; проверка
  *  строгая, чтобы id карточки мастера не приняли за приглашение. */
 const INVITE_SEGMENT = /^invite-([0-9a-f-]{36})$/;

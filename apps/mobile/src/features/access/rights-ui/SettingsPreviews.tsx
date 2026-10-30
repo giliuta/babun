@@ -1,4 +1,5 @@
 import {
+  Building2,
   Banknote,
   Briefcase,
   HandCoins,
@@ -213,6 +214,10 @@ export function SettingsPreview({
       case "finance.settings_categories_debts":
         return (
           <SettingsRow tile={SETTINGS_TILE.yellow} icon={NotebookPen} title="Долги" sub="Пока нет" onPress={onPress} />
+        );
+      case "finance.settings_requisites":
+        return (
+          <SettingsRow tile={SETTINGS_TILE.green} icon={Building2} title="Реквизиты" sub="Основные · INV-2026-0001" onPress={onPress} />
         );
       case "finance.settings_currency":
         return (

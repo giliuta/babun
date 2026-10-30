@@ -150,7 +150,7 @@ function MasterDraftCard({
 
   const openArea = (area: string) =>
     router.push(
-      `/cabinet/people/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
+      `/calendar/partners/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
     );
   // Лента команд и «Доступ» — как у сотрудника.
   const access = useDraftTeamAccess({
@@ -158,7 +158,7 @@ function MasterDraftCard({
     draft,
     teams,
     initialTeam: teamId,
-    rightsHref: `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
+    rightsHref: `/calendar/partners/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
     onAdd: () => setCalendarsOpen(true),
     onApplyRole: (role, team, part) =>
       blocks && updateMasterDraft((currentDraft) => draftWithRole(currentDraft, blocks, role, team, part)),
@@ -206,7 +206,7 @@ function MasterDraftCard({
         closeMasterDraft();
         // Не «назад», а сразу карточка приглашения: владелец видит то, что
         // только что отправил, и может поправить до ответа.
-        router.replace(`/cabinet/people/${invitationSegment(saved.id)}` as Href);
+        router.replace(`/calendar/partners/${invitationSegment(saved.id)}` as Href);
       },
       onError: (error) => {
         toast(invitationRefusalText(error), "error");

@@ -76,7 +76,7 @@ export function MasterWorkBlock({
         sub={received > 0 ? `${workLine(work)} · получено ${formatEUR(received)}` : workLine(work)}
         onPress={() =>
           router.push(
-            `/cabinet/people/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
+            `/calendar/partners/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
           )
         }
       />

@@ -1,4 +1,4 @@
-import { BadgeCheck, Building2, History, MessageSquare, Receipt, UserCog } from "lucide-react-native";
+import { BadgeCheck, History, MessageSquare, Receipt, UserCog } from "lucide-react-native";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
@@ -37,19 +37,16 @@ export function CabinetPreview({ blockKey, level }: { blockKey: string; level: A
     switch (blockKey) {
       case "cabinet.tariff":
         return (
-          <SettingsRow tile={SETTINGS_TILE.blue} icon={BadgeCheck} title="Тариф" sub={CAN_PAY_HERE ? "Про · оплачен до 12.11" : "Про"} onPress={onPress} />
+          // Строка — та, что у партнёра в шестерёнке вашего календаря.
+          <SettingsRow tile={SETTINGS_TILE.blue} icon={BadgeCheck} title="Тариф" sub="Оплачен до 12.11" onPress={onPress} />
         );
       case "cabinet.tariff_payments":
         return (
-          <SettingsRow tile={SETTINGS_TILE.blue} icon={Receipt} title="Оплаты тарифа" sub={CAN_PAY_HERE ? "12 окт · €29,99" : undefined} onPress={onPress} />
+          <SettingsRow tile={SETTINGS_TILE.blue} icon={Receipt} title="Оплаты" sub="Чеки этого календаря" onPress={onPress} />
         );
       case "cabinet.sms":
         return (
           <SettingsRow tile={SETTINGS_TILE.green} icon={MessageSquare} title="SMS" value="€14,20" onPress={onPress} />
-        );
-      case "finance.settings_requisites":
-        return (
-          <SettingsRow tile={SETTINGS_TILE.green} icon={Building2} title="Реквизиты" sub="1 набор" onPress={onPress} />
         );
       case "cabinet.history":
         return (
@@ -79,7 +76,7 @@ export function CabinetPreview({ blockKey, level }: { blockKey: string; level: A
       ? "Так он пополняет — кнопкой с именем вашего аккаунта"
       : state === "write" && blockKey === "company.partners"
         ? "Так он ведёт партнёров вашего аккаунта — не выше своих прав"
-      : state === "read" && (blockKey === "cabinet.history" || blockKey === "finance.settings_requisites" || blockKey === "company.partners")
+      : state === "read" && (blockKey === "cabinet.history" || blockKey === "company.partners")
         ? "Так он видит в блоке вашего аккаунта"
         : CAPTION[state];
   return (

@@ -32,7 +32,7 @@ export function useDraftTeamAccess({
   draft: MasterDraft;
   teams: readonly Team[];
   initialTeam: string | null;
-  /** Адрес страницы прав без фокуса: `/cabinet/people/new/rights?team=…`. */
+  /** Адрес страницы прав без фокуса: `/calendar/partners/new/rights?team=…`. */
   rightsHref: string;
   /** «Добавить» справа от ленты — шторка команд. */
   onAdd: () => void;

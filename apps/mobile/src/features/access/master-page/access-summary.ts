@@ -135,18 +135,17 @@ const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
       "finance.settings_categories_debts",
     ],
   },
-  // «Реквизиты» ушли из шестерёнки в Кабинет — их право теперь в
-  // разделе «Кабинет» (`CABINET_ROW_ORDER`).
+  // «Реквизиты» — у каждого календаря: от чьего имени он выставляет документы.
+  { key: "documents", title: "Документы", keys: ["finance.settings_requisites"] },
   { key: "general", title: "Общие", keys: ["finance.settings_currency"] },
 ];
 
-/** РАЗДЕЛ «КАБИНЕТ» (доступ к реквизитам, тарифу, SMS, оплате): права аккаунта в порядке строк Кабинета.
+/** РАЗДЕЛ «КАБИНЕТ» (доступ к тарифу, SMS, оплате, истории): права аккаунта в порядке строк Кабинета.
  *  Право, которого нет в списке, встаёт после них. */
 const CABINET_ROW_ORDER: readonly string[] = [
   "cabinet.tariff",
   "cabinet.tariff_payments",
   "cabinet.sms",
-  "finance.settings_requisites",
   "cabinet.history",
   "company.partners",
 ];

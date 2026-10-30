@@ -70,12 +70,12 @@ describe("приглашение по карточке без аккаунта",
 
 describe("одна дверь на человека", () => {
   test("карточка с аккаунтом уводит на страницу сотрудника", () => {
-    const route = read("../../../../app/(dashboard)/cabinet/people/[id]/index.tsx");
+    const route = read("../../../../app/(dashboard)/(home)/calendar/partners/[id]/index.tsx");
     assert.match(route, /if \(card\?\.user_id\) \{/);
     assert.match(route, /<Redirect/);
     assert.doesNotMatch(route, /MasterHubScreen/);
-    const list = read("../../../../app/(dashboard)/cabinet/people/index.tsx");
-    assert.match(list, /item\.master\.user_id\s*\?\s*`\/cabinet\/people\/access\//);
+    const list = read("../../../../app/(dashboard)/(home)/calendar/partners/index.tsx");
+    assert.match(list, /item\.master\.user_id\s*\?\s*`\/calendar\/partners\/access\//);
   });
   test("у каждой команды своя строка прав, а в «Компании» — только компания", () => {
     const view = read("MasterCardView.tsx");

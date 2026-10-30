@@ -165,7 +165,7 @@ export function OperationPickers({
           payee.items.length > 0
             ? undefined
             : isOwner && teamId
-              ? "Партнёров нет — пригласите в «Кабинет → Партнёры»"
+              ? "Партнёров нет — пригласите в шестерёнке календаря → «Партнёры»"
               : "Партнёров нет"
         }
         items={payee.items.map((m) => ({
@@ -185,7 +185,7 @@ export function OperationPickers({
             ? () =>
                 doorway.open(() =>
                   router.push(
-                    "/cabinet/people" as Href,
+                    `/calendar/partners?team=${encodeURIComponent(teamId)}` as Href,
                   ),
                 )
             : undefined

@@ -43,8 +43,8 @@ const REGISTRY: AccessBlock[] = [
   block("finance.accounts", ["off", "read", "write"], 120),
   block("finance.debts", ["off", "read", "write"], 130),
   block("finance.documents", ["off", "read", "write"], 140),
-  // «Реквизиты» — право аккаунта (как в базе): на странице команды его нет.
-  { ...block("finance.settings_requisites", ["off", "read"], 165), scope: "company" },
+  // «Реквизиты» — право календаря (как в базе): строка шестерёнки «Финансов».
+  block("finance.settings_requisites", ["off", "read"], 165),
   block("finance.settings_accounts", ["off", "read", "write"], 160),
   block("finance.settings_trash", ["off", "read", "write"], 161),
   block("finance.settings_categories_income", ["off", "read", "write"], 162),
@@ -144,18 +144,18 @@ describe("страница раздела доступа — блоками вл
           "finance.settings_categories_debts",
         ],
       },
-      // «Реквизиты» — в разделе «Кабинет», не в шестерёнке.
+      // «Реквизиты» — у каждого календаря, блоком «Документы» шестерёнки.
+      { title: "Документы", keys: ["finance.settings_requisites"] },
     ]);
   });
 
-  test("право шестерёнки на весь аккаунт — в «Настройках финансов» команды; «Реквизиты» — в «Кабинете» (04.10)", () => {
+  test("право шестерёнки на весь аккаунт — в «Настройках финансов» команды; «Реквизиты» — у команды", () => {
     const company = (key: string, position: number): AccessBlock => ({
       ...block(key, ["off", "read"], position),
       scope: "company",
     });
     const blocks = [
-      ...REGISTRY.filter((b) => b.key !== "finance.settings_requisites"),
-      company("finance.settings_requisites", 165),
+      ...REGISTRY,
       company("finance.settings_currency", 166),
       { ...block("company.services", ["off", "read"], 200), area: "company", scope: "company" } as AccessBlock,
     ];
@@ -183,6 +183,7 @@ describe("страница раздела доступа — блоками вл
             ["finance.settings_categories_debts", "off"],
           ],
         ],
+        ["Документы", [["finance.settings_requisites", "off"]]],
         // Положение аккаунта — без команды, а не «закрыто» в команде.
         ["Общие", [["finance.settings_currency", "read"]]],
       ],
@@ -195,25 +196,23 @@ describe("страница раздела доступа — блоками вл
       onlyCompany: false,
       withCompany: true,
     }).find((section) => section.key === "company");
-    // «Кабинет»: строки Кабинета по порядку, прочее — после них.
+    // «Кабинет»: права аккаунта; «Реквизитов» там больше нет.
     assert.equal(card?.title, "Кабинет");
-    assert.deepEqual(card?.rows.map((row) => row.block.key), ["finance.settings_requisites", "company.services"]);
-    // Страница «Кабинета» — одной карточкой, вместе с «Реквизитами» из финансов.
+    assert.deepEqual(card?.rows.map((row) => row.block.key), ["company.services"]);
     const cabinet = viewSections({ blocks, levelOf, activeId: "team-1", onlyCalendar: false, onlyCompany: true, area: "company" });
     assert.deepEqual(
       cabinet.map((section) => [section.title, section.rows.map((row) => row.block.key)]),
-      [["", ["finance.settings_requisites", "company.services"]]],
+      [["", ["company.services"]]],
     );
   });
 
-  test("«Кабинет» — тариф, оплаты, SMS, реквизиты в порядке строк Кабинета (04.10)", () => {
+  test("«Кабинет» — тариф, оплаты, SMS в порядке строк Кабинета", () => {
     const account = (key: string, area: AccessBlock["area"], position: number, levels: AccessLevel[]): AccessBlock => ({
       ...block(key, levels, position),
       area,
       scope: "company",
     });
     const blocks = [
-      account("finance.settings_requisites", "finance", 156, ["off", "read"]),
       account("cabinet.sms", "company", 373, ["off", "read", "write"]),
       account("cabinet.tariff", "company", 371, ["off", "read", "write"]),
       account("cabinet.tariff_payments", "company", 372, ["off", "read"]),
@@ -226,7 +225,7 @@ describe("страница раздела доступа — блоками вл
       onlyCompany: true,
     });
     assert.deepEqual(sections.map((section) => section.rows.map((row) => row.block.key)), [
-      ["cabinet.tariff", "cabinet.tariff_payments", "cabinet.sms", "finance.settings_requisites"],
+      ["cabinet.tariff", "cabinet.tariff_payments", "cabinet.sms"],
     ]);
   });
 });

@@ -98,7 +98,7 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
       teamIds,
     });
     router.push(
-      `/cabinet/people/new?team=${encodeURIComponent(teamIds[0] ?? "")}&card=${encodeURIComponent(card.id)}` as Href,
+      `/calendar/partners/new?team=${encodeURIComponent(teamIds[0] ?? "")}&card=${encodeURIComponent(card.id)}` as Href,
     );
   };
 
@@ -191,7 +191,7 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
               state: "pending",
               sub: pending.email,
               onPress: () =>
-                router.push(`/cabinet/people/${invitationSegment(pending.id)}` as Href),
+                router.push(`/calendar/partners/${invitationSegment(pending.id)}` as Href),
             }
           : { state: "none", onPress: invite }
       }

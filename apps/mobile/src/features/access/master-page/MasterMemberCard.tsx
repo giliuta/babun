@@ -297,7 +297,7 @@ export function MasterMemberCard({
         // строках календарей.
         onOpenArea={(area) =>
           router.push(
-            `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? "")}&rights=1&area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
+            `/calendar/partners/access/${userId}?team=${encodeURIComponent(teamId ?? "")}&rights=1&area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
           )
         }
         // У КАЖДОГО КАЛЕНДАРЯ СВОИ ПРАВА: строка календаря
@@ -307,7 +307,7 @@ export function MasterMemberCard({
         onMirror={manager.canPreview ? () => preview({ blocks, draft, name, userId }) : undefined}
         onOpenCalendarRights={(id) =>
           router.push(
-            `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+            `/calendar/partners/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
           )
         }
         onDetachCalendar={manager.readOnly ? undefined : (id) => void toggleCalendar(id)}
@@ -356,7 +356,7 @@ export function MasterMemberCard({
                   ? rightsFocusQuery({ kind: "calendar", teamId: activeId, group })
                   : rightsFocusQuery({ kind: "company" });
               router.push(
-                `/cabinet/people/access/${userId}?team=${encodeURIComponent(activeId ?? teamId ?? "")}&rights=1&${focus}` as Href,
+                `/calendar/partners/access/${userId}?team=${encodeURIComponent(activeId ?? teamId ?? "")}&rights=1&${focus}` as Href,
               );
             }}
           />

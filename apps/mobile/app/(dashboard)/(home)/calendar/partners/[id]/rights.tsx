@@ -1,0 +1,61 @@
+import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+
+import { MasterRightsPage } from "@/features/access/master-page/MasterRightsPage";
+import { invitationIdFromSegment } from "@/features/access/master-page/master-draft";
+import { rightsFocusOf } from "@/features/access/master-page/rights-focus";
+
+// «ПРАВА» — СТРАНИЦА ВНУТРИ МАСТЕРА. `new` — черновик нового мастера,
+// `invite-<uuid>` — приглашение без ответа. У старой карточки без аккаунта
+// прав нет: права ставятся человеку, а не карточке, — адрес ведёт на её хаб.
+// Права сотрудника открываются из его карточки (`access/[userId]?rights=1`).
+
+const first = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
+export default function MasterRightsRoute() {
+  const params = useLocalSearchParams<{
+    id: string;
+    team?: string | string[];
+    area?: string | string[];
+    calendar?: string | string[];
+    scope?: string | string[];
+    /** Раздел доступа — страница только его прав (как у сотрудника). */
+    group?: string | string[];
+  }>();
+  const router = useRouter();
+  const team = first(params.team);
+  const area = first(params.area);
+  const invitationId = invitationIdFromSegment(params.id);
+  // Права ОДНОГО календаря или только компании — как у сотрудника (STORY-087).
+  const focus = rightsFocusOf(first(params.calendar), first(params.scope), first(params.group));
+
+  const back = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    const home =
+      params.id === "new"
+        ? team
+          ? `/calendar/partners/new?team=${encodeURIComponent(team)}`
+          : "/calendar/partners"
+        : `/calendar/partners/${params.id}`;
+    router.replace(home as Href);
+  };
+
+  if (params.id === "new") {
+    return <MasterRightsPage mode="draft" area={area} focus={focus} onBack={back} />;
+  }
+  if (invitationId) {
+    return (
+      <MasterRightsPage
+        mode="invite"
+        invitationId={invitationId}
+        area={area}
+        focus={focus}
+        onBack={back}
+      />
+    );
+  }
+  return <Redirect href={`/calendar/partners/${params.id}` as Href} />;
+}

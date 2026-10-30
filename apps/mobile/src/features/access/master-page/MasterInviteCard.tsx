@@ -114,7 +114,7 @@ export function MasterInviteCard({
     draft: draft ?? blankMasterDraft(null),
     teams: teams ?? [],
     initialTeam: null,
-    rightsHref: `/cabinet/people/${invitationSegment(invitationId)}/rights`,
+    rightsHref: `/calendar/partners/${invitationSegment(invitationId)}/rights`,
     onAdd: () => {
       if (draft) setSheetTeamIds(draft.teamIds);
     },
@@ -288,7 +288,7 @@ export function MasterInviteCard({
         teamRights={access.teamRights}
         onOpenArea={(area) =>
           router.push(
-            `/cabinet/people/${invitationSegment(row.id)}/rights?area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
+            `/calendar/partners/${invitationSegment(row.id)}/rights?area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
           )
         }
         footer={<GradientButton label="Отправить ещё раз" onPress={() => void share()} />}

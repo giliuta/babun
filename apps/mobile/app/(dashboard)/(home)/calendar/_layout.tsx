@@ -2,6 +2,8 @@ import { Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import { useThemeColors } from "@/theme/colors";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useTeamSettingLevel } from "@/session/team-setting-level";
+import { usePartnersAccess } from "@/session/use-partner-manager";
+import { MirrorReturnRetry } from "@/features/access/mirror/MirrorReturnRetry";
 
 // Настройки календаря. Живут ВНУТРИ вкладки «Календарь» (app/(dashboard)/
 // (home)), поэтому таб-бар остаётся на месте, а вкладка помнит, на какой
@@ -44,13 +46,18 @@ export default function CalendarSettingsLayout() {
   const teamParam = Array.isArray(params.team) ? params.team[0] : params.team;
   const pageBlock = TEAM_PAGE_BLOCK[pathname.replace(/\/$/, "")] ?? null;
   const pageLevel = useTeamSettingLevel(pageBlock ?? "", teamParam ?? null);
+  const partners = usePartnersAccess();
   const stack = (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: t.canvas },
-      }}
-    />
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: t.canvas },
+        }}
+      />
+      {/* Выход из «его глазами» возвращает на страницу прав партнёра. */}
+      <MirrorReturnRetry />
+    </>
   );
   const isIndex = pathname === "/calendar" || pathname === "/calendar/";
   if (isIndex) return stack;
@@ -58,6 +65,12 @@ export default function CalendarSettingsLayout() {
   // право удалять в календаре, а не «настройки календаря». Дверь-строку видит
   // только тот, кто может удалять; что внутри показать, решает RLS ящика.
   if (pathname.replace(/\/$/, "") === "/calendar/deleted") return stack;
+  // ТАРИФ И ОПЛАТЫ КАЛЕНДАРЯ — тоже не настройка, а деньги: их право —
+  // «Тариф» и «Оплаты тарифа», и что показать, страницы решают сами.
+  if (/^\/calendar\/tariff(-payments)?$/.test(pathname.replace(/\/$/, ""))) return stack;
+  // ПАРТНЁРЫ КАЛЕНДАРЯ — по праву «Партнёры» (владелец и директор): это люди
+  // и их права, а не настройки календаря.
+  if (/^\/calendar\/partners(\/|$)/.test(pathname) && partners.sees) return stack;
   // Без команды в адресе ступень не спросить — такую ссылку ведёт общее
   // правило (владельцу открыто всё).
   if (pageBlock && teamParam && pageLevel !== "hidden") return stack;
