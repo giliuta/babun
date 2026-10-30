@@ -170,46 +170,6 @@ describe("деньги блока считаются по итогу ФОРМЫ"
     assert.deepEqual(paymentMath(null, 0), { outstanding: 0, overpaid: 0 });
   });
 
-  test("пока итог не сохранён, строка просит сохранить, а не объявляет оплату", () => {
-    // Деньги принимает сервер, а он считает долг по СВОЕЙ строке: платёж на
-    // ещё не сохранённый остаток он отобьёт «По заявке нечего оплачивать».
-    const caption = blockCaption({
-      hasTeam: true,
-      hasAppointment: true,
-      visitCompleted: true,
-      outstanding: 12000,
-      rowsCount: 1,
-      amountMode: false,
-      started: true,
-      hasPending: false,
-      outstandingLabel: "€120,00",
-      billUnsaved: true,
-    });
-    assert.deepEqual(caption, {
-      text: "Итог изменён — сохраните",
-      tone: "warning",
-    });
-  });
-
-  test("клиент сменён и не сохранён — сначала сохранить (аудит 03.10)", () => {
-    const caption = blockCaption({
-      hasTeam: true,
-      hasAppointment: true,
-      visitCompleted: false,
-      outstanding: 13500,
-      rowsCount: 0,
-      amountMode: false,
-      started: false,
-      hasPending: false,
-      outstandingLabel: "€135,00",
-      clientUnsaved: true,
-    });
-    assert.deepEqual(caption, {
-      text: "Клиент изменён — сохраните",
-      tone: "warning",
-    });
-  });
-
   test("отменённый визит — не долг: «Визит отменён» (аудит 03.10)", () => {
     const caption = blockCaption({
       hasTeam: true,
@@ -237,7 +197,6 @@ describe("деньги блока считаются по итогу ФОРМЫ"
       started: true,
       hasPending: false,
       outstandingLabel: "€120,00",
-      billUnsaved: false,
     });
     assert.deepEqual(caption, { text: "Долг €120,00", tone: "warning" });
   });
@@ -413,18 +372,5 @@ describe("дата и время формы против сохранённых"
   test("сменили дату или время — сначала сохранить", () => {
     assert.equal(slotUnsaved({ date: "2026-10-05", time_start: "10:00" }, { date: "2026-10-04", timeStart: "08:00" }), "date");
     assert.equal(slotUnsaved({ date: "2026-10-04", time_start: "10:00" }, { date: "2026-10-04", timeStart: "08:00" }), "time");
-    const base = {
-      hasTeam: true,
-      hasAppointment: true,
-      visitCompleted: false,
-      outstanding: 5000,
-      rowsCount: 0,
-      amountMode: false,
-      started: false,
-      hasPending: false,
-      outstandingLabel: "€50,00",
-    };
-    assert.deepEqual(blockCaption({ ...base, slotUnsaved: "date" }), { text: "Дата изменена — сохраните", tone: "warning" });
-    assert.deepEqual(blockCaption({ ...base, slotUnsaved: "time" }), { text: "Время изменено — сохраните", tone: "warning" });
   });
 });

@@ -1,5 +1,4 @@
 import { CalendarClock, CalendarRange, Globe, ZoomIn } from "lucide-react-native";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SettingsGroup } from "@/components/ui/SettingsGroup";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -9,6 +8,7 @@ import { zoneCities } from "@/features/calendar/zone-label";
 import { CalendarIdentityCard } from "./CalendarIdentityCard";
 import { TourTarget } from "@/components/tour/TourTarget";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
+import { useTeamName } from "@/session/team-name";
 
 const WHOLE_DAY = "Весь день на экране";
 
@@ -18,22 +18,28 @@ type Team = NonNullable<CalendarSettingsState["team"]>;
  *  zoom, team schedule. */
 export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsState; team: Team }) {
   const { rows, patchTeam, timezone, setPicker, window, zoomPct, schedText, setScheduleOpen } = screen;
+  // Имя календаря — правилом показа, как чип ленты (`useTeamName`).
+  const teamName = useTeamName();
   return (
     <>
-      {rows.renameEdit ? (
-        <CalendarIdentityCard
-          key={team.id}
-          team={team}
-          onPatch={patchTeam}
-        />
-      ) : rows.rename ? (
-        // «Название и цвет: Только видит» — имя с цветом, без правки.
-        <SectionCard>
-          <TourTarget id="settings.name">
-            <SettingsRow appearance={{ color: team.color }} title={team.name} sub="Название и цвет" />
-          </TourTarget>
-        </SectionCard>
-      ) : null}
+      {/* ИМЯ И ЦВЕТ — ГРУППА «КАЛЕНДАРЬ», как все группы шестерёнки. */}
+      <SettingsGroup
+        title="Календарь"
+        rows={[
+          rows.renameEdit ? (
+            <CalendarIdentityCard
+              key={team.id}
+              team={team}
+              onPatch={patchTeam}
+            />
+          ) : rows.rename ? (
+            // «Название и цвет: Только видит» — имя с цветом, без правки.
+            <TourTarget key="name" id="settings.name">
+              <SettingsRow appearance={{ color: team.color }} title={teamName(team.name)} sub="Название и цвет" />
+            </TourTarget>
+          ) : null,
+        ]}
+      />
       {/* ЧАСОВОЙ ПОЯС — СРАЗУ ПОД ИМЕНЕМ КАЛЕНДАРЯ. Он задаёт, что для этого
           бизнеса значит «сегодня»: от него считаются границы дня в календаре,
           в финансах и в отчётах. Остальные настройки экрана живут ВНУТРИ
@@ -44,6 +50,7 @@ export function CalendarTeamRows({ screen, team }: { screen: CalendarSettingsSta
           часы сетки и график команды — один вопрос «когда», и каждая строка
           своей плашкой разрывала его на три. */}
       <SettingsGroup
+        title="Время"
         rows={[
       rows.timezone ? (
           <TourTarget key="timezone" id="settings.timezone">

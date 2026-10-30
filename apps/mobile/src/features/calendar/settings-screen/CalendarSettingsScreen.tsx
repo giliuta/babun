@@ -1,10 +1,8 @@
 import { useRef } from "react";
-import { ScrollView, Text } from "react-native";
+import { ScrollView } from "react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useThemeColors } from "@/theme/colors";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 import { CalendarChipsBar } from "./CalendarChipsBar";
 import { CalendarExitRows } from "./CalendarExitRows";
@@ -30,7 +28,6 @@ import { CalendarAccountRows } from "./CalendarAccountRows";
 // (возвращал в календарь вместо настроек). Управление командой живёт в
 // Кабинет → Команды — там ему и место, а этот экран про календарь.
 export function CalendarSettingsScreen() {
-  const t = useThemeColors();
   const screen = useCalendarSettingsScreen();
   const { settingsQuery, teams, teamsLoading, savedTick, team, rows, canLeave } = screen;
   // Обучение докручивает к строке, которую объясняет.
@@ -40,7 +37,7 @@ export function CalendarSettingsScreen() {
   if (teamsLoading || settingsQuery.isLoading) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="Календарь" />
+        <ScreenHeader title="Настройки календаря" />
         <EmptyState state="loading" fill />
       </Screen>
     );
@@ -49,7 +46,7 @@ export function CalendarSettingsScreen() {
   if (settingsQuery.isError) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="Календарь" />
+        <ScreenHeader title="Настройки календаря" />
         <EmptyState
           state="error"
           fill
@@ -71,7 +68,8 @@ export function CalendarSettingsScreen() {
     <Screen edges={["top"]}>
       {/* Шов под шапкой один — его несёт лента чипов. */}
       <ScreenHeader
-        title="Календарь"
+        // Шапка — «Настройки …», как у шестерёнок клиентов и финансов.
+        title="Настройки календаря"
         // Шов несёт лента чипов, но при нуле календарей она не рисуется —
         // тогда линию берёт на себя шапка, иначе она висит в воздухе.
         seam={teams.length === 0}
@@ -99,22 +97,9 @@ export function CalendarSettingsScreen() {
 
           <CalendarExitRows screen={screen} />
 
-          {teams.length === 0 ? (
-            <SectionCard>
-              <Text
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  fontSize: 15,
-                  color: t.faint,
-                }}
-              >
-                {rows.addCalendar
-                  ? "Календарей пока нет — создайте первый на вкладке «Календарь»."
-                  : "Календарей пока нет."}
-              </Text>
-            </SectionCard>
-          ) : null}
+          {/* Календарей нет — общее пустое состояние, одной строкой (канон
+              пустых): дверь «Добавить» стоит в ленте над ним. */}
+          {teams.length === 0 ? <EmptyState title="Календарей пока нет" /> : null}
         </ScrollView>
         </TourScrollProvider>
       ) : (

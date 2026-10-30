@@ -1,46 +1,44 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { birthdayText, personCardView } from "./person-card";
 
+const here = dirname(fileURLToPath(import.meta.url));
+
 describe("карта человека в Кабинете", () => {
-  test("имя, компания и факты: почта, номер, день рождения", () => {
+  test("имя, под ним почта и номер — без компании, дня рождения и инициалов", () => {
     assert.deepEqual(
-      personCardView(
-        {
-          email: "artem@example.com",
-          user_metadata: {
-            full_name: "  артём гилюта ",
-            phone: "+35799123456",
-            birthday: "1990-03-12",
-          },
+      personCardView({
+        email: "artem@example.com",
+        user_metadata: {
+          full_name: "  артём гилюта ",
+          phone: "+35799123456",
+          birthday: "1990-03-12",
         },
-        "AirFix",
-      ),
+      }),
       {
         title: "артём гилюта",
-        company: "AirFix",
-        facts: [
+        lines: [
           { kind: "email", text: "artem@example.com" },
           { kind: "phone", text: "+357 99 123 456" },
-          { kind: "birthday", text: "12 марта 1990" },
         ],
-        initials: "АГ",
       },
     );
   });
 
-  test("компания с тем же именем, что и человек, второй раз не печатается", () => {
-    const view = personCardView(
-      { email: "a@b.cy", user_metadata: { full_name: "Giliuta" } },
-      " giliuta ",
+  test("номера нет — только почта", () => {
+    assert.deepEqual(
+      personCardView({ email: "a@b.cy", user_metadata: { full_name: "Giliuta" } }).lines,
+      [{ kind: "email", text: "a@b.cy" }],
     );
-    assert.equal(view.company, null);
   });
 
   test("без имени на его месте почта, и второй раз она не печатается", () => {
     assert.deepEqual(
       personCardView({ email: "airfix.cy@gmail.com", user_metadata: {} }),
-      { title: "airfix.cy@gmail.com", company: null, facts: [], initials: "A" },
+      { title: "airfix.cy@gmail.com", lines: [] },
     );
   });
 
@@ -50,33 +48,26 @@ describe("карта человека в Кабинете", () => {
       user_metadata: { full_name: "   ", phone: "+357 99 000000" },
     });
     assert.equal(view.title, "a@b.cy");
-    assert.deepEqual(view.facts, [{ kind: "phone", text: "+357 99 000 000" }]);
+    assert.deepEqual(view.lines, [{ kind: "phone", text: "+357 99 000 000" }]);
   });
 
   test("не строки в метаданных не печатаются", () => {
     const view = personCardView({
       email: "a@b.cy",
-      user_metadata: { full_name: 42, phone: { e164: "+357" }, birthday: 19900312 },
+      user_metadata: { full_name: 42, phone: { e164: "+357" } },
     });
     assert.equal(view.title, "a@b.cy");
-    assert.deepEqual(view.facts, []);
+    assert.deepEqual(view.lines, []);
   });
 
   test("сессии ещё нет — нейтральная карта, а не падение", () => {
-    assert.deepEqual(personCardView(null), {
-      title: "Аккаунт",
-      company: null,
-      facts: [],
-      initials: "А",
-    });
+    assert.deepEqual(personCardView(null), { title: "Аккаунт", lines: [] });
   });
 
-  test("однословное имя даёт одну букву", () => {
-    assert.equal(
-      personCardView({ email: "x@y.cy", user_metadata: { full_name: "Янис" } })
-        .initials,
-      "Я",
-    );
+  test("карта без кругляша, витрины и строки компании", () => {
+    const source = readFileSync(resolve(here, "./PersonCard.tsx"), "utf8");
+    assert.doesNotMatch(source, /initials|LinearGradient|useOwnAccountName/);
+    assert.match(source, /<SectionCard>/);
   });
 
   test("день рождения: кривая и несуществующая дата не печатаются", () => {

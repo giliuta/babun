@@ -23,7 +23,6 @@ import type { CalendarUiState } from "./use-calendar-ui-state";
 import type { CalendarView } from "./use-calendar-view";
 import type { GridModes } from "./use-grid-modes";
 import type { RecordNaming } from "./use-record-naming";
-import type { SlotNotice } from "./use-slot-notice";
 
 type UseRecordActionsDeps =
   Pick<CalendarScope, "activeActions" | "activeTeamId">
@@ -34,8 +33,7 @@ type UseRecordActionsDeps =
   & Pick<RecordNaming, "clientName" | "appointmentTimeZone">
   & Pick<GridModes, "setMoving" | "setEditingApt" | "placedFromRef" | "setPick"
     | "setMovingKind">
-  & Pick<CalendarView, "mode" | "setMode" | "rememberView" | "setDay">
-  & Pick<SlotNotice, "setNotice">;
+  & Pick<CalendarView, "mode" | "setMode" | "rememberView" | "setDay">;
 
 /** What a tap or a menu item does to one record: open, book, cancel,
  *  restore, delete, start a move or copy, set a reminder. */
@@ -44,7 +42,7 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
     activeActions, canManageBookings, isCrew, toast, roleQuery, pushBookOnce,
     activeTeamId, appts,
     clientName, setMoving, setEditingApt, mode, setMode, rememberView, setDay,
-    placedFromRef, setPick, setNotice, setMovingKind, reminderFor, setReminderFor,
+    placedFromRef, setPick, setMovingKind, reminderFor, setReminderFor,
     appointmentTimeZone, tenantId,
   } = deps;
   const createAppt = useCreateAppointment();
@@ -130,7 +128,6 @@ export function useRecordActions(deps: UseRecordActionsDeps) {
   const startMove = (apt: Appointment, kind: "move" | "copy" = "move") => {
     placedFromRef.current = null;
     setPick(null);
-    setNotice(null);
     setMovingKind(kind);
     setEditingApt(null);
     setMoving(apt);

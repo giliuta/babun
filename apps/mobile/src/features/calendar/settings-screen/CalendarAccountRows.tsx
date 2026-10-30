@@ -11,6 +11,7 @@ export function CalendarAccountRows({ teamId }: { teamId: string }) {
   const partners = usePartnersAccess().sees;
   return (
     <SettingsGroup
+      title="Тариф и партнёры"
       rows={[
         seesTariff ? <TariffRow key="tariff" teamId={teamId} /> : null,
         partners ? <CalendarPartnersRow key="partners" teamId={teamId} /> : null,

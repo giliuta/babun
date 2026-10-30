@@ -4,10 +4,11 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { AlertTriangle, ChevronRight } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 import { humanDayMaybeYear } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { durationLabel } from "@/lib/service-format";
@@ -43,6 +44,7 @@ export function TotalRow({
   onPress?: () => void;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   const note =
     discountAmount > 0
       ? `Скидка −${formatEURExact(discountAmount)}`
@@ -59,7 +61,7 @@ export function TotalRow({
         onPress ? "Открывает услуги, количество и скидку" : undefined
       }
       style={({ pressed }) => ({
-        minHeight: 56,
+        minHeight: densePage ? 40 : 56,
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
@@ -103,7 +105,6 @@ export function WhenRow({
   timeEnd,
   duration,
   allDay,
-  warning,
   onPress,
   until,
   dateLabel,
@@ -125,14 +126,14 @@ export function WhenRow({
   timeEnd?: string;
   duration?: number;
   allDay?: boolean;
-  warning?: string | null;
   /** Нет — та же плашка, только для чтения: время записи человеку не
    *  меняется (STORY-084, одна страница записи для всех). */
   onPress?: () => void;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   return (
-    <View className="mx-4 mt-2">
+    <View className={`mx-4 ${densePage ? "mt-1" : "mt-2"}`}>
       <Card style={{ flexDirection: "row", alignItems: "stretch" }}>
         {/* У ВРЕМЕНИ НЕТ СВОЕГО ЦВЕТА. Цветной
             корешок называет ЧЕЙ выезд; час дня ничей, и полоска рядом с ним
@@ -145,7 +146,7 @@ export function WhenRow({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            paddingVertical: 10,
+            paddingVertical: densePage ? 5 : 10,
             paddingHorizontal: 12,
             backgroundColor: pressed && onPress ? t.pressed : "transparent",
           })}
@@ -264,30 +265,6 @@ export function WhenRow({
         </Pressable>
       </Card>
 
-      {warning ? (
-        <View
-          className="mt-2 flex-row items-center gap-2 rounded-[10px] px-3 py-2.5"
-          style={{
-            backgroundColor: `${t.warning}14`,
-            borderWidth: 1,
-            borderColor: `${t.warning}33`,
-          }}
-          accessibilityLiveRegion="assertive"
-          accessibilityRole="alert"
-        >
-          <AlertTriangle color={t.warning} size={ICON.sm} />
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "500",
-              color: t.warning,
-              flex: 1,
-            }}
-          >
-            {warning}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }

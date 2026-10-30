@@ -23,6 +23,7 @@ import {
   useSetBookingEnabled,
   useSetBookingService,
 } from "./online-booking-settings";
+import { useTeamName } from "@/session/team-name";
 
 // «ОНЛАЙН-ЗАПИСЬ» КАЛЕНДАРЯ — за шестерёнкой календаря (`?team=`, как
 // «Услуги» и «SMS»). Сверху выключатель, ссылка и её замена, ниже — какие услуги видны
@@ -37,6 +38,9 @@ import {
 // три функции базы сами проверяют владельца компании этого календаря.
 
 export function OnlineBookingSettingsScreen() {
+  // Имя команды — правилом показа: команда, названная почтой, не печатается
+  // адресом (`useTeamName`, как чипы ленты над шестерёнкой).
+  const teamName = useTeamName();
   const t = useThemeColors();
   const params = useLocalSearchParams<{ team?: string }>();
   const { data: teams = [] } = useTeams();
@@ -69,7 +73,7 @@ export function OnlineBookingSettingsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Онлайн-запись" subtitle={team?.name} />
+      <ScreenHeader title="Онлайн-запись" subtitle={team ? teamName(team.name) : undefined} />
 
       {settings.isLoading ? (
         <EmptyState state="loading" fill />

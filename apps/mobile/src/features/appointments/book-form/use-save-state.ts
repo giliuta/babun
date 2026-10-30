@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { AccessibilityInfo } from "react-native";
 import type { Service } from "@/features/services/queries";
 import type { Master, Team } from "@/features/reference/queries";
@@ -24,13 +24,9 @@ interface SaveStateInput {
   bookingBusy: boolean;
   workInPlan: boolean;
   archivedRecord: boolean;
-  hydrated: boolean;
-  /** Найденное пересечение: его жанр называет предупреждение. */
-  overlap: { kind?: string | null } | null;
-  timeWarning: string | null;
 }
 
-/** Can the form be saved, why not, and the slot warning worth saying aloud. */
+/** Can the form be saved and why not. */
 export function useSaveState({
   kind,
   isEdit,
@@ -49,9 +45,6 @@ export function useSaveState({
   bookingBusy,
   workInPlan,
   archivedRecord,
-  hydrated,
-  overlap,
-  timeWarning,
 }: SaveStateInput) {
   const hasValidTeam =
     teamId != null && teams.some((candidate) => candidate.id === teamId);
@@ -91,50 +84,19 @@ export function useSaveState({
     archivedRecord,
   });
 
-  // accessibilityLiveRegion — Android-only. На iOS-приложении причина под CTA,
-  // предупреждение докета и ошибки оплаты озвучиваем сами, иначе весь
-  // динамический фид-бек нем для VoiceOver. Объявляем при СМЕНЕ текста.
-  // ОДНО ПРЕДУПРЕЖДЕНИЕ НА ОДНУ ДОРОГУ. Про нерабочее время уже
-  // сказала плашка над календарём — там же человек и ответил на неё кнопкой
-  // «Записать». Повторять это в форме значит спорить с его собственным
-  // решением, принятым десять секунд назад.
+  // accessibilityLiveRegion — Android-only. На iOS причину под CTA озвучиваем
+  // сами, иначе она нема для VoiceOver. Объявляем при СМЕНЕ текста.
   //
-  // Но молчать совсем нельзя: время правят и ЗДЕСЬ. Поэтому график команды
-  // подаёт голос ровно тогда, когда дату или время сдвинули внутри формы, —
-  // это уже НОВЫЙ выбор, о котором никто не предупреждал. Пересечение с
-  // другой записью не гасится никогда: о нём в календаре не говорили вовсе.
-  // Снимок — только ПОСЛЕ загрузки записи: сохранённую открывают одним
-  // `appointmentId`, и до гидрации форма стоит на «сегодня, 10:00». Снятый
-  // тогда, он объявлял время записи «сдвинутым», и «Вне графика» загоралось
-  // на записи, которую никто не трогал.
-  const openedAtRef = useRef<{ date: string; time: string } | null>(null);
-  if (openedAtRef.current === null && hydrated && date && timeStart) {
-    openedAtRef.current = { date, time: timeStart };
-  }
-  const timeMovedHere =
-    openedAtRef.current != null &&
-    (openedAtRef.current.date !== date || openedAtRef.current.time !== timeStart);
-  // ОДНО ПРЕДУПРЕЖДЕНИЕ НА ОБА ЖАНРА: считается от
-  // КОМАНДЫ, а не от «записи». Слово про пересечение называет, с чем именно
-  // столкнулись — у события это может быть и запись клиента, и другое
-  // событие той же команды.
-  const workWarning =
-    overlap != null
-      ? overlap.kind === "event"
-        ? "Пересекается с событием этой команды"
-        : "Пересекается с работой этой команды"
-      : timeMovedHere
-        ? timeWarning
-        : null;
+  // ПРЕДУПРЕЖДЕНИЙ О ВРЕМЕНИ В ФОРМЕ НЕТ. «Пересекается с работой», «Вне
+  // графика», «Нерабочий день», «Меньше N мин на дорогу» висели жёлтой
+  // плашкой под временем: человек и так видит календарь, в котором ставит
+  // запись, а постоянная плашка режет глаз (владелец). Что не так — скажет
+  // сервер тостом сверху при сохранении.
   useEffect(() => {
     if (!canSave && !bookingBusy && !referencesPending) {
       AccessibilityInfo.announceForAccessibility(missingHint);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- объявляем только новую подсказку, а не каждую смену флагов
   }, [missingHint]);
-  useEffect(() => {
-    if (workWarning) AccessibilityInfo.announceForAccessibility(workWarning);
-  }, [workWarning]);
-
-  return { canSave, workLocked, missingHint, workWarning };
+  return { canSave, workLocked, missingHint };
 }

@@ -1,8 +1,4 @@
 import type { Appointment } from "@babun/shared/local/appointments";
-import {
-  findBufferClash,
-  findOverlap,
-} from "@babun/shared/common/utils/appointment-overlap";
 import { haptics } from "@/lib/haptics";
 import { humanDay, parseYMD } from "@/features/appointments/helpers";
 import {
@@ -15,8 +11,6 @@ import { SERVICES_HOLD_TEAM, SETTLED_STAYS, settledVisit } from "./appointment-r
 import { servicesBlockTeamMove } from "@/features/appointments/booking-selection";
 import { startOfDay } from "./dates";
 import { settleGate } from "./settle-gate";
-import { scheduleWarning } from "./work-band";
-import type { CalendarGrid } from "./use-calendar-grid";
 import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarSources } from "./use-calendar-sources";
 import type { CalendarView } from "./use-calendar-view";
@@ -27,8 +21,7 @@ import type { VisibleAppointments } from "./use-visible-appointments";
 type CreateRescheduleDeps =
   Pick<CalendarRights, "isCrew" | "workInPlanFor" | "nudgeTariff" | "canMoveAppointment">
   & Pick<CalendarSources, "toast" | "updateAppt" | "teams" | "visibilityTenantId" | "servicesQuery">
-  & Pick<VisibleAppointments, "visibleAppts" | "weekYmds">
-  & Pick<CalendarGrid, "workBandFor" | "bufferMinutes">
+  & Pick<VisibleAppointments, "weekYmds">
   & Pick<CalendarView, "mode" | "setDay">
   & Pick<GridModes, "editingApt" | "setEditingApt">
   & Pick<RecordNaming, "appointmentTimeZone">
@@ -38,11 +31,11 @@ type CreateRescheduleDeps =
   };
 
 /** Drag and stretch on the grid: move a record in time, across days or to
- *  another own team, warn softly and offer an undo. */
+ *  another own team, and offer an undo. */
 export function createReschedule(deps: CreateRescheduleDeps) {
   const {
-    isCrew, toast, workInPlanFor, nudgeTariff, canMoveAppointment, visibleAppts,
-    workBandFor, bufferMinutes, mode, weekYmds, setDay, editingApt, setEditingApt,
+    isCrew, toast, workInPlanFor, nudgeTariff, canMoveAppointment,
+    mode, weekYmds, setDay, editingApt, setEditingApt,
     updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery, smsOnMove,
   } = deps;
   const reschedule = (
@@ -108,8 +101,9 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       toast("Повтор события — измените исходную запись");
       return;
     }
-    // Дабл-букинг команды — предупреждаем, но НЕ блокируем (web parity:
-    // findOverlap перед записью; диспетчер иногда ставит внахлёст сознательно).
+    // НАКЛАДКА, НЕРАБОЧИЙ ЧАС И БУФЕР НЕ ПРЕДУПРЕЖДАЮТСЯ: перенос ставит
+    // запись сразу, человек видит сетку, в которую её кладёт. Отказ сервера —
+    // тостом ниже.
     const moved = {
       ...apt,
       date,
@@ -117,25 +111,6 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       time_start: newStart,
       time_end: newEnd,
     };
-    const clash = findOverlap(moved, visibleAppts);
-    // Перерыв / нерабочие часы команды — то же «предупредить, не блокировать»:
-    // диспетчер иногда сознательно ставит до открытия или в обед.
-    const toMin = (s: string) => {
-      const [h, m] = s.split(":").map(Number);
-      return h * 60 + m;
-    };
-    const startMin = toMin(newStart);
-    const endMin = toMin(newEnd);
-    const bandWarn = scheduleWarning(workBandFor?.(date), startMin, endMin);
-    // Буфер на дорогу/уборку — самый слабый из трёх сигналов, поэтому
-    // последним: пересечение и нерабочие часы важнее.
-    const tight = findBufferClash(moved, visibleAppts, bufferMinutes);
-    const warn = clash
-      ? `Пересечение с ${clash.time_start}–${clash.time_end}`
-      : (bandWarn ??
-        (tight
-          ? `Меньше ${bufferMinutes} мин до ${tight.time_start}–${tight.time_end}`
-          : null));
     const patch = {
       time_start: newStart,
       time_end: newEnd,
@@ -195,7 +170,7 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       ...(dateMoves ? { date: apt.date } : {}),
       ...(teamMoves ? { team_id: apt.team_id } : {}),
     };
-    toast([what, sms, warn].filter(Boolean).join(". "), "success", {
+    toast([what, sms].filter(Boolean).join(". "), "success", {
       label: "Отменить",
       onPress: () =>
         void gate.settled.then((ok) => {

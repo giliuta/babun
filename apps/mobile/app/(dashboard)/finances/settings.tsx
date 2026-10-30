@@ -1,4 +1,4 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   HandCoins,
@@ -10,10 +10,9 @@ import {
 import type { FinanceCategoryKind } from "@babun/shared/db/repositories/finance-categories";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsGroup } from "@/components/ui/SettingsGroup";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useToast } from "@/components/ui/Toast";
@@ -37,7 +36,6 @@ import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { RequisitesRow } from "@/features/companies/RequisitesRow";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { useDeletedOperations } from "@/features/finances/deleted-operations";
-import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ: выбрал сверху команду — и это полностью её
 // настройки.
@@ -48,7 +46,8 @@ import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 //
 // Ниже — «Общие»: валюта, одна на весь аккаунт.
 //
-// ВИД: имена блоков — внутри карточек, как в записи и в листе реквизитов;
+// ВИД: группы — `SettingsGroup`, как у шестерёнок календаря и клиентов: имя
+// блока внутри карточки, как в записи и в листе реквизитов;
 // подписи дверей — коротко, живым состоянием («Евро · €»).
 //
 // НЕТ здесь: «Шаблонов операций», двери VAT (ставку регулируем в «Итого»
@@ -142,13 +141,15 @@ export default function FinanceSettingsScreen() {
       ) : null}
       {any ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-          {moneyGroup ? (
-            <SectionCard title="Деньги">
-              {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ: остатки,
+          <SettingsGroup
+            title="Деньги"
+            rows={[
+              /* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ: остатки,
                   порядок, скрытие, «Добавить счёт»; открывается на этой
-                  команде и своей ленты команд не несёт. */}
-              {money.accounts ? (
+                  команде и своей ленты команд не несёт. */
+              moneyGroup && money.accounts ? (
                 <SettingsRow
+                  key="accounts"
                   tile={SETTINGS_TILE.blue}
                   icon={Wallet}
                   title="Счета"
@@ -162,67 +163,65 @@ export default function FinanceSettingsScreen() {
                   }
                   onPress={() => router.push(withTeam("/accounts/settings"))}
                 />
-              ) : null}
-              {/* «УДАЛЁННЫЕ ОПЕРАЦИИ» — ящик этой команды:
-                  30 дней, «Вернуть». Вид — как «Удалённые клиенты» в
-                  шестерёнке клиентов. */}
-              {money.trash ? (
-                <>
-                  {money.accounts ? <Divider inset={SETTINGS_ROW_INSET} /> : null}
-                  <SettingsRow
-                    tile={SETTINGS_TILE.red}
-                    icon={Trash2}
-                    title="Удалённые операции"
-                    sub={
-                      deletedOperations.data
-                        ? deletedOperationsDoorLine(
-                            deletedOperations.data.filter((item) => item.teamId === teamId).length,
-                          )
-                        : undefined
-                    }
-                    onPress={() => router.push(withTeam("/finances/deleted"))}
-                  />
-                </>
-              ) : null}
-            </SectionCard>
-          ) : null}
+              ) : null,
+              /* «УДАЛЁННЫЕ ОПЕРАЦИИ» — ящик этой команды: 30 дней,
+                  «Вернуть». Вид — как «Удалённые клиенты» в шестерёнке
+                  клиентов. */
+              moneyGroup && money.trash ? (
+                <SettingsRow
+                  key="trash"
+                  tile={SETTINGS_TILE.red}
+                  icon={Trash2}
+                  title="Удалённые операции"
+                  sub={
+                    deletedOperations.data
+                      ? deletedOperationsDoorLine(
+                          deletedOperations.data.filter((item) => item.teamId === teamId).length,
+                        )
+                      : undefined
+                  }
+                  onPress={() => router.push(withTeam("/finances/deleted"))}
+                />
+              ) : null,
+            ]}
+          />
 
-          {/* КАТЕГОРИИ — ТРИ СТРОКИ, КАК «СЧЕТА», «РЕКВИЗИТЫ» И «ИНВОЙСЫ»
-              (обычный блок, как все: доходы, расходы, долги). Каждая ведёт на свою страницу вида, там внизу «Добавить
-              категорию». Подпись — сколько категорий у команды. */}
-          {categoryKinds.length > 0 ? (
-            <SectionCard title="Категории">
-              {categoryKinds.map(({ kind, title, icon, tile }, index) => (
-                <View key={kind}>
-                  {index > 0 ? <Divider inset={SETTINGS_ROW_INSET} /> : null}
-                  <SettingsRow
-                    tile={tile}
-                    icon={icon}
-                    title={title}
-                    sub={
-                      categoriesQuery.data
-                        ? teamCategoryKindLine(categoriesQuery.data, teamId, kind)
-                        : undefined
-                    }
-                    onPress={() => router.push(withTeam("/finances/categories", `kind=${kind}`))}
-                  />
-                </View>
-              ))}
-            </SectionCard>
-          ) : null}
+          {/* КАТЕГОРИИ — ТРИ СТРОКИ, КАК «СЧЕТА» (обычный блок: доходы,
+              расходы, долги). Каждая ведёт на свою страницу вида, там внизу
+              «Добавить категорию». Подпись — сколько категорий у команды. */}
+          <SettingsGroup
+            title="Категории"
+            rows={categoryKinds.map(({ kind, title, icon, tile }) => (
+              <SettingsRow
+                key={kind}
+                tile={tile}
+                icon={icon}
+                title={title}
+                sub={
+                  categoriesQuery.data
+                    ? teamCategoryKindLine(categoriesQuery.data, teamId, kind)
+                    : undefined
+                }
+                onPress={() => router.push(withTeam("/finances/categories", `kind=${kind}`))}
+              />
+            ))}
+          />
 
-          {requisites && teamId ? (
-            <SectionCard title="Документы">
-              <RequisitesRow teamId={teamId} />
-            </SectionCard>
-          ) : null}
+          {/* РЕКВИЗИТЫ — у календаря: какой набор печатается в его документах. */}
+          <SettingsGroup
+            title="Документы"
+            rows={[requisites && teamId ? <RequisitesRow key="requisites" teamId={teamId} /> : null]}
+          />
 
           {/* ВАЛЮТА — ОДНА НА ВЕСЬ АККАУНТ. */}
-          {shown("currency") ? (
-            <SectionCard title="Общие">
-              <CurrencySettingsRow readOnly={levels.currency !== "write"} />
-            </SectionCard>
-          ) : null}
+          <SettingsGroup
+            title="Общие"
+            rows={[
+              shown("currency") ? (
+                <CurrencySettingsRow key="currency" readOnly={levels.currency !== "write"} />
+              ) : null,
+            ]}
+          />
         </ScrollView>
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело

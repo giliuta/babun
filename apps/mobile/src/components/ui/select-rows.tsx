@@ -193,7 +193,10 @@ export function SelectRow({
   /** СНИМОК ВМЕСТО ЗНАЧКА — плитка того же размера показывает само фото
    *  (файлы клиента: фото узнают глазами, а не по слову). */
   image?: string;
-  onPress: () => void;
+  /** Нет — строка не нажимается вовсе: всё решает свой орган справа
+   *  (`trailing`). Так у выбора услуг: количество — только «−» и «+», и
+   *  палец, промахнувшийся мимо «+», не берёт и не снимает услугу. */
+  onPress?: () => void;
   /** Удержание — второе действие строки (реквизиты: скопировать набор). */
   onLongPress?: () => void;
 }) {
@@ -216,7 +219,10 @@ export function SelectRow({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      disabled={disabled}
+      disabled={disabled || (!onPress && !onLongPress)}
+      // Строка без нажатия не собирает детей под себя: VoiceOver должен
+      // дойти до кнопок органа справа по одной.
+      accessible={onPress || onLongPress ? undefined : false}
       accessibilityRole={accessibilityRole}
       accessibilityState={
         accessibilityRole === "checkbox"

@@ -121,31 +121,12 @@ export type BlockFrame = {
 };
 
 /** МЕСТО БЛОКА В КОЛОНКЕ (несколько записей на одно время не должны
- *  сплетаться).
- *  • Широкая колонка (День): рядом, с растяжкой вправо на свободное.
- *  • Узкая (Неделя): «веер» — каждая следующая сдвинута на шаг и лежит
- *    поверх; начавшаяся раньше видна полосой слева и целиком выше чужого
- *    начала. Шаг — 40 % колонки на весь веер, не больше 22pt на запись. */
-export function blockFrame(
-  p: PlacedAppt,
-  laneW: number,
-  gap: number,
-  deck?: { index: number; size: number },
-): BlockFrame {
-  // СТОПКА: в узкой колонке записи, начавшиеся почти вместе, лежат друг на
-  // друге со сдвигом 4pt — верхняя почти во всю ширину, с именем и «+N».
-  if (deck && deck.size > 1) {
-    // Сдвиг на всю стопку — не больше 40 % колонки, как у «веера»:
-    // при 4pt на запись четырнадцать записей в одну минуту в колонке
-    // Недели давали отрицательную ширину, и верхняя карточка пропадала.
-    const peek = Math.min(4, (laneW * 0.4) / (deck.size - 1));
-    return {
-      left: 1 + deck.index * peek,
-      width: laneW - gap - (deck.size - 1) * peek,
-      z: deck.index,
-      overlapped: deck.index > 0,
-    };
-  }
+ *  сплетаться). `p` — уже уложенная в дорожки (`fitLanes`).
+ *  • Рядом: колонка делится поровну, с растяжкой вправо на свободное.
+ *  • Узкая (Неделя), запись началась заметно позже соседки: «веер» — лежит
+ *    поверх со сдвигом, начавшаяся раньше видна полосой слева и целиком
+ *    выше чужого начала. */
+export function blockFrame(p: PlacedAppt, laneW: number, gap: number): BlockFrame {
   if (p.colCount <= 1) {
     return { left: 1, width: laneW - gap, z: 0, overlapped: false };
   }
@@ -179,90 +160,142 @@ export function blockFrame(
   };
 }
 
-type Deck = { index: number; size: number; members: PlacedAppt[] };
+/** Читаемый минимум ширины записи, поставленной рядом с другими. На 64pt
+ *  карточка получает паддинг 4 и ~51pt под текст: время «10:00» (≈34pt) и
+ *  имя в пять-шесть букв 13-м жирным помещаются целиком. Уже — имя
+ *  обрывается на втором-третьем знаке, и дорожка перестаёт называть запись.
+ *  В Дне iPhone (~350pt) это пять дорожек: четыре записи на одно время стоят
+ *  рядом по ~88pt, пять — по ~70pt, с шестой последняя дорожка становится
+ *  «+N». */
+export const MIN_LANE_W = 64;
 
-const touched = (p: PlacedAppt): number => {
-  const at = Date.parse(p.apt.updated_at ?? "");
-  return Number.isFinite(at) ? at : 0;
-};
-
-const isWork = (p: PlacedAppt): boolean =>
-  (p.apt.kind ?? "work") === "work" && p.apt.status !== "cancelled";
-
-/** НАКЛАДКА — ДВЕ РАБОЧИЕ ЗАПИСИ НА ОДНО ВРЕМЯ. Для каждой такой записи —
- *  сколько других рабочих записей идёт одновременно с ней. События и
- *  отменённые накладкой не считаются: так же решает `findOverlap`. */
-export function clashCounts(placements: readonly PlacedAppt[]): Map<string, number> {
-  const out = new Map<string, number>();
-  const work = placements.filter(isWork);
-  for (const p of work) {
-    let n = 0;
-    for (const q of work) {
-      if (q !== p && p.startMin < q.endMin && q.startMin < p.endMin) n += 1;
-    }
-    if (n > 0) out.set(p.apt.id, n);
-  }
-  return out;
+/** Сколько дорожек вмещает колонка: не меньше двух — в Неделе (~50pt) две
+ *  записи на одно время делят её пополам, как в Bumpix. */
+export function lanesFor(laneW: number): number {
+  return Math.max(2, Math.floor(laneW / MIN_LANE_W));
 }
 
-/** СТОПКИ УЗКОЙ КОЛОНКИ. Две полоски по 24pt без текста не читаются никак, поэтому в
- *  колонке уже `SIDE_BY_SIDE_MIN_W` записи одной кучки, начавшиеся почти
- *  вместе (не `late`), складываются в стопку. Поздние остаются «веером». */
-export function decksFor(placements: PlacedAppt[], laneW: number): Map<string, Deck> {
-  const out = new Map<string, Deck>();
-  if (laneW >= SIDE_BY_SIDE_MIN_W) return out;
+/** Карточка «+N» последней дорожки: записи, которым места рядом не хватило. */
+export type MoreCard = {
+  key: string;
+  startMin: number;
+  endMin: number;
+  colIndex: number;
+  colCount: number;
+  /** По началу; тап раскрывает их списком. */
+  members: PlacedAppt[];
+};
+
+const overlaps = (a: { startMin: number; endMin: number }, b: { startMin: number; endMin: number }) =>
+  a.startMin < b.endMin && b.startMin < a.endMin;
+
+/** Дорожки переполненной кучки заново: при равном начале первой идёт
+ *  длинная. `layoutDay` ставит первой короткую — в Дне это даёт растяжку
+ *  вправо, но здесь первая дорожка пустела бы посреди времени, а длинная
+ *  запись пряталась бы в «+N» на весь свой срок. Сколько дорожек нужно, от
+ *  порядка равных начал не зависит. */
+function longFirst(members: readonly PlacedAppt[]): PlacedAppt[] {
+  const sorted = [...members].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
+  const colEnds: number[] = [];
+  const cols = sorted.map((it) => {
+    let col = colEnds.findIndex((e) => e <= it.startMin);
+    if (col === -1) {
+      col = colEnds.length;
+      colEnds.push(it.endMin);
+    } else {
+      colEnds[col] = it.endMin;
+    }
+    return col;
+  });
+  return sorted.map((it, i) => ({
+    ...it,
+    colIndex: cols[i],
+    late: sorted.some(
+      (other, j) => cols[j] < cols[i] && overlaps(it, other) && other.startMin <= it.startMin - LATE_START_MIN,
+    ),
+  }));
+}
+
+/** ЗАПИСИ НА ОДНО ВРЕМЯ — ДОРОЖКАМИ, ЛИШНИЕ — «+N» (владелец, «как в Bumpix»).
+ *  Кучка, которой хватает дорожек (`lanesFor`), стоит как разложена: каждая
+ *  запись своей долей колонки. Кучка шире — первые дорожки отдаются первым
+ *  записям, а последняя — карточке «+N» того же вида: сколько записей не
+ *  поместилось на это время. Одинокая лишняя запись карточкой не
+ *  становится: «+1» занял бы то же место, что сама запись.
+ *  `pinnedId` — запись в свободном перемещении: её тянут пальцем, и в «+N» она
+ *  не прячется, а встаёт в последнюю дорожку. */
+export function fitLanes(
+  placements: readonly PlacedAppt[],
+  laneW: number,
+  pinnedId: string | null = null,
+): { shown: PlacedAppt[]; more: MoreCard[] } {
+  const lanes = lanesFor(laneW);
+  const shown: PlacedAppt[] = [];
+  const more: MoreCard[] = [];
   const byCluster = new Map<number, PlacedAppt[]>();
   for (const p of placements) {
-    if (p.colCount <= 1 || p.late) continue;
     const list = byCluster.get(p.cluster) ?? [];
     list.push(p);
     byCluster.set(p.cluster, list);
   }
-  for (const members of byCluster.values()) {
-    if (members.length < 2) continue;
-    // НАВЕРХ — ПОСЛЕДНЯЯ ТРОНУТАЯ. Перенесённая на занятое время короче
-    // соседки уходила ПОД неё, и перенос выглядел откатом: запись пропадала
-    // с того места, куда её только что положили. При равенстве — самая
-    // длинная: у неё есть высота под имя и «+N»; короткие под ней видны краем.
-    members.sort(
-      (a, b) =>
-        touched(a) - touched(b) ||
-        a.endMin - a.startMin - (b.endMin - b.startMin) ||
-        a.startMin - b.startMin,
-    );
-    members.forEach((p, index) =>
-      out.set(p.apt.id, { index, size: members.length, members }),
-    );
+  for (const [cluster, members] of byCluster) {
+    if (members[0].colCount <= lanes) {
+      shown.push(...members);
+      continue;
+    }
+    const last = lanes - 1;
+    const laid = longFirst(members);
+    const keep = laid.filter((p) => p.colIndex < last);
+    const rest = laid
+      .filter((p) => p.colIndex >= last)
+      .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+    // Лишние, идущие одновременно, — одна карточка на их общее время.
+    const groups: PlacedAppt[][] = [];
+    let groupEnd = -1;
+    for (const p of rest) {
+      if (groups.length > 0 && p.startMin < groupEnd) groups[groups.length - 1].push(p);
+      else groups.push([p]);
+      groupEnd = Math.max(groupEnd, p.endMin);
+    }
+    const inLast: PlacedAppt[] = [];
+    groups.forEach((group, i) => {
+      const pinned = group.find((p) => p.apt.id === pinnedId);
+      if (pinned) inLast.push(pinned);
+      const hidden = group.filter((p) => p !== pinned);
+      if (hidden.length === 1 && !pinned) {
+        inLast.push(hidden[0]);
+      } else if (hidden.length > 0) {
+        more.push({
+          key: `more:${cluster}:${i}`,
+          startMin: Math.min(...hidden.map((p) => p.startMin)),
+          endMin: Math.max(...hidden.map((p) => p.endMin)),
+          colIndex: last,
+          colCount: lanes,
+          members: hidden,
+        });
+      }
+    });
+    const lastLane = [...inLast, ...more.filter((m) => m.key.startsWith(`more:${cluster}:`))];
+    for (const p of keep) {
+      // Растяжка вправо — пока в дорожке справа никто не идёт одновременно.
+      let span = 1;
+      for (let c = p.colIndex + 1; c < lanes; c++) {
+        const taken =
+          c === last
+            ? lastLane.some((q) => overlaps(p, q))
+            : keep.some((q) => q !== p && q.colIndex === c && overlaps(p, q));
+        if (taken) break;
+        span++;
+      }
+      shown.push({ ...p, colCount: lanes, colSpan: span });
+    }
+    for (const p of inLast) shown.push({ ...p, colIndex: last, colCount: lanes, colSpan: 1 });
   }
-  return out;
+  return { shown, more };
 }
 
-/** КТО НЕСЁТ ЗНАЧОК НАКЛАДКИ. Значок один на группу — на карточке, что лежит
- *  сверху: в стопке это верхняя (её «+N» становится красным), вне стопки —
- *  та, что поверх соседок (правее в «веере», последняя в ряду в Дне). Число —
- *  сколько записей под значком: у стопки весь её состав, иначе накладки. */
-export function clashBadgeHolders(
-  placements: readonly PlacedAppt[],
-  decks: ReadonlyMap<string, Deck>,
-): Map<string, number> {
-  const clash = clashCounts(placements);
-  const out = new Map<string, number>();
-  for (const deck of new Set(decks.values())) {
-    if (!deck.members.some((m) => clash.has(m.apt.id))) continue;
-    const top = deck.members[deck.size - 1];
-    out.set(top.apt.id, deck.size - 1);
-  }
-  const work = placements.filter(isWork);
-  for (const p of work) {
-    if (!clash.has(p.apt.id) || decks.has(p.apt.id)) continue;
-    const covers = work.every(
-      (q) =>
-        q === p ||
-        !(p.startMin < q.endMin && q.startMin < p.endMin) ||
-        decks.has(q.apt.id) ||
-        q.colIndex < p.colIndex,
-    );
-    if (covers) out.set(p.apt.id, clash.get(p.apt.id) ?? 0);
-  }
-  return out;
+/** Место карточки «+N» — её дорожка, как у записи рядом. */
+export function moreFrame(card: MoreCard, laneW: number, gap: number): BlockFrame {
+  const colW = laneW / card.colCount;
+  return { left: card.colIndex * colW + 1, width: colW - gap, z: card.colIndex, overlapped: false };
 }

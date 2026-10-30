@@ -59,17 +59,3 @@ export function repeatExpandWindow(
   );
   return { fromKey, toKey };
 }
-
-/** True when the slot start is before "now" of the business day. */
-export function isPastSlotAt(
-  dateYmd: string,
-  timeStart: string,
-  todayYmd: string,
-  nowMinutes: number | null,
-): boolean {
-  if (dateYmd > todayYmd) return false;
-  if (dateYmd < todayYmd) return true;
-  const [h, m] = timeStart.split(":").map(Number);
-  const startMin = (h || 0) * 60 + (m || 0);
-  return nowMinutes != null && startMin < nowMinutes;
-}

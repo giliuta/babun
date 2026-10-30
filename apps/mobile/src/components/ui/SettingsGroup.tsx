@@ -1,28 +1,36 @@
 import { Fragment, type ReactNode } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
-/** Группа шестерёнки: шапка и карточка строк, швы — только между теми, что
- *  остались. Пустая группа не рисуется вовсе — ни шапки, ни белой полосы.
- *  Одна на все шестерёнки (клиенты, календарь): строки одного раздела
- *  лежат одной карточкой со швами, а не каждая своей. Шапка необязательна —
- *  у страницы без подписей групп её нет. */
-export function SettingsGroup({ title, rows }: { title?: string; rows: ReactNode[] }) {
+/** ГРУППА ШЕСТЕРЁНКИ — ОДНА НА ВСЕ НАСТРОЙКИ (календарь, клиенты, финансы).
+ *  Подпись группы — ВНУТРИ белой карточки, тем же рецептом, что у блоков
+ *  записи и клиента (`SectionCard title`): три шестерёнки, собранные тремя
+ *  рецептами (подпись над карточкой, внутри, без подписи), читались как три
+ *  разных приложения. Подпись обязательна — короткое существительное.
+ *
+ *  Швы — только между строками, что остались; пустая группа не рисуется
+ *  вовсе — ни подписи, ни белой полосы. `inset` — для групп без плиток
+ *  (тумблер, кнопка): шов тогда от поля строки, а не от текста за плиткой. */
+export function SettingsGroup({
+  title,
+  rows,
+  inset = SETTINGS_ROW_INSET,
+}: {
+  title: string;
+  rows: ReactNode[];
+  inset?: number;
+}) {
   const shown = rows.filter(Boolean);
   if (shown.length === 0) return null;
   return (
-    <>
-      {title ? <SectionEyebrow>{title}</SectionEyebrow> : null}
-      <SectionCard>
-        {shown.map((row, index) => (
-          <Fragment key={index}>
-            {index > 0 ? <Divider inset={SETTINGS_ROW_INSET} /> : null}
-            {row}
-          </Fragment>
-        ))}
-      </SectionCard>
-    </>
+    <SectionCard title={title}>
+      {shown.map((row, index) => (
+        <Fragment key={index}>
+          {index > 0 ? <Divider inset={inset} /> : null}
+          {row}
+        </Fragment>
+      ))}
+    </SectionCard>
   );
 }

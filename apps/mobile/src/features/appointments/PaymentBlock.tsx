@@ -6,6 +6,7 @@ import type {
 } from "@babun/shared/local/appointments";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { useDensePage } from "@/components/ui/dense-page";
 import { useThemeColors } from "@/theme/colors";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
@@ -67,6 +68,8 @@ export interface PaymentBlockProps {
 export function PaymentBlock(props: PaymentBlockProps) {
   const { appointment, teamId, pending } = props;
   const t = useThemeColors();
+  // На плотной странице записи строка долга и плитки счетов ниже.
+  const densePage = useDensePage();
   const state = usePaymentBlock(props);
   const {
     currency,
@@ -122,6 +125,7 @@ export function PaymentBlock(props: PaymentBlockProps) {
     <SectionCard title="Оплата">
       {showStateRow ? (
       <PaymentStateRow
+        minHeight={densePage ? 32 : 40}
         caption={caption?.text}
         captionColor={captionColor}
         captionTone={caption && caption.tone !== "neutral" ? "money" : "neutral"}
@@ -204,7 +208,7 @@ export function PaymentBlock(props: PaymentBlockProps) {
       ) : (
         <View
           className="flex-row flex-wrap"
-          style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, gap: TILE_GAP }}
+          style={{ paddingHorizontal: 16, paddingTop: densePage ? 4 : 8, paddingBottom: densePage ? 8 : 10, gap: TILE_GAP }}
         >
           {[...accounts, ...strayAccounts].map((account) => {
             const accountRowsForTile = rowsByAccount.get(account.id) ?? [];
@@ -225,6 +229,7 @@ export function PaymentBlock(props: PaymentBlockProps) {
                 color={account.color ?? t.ink}
                 tint={account.color}
                 width={tileWidth} compact
+                height={densePage ? 36 : undefined}
                 state={state}
                 amount={isPaid ? formatEURExact(paid) : undefined}
                 disabled={busy}

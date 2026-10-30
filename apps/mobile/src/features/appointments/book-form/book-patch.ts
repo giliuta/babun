@@ -34,6 +34,10 @@ export interface BookPatchInput {
    *  Нет — пусто. */
   eventPlacePin?: string;
   eventPlaceNote?: string;
+  /** Тип объекта события и есть ли его колонка на сервере: до наката поле
+   *  в патч не идёт (`use-event-place-type-live.ts`). */
+  eventPlaceTypeId?: string | null;
+  eventPlaceTypeLive?: boolean;
   allDay: boolean;
   repeat: PersonalEventRepeat;
   eventNotes: string;
@@ -82,6 +86,8 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
     eventAddress,
     eventPlacePin = "",
     eventPlaceNote = "",
+    eventPlaceTypeId = null,
+    eventPlaceTypeLive = false,
     allDay,
     repeat,
     eventNotes,
@@ -162,6 +168,9 @@ export function buildBookPatch(input: BookPatchInput): Partial<Appointment> {
       address_lat: coords.lat,
       address_lng: coords.lng,
       address_note: eventLoc ? "" : eventPlaceNote.trim(),
+      ...(eventPlaceTypeLive
+        ? { address_object_type_id: eventLoc ? null : eventPlaceTypeId }
+        : {}),
       color_override: eventColor,
       // Метка события — та же метка выезда, что у записи: null значит «как
       // у дня».

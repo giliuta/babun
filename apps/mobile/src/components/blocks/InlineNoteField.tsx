@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Pressable, TextInput } from "react-native";
 import type { useInlineNote } from "@/components/blocks/use-inline-note";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 
 // ЗАМЕТКА — ЧИСТЫЙ ЛИСТ ДЛЯ ПИСЬМА. Серая плашка 13pt читалась мелким
 // примечанием, а цветная бумага кричала громче самой записи. Поэтому —
@@ -52,6 +53,7 @@ export function InlineNoteField({
   rows?: number;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   const input = useRef<TextInput>(null);
   if (readOnly && !note.draft.trim()) return null;
   return (
@@ -61,10 +63,10 @@ export function InlineNoteField({
       accessible={false}
       style={{
         marginHorizontal: 12,
-        marginTop: 2,
-        marginBottom: 8,
+        marginTop: densePage ? 0 : 2,
+        marginBottom: densePage ? 4 : 8,
         paddingHorizontal: 12,
-        paddingVertical: 9,
+        paddingVertical: densePage ? 5 : 9,
         borderRadius: t.radius.input,
         borderWidth: 1,
         borderColor: t.separator,

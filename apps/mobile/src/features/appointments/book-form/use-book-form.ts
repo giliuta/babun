@@ -19,7 +19,6 @@ import { useClientLocations } from "./use-client-locations";
 import { useTeamLabel } from "./use-team-label";
 import { useBookPrefill } from "./use-book-prefill";
 import { useBookTotals } from "./use-book-totals";
-import { useSlotWarnings } from "./use-slot-warnings";
 import { useRecordPicks } from "./use-record-picks";
 import { useRecordNotes } from "./use-record-notes";
 import { serviceLineActions } from "./service-line-actions";
@@ -44,6 +43,8 @@ import {
   useRestoredBookDraft,
 } from "./use-book-draft-memory";
 import { useDeletedClientNames } from "@/features/clients/queries";
+import { useEventPlaceTypeLive } from "./use-event-place-type-live";
+import { useLocationLabels } from "@/features/settings/local-settings";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -58,6 +59,8 @@ export function useBookForm() {
   const scrollRef = useRef<ScrollView>(null);
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
+  // Колонка типа объекта события — после наката; до него типа у события нет.
+  const eventPlaceTypeLive = useEventPlaceTypeLive();
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<BookParams>();
@@ -83,9 +86,14 @@ export function useBookForm() {
   // клиентов). Тариф — у календаря записи: у каждого своя оплата. Страница
   // открывается, «Сохранить» серая, тап — плашка про оплату; сервер держит то
   // же (`tenant_free_readonly_guard`).
+  // ОДНО МЕСТО ЗАМКА ТАРИФА ФОРМЫ: клиент, объект клиента, запись клиента и её
+  // оплата смотрят только сюда. Объект самого события и прочее в событии
+  // тарифом не заперты.
   const workInPlan = usePlanAllows("book-clients", teamId);
   const nudgeTariff = useTariffNudge(teamId);
   const look = useBookBlocks(teamId);
+  // «Типы объектов» команды записи — у объекта события без клиента (`event-place.ts`).
+  const { data: placeTypePresets = [] } = useLocationLabels(teamId);
   const refs = useBookReferences(teamId);
   const { teams, masters, services, clients, allAppts, calendarSettings } = refs;
   const draft = useBookDraft({
@@ -159,22 +167,6 @@ export function useBookForm() {
     teamId,
     slotFallback: label.slotFallback,
   });
-  const slot = useSlotWarnings({
-    allAppts,
-    // НОВАЯ ЗАПИСЬ СВЕРЯЕТСЯ ПОД СВОИМ БУДУЩИМ id. Создание кладёт её в список
-    // дня сразу, ещё под спиннером «Создать», — и под чужим id черновик
-    // находил в нём самого себя: на миг вспыхивало «Пересекается с событием
-    // этой команды».
-    editId: draft.editId ?? draft.newRecordIdRef.current,
-    kind,
-    teamId,
-    date,
-    timeStart,
-    timeEnd,
-    schedule: draft.teamScheduleQuery.data,
-    calendarSettings,
-    teams,
-  });
   const picks = useRecordPicks({
     ...refs,
     ...draft,
@@ -183,6 +175,7 @@ export function useBookForm() {
     client,
     teamId,
     setTeamId,
+    workInPlan,
     router,
   });
   const notes = useRecordNotes({
@@ -210,6 +203,7 @@ export function useBookForm() {
       ...totals,
       teamId,
       eventLoc: places.eventLocationEntry?.loc ?? null,
+      eventPlaceTypeLive,
       eventTypeLabel: eventKind.eventType?.label ?? null,
       // The note as typed right now, not the settled `comment` state.
       comment: draft.commentNow.current,
@@ -266,9 +260,6 @@ export function useBookForm() {
     bookingBusy,
     workInPlan,
     archivedRecord: label.archivedRecord,
-    hydrated: draft.hydrated,
-    overlap: slot.overlap,
-    timeWarning: slot.timeWarning,
   });
   // Что на форме сейчас — тем же видом, что ложится в черновик на телефоне.
   const snapshot = {
@@ -302,6 +293,7 @@ export function useBookForm() {
     eventAddress: draft.eventAddress,
     eventPlacePin: draft.eventPlacePin,
     eventPlaceNote: draft.eventPlaceNote,
+    eventPlaceTypeId: draft.eventPlaceTypeId,
     eventUrl: draft.eventUrl,
     eventReminderOffset: draft.eventReminderOffset,
     repeat: draft.repeat,
@@ -337,6 +329,7 @@ export function useBookForm() {
           eventLoc:
             places.eventLocationPool.find((row) => row.loc.id === openRecord.locationId)?.loc ?? null,
           clientLocations: places.clientLocations,
+          eventPlaceTypeLive,
         }),
       )
     : null;
@@ -462,6 +455,8 @@ export function useBookForm() {
     workInPlan,
     nudgeTariff,
     teamId,
+    eventPlaceTypeLive,
+    placeTypePresets,
     ...look,
     ...refs,
     ...draft,

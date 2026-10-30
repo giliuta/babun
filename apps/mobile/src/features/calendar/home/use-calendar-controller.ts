@@ -22,7 +22,6 @@ import { useRecordColors } from "./use-record-colors";
 import { useRecordCopyLink } from "./use-record-copy-link";
 import { useRecordNaming } from "./use-record-naming";
 import { useReminderReconcile } from "./use-reminder-reconcile";
-import { useSlotNotice } from "./use-slot-notice";
 import { useVisibleAppointments } from "./use-visible-appointments";
 
 /** Everything the calendar tab renders, composed from the hooks of this
@@ -53,9 +52,8 @@ export function useCalendarController() {
   const named = { ...timed, ...naming };
   const colors = useRecordColors(named);
   const coloured = { ...named, ...colors };
-  const notice = useSlotNotice(coloured);
   const visible = useVisibleAppointments(coloured);
-  const listed = { ...coloured, ...notice, ...visible };
+  const listed = { ...coloured, ...visible };
 
   const firstCalendar = useFirstCalendar(listed);
   const actions = useRecordActions(listed);

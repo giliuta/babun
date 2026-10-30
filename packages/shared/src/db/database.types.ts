@@ -444,6 +444,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -501,6 +502,7 @@ export type Database = {
           address_lat?: number | null
           address_lng?: number | null
           address_note?: string
+          address_object_type_id?: string | null
           cancel_reason?: string | null
           city?: string | null
           client_id?: string | null
@@ -558,6 +560,7 @@ export type Database = {
           address_lat?: number | null
           address_lng?: number | null
           address_note?: string
+          address_object_type_id?: string | null
           cancel_reason?: string | null
           city?: string | null
           client_id?: string | null
@@ -611,6 +614,13 @@ export type Database = {
           vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "appointments_address_object_type_fk"
+            columns: ["tenant_id", "address_object_type_id"]
+            isOneToOne: false
+            referencedRelation: "location_labels"
+            referencedColumns: ["tenant_id", "id"]
+          },
           {
             foreignKeyName: "appointments_client_id_fkey"
             columns: ["client_id"]
@@ -5709,6 +5719,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -6795,6 +6806,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -6919,6 +6931,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -7122,6 +7135,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -7229,6 +7243,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -7295,6 +7310,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null
@@ -7637,6 +7653,7 @@ export type Database = {
           address_lat: number | null
           address_lng: number | null
           address_note: string
+          address_object_type_id: string | null
           cancel_reason: string | null
           city: string | null
           client_id: string | null

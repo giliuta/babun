@@ -216,6 +216,10 @@ export interface Appointment {
   address_note: string;
   address_lat: number | null;
   address_lng: number | null;
+  /** Тип объекта события без клиента — id из «Типов объектов» команды
+   *  записи. Колонка появляется накатом; до него поля нет (`undefined`), и
+   *  в базу оно не уходит. */
+  address_object_type_id?: string | null;
 
   source: AppointmentSource | null; // канал обращения клиента
   is_online_booking: boolean; // true — клиент записался сам через онлайн-форму

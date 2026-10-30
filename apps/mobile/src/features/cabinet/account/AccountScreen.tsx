@@ -8,12 +8,16 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ColumnDoorRow } from "@/components/ui/card-rows";
+import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { PERSON_COLUMN } from "@/features/clients/contact-column";
 import { useSession } from "@/providers/SessionProvider";
 import { ChangeEmailSheet } from "@/features/cabinet/ChangeEmailSheet";
 import { DangerZoneSection } from "./DangerZoneSection";
 import { DevicesSection } from "./DevicesSection";
 import { PasswordSheet } from "./PasswordSection";
+import { TwoFactorRow, useTotpFactor } from "./TwoFactorSection";
+import { twoFactorOffered } from "./two-factor";
 
 // «ВХОД И БЕЗОПАСНОСТЬ» — СТРОКИ КАНОНА, КАК ВЕСЬ КАБИНЕТ. Страница жила своей
 // вёрсткой: подпись над значением в рамке, три поля пароля прямо в карточке,
@@ -26,6 +30,7 @@ export function AccountScreen() {
   const u = session?.user;
   const [emailSheet, setEmailSheet] = useState(false);
   const [passwordSheet, setPasswordSheet] = useState(false);
+  const totp = useTotpFactor().data ?? null;
   const registered = u?.created_at
     ? new Date(u.created_at).toLocaleDateString("ru-RU", {
         day: "numeric",
@@ -69,9 +74,16 @@ export function AccountScreen() {
               tile={SETTINGS_TILE.orange}
               icon={KeyRound}
               title="Сменить пароль"
-              sub="Нужен текущий пароль"
+              sub={totp ? "Нужен код из приложения" : "Нужен текущий пароль"}
               onPress={() => setPasswordSheet(true)}
             />
+            {/* Аккаунту проверки Apple двухфакторного входа не даём. */}
+            {twoFactorOffered(u?.email) ? (
+              <>
+                <Divider inset={SETTINGS_ROW_INSET} />
+                <TwoFactorRow />
+              </>
+            ) : null}
           </SectionCard>
           <DevicesSection />
           <DangerZoneSection email={u?.email ?? ""} />
@@ -86,6 +98,7 @@ export function AccountScreen() {
         visible={passwordSheet}
         onClose={() => setPasswordSheet(false)}
         email={u?.email ?? null}
+        totpFactorId={totp?.id ?? null}
       />
     </Screen>
   );

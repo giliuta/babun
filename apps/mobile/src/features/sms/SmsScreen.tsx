@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState, ScrollView, View } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, usePathname, useRouter, type Href } from "expo-router";
 import { History } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -53,6 +53,9 @@ import { tDynamic } from "@babun/shared/i18n/runtime";
 
 export function SmsScreen() {
   const router = useRouter();
+  // Страница открыта из настроек календаря: двери ведут в стек календаря, а
+  // не в Кабинет (чужая вкладка).
+  const inCalendar = usePathname().startsWith("/calendar");
   const toast = useToast();
   const scope = useAccountScope();
   const ownerOfAccount = scope.viewRole === "owner";
@@ -201,7 +204,8 @@ export function SmsScreen() {
                   icon={History}
                   title="Вся история"
                   sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
-                  onPress={() => router.push("/cabinet/sms-history" as Href)}
+                  // Открытый из настроек календаря — дверь своего стека.
+                  onPress={() => router.push((inCalendar ? "/calendar/sms-history" : "/cabinet/sms-history") as Href)}
                 />
               </>
             )}

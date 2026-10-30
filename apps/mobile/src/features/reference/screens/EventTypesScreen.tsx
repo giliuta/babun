@@ -108,7 +108,6 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
         <EmptyState
           fill
           title="Типов событий пока нет"
-          subtitle="Тип называет событие, красит его в календаре и подсказывает длительность."
         />
       ) : (
         <ScrollView

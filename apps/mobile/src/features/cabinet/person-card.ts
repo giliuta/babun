@@ -2,30 +2,19 @@
 //
 // Имя — `user_metadata.full_name` (пишется при регистрации и правится в
 // «Профиле»), телефон — `user_metadata.phone` (сам человек его вписал, не
-// подтверждён), день рождения — `user_metadata.birthday` («YYYY-MM-DD»),
-// почта — логин аккаунта. У старых аккаунтов имени нет: тогда на месте имени
-// стоит почта, а второй раз её не печатаем.
+// подтверждён), почта — логин аккаунта. У старых аккаунтов имени нет: тогда
+// на месте имени стоит почта, а второй раз её не печатаем.
 //
-// КАРТА — ПОЛНАЯ ВИЗИТКА: имя, имя компании, почта, номер, дата рождения.
-// Под именем —
-// компания (имя своего аккаунта), ниже — факты значком и значением, без
-// подписей: значок и есть подпись. Пустое не печатается.
+// КАРТА — ТОЛЬКО ЧЕЛОВЕК: имя, под ним почта, под ней номер, если он есть.
+// Имени аккаунта (компании), дня рождения и инициалов здесь нет — это
+// «Профиль»; карта лишь дверь в него. Пустое не печатается.
 
 import { formatPhoneForDisplay } from "@/lib/phone";
 
-export type PersonFactKind = "email" | "phone" | "birthday";
-
-interface PersonFact {
-  kind: PersonFactKind;
-  text: string;
-}
-
 type PersonCardView = {
   title: string;
-  /** Имя своего аккаунта — когда оно не повторяет имя человека. */
-  company: string | null;
-  facts: PersonFact[];
-  initials: string;
+  /** Строки под именем: почта, затем номер — только непустые. */
+  lines: { kind: "email" | "phone"; text: string }[];
 };
 
 type UserLike =
@@ -39,22 +28,15 @@ type UserLike =
 const clean = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
 
-export function personCardView(user: UserLike, accountName?: string | null): PersonCardView {
+export function personCardView(user: UserLike): PersonCardView {
   const name = clean(user?.user_metadata?.full_name);
   const email = clean(user?.email);
   const phone = clean(user?.user_metadata?.phone);
-  const birthday = birthdayText(clean(user?.user_metadata?.birthday));
   const title = name || email || "Аккаунт";
-  const account = clean(accountName);
-  // Регистрация кладёт одно поле «Ваше имя» и в имя, и в аккаунт — пока их не развели в «Профиле», второй
-  // раз то же слово не печатаем.
-  const company =
-    account && account.toLocaleLowerCase() !== title.toLocaleLowerCase() ? account : null;
-  const facts: PersonFact[] = [];
-  if (name && email) facts.push({ kind: "email", text: email });
-  if (phone) facts.push({ kind: "phone", text: formatPhoneForDisplay(phone) });
-  if (birthday) facts.push({ kind: "birthday", text: birthday });
-  return { title, company, facts, initials: initialsOf(name, title) };
+  const lines: PersonCardView["lines"] = [];
+  if (name && email) lines.push({ kind: "email", text: email });
+  if (phone) lines.push({ kind: "phone", text: formatPhoneForDisplay(phone) });
+  return { title, lines };
 }
 
 /** «1990-03-12» → «12 марта 1990»; кривое — пусто. Месяц словом языка
@@ -67,16 +49,4 @@ export function birthdayText(ymd: string): string {
   if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return "";
   const dayMonth = date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
   return `${dayMonth} ${y}`;
-}
-
-/** Две первые буквы имени («Артём Гилюта» → «АГ»); без имени — первая буква
- *  того, что стоит на месте имени. `Array.from` — чтобы не резать пополам
- *  символ за пределами BMP. */
-function initialsOf(name: string, fallback: string): string {
-  const words = name.split(/\s+/).filter(Boolean);
-  const letters =
-    words.length > 0
-      ? words.slice(0, 2).map((word) => Array.from(word)[0] ?? "")
-      : [Array.from(fallback)[0] ?? ""];
-  return letters.join("").toUpperCase() || "?";
 }

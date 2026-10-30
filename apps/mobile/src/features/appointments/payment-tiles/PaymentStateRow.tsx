@@ -19,6 +19,7 @@ export function PaymentStateRow({
   captionTone = "neutral",
   amount,
   right,
+  minHeight = 40,
 }: {
   caption?: string;
   captionColor?: string;
@@ -27,12 +28,14 @@ export function PaymentStateRow({
   /** Открытое поле суммы занимает место подписи. */
   amount?: StateRowAmount;
   right?: ReactNode;
+  /** Плотная страница записи держит строку ниже. */
+  minHeight?: number;
 }) {
   const t = useThemeColors();
   return (
     <View
       className="flex-row items-center"
-      style={{ paddingHorizontal: 16, minHeight: 40, gap: 10 }}
+      style={{ paddingHorizontal: 16, minHeight, gap: 10 }}
     >
       {amount ? (
         <>

@@ -171,6 +171,9 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
   // Объект события без клиента — точка и заметка рядом с адресом (`event-place.ts`).
   const [eventPlacePin, setEventPlacePin] = useState(restored?.eventPlacePin ?? "");
   const [eventPlaceNote, setEventPlaceNote] = useState(restored?.eventPlaceNote ?? "");
+  const [eventPlaceTypeId, setEventPlaceTypeId] = useState<string | null>(
+    restored?.eventPlaceTypeId ?? null,
+  );
   const [eventUrl, setEventUrl] = useState(restored?.eventUrl ?? "");
   const [eventReminderOffset, setEventReminderOffset] = useState<number | null>(
     restored?.eventReminderOffset ?? null,
@@ -298,6 +301,7 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
         setEventAddress(editing.address || editing.event_url || "");
         setEventPlacePin(pinOfCoords(editing.address_lat, editing.address_lng));
         setEventPlaceNote(editing.address_note ?? "");
+        setEventPlaceTypeId(editing.address_object_type_id ?? null);
         setEventUrl(editing.event_url ?? "");
         setEventReminderOffset(
           editing.event_push_enabled
@@ -384,6 +388,8 @@ export function useBookDraft({ params, teamId, setTeamId, allAppts, restored = n
     setEventPlacePin,
     eventPlaceNote,
     setEventPlaceNote,
+    eventPlaceTypeId,
+    setEventPlaceTypeId,
     eventUrl,
     eventReminderOffset,
     repeat,

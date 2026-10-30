@@ -18,10 +18,16 @@ export function PasswordSheet({
   visible,
   onClose,
   email,
+  totpFactorId = null,
 }: {
   visible: boolean;
   onClose: () => void;
   email: string | null;
+  /** Двухфакторный вход включён — вместо текущего пароля код из
+   *  приложения. Перепроверка паролем выдала бы сессию первого уровня, и
+   *  посреди работы человека увело бы на экран кода; а код из приложения и
+   *  есть второй, более сильный ключ. */
+  totpFactorId?: string | null;
 }) {
   const t = useThemeColors();
   const toast = useToast();
@@ -40,9 +46,10 @@ export function PasswordSheet({
 
   const pwdHint = passwordHint(pwd);
   const mismatch = confirm.length > 0 && pwd !== confirm;
-  const samePwd = pwd.length > 0 && pwd === currentPwd;
+  const byCode = !!totpFactorId;
+  const samePwd = !byCode && pwd.length > 0 && pwd === currentPwd;
   const canSubmit =
-    currentPwd.length > 0 &&
+    (byCode ? /^\d{6}$/.test(currentPwd) : currentPwd.length > 0) &&
     passwordAccepted(pwd) &&
     confirm === pwd &&
     !samePwd &&
@@ -68,13 +75,19 @@ export function PasswordSheet({
       if (!email) {
         throw new Error("Не удалось определить email аккаунта. Войдите заново.");
       }
-      // v678 P0-9 (web parity) — challenge с текущим паролем: сам
-      // updateUser({password}) Supabase его не требует, а без проверки
-      // угнанная сессия молча выкидывает владельца из аккаунта.
-      const { error: reauthErr } = await supabase.auth.signInWithPassword({
-        email,
-        password: currentPwd,
-      });
+      // Перепроверка перед сменой: сам updateUser({password}) Supabase её не
+      // требует, а без неё угнанная сессия молча выкидывает владельца из
+      // аккаунта. При двухфакторном входе — кодом из приложения.
+      if (totpFactorId) {
+        const { error: codeErr } = await supabase.auth.mfa.challengeAndVerify({
+          factorId: totpFactorId,
+          code: currentPwd,
+        });
+        if (codeErr) throw new Error("Неверный код из приложения.");
+      }
+      const { error: reauthErr } = byCode
+        ? { error: null }
+        : await supabase.auth.signInWithPassword({ email, password: currentPwd });
       if (reauthErr) {
         throw new Error(
           /invalid|credentials/i.test(reauthErr.message)
@@ -121,18 +134,32 @@ export function PasswordSheet({
         />
       }
     >
-      <Field
-        label="Текущий пароль"
-        value={currentPwd}
-        onChangeText={setCurrentPwd}
-        placeholder="Введите текущий пароль"
-        secureTextEntry
-        keyboardType={PASSWORD_KEYBOARD}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="current-password"
-        textContentType="password"
-      />
+      {byCode ? (
+        <Field
+          label="Код из приложения"
+          value={currentPwd}
+          onChangeText={(v) => setCurrentPwd(v.replace(/\D/g, "").slice(0, 6))}
+          placeholder="Шесть цифр"
+          keyboardType="number-pad"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
+          maxLength={6}
+        />
+      ) : (
+        <Field
+          label="Текущий пароль"
+          value={currentPwd}
+          onChangeText={setCurrentPwd}
+          placeholder="Введите текущий пароль"
+          secureTextEntry
+          keyboardType={PASSWORD_KEYBOARD}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="current-password"
+          textContentType="password"
+        />
+      )}
       <Field
         label="Новый пароль"
         value={pwd}
