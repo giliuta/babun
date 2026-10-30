@@ -17,7 +17,7 @@ import type { CalendarController } from "./use-calendar-controller";
 export function CalendarSheets({ c }: { c: CalendarController }) {
   const {
     canViewCompanyFinance, finModalYmd, financeFor, activeTeamId, todayYmd,
-    nowHmBusiness, setFinModalYmd, openEdit, findFinanceRecord, slotDraft, sheetBandFor,
+    nowHmBusiness, setFinModalYmd, openEdit, findFinanceRecord, slotDraft,
     activeActions, setSlotDraft, bookAt, sheetMenu, setSheetMenu, smsApt, clients,
     smsOpen, teams, companyName, canManageBookings, setSmsOpen, reminderFor,
     pickReminderFor, setReminderFor, recolor, setRecolor, teamColorFor, updateAppt,
@@ -47,7 +47,6 @@ export function CalendarSheets({ c }: { c: CalendarController }) {
           открывается уже с выбранными временем и типом. */}
       <BookSlotSheet
         slot={slotDraft}
-        bandFor={sheetBandFor}
         canWork={activeActions.create}
         canEvent={activeActions.events === "write"}
         onClose={() => setSlotDraft(null)}

@@ -39,7 +39,6 @@ export function WorkBody({ form }: { form: BookModel }) {
     timeStart,
     timeEnd,
     slotFallback,
-    workWarning,
     setWhenOpen,
     blocks,
     recordSmsContext,
@@ -134,8 +133,8 @@ export function WorkBody({ form }: { form: BookModel }) {
         }
       />
 
-      {/* КОГДА — своим блоком ниже; предупреждения о времени живут
-          здесь же, под ним. */}
+      {/* КОГДА — своим блоком ниже. Предупреждений о времени под ним нет:
+          календарь, в котором ставят запись, уже всё показал. */}
       <WhenRow
         date={date}
         timeStart={timeStart}
@@ -143,7 +142,6 @@ export function WorkBody({ form }: { form: BookModel }) {
         // ДЛИТЕЛЬНОСТЬ — ПО КОНЦУ ЗАПИСИ, А НЕ ПО СУММЕ УСЛУГ: конец,
         // заданный руками, докет иначе игнорировал.
         duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-        warning={workWarning}
         onPress={
           can.editWhen
             ? () => {

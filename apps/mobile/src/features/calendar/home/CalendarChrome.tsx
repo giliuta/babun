@@ -2,19 +2,17 @@ import { View } from "react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { CalendarHeader } from "@/features/calendar/CalendarHeader";
-import { CalendarNotice } from "@/features/calendar/CalendarNotice";
 import { ModePlaque } from "@/features/calendar/ModePlaque";
-import { NOTICE_LIFETIME_MS } from "./use-slot-notice";
 import type { CalendarController } from "./use-calendar-controller";
 import { recordComment } from "@/features/calendar/record-title";
 import { TourTarget } from "@/components/tour/TourTarget";
 
-/** Header with the notice, the mode plaque, the calendars ribbon and the
+/** Header, the mode plaque, the calendars ribbon and the
  *  background refresh bar. */
 export function CalendarChrome({ c }: { c: CalendarController }) {
   const {
     headerTitle, mode, now, isOnToday, changeMode, pushBookOnce, activeTeamId,
-    setMiniCalOpen, goToday, notice, setNotice, pickClientId, pickClientName,
+    setMiniCalOpen, goToday, pickClientId, pickClientName,
     activeTeam, setPick, editingApt, clientName, setEditingApt, moving, movingKind,
     teams, isCrew, moveWindowMin, moveLimit, setMoving, chipItems, pendingChipId, chipTeamId,
     pickCalendar, isRefetching, pull, silentRevalidating,
@@ -42,17 +40,6 @@ export function CalendarChrome({ c }: { c: CalendarController }) {
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
-      {notice ? (
-        <CalendarNotice
-          stamp={notice.id}
-          when={notice.when}
-          message={notice.message}
-          actionLabel="Записать"
-          onAction={notice.onAction}
-          onDismiss={() => setNotice(null)}
-          lifetimeMs={NOTICE_LIFETIME_MS}
-        />
-      ) : null}
       </View>
 
       {/* ПЛАШКА РЕЖИМА — «кого записываем» или «что переносим». Пока она

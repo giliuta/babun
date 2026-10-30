@@ -228,9 +228,6 @@ describe("повторный аудит календаря 03.10", () => {
     assert.doesNotMatch(toastSrc, /\{toast \? \(\s*<Animated\.View/);
   });
 
-  test("вопрос «время прошло» снимается сменой команды, вида и компании", () => {
-    assert.match(screen(), /setNotice\(null\);\s*\}, \[activeTeamId, mode, tenantId\]\);/);
-  });
 
   test("«Настроить» метки и шестерёнка — с командой и от двойного тапа", () => {
     const src = screen();

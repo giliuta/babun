@@ -3,7 +3,6 @@ import { describe, test } from "node:test";
 import { formatYMD } from "@/features/appointments/helpers";
 import {
   addDays,
-  isPastSlotAt,
   parseHourHM,
   repeatExpandAnchor,
   repeatExpandWindow,
@@ -70,18 +69,5 @@ describe("repeat expansion window", () => {
       fromKey: "2026-08-27",
       toKey: "2026-12-30",
     });
-  });
-});
-
-describe("past slot", () => {
-  test("earlier day is past, later day is not, today compares with now", () => {
-    assert.equal(isPastSlotAt("2026-10-12", "23:00", "2026-10-13", 600), true);
-    assert.equal(isPastSlotAt("2026-10-14", "00:00", "2026-10-13", 600), false);
-    assert.equal(isPastSlotAt("2026-10-13", "09:45", "2026-10-13", 600), true);
-    assert.equal(isPastSlotAt("2026-10-13", "10:00", "2026-10-13", 600), false);
-  });
-
-  test("today without a known now is not past", () => {
-    assert.equal(isPastSlotAt("2026-10-13", "00:00", "2026-10-13", null), false);
   });
 });

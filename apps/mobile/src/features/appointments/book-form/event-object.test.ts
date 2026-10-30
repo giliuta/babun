@@ -202,7 +202,7 @@ describe("неоплаченный календарь: событие работ
   });
   test("e. сервер отказывает только на клиенте и объекте клиента", () => {
     const sql = readFileSync(
-      resolve(here, "../../../../../../supabase/parked/20261029090000_free_event_without_client_refs.sql"),
+      resolve(here, "../../../../../../supabase/migrations/20261029090000_free_event_without_client_refs.sql"),
       "utf8",
     );
     assert.match(sql, /if new\.client_id is not null or new\.location_id is not null then/);

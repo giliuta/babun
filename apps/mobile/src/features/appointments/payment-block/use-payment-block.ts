@@ -200,9 +200,6 @@ export function usePaymentBlock({
     outstandingLabel: formatEURExact(outstanding / 100),
     overpaid,
     overpaidLabel: formatEURExact(overpaid / 100),
-    billUnsaved,
-    clientUnsaved,
-    slotUnsaved: slotChange,
     visitCancelled,
   });
 

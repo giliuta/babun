@@ -3,8 +3,6 @@ import { duplicateAppointment } from "@babun/shared/local/appointments";
 import { randomUuid } from "@babun/shared/sync";
 import { haptics } from "@/lib/haptics";
 import { addMinutesHM, humanDay } from "@/features/appointments/helpers";
-import { captionFor, offStateAt } from "@/features/calendar/BookSlotSheet";
-import { dayMonthLabel } from "@/features/calendar/day-month-label";
 import {
   cancelAppointmentReminders,
   syncEventAppointmentReminders,
@@ -12,9 +10,7 @@ import {
 import { isCalendarEvent } from "@/features/calendar/event-access";
 import { serverReason } from "@/features/calendar/server-reason";
 import { placementRefusal, placementTeam } from "./appointment-rules";
-import { isPastSlotAt } from "./dates";
 import { settleGate } from "./settle-gate";
-import type { CalendarClock } from "./use-calendar-clock";
 import type { CalendarGrid } from "./use-calendar-grid";
 import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarRoute } from "./use-calendar-route";
@@ -25,11 +21,9 @@ import type { GridModes } from "./use-grid-modes";
 import type { QuickEvents } from "./use-quick-events";
 import type { RecordActions } from "./use-record-actions";
 import type { RecordNaming } from "./use-record-naming";
-import type { SlotNotice } from "./use-slot-notice";
 
 type CreateSlotPlacementDeps =
-  Pick<CalendarClock, "todayYmd" | "nowMinutes">
-  & Pick<CalendarGrid, "freeSlotsFor" | "moveWindowMin" | "workBandFor">
+  Pick<CalendarGrid, "freeSlotsFor" | "moveWindowMin">
   & Pick<CalendarSources, "toast" | "teams" | "updateAppt" | "servicesQuery">
   & Pick<GridModes, "pickClientId" | "pick" | "setMoving" | "editingApt" | "setEditingApt"
     | "moving" | "placedFromRef" | "movingKind">
@@ -39,18 +33,17 @@ type CreateSlotPlacementDeps =
   & Pick<RecordActions, "memberCopy" | "createAppt" | "deleteAppt">
   & Pick<QuickEvents, "attemptId" | "settleAttempt">
   & Pick<RecordNaming, "appointmentTimeZone">
-  & Pick<SlotNotice, "setNotice">
   & Pick<CalendarUiState, "setSlotDraft">;
 
 /** A tap on empty grid time: finish a free move, place a move or a copy on
  *  a green slot, pick a time for a client, or open the new-record sheet. */
 export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
   const {
-    todayYmd, nowMinutes, freeSlotsFor, toast, pickClientId, pick, activeTeamId,
+    freeSlotsFor, toast, pickClientId, pick, activeTeamId,
     pushBookOnce, setMoving, isCrew, memberCopy, moveWindowMin, attemptId,
     settleAttempt, createAppt, deleteAppt, teams, updateAppt, appointmentTimeZone,
-    editingApt, setEditingApt, moving, placedFromRef, movingKind, workBandFor,
-    setNotice, setSlotDraft, tenantId, servicesQuery,
+    editingApt, setEditingApt, moving, placedFromRef, movingKind,
+    setSlotDraft, tenantId, servicesQuery,
   } = deps;
   // Тот же отказ, что гасит зелень (`placementRefusal`): тап по кубику
   // проверяет его на случай, если кубик нарисован до свежих данных.
@@ -62,14 +55,6 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       placementTeam(apt, activeTeamId, isCrew),
       servicesQuery.data ?? [],
     );
-  /** В ПРОШЛОЕ ЗАПИСЫВАЮТ ТОЛЬКО ЧЕРЕЗ ПЛАШКУ: в прошлом сверху
-   *  выезжает плашка с кнопкой. Глухой запрет мешал бы ровно там, где выезд
-   *  состоялся, а завести его забыли. Поэтому у правила есть дверь, и человек
-   *  открывает её осознанно, одним тапом по кнопке на плашке (см. createAt).
-   *  Перенос существующей записи это не трогает: у него свои правила. */
-  const isPastSlot = (dateYmd: string, timeStart: string): boolean =>
-    isPastSlotAt(dateYmd, timeStart, todayYmd, nowMinutes);
-
   /** В режимах подбора и переноса запись ставится ТОЛЬКО в кубик. Зелень обещает «здесь
    *  у команды свободно»; тап мимо неё (обед, нерабочий час, щель между
    *  визитами) уходил в форму молча — и обещание оказывалось краской. */
@@ -282,46 +267,16 @@ export function createSlotPlacement(deps: CreateSlotPlacementDeps) {
       if (placed) placedFromRef.current = moving;
       return;
     }
-    // Кнопка на плашке зовёт ровно тот же путь, минуя проверки: на них уже
-    // ответили тапом по кнопке.
-    const open = () => {
-      haptics.tap();
-      if (pickClientId) {
-        pickSlotForClient(dateYmd, timeStart);
-        return;
-      }
-      setSlotDraft({ date: dateYmd, time: timeStart });
-    };
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
-    // ПЛАШКА ВЫЕЗЖАЕТ НА ТАП ПО СЕТКЕ, И РОВНО ОДИН РАЗ: тап на кнопку плашки открывает
-    // выбор времени, не триггеря её несколько раз. Поэтому причина считается ЗДЕСЬ, до листа, и она одна:
-    // прошлое сильнее нерабочего часа — в позавчерашний выходной незачем
-    // говорить дважды. Дальше по дороге не спрашивает никто: ни лист выбора
-    // времени, ни сама форма записи.
-    const [hh, mm] = timeStart.split(":").map(Number);
-    const off = offStateAt(workBandFor?.(dateYmd), (hh || 0) * 60 + (mm || 0));
-    const reason = isPastSlot(dateYmd, timeStart)
-      ? "Это время уже прошло"
-      : off
-        ? captionFor(off)
-        : null;
-    if (reason) {
-      haptics.warning();
-      const [ny, nm, nd] = dateYmd.split("-").map(Number);
-      setNotice({
-        id: Date.now(),
-        // Дата — всегда, и сегодня тоже.
-        when: `${dayMonthLabel(new Date(ny, nm - 1, nd))}, ${timeStart}`,
-        message: reason,
-        onAction: () => {
-          setNotice(null);
-          open();
-        },
-      });
+    // ПРОШЛОЕ И НЕРАБОЧЕЕ НЕ СПРАШИВАЮТ: тап сразу открывает лист записи.
+    // Серый на сетке уже сказал, что час нерабочий, а выезд в прошлом
+    // заводят осознанно — вопрос «всё равно записать?» только мешал.
+    haptics.tap();
+    if (pickClientId) {
+      pickSlotForClient(dateYmd, timeStart);
       return;
     }
-    setNotice(null);
-    open();
+    setSlotDraft({ date: dateYmd, time: timeStart });
   };
 
   return createAt;
