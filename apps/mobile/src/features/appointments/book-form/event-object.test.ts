@@ -140,7 +140,7 @@ describe("1. событие без клиента — объект в самом
   });
   test("«Добавить объект» без клиента — сразу форма, без тоста и выбора клиента", () => {
     const picks = read("use-record-picks.ts");
-    assert.match(picks, /if \(client\) setObjectSheet\(true\);\s*else setPlaceSheet\(true\);/);
+    assert.match(picks, /if \(client && workInPlan\) setObjectSheet\(true\);\s*else setPlaceSheet\(true\);/);
     assert.doesNotMatch(picks, /Объект заводится клиенту — выберите клиента/);
     const sheets = read("BookPickSheets.tsx");
     assert.match(sheets, /<PlaceSheet\s+visible=\{placeSheet\}/);
@@ -173,15 +173,40 @@ describe("2–3. с клиентом — только его объекты; ч�
   });
 });
 
-describe("4. без тарифа — видно, но серо, тап — плашка тарифа", () => {
-  test("«Клиент» и «Объект» события не прячутся, а гаснут", () => {
+describe("неоплаченный календарь: событие работает, клиент серый, объект события — свой", () => {
+  test("a. само событие тарифом не заперто — только запись клиента", () => {
+    const rights = read("../record-blocks/book-rights.ts");
+    assert.match(rights, /if \(input\.kind === "work"\) return !input\.workInPlan;\s*return !input\.isMember && !input\.ownEvent;/);
+  });
+  test("b. объект события без тарифа доступен; серым — только объект клиента", () => {
+    const block = read("EventObjectBlock.tsx");
+    assert.match(block, /const clientObjects = workInPlan;/);
+    assert.match(block, /return !clientObjects && eventLocationEntry \? \(\s*<TariffLocked locked>\{block\}<\/TariffLocked>/);
+    assert.doesNotMatch(block, /return workInPlan \? block : <TariffLocked locked>/);
+    // Без тарифа «Добавить объект» — форма объекта события, не объект клиента.
+    assert.match(read("use-record-picks.ts"), /if \(client && workInPlan\) setObjectSheet\(true\);\s*else setPlaceSheet\(true\);/);
+    assert.match(block, /objectClientId && eventPickPool\.length > 0/);
+  });
+  test("c. «Клиент» виден, но серый; тап — плашка тарифа", () => {
     const body = read("EventBody.tsx");
     assert.doesNotMatch(body, /\(workInPlan \|\| client\)/);
     assert.match(body, /<TariffLocked locked=\{!workInPlan\}>\s*<SmsComposeProvider/);
-    const block = read("EventObjectBlock.tsx");
-    assert.match(block, /return workInPlan \? block : <TariffLocked locked>\{block\}<\/TariffLocked>;/);
-  });
-  test("плашка — та же, что у «Сохранить» в записи", () => {
     assert.match(read("../../tariffs/TariffLocked.tsx"), /const nudge = useTariffNudge\(\);/);
+  });
+  test("d. запись с клиентом без тарифа — только смотреть, оплата серая", () => {
+    assert.match(read("use-book-rights.ts"), /const can = readOnly \? readOnlyBookRights\(rights\) : rights;/);
+    assert.match(read("../payment-block/use-payment-block.ts"), /const bookingInPlan = usePlanAllows\("book-clients"\);/);
+  });
+  test("один замок тарифа формы — `workInPlan`", () => {
+    assert.match(read("use-book-form.ts"), /ОДНО МЕСТО ЗАМКА ТАРИФА ФОРМЫ[\s\S]{0,400}const workInPlan = usePlanAllows\("book-clients"\);/);
+  });
+  test("e. сервер отказывает только на клиенте и объекте клиента", () => {
+    const sql = readFileSync(
+      resolve(here, "../../../../../../supabase/parked/20261029090000_free_event_without_client_refs.sql"),
+      "utf8",
+    );
+    assert.match(sql, /if new\.client_id is not null or new\.location_id is not null then/);
+    assert.doesNotMatch(sql, /new\.address_lat is not null/);
+    assert.doesNotMatch(sql, /address_note, ''\) <> ''/);
   });
 });

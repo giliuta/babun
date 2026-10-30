@@ -47,6 +47,12 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
   // Объекта «любого клиента» в событии нет: список всех объектов открывал
   // чужие адреса. Старое событие, где такой уже стоит, показывает его как
   // есть — только читать, данные не теряются.
+  // БЕЗ ТАРИФА — ОБЪЕКТ САМОГО СОБЫТИЯ РАБОТАЕТ, ОБЪЕКТ КЛИЕНТА — НЕТ. Объект
+  // события живёт только в событии и клиентской функцией не является; объект
+  // клиента приходит вместе с клиентом, а клиента без тарифа не записать.
+  // Замок — `workInPlan` формы (одно место, `use-book-form.ts`).
+  const clientObjects = workInPlan;
+  const objectClientId = clientObjects ? clientId : null;
   const place = { address: eventAddress, pin: eventPlacePin, note: eventPlaceNote };
   const ownPlace = !eventLocationEntry && hasEventPlace(place);
   const foreign = !!eventLocationEntry && eventLocationEntry.ownerId !== clientId;
@@ -136,7 +142,7 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
               футере выбора), без объектов — сразу добавление; без клиента —
               сразу форма объекта события. Без права менять объект двери нет. */}
           {can.editObject ? (
-            clientId && eventPickPool.length > 0 ? (
+            objectClientId && eventPickPool.length > 0 ? (
               <ChooseRow
                 icon={MapPin}
                 label="Выбрать объект"
@@ -150,7 +156,7 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
               <ChooseRow
                 icon={MapPin}
                 label="Добавить объект"
-                hint={clientId ? "Заводит первый объект клиента" : "Открывает форму объекта"}
+                hint={objectClientId ? "Заводит первый объект клиента" : "Открывает форму объекта"}
                 onPress={openEventObjectAdd}
               />
             )
@@ -160,7 +166,11 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
     </SectionCard>
   );
 
-  // БЕЗ ТАРИФА — ВИДНО, НО СЕРО: тап — плашка тарифа, как у «Сохранить» в
-  // записи. Блок не прячется: спрятанное не объясняет, чего не хватает.
-  return workInPlan ? block : <TariffLocked locked>{block}</TariffLocked>;
+  // ОБЪЕКТ КЛИЕНТА БЕЗ ТАРИФА — ВИДНО, НО СЕРО: тап — плашка тарифа, как у
+  // «Сохранить» в записи. Старое событие показывает его как было.
+  return !clientObjects && eventLocationEntry ? (
+    <TariffLocked locked>{block}</TariffLocked>
+  ) : (
+    block
+  );
 }

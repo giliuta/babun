@@ -55,6 +55,9 @@ interface RecordPicksInput {
   clientPickerOpen: boolean;
   setClientPickerOpen: Setter<boolean>;
   setObjectSheet: Setter<boolean>;
+  /** Клиентские функции по тарифу (`workInPlan` формы): без тарифа объект
+   *  события — только его собственный. */
+  workInPlan: boolean;
   setPlaceSheet: Setter<boolean>;
   router: ReturnType<typeof useRouter>;
 }
@@ -93,6 +96,7 @@ export function useRecordPicks({
   setClientPickerOpen,
   setObjectSheet,
   setPlaceSheet,
+  workInPlan,
   router,
 }: RecordPicksInput) {
   const selectTeam = (nextTeamId: string | null) => {
@@ -268,12 +272,12 @@ export function useRecordPicks({
   };
 
   // «ДОБАВИТЬ ОБЪЕКТ» У СОБЫТИЯ. С клиентом — объект заводится ему, тем же
-  // листом, что в записи. Без клиента — СРАЗУ форма объекта события
-  // (`PlaceSheet`): объект живёт в самом событии, ни списка чужих объектов,
-  // ни выбора клиента «ради объекта».
+  // листом, что в записи. Без клиента или без тарифа — СРАЗУ форма объекта
+  // события (`PlaceSheet`): объект живёт в самом событии, ни списка чужих
+  // объектов, ни выбора клиента «ради объекта».
   const openEventObjectAdd = () => {
     haptics.tap();
-    if (client) setObjectSheet(true);
+    if (client && workInPlan) setObjectSheet(true);
     else setPlaceSheet(true);
   };
   // Правка объекта пишет в карточку его ВЛАДЕЛЬЦА: у события это может быть

@@ -61,6 +61,9 @@ export function useBookForm() {
   // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА ТОЛЬКО СМОТРЯТ (иначе за бесплатный срок можно наставить записей наперёд и
   // добавить туда клиентов). Страница открывается, «Сохранить» серая, тап — плашка про тариф; сервер
   // держит то же (`tenant_free_readonly_guard`).
+  // ОДНО МЕСТО ЗАМКА ТАРИФА ФОРМЫ: клиент, объект клиента, запись клиента и её
+  // оплата смотрят только сюда. Объект самого события и прочее в событии
+  // тарифом не заперты. Тариф переедет в календарь — меняется эта строка.
   const workInPlan = usePlanAllows("book-clients");
   const nudgeTariff = useTariffNudge();
   const { data: dayCities = {} } = useDayCities();
@@ -181,6 +184,7 @@ export function useBookForm() {
     client,
     teamId,
     setTeamId,
+    workInPlan,
     router,
   });
   const notes = useRecordNotes({
