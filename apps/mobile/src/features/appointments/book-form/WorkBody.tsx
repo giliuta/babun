@@ -222,6 +222,9 @@ export function WorkBody({ form }: { form: BookModel }) {
                 custom={customTotal}
                 discountAmount={discountAmount}
                 onPickServices={can.editServices ? () => setServicePickerOpen(true) : undefined}
+                // Ноль убирает услугу из записи — тот же путь, что «−» на
+                // единице в выборе услуг.
+                onRemoveLine={can.editServices ? (id) => form.setQty(id, 0) : undefined}
                 onOpenTotal={can.editTotal ? () => setTotalSheetOpen(true) : undefined}
                 showMoney={can.showMoney}
               />
