@@ -14,7 +14,8 @@
 --     аккаунта одно (партнёры, профиль, пробный): платный, если оплачен хоть
 --     один календарь.
 --   • Сторожа записей (`enforce_plan_limits`, `tenant_free_readonly_guard`,
---     `sms_messages_tier_guard`) и онлайн-запись судят по календарю СТРОКИ:
+--     `sms_messages_tier_guard`, `free_event_without_client_refs`) и
+--     онлайн-запись судят по календарю СТРОКИ:
 --     клиенты, записи, услуги, документы и SMS неоплаченного календаря —
 --     только для просмотра, остальные календари работают.
 --   • Календари больше не упираются в лимит: новый бесплатен, пока в нём нет
@@ -520,6 +521,42 @@ begin
 end;
 $function$;
 
+-- Событие неоплаченного календаря — без клиента и объекта клиента: тот же
+-- сторож, что накатан раньше, но тариф — календаря события, а не аккаунта.
+-- Иначе один оплаченный календарь открыл бы клиентов в событиях всех.
+create or replace function public.free_event_without_client_refs()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+begin
+  if auth.uid() is null
+     or new.kind is distinct from 'event'
+     or (case
+           when new.team_id is not null then public.calendar_effective_plan(new.tenant_id, new.team_id)
+           else public.tenant_effective_plan(new.tenant_id)
+         end) is distinct from 'free' then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.client_id is not null or new.location_id is not null then
+      raise exception 'Клиент в событии — после оплаты календаря'
+        using errcode = 'P0001', hint = 'plan:book-clients';
+    end if;
+    return new;
+  end if;
+
+  if (new.client_id is not null and new.client_id is distinct from old.client_id)
+     or (new.location_id is not null and new.location_id is distinct from old.location_id) then
+    raise exception 'Клиент в событии — после оплаты календаря'
+      using errcode = 'P0001', hint = 'plan:book-clients';
+  end if;
+  return new;
+end;
+$function$;
+
 create or replace function public.online_booking_resolve(p_token text)
 returns table(tenant_id uuid, team_id text, state text, business_name text, logo_url text, calendar_name text, country text, tz text)
 language plpgsql
@@ -595,6 +632,18 @@ begin
        and pg_get_functiondef(p.oid) like '%team_is_working(%'
   ) then
     raise exception 'calendar_subscriptions: team_is_working ещё зовут';
+  end if;
+  -- Сторожа строк календаря спрашивают тариф календаря, а не аккаунта.
+  if exists (
+    select 1
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.proname in ('enforce_plan_limits', 'tenant_free_readonly_guard',
+                         'sms_messages_tier_guard', 'free_event_without_client_refs',
+                         'online_booking_resolve')
+       and pg_get_functiondef(p.oid) not like '%calendar_effective_plan(%'
+  ) then
+    raise exception 'calendar_subscriptions: сторож календаря судит тарифом аккаунта';
   end if;
 end;
 $$;
