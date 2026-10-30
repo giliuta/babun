@@ -90,6 +90,7 @@ function CreateMode(props: Extract<ObjectSheetProps, { mode: "create" }>) {
       {...props}
       teamId={teamId}
       title="Новый объект"
+      draft
       value={form.value}
       typeOptions={typeOptions}
       onChange={form.onChange}
@@ -208,6 +209,7 @@ export function PlaceSheet({
     <Shell
       visible={visible}
       title={initial ? "Объект" : "Новый объект"}
+      draft={!initial}
       teamId={null}
       value={value}
       typeOptions={[]}
@@ -256,6 +258,7 @@ function Shell({
   extra,
   footer,
   noType = false,
+  draft = false,
 }: {
   visible: boolean;
   title: string;
@@ -275,6 +278,8 @@ function Shell({
   footer: ReactNode;
   /** Без «Типа объекта» (`PlaceSheet`). */
   noType?: boolean;
+  /** Новый объект — меню полей со «Вставить» стоит всегда (`ObjectFields`). */
+  draft?: boolean;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -322,6 +327,7 @@ function Shell({
         <ObjectFields
           addressRef={addressRef}
           noType={noType}
+          draft={draft}
           teamId={teamId}
           value={value}
           typeOptions={typeOptions}

@@ -102,6 +102,7 @@ export function ObjectFields({
   addressRef,
   teamId = null,
   noType = false,
+  draft = false,
 }: {
   value: ObjectFieldsValue;
   typeOptions: string[];
@@ -124,11 +125,16 @@ export function ObjectFields({
   /** Без блока «Тип объекта»: объект события без клиента хранится в самом
    *  событии, и типа у него держать негде. */
   noType?: boolean;
+  /** Новый объект: всё в полях вписал сам человек, и меню поля — со
+   *  «Вставить» — стоит всегда. iOS прячет меню целиком, вместе со вставкой,
+   *  а без вставки ссылку на карту в адрес не положить. */
+  draft?: boolean;
 }) {
   const t = useThemeColors();
-  // Без выноса: у сотрудника чужой компании адрес и заметку объекта
-  // не скопировать.
+  // Без выноса: у сотрудника чужой компании адрес и заметку сохранённого
+  // объекта не скопировать.
   const caps = useClientsCapabilities();
+  const noCopy = !draft && !caps.export;
   /** Раскрыта ли карта под адресом. */
   const [mapOpen, setMapOpen] = useState(false);
   /** Поднят ли список типов объекта. */
@@ -286,7 +292,7 @@ export function ObjectFields({
           label="Адрес"
           hideLabel
           big
-          noCopy={!caps.export}
+          noCopy={noCopy}
           value={value.target}
           placeholder="Улица и дом или ссылка на карту"
           stacked
@@ -335,6 +341,7 @@ export function ObjectFields({
             parts={value.parts}
             onChange={(parts) => onChange({ parts })}
             onEditEnd={onCommit}
+            noCopy={noCopy}
           />
         ) : null}
       </SectionCard>
@@ -347,7 +354,7 @@ export function ObjectFields({
             value={value.note}
             onChangeText={(v) => onChange({ note: v })}
             onBlur={onCommit}
-            contextMenuHidden={!caps.export}
+            contextMenuHidden={noCopy}
             multiline
             accessibilityLabel="Заметка объекта"
             // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ. Пример «как

@@ -144,13 +144,20 @@ export function AddressDetailsFields({
   parts,
   onChange,
   onEditEnd,
+  noCopy,
 }: {
   /** Точный адрес — части без улицы (см. withoutStreet). */
   parts: AddressParts;
   onChange: (next: AddressParts) => void;
   /** Уход с любого поля — момент записи у правки объекта. */
   onEditEnd?: () => void;
+  /** Спрятать меню полей (копировать и вставить). Не передан — по праву
+   *  выноса; у нового объекта форма передаёт `false`. */
+  noCopy?: boolean;
 }) {
+  // Без выноса: у сотрудника чужой компании части адреса не скопировать.
+  const caps = useClientsCapabilities();
+  const hideMenu = noCopy ?? !caps.export;
   const set = (key: keyof AddressParts) => (value: string) =>
     onChange({ ...parts, [key]: value });
   // ПОЛЯ-ПОДЛОЖКИ, А НЕ ТАБЛИЦА. Сетка из строк с подписями
@@ -167,6 +174,7 @@ export function AddressDetailsFields({
         autoCapitalize="words"
         onChange={set("complex")}
         onEditEnd={onEditEnd}
+        noCopy={hideMenu}
       />
       <View style={{ flexDirection: "row", gap: 10 }}>
         {SHORT.map((field) => (
@@ -176,6 +184,7 @@ export function AddressDetailsFields({
             value={parts[field.key] ?? ""}
             onChange={set(field.key)}
             onEditEnd={onEditEnd}
+            noCopy={hideMenu}
           />
         ))}
       </View>
@@ -187,6 +196,7 @@ export function AddressDetailsFields({
             autoCapitalize="words"
             onChange={set("city")}
             onEditEnd={onEditEnd}
+            noCopy={hideMenu}
           />
         </View>
         <View style={{ flex: 1 }}>
@@ -196,6 +206,7 @@ export function AddressDetailsFields({
             keyboardType="numbers-and-punctuation"
             onChange={set("zip")}
             onEditEnd={onEditEnd}
+            noCopy={hideMenu}
           />
         </View>
       </View>
@@ -212,6 +223,7 @@ function DetailBox({
   autoCapitalize,
   onChange,
   onEditEnd,
+  noCopy,
 }: {
   label: string;
   value: string;
@@ -219,11 +231,10 @@ function DetailBox({
   autoCapitalize?: "none" | "words";
   onChange: (next: string) => void;
   onEditEnd?: () => void;
+  noCopy: boolean;
 }) {
   const t = useThemeColors();
   const input = useRef<TextInput>(null);
-  // Без выноса: у сотрудника чужой компании части адреса не скопировать.
-  const caps = useClientsCapabilities();
   // ПОДПИСЬ — ПОДСКАЗКОЙ ВНУТРИ ПОЛЯ: нажали на «Город» и вписали туда. Поле во всю ширину,
   // подсказка уходит с первой буквой; каждое поле — своя плашка. Заполненное
   // поле держит подпись мелко сверху: иначе «4», «4», «33» в ряд неотличимы.
@@ -257,7 +268,7 @@ function DetailBox({
         placeholder={label}
         placeholderTextColor={t.placeholder}
         accessibilityLabel={label}
-        contextMenuHidden={!caps.export}
+        contextMenuHidden={noCopy}
         selectionColor={t.accent}
         keyboardAppearance="light"
         keyboardType={keyboardType}
