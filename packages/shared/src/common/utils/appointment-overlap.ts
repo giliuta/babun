@@ -9,9 +9,7 @@
 //     ranges intersect.
 //   · Cancelled rows never count (they're ghosts).
 //   · Personal events / kind="event" never collide with work
-//     appointments and vice versa — except in the event form, which passes
-//     `withTeamEvents`: a team event against another event of the SAME team
-//     is the same people at the same time. Grid reschedule never passes it.
+//     appointments and vice versa.
 
 interface OverlapCandidate {
   id?: string;
@@ -27,15 +25,9 @@ interface OverlapExisting extends OverlapCandidate {
   status?: string;
 }
 
-interface OverlapOptions {
-  /** Existing events of the candidate's team count as overlaps too. */
-  withTeamEvents?: boolean;
-}
-
 export function findOverlap(
   candidate: OverlapCandidate,
   existing: readonly OverlapExisting[],
-  options: OverlapOptions = {},
 ): OverlapExisting | null {
   if (!candidate.team_id) return null;
   if (candidate.kind === "event" || candidate.kind === "personal") return null;
@@ -51,8 +43,7 @@ export function findOverlap(
     if (other.status === "cancelled") continue;
     if (other.date !== candidate.date) continue;
     if (other.team_id !== candidate.team_id) continue;
-    if (other.kind === "personal") continue;
-    if (other.kind === "event" && !options.withTeamEvents) continue;
+    if (other.kind === "event" || other.kind === "personal") continue;
     if (
       candidate.time_start < other.time_end &&
       other.time_start < candidate.time_end

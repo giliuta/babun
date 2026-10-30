@@ -19,7 +19,6 @@ import { useClientLocations } from "./use-client-locations";
 import { useTeamLabel } from "./use-team-label";
 import { useBookPrefill } from "./use-book-prefill";
 import { useBookTotals } from "./use-book-totals";
-import { useSlotWarnings } from "./use-slot-warnings";
 import { useRecordPicks } from "./use-record-picks";
 import { useRecordNotes } from "./use-record-notes";
 import { serviceLineActions } from "./service-line-actions";
@@ -166,22 +165,6 @@ export function useBookForm() {
     teamId,
     slotFallback: label.slotFallback,
   });
-  const slot = useSlotWarnings({
-    allAppts,
-    // НОВАЯ ЗАПИСЬ СВЕРЯЕТСЯ ПОД СВОИМ БУДУЩИМ id. Создание кладёт её в список
-    // дня сразу, ещё под спиннером «Создать», — и под чужим id черновик
-    // находил в нём самого себя: на миг вспыхивало «Пересекается с событием
-    // этой команды».
-    editId: draft.editId ?? draft.newRecordIdRef.current,
-    kind,
-    teamId,
-    date,
-    timeStart,
-    timeEnd,
-    schedule: draft.teamScheduleQuery.data,
-    calendarSettings,
-    teams,
-  });
   const picks = useRecordPicks({
     ...refs,
     ...draft,
@@ -275,9 +258,6 @@ export function useBookForm() {
     bookingBusy,
     workInPlan,
     archivedRecord: label.archivedRecord,
-    hydrated: draft.hydrated,
-    overlap: slot.overlap,
-    timeWarning: slot.timeWarning,
   });
   // Что на форме сейчас — тем же видом, что ложится в черновик на телефоне.
   const snapshot = {

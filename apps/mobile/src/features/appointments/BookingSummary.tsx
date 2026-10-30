@@ -4,7 +4,7 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { AlertTriangle, ChevronRight } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -105,7 +105,6 @@ export function WhenRow({
   timeEnd,
   duration,
   allDay,
-  warning,
   onPress,
   until,
   dateLabel,
@@ -127,7 +126,6 @@ export function WhenRow({
   timeEnd?: string;
   duration?: number;
   allDay?: boolean;
-  warning?: string | null;
   /** Нет — та же плашка, только для чтения: время записи человеку не
    *  меняется (STORY-084, одна страница записи для всех). */
   onPress?: () => void;
@@ -267,30 +265,6 @@ export function WhenRow({
         </Pressable>
       </Card>
 
-      {warning ? (
-        <View
-          className="mt-2 flex-row items-center gap-2 rounded-[10px] px-3 py-2.5"
-          style={{
-            backgroundColor: `${t.warning}14`,
-            borderWidth: 1,
-            borderColor: `${t.warning}33`,
-          }}
-          accessibilityLiveRegion="assertive"
-          accessibilityRole="alert"
-        >
-          <AlertTriangle color={t.warning} size={ICON.sm} />
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "500",
-              color: t.warning,
-              flex: 1,
-            }}
-          >
-            {warning}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }

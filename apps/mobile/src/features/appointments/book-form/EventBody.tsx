@@ -32,7 +32,6 @@ export function EventBody({ form }: { form: BookModel }) {
     timeStart,
     timeEnd,
     slotFallback,
-    workWarning,
     setWhenOpen,
     eventBlocks,
     evShowType,
@@ -110,7 +109,6 @@ export function EventBody({ form }: { form: BookModel }) {
         timeStart={timeStart}
         timeEnd={timeEnd}
         duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-        warning={workWarning}
         onPress={
           can.editWhen
             ? () => {
