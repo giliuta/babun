@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { AppState, Pressable, ScrollView, Text, View } from "react-native";
+import { AppState, ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, Check, CreditCard, Layers } from "lucide-react-native";
+import { Check, CreditCard, Receipt } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { PageFooter } from "@/components/ui/PageFooter";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -15,83 +17,59 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, TYPE, SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 import { useAccountGate, useAccountName, useAccountScope } from "@/session/account-scope";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import {
-  TIER_CARDS,
-  calendarsMonthly,
-  tiersForKind,
-  TIER_LIMITS,
+  CALENDAR_CARD,
   partnerTariffAction,
   tariffAction,
   tariffStatus,
-  tierName,
-  workingTeamIds,
   type BillingPeriod,
-  type Tier,
-  type TierCard,
+  type TariffState,
 } from "@/session/tiers";
-import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "./use-tariff";
-import { useLiveCalendarCount } from "./use-live-calendars";
+import { openTariffCheckout, openTariffPortal, useCalendarTariff, useStartTrial } from "./use-tariff";
+import { usePageCalendar } from "./use-page-calendar";
 
-// КАБИНЕТ → ТАРИФ — ЦЕНА ЗА КАЛЕНДАРЬ (€9,99 в месяц за рабочий календарь,
-// €7,99 при оплате за год, люди бесплатно). Пробный 14 дней без карты — один раз; оплата —
-// страница Stripe в браузере.
+// ТАРИФ КАЛЕНДАРЯ — €9,99 в месяц, €7,99 в месяц при оплате за год; люди
+// бесплатно. Сюда ведёт строка «Тариф» в шестерёнке календаря: у каждого
+// календаря своя подписка, один можно оплатить, а другой нет. Пробный 14
+// дней без карты — один раз на аккаунт и сразу на все его календари; оплата
+// — страница Stripe в браузере.
 //
-// Сверху — что действует сейчас; ниже — карточка «Календарь»: цена одного и
-// итог за все живые календари аккаунта; действие страницы одно, в футере:
-// «Попробовать 14 дней», «Оплатить €… в месяц» («… за год» — переключатель
-// «Месяц · Год» под карточкой) или, когда старая подписка есть, «Перейти на
-// цену за календарь». Подписка есть — строка
-// «Управление подпиской» (страница Stripe: карта, счета, отмена). Команд
-// больше лимита — строка «Рабочие команды» ведёт к выбору, какие работают;
-// остальные только смотрят.
+// Сверху — что действует у этого календаря; под ним «Управление подпиской»
+// (страница Stripe: карта, счета, отмена — общая на все календари аккаунта)
+// и «Оплаты» этого календаря. Ниже — цена; действие страницы одно, в футере:
+// «Попробовать 14 дней», «Оплатить €… в месяц» («… за год» —
+// переключатель «Месяц · Год») или, у оплаченного, переход на другой период.
 //
 // Тариф после оплаты приходит вебхуком Stripe: вернулся из браузера —
-// профиль перечитывается.
+// тариф перечитывается.
 //
-// ТАРИФ АККАУНТА, КОТОРЫЙ ПРИГЛАСИЛ: из блока аккаунта в Кабинете
-// страница открыта партнёру с правом «Тариф» — шапка называет аккаунт.
-// «Видит» — только что действует; «Оплачивает» — кнопка «Оплатить … за
-// <аккаунт>», пока подписки нет. Пробный, смена тарифа, рабочие команды и
-// управление подпиской — у владельца.
-//
-// ПРОБНЫЙ — ТОЛЬКО КНОПКОЙ ЗДЕСЬ: автоматически он не включается, ни после
-// регистрации, ни при первом входе. Новый аккаунт начинает без тарифа, а
-// «Попробовать 14 дней» стоит здесь в любой сборке.
+// ПАРТНЁР видит страницу по праву «Тариф»: «Видит» — только что действует;
+// «Оплачивает» — кнопка «Оплатить … за <аккаунт>», пока подписки нет.
+// Пробный, смена периода и управление подпиской — у владельца.
 //
 // В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА БЕЗ ОПЛАТЫ (`CAN_PAY_HERE` выключен, `pay-here.ts`)
-// — строка тарифа со сроком, «Рабочие команды» и только кнопка пробного «Про»:
-// он бесплатный, это не покупка. Выбор тарифа и оплата — на babun.app.
+// — строка состояния и только кнопка пробного: он бесплатный, это не
+// покупка. Цена и оплата — на babun.app.
 
 export function TariffScreen() {
   const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
-  const { state, periodEnd, workingChosen } = useTariff();
+  const { team, loading: teamLoading } = usePageCalendar();
+  const { state, periodEnd, loading } = useCalendarTariff(team?.id);
   const scope = useAccountScope();
-  const offered = tiersForKind(null);
   const owner = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.tariff");
+  const paymentsGate = useAccountGate("cabinet.tariff_payments");
   const accountName = useAccountName();
-  const { data: teams = [] } = useTeams();
-  const liveCount = useLiveCalendarCount();
   const startTrial = useStartTrial();
   const [paying, setPaying] = useState(false);
-  const current = state.tier && state.tier !== "free" ? state.tier : null;
-  // Выбор человека; пока не выбирал — действующий тариф (профиль может
-  // приехать после первого кадра).
-  const [picked, setPicked] = useState<Exclude<Tier, "free"> | null>(null);
-  const [period, setPeriod] = useState<BillingPeriod>("month");
-  // Выдан навсегда — выбирать нечего: выделен свой тариф, а не прошлый тап.
-  // Без плиток выбора (сборка без оплаты) пробный — на основной «Про».
-  const fallback = offered[0]!;
-  const selected = state.forever
-    ? (current ?? "max")
-    : (picked ?? current ?? fallback);
+  // Выбор человека; пока не выбирал — период живой подписки (или месяц).
+  const [picked, setPicked] = useState<BillingPeriod | null>(null);
+  const period = picked ?? state.period ?? "month";
 
   // Вернулся из браузера (оплата, управление подпиской) — перечитать тариф.
   useEffect(() => {
@@ -101,33 +79,19 @@ export function TariffScreen() {
     return () => sub.remove();
   }, [qc]);
 
-  const live = teams.filter((team) => team.is_active !== false);
-  const limit = state.tier ? TIER_LIMITS[state.tier].teams : live.length;
-  // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
-  const overLimit = owner && !scope.foreign && live.length > limit;
-  const working = workingTeamIds(live, state.tier, workingChosen);
-  // Платят за каждый живой календарь с работой — столько и в кнопке; счёт —
-  // по аккаунту страницы, а не по открытому в календаре. Пока число не
-  // пришло — минимум подписки, а не все живые: календари только с событиями
-  // бесплатны.
-  const calendars = Math.max(1, liveCount ?? 0);
   const full = owner
-    ? tariffAction(state, selected, calendars, period)
+    ? tariffAction(state, period)
     : gate === "write"
-      ? partnerTariffAction(state, selected, accountName, calendars, period)
+      ? partnerTariffAction(state, accountName, period)
       : null;
   // Без оплаты здесь — только бесплатный пробный.
   const action = CAN_PAY_HERE ? full : full?.kind === "trial" ? full : null;
-  // Выбирать тариф есть смысл тому, кто может за него заплатить.
-  const canPick = !state.forever && (owner || gate === "write");
-  // Плитки тарифов — только там, где тариф выбирают: на сайте.
-  const showTiers = CAN_PAY_HERE;
 
   const run = async () => {
-    if (!action) return;
+    if (!action || !team) return;
     if (action.kind === "trial") {
       try {
-        await startTrial.mutateAsync(selected);
+        await startTrial.mutateAsync("max");
         toast("Пробный — 14 дней", "success");
       } catch (e) {
         notify("Пробный не включился", e instanceof Error ? e.message : undefined);
@@ -136,15 +100,15 @@ export function TariffScreen() {
     }
     setPaying(true);
     try {
-      const result = await openTariffCheckout(selected, scope.foreign ? scope.tenantId : null, undefined, period);
+      const result = await openTariffCheckout({ teamId: team.id, period });
       if (result === "changed") {
-        toast("Оплата за календари обновлена", "success");
+        toast("Оплата календаря обновлена", "success");
         // Тариф пишет вебхук Stripe — через пару секунд.
         void qc.invalidateQueries({ queryKey: ["tenant"] });
         setTimeout(() => void qc.invalidateQueries({ queryKey: ["tenant"] }), 4000);
       }
     } catch (e) {
-      notify(action.kind === "change" ? "Тариф не сменился" : "Оплата не открылась", e instanceof Error ? e.message : undefined);
+      notify(action.kind === "change" ? "Оплата не сменилась" : "Оплата не открылась", e instanceof Error ? e.message : undefined);
     } finally {
       setPaying(false);
     }
@@ -153,7 +117,7 @@ export function TariffScreen() {
   const manage = async () => {
     setPaying(true);
     try {
-      await openTariffPortal(scope.foreign ? scope.tenantId : null);
+      await openTariffPortal(null, team?.id);
     } catch (e) {
       notify("Подписка не открылась", e instanceof Error ? e.message : undefined);
     } finally {
@@ -175,91 +139,87 @@ export function TariffScreen() {
     );
   }
 
+  if (!team) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Тариф" />
+        <EmptyState fill state={teamLoading ? "loading" : undefined} title={teamLoading ? undefined : "Календарей пока нет"} />
+      </Screen>
+    );
+  }
+
+  const showPeriod =
+    CAN_PAY_HERE && ((action != null && action.kind !== "trial") || (owner && state.paid && !!state.period));
+  // Оплаты — у оплаченного: у календаря без подписки дверь вела бы в пустую
+  // страницу.
+  const seesPayments = CAN_PAY_HERE && state.paid && (owner || paymentsGate === "read" || paymentsGate === "write");
+
   return (
     <Screen edges={["top"]}>
       {/* Чужой аккаунт — его имя в шапке: платят за него, а не за свой. */}
-      <ScreenHeader title="Тариф" subtitle={!owner || scope.foreign ? (accountName ?? undefined) : undefined} />
+      <ScreenHeader title="Тариф" subtitle={owner ? undefined : (accountName ?? undefined)} />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionCard>
-          {/* Плитка — та же, что у «Тарифа» в корне Кабинета: дверь и
-              страница узнаются одним пятном. */}
+          {/* Плитка — цвет календаря: страница узнаётся тем же пятном, что
+              его чип и строка в шестерёнке. */}
           <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={BadgeCheck}
-            title={state.tier ? tierName(state.tier) : "—"}
-            sub={tariffStatus(state, periodEnd, CAN_PAY_HERE)}
+            appearance={{ color: team.color }}
+            title={team.name}
+            sub={loading ? undefined : tariffStatus(state, periodEnd, CAN_PAY_HERE)}
           />
-          {overLimit ? (
-            <>
-              <Divider inset={SETTINGS_ROW_INSET} />
-              <SettingsRow
-                tile={SETTINGS_TILE.indigo}
-                icon={Layers}
-                title="Рабочие команды"
-                sub={`Работают ${working.size} из ${live.length}`}
-                onPress={() => router.push("/cabinet/tariff-teams" as Href)}
-              />
-            </>
-          ) : null}
-          {CAN_PAY_HERE && owner && state.paid && !state.forever ? (
+          {CAN_PAY_HERE && owner && state.paid ? (
             <>
               <Divider inset={SETTINGS_ROW_INSET} />
               <SettingsRow
                 tile={SETTINGS_TILE.green}
                 icon={CreditCard}
                 title="Управление подпиской"
+                sub="Карта, счета, отмена"
                 onPress={paying ? undefined : () => void manage()}
+              />
+            </>
+          ) : null}
+          {seesPayments ? (
+            <>
+              <Divider inset={SETTINGS_ROW_INSET} />
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={Receipt}
+                title="Оплаты"
+                sub="Чеки этого календаря"
+                onPress={() => router.push(`/calendar/tariff-payments?team=${encodeURIComponent(team.id)}` as Href)}
               />
             </>
           ) : null}
         </SectionCard>
 
-        {showTiers ? <SectionEyebrow>Цена</SectionEyebrow> : null}
-        {(showTiers ? TIER_CARDS.filter((card) => offered.includes(card.tier)) : []).map((card) => (
-          <TierTile
-            key={card.tier}
-            card={card}
-            calendars={calendars}
-            forever={state.forever}
-            selected={selected === card.tier}
-            mark={
-              current === card.tier
-                ? state.forever
-                  ? // Выдан навсегда: «Ваш» рядом с ценой читалось как своя
-                    // цена, хотя этот аккаунт не платит ничего.
-                    "Навсегда"
-                  : state.trial
-                  ? "Пробный"
-                  : // Партнёру тариф не «его» — аккаунта, который пригласил.
-                    owner
-                    ? "Ваш"
-                    : "Действует"
-                : null
-            }
-            // Выдан навсегда — выбирать нечего: ни пробного, ни оплаты.
-            onPress={canPick ? () => setPicked(card.tier) : undefined}
-          />
-        ))}
+        {CAN_PAY_HERE ? (
+          <>
+            <SectionEyebrow>Цена</SectionEyebrow>
+            <PriceCard state={state} />
+          </>
+        ) : null}
         {/* Период — только у оплаты: пробный бесплатный, а у выданного
-            навсегда и своего оплаченного кнопки нет. */}
-        {showTiers && action && action.kind !== "trial" ? (
+            навсегда кнопки нет. У оплаченного он стоит на своём, и выбор
+            другого даёт кнопку перехода. */}
+        {showPeriod ? (
           <SegmentedControl
             options={PERIOD_OPTIONS}
             value={period}
-            onChange={setPeriod}
+            onChange={setPicked}
             style={{ marginHorizontal: GUTTER, marginTop: 12 }}
           />
         ) : null}
       </ScrollView>
 
       {action ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <PageFooter>
           <GradientButton
             label={action.label}
             loading={startTrial.isPending || paying}
             onPress={() => void run()}
           />
-        </View>
+        </PageFooter>
       ) : null}
     </Screen>
   );
@@ -270,40 +230,31 @@ const PERIOD_OPTIONS = [
   { value: "year", label: "Год" },
 ] as const satisfies readonly { value: BillingPeriod; label: string }[];
 
-function TierTile({
-  card,
-  calendars,
-  forever,
-  selected: on,
-  mark,
-  onPress,
-}: {
-  card: TierCard;
-  /** Живых календарей аккаунта — итог в месяц под ценой одного. */
-  calendars: number;
-  /** Тариф выдан навсегда: аккаунт не платит, и счёт «за столько-то
-   *  календарей» ему не про что. */
-  forever: boolean;
-  selected: boolean;
-  mark: string | null;
-  onPress?: () => void;
-}) {
+/** Метка у имени цены — что у календаря сейчас. */
+function priceMark(state: TariffState): string | null {
+  if (state.forever) return "Навсегда";
+  if (state.paid) return "Оплачен";
+  if (state.trial) return "Пробный";
+  return null;
+}
+
+function PriceCard({ state }: { state: TariffState }) {
   const t = useThemeColors();
+  const card = CALENDAR_CARD;
+  const mark = priceMark(state);
+  // Выданному навсегда цены не печатаем вовсе: ни за месяц, ни за год —
+  // это не его счёт.
+  const priced = !state.forever;
   return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected: on }}
-      // Цены — только там, где за тариф можно заплатить (`pay-here.ts`).
-      accessibilityLabel={CAN_PAY_HERE && !forever ? `${card.name}, ${card.monthly} в месяц` : card.name}
-      onPress={onPress}
+    <View
+      accessible
+      accessibilityLabel={priced ? `${card.name}, ${card.monthly} в месяц` : card.name}
       style={{
         marginHorizontal: GUTTER,
         marginTop: 8,
         borderRadius: t.radius.card,
         borderCurve: "continuous",
-        // ВЫБРАННЫЙ — ТИНТОМ, БЕЗ РАМКИ 2pt: рамка была единственной на
-        // продукт; выбор везде говорит заливкой (канон шторки выбора).
-        backgroundColor: on ? `${t.accent}14` : t.surface,
+        backgroundColor: t.surface,
         boxShadow: t.cardShadow,
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -312,15 +263,11 @@ function TierTile({
     >
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
         <Text style={{ ...TYPE.headline, color: t.ink }}>{card.name}</Text>
-        {mark ? (
-          <Text style={{ ...TYPE.subhead, color: t.accent }}>{mark}</Text>
-        ) : null}
+        {mark ? <Text style={{ ...TYPE.subhead, color: t.accent }}>{mark}</Text> : null}
         <View style={{ flex: 1 }} />
-        {CAN_PAY_HERE && !forever ? (
+        {priced ? (
           <>
-            <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>
-              {card.monthly}
-            </Text>
+            <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>{card.monthly}</Text>
             <Text style={{ ...TYPE.subhead, color: t.faint }}>в месяц</Text>
           </>
         ) : null}
@@ -333,19 +280,10 @@ function TierTile({
           </View>
         ))}
       </View>
-      {/* Выданному навсегда цены не печатаем вовсе: ни за месяц, ни за год —
-          это не его счёт. */}
-      {CAN_PAY_HERE && !forever ? (
-        <View style={{ gap: 2 }}>
-          <Text style={{ ...TYPE.subhead, color: t.ink }}>
-            {`Рабочих календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
-          </Text>
-          <Text style={{ ...TYPE.subhead, color: t.faint }}>
-            {`За год — ${card.yearlyMonthly} за календарь в месяц`}
-          </Text>
-        </View>
+      {priced ? (
+        <Text style={{ ...TYPE.subhead, color: t.faint }}>{`За год — ${card.yearlyMonthly} в месяц`}</Text>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 

@@ -10,7 +10,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useDataRole } from "@/session/tenant";
-import { openTariffPortal, useTariff } from "@/features/tariffs/use-tariff";
+import { openTariffPortal, useCalendarTariff } from "@/features/tariffs/use-tariff";
+import { usePageCalendar } from "@/features/tariffs/use-page-calendar";
 import { loadErrorWords } from "@/lib/connection-words";
 import { notify } from "@/lib/notify";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
@@ -21,9 +22,9 @@ import { groupByMonth, paymentSub, paymentValue, type TariffPayment } from "./ta
 import { useAccountGate, useAccountName, useAccountScope } from "@/session/account-scope";
 import { useTariffPayments } from "./use-tariff-payments";
 
-// «ОПЛАТЫ ТАРИФА» (Кабинет).
-// История списаний за подписку: события Stripe из `billing_events`, по
-// месяцам. Строка — тариф, срок, сумма; не прошедшая оплата красная и
+// «ОПЛАТЫ» КАЛЕНДАРЯ (страница тарифа календаря → «Оплаты»).
+// История списаний за подписку этого календаря: события Stripe из
+// `billing_events`, по месяцам. Строка — тариф, срок, сумма; не прошедшая оплата красная и
 // подписана «не прошла». Тап по строке открывает чек Stripe (нет чека — pdf
 // счёта) в браузере.
 //
@@ -31,9 +32,8 @@ import { useTariffPayments } from "./use-tariff-payments";
 // стоит и при пустой истории: подписка могла оформиться раньше, чем вебхук
 // начал записывать события, и тогда управлять ей всё равно нужно.
 //
-// Видит владелец аккаунта и партнёр с правом «Оплаты тарифа» (из
-// блока аккаунта, который пригласил: шапка называет аккаунт); остальным —
-// слова. Управлять подпиской — только владелец, и только на сайте: в
+// Видит владелец аккаунта и партнёр с правом «Оплаты тарифа» (шапка
+// называет календарь); остальным — слова. Управлять подпиской — только владелец, и только на сайте: в
 // приложении из магазина двери в Stripe нет (`pay-here.ts`).
 
 // Вшитый отступ разделителя нейтральной строки: поле 16 + глиф 20 + зазор 12.
@@ -55,7 +55,8 @@ export function TariffPaymentsScreen() {
   const owner = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.tariff_payments");
   const accountName = useAccountName();
-  const payments = useTariffPayments();
+  const { team } = usePageCalendar();
+  const payments = useTariffPayments(undefined, team?.id ?? null);
   const pull = usePullRefresh(payments.refetch);
   const opening = useRef(false);
   const months = useMemo(() => groupByMonth(payments.data ?? []), [payments.data]);
@@ -67,7 +68,7 @@ export function TariffPaymentsScreen() {
   // оплатами в истории. На пробном и без тарифа строка вела в «Подписки ещё
   // нет — сначала оплатите тариф»; у «навсегда»
   // подписки нет вовсе.
-  const tariffState = useTariff().state;
+  const tariffState = useCalendarTariff(team?.id).state;
   const hasSubscription = tariffState.paid && !tariffState.forever;
   const now = Date.now();
 
@@ -75,7 +76,7 @@ export function TariffPaymentsScreen() {
     if (opening.current) return;
     opening.current = true;
     try {
-      await openTariffPortal(scope.foreign ? scope.tenantId : null);
+      await openTariffPortal(scope.foreign ? scope.tenantId : null, team?.id);
     } catch (e) {
       notify("Подписка не открылась", e instanceof Error ? e.message : undefined);
     } finally {
@@ -172,7 +173,7 @@ export function TariffPaymentsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Оплаты тарифа" subtitle={!owner || scope.foreign ? (accountName ?? undefined) : undefined} />
+      <ScreenHeader title="Оплаты" subtitle={team?.name ?? (accountName ?? undefined)} />
       {renderBody()}
     </Screen>
   );

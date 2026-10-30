@@ -182,6 +182,6 @@ describe("4. без тарифа — видно, но серо, тап — пл�
     assert.match(block, /return workInPlan \? block : <TariffLocked locked>\{block\}<\/TariffLocked>;/);
   });
   test("плашка — та же, что у «Сохранить» в записи", () => {
-    assert.match(read("../../tariffs/TariffLocked.tsx"), /const nudge = useTariffNudge\(\);/);
+    assert.match(read("../../tariffs/TariffLocked.tsx"), /const nudge = useTariffNudge\(teamId\);/);
   });
 });

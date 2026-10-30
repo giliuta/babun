@@ -50,6 +50,7 @@ export function CalendarSheets({ c }: { c: CalendarController }) {
         bandFor={sheetBandFor}
         canWork={activeActions.create}
         canEvent={activeActions.events === "write"}
+        teamId={activeTeamId}
         onClose={() => setSlotDraft(null)}
         onPick={(kind, s) => {
           setSlotDraft(null);

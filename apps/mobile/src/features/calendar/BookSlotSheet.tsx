@@ -93,6 +93,7 @@ export function BookSlotSheet({
   onPick,
   canWork = true,
   canEvent = true,
+  teamId = null,
 }: {
   /** Тапнутый слот; null = лист закрыт. */
   slot: SlotDraft | null;
@@ -108,12 +109,14 @@ export function BookSlotSheet({
    *  «События: Меняет». Нет права — нет и кнопки, а не кнопка с отказом. */
   canWork?: boolean;
   canEvent?: boolean;
+  /** Календарь слота: запись клиента — по его оплате. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
-  // Записывать клиентов умеет платный тариф. Бесплатный личный календарь
-  // ведёт события и деньги — этого достаточно для своей жизни и недостаточно
-  // для чужих клиентов.
-  const canBookClients = usePlanAllows("book-clients");
+  // Записывать клиентов умеет оплаченный календарь. Неоплаченный ведёт
+  // события — этого достаточно для своей жизни и недостаточно для чужих
+  // клиентов.
+  const canBookClients = usePlanAllows("book-clients", teamId);
   const [draft, setDraft] = useState<SlotDraft | null>(slot);
 
   // Появление/затухание сигнала — только opacity, ничего не едет (закон
@@ -265,7 +268,7 @@ export function BookSlotSheet({
                 />
               ) : null}
               {!canWork ? null : (
-                <TariffLocked locked={!canBookClients} beforeNudge={onClose}>
+                <TariffLocked locked={!canBookClients} beforeNudge={onClose} teamId={teamId}>
                   <Button
                     label="Клиент"
                     accessibilityHint="Откроет новую запись клиенту на выбранное время"

@@ -13,6 +13,7 @@ import { CalendarSettingsSheets } from "./CalendarSettingsSheets";
 import { CalendarTeamRows } from "./CalendarTeamRows";
 import { useCalendarSettingsScreen } from "./use-calendar-settings-screen";
 import { TourScrollProvider } from "@/components/tour/TourTarget";
+import { CalendarAccountRows } from "./CalendarAccountRows";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -91,6 +92,8 @@ export function CalendarSettingsScreen() {
           }}
         >
           {team ? <CalendarTeamRows screen={screen} team={team} /> : null}
+
+          {team ? <CalendarAccountRows teamId={team.id} /> : null}
 
           <CalendarReferenceRows screen={screen} />
 

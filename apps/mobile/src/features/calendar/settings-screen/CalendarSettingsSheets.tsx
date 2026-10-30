@@ -1,6 +1,4 @@
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
-import { CalendarOfferSheet } from "@/features/tariffs/CalendarOfferSheet";
-import { useLiveCalendarCount } from "@/features/tariffs/use-live-calendars";
 import { CALENDAR_PRICE, euro } from "@/session/calendar-price";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
@@ -10,19 +8,16 @@ import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { formatHm } from "@/features/calendar/window";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 
-/** The screen's sheets: new calendar offer and form, hours, timezone and
- *  the team schedule. */
+/** The screen's sheets: new calendar form, hours, timezone and the team
+ *  schedule. */
 export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsState }) {
   const {
     router,
     teams,
     team,
     rows,
-    offerOpen,
-    setOfferOpen,
     createOpen,
     setCreateOpen,
-    tariffPaid,
     tariffForever,
     picker,
     setPicker,
@@ -34,23 +29,15 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
     scheduleOpen,
     setScheduleOpen,
   } = screen;
-  // Предложение «Новый календарь» называет сумму — значит, считает те же
-  // платные календари (с работой), что «Тариф» и Stripe, а не все живые.
-  const paidCalendars = useLiveCalendarCount();
   return (
     <>
-      <CalendarOfferSheet
-        visible={offerOpen}
-        calendars={paidCalendars ?? 0}
-        onClose={() => setOfferOpen(false)}
-        onUnlocked={() => setCreateOpen(true)}
-      />
       <CalendarCreateSheet
         visible={createOpen}
-        // Подписка уже есть — календарь в ней со следующего платежа.
+        // У каждого календаря своя оплата: новый ведёт события сразу, а
+        // клиенты и записи в нём — после его оплаты.
         note={
-          CAN_PAY_HERE && tariffPaid && !tariffForever
-            ? `+${euro(CALENDAR_PRICE.monthly)} в месяц со следующего платежа`
+          CAN_PAY_HERE && !tariffForever
+            ? `Клиенты и записи — после оплаты календаря, ${euro(CALENDAR_PRICE.monthly)} в месяц`
             : undefined
         }
         onClose={() => setCreateOpen(false)}

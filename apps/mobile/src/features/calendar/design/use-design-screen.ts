@@ -113,8 +113,9 @@ export function useDesignScreen() {
   //
   // БЕЗ ТАРИФА КЛИЕНТОВ НЕТ: «Клиент» серый, тап — плашка
   // тарифа; страница стоит на «Событии».
-  const clientsInPlan = usePlanAllows("book-clients");
-  const nudgeTariff = useTariffNudge();
+  // Тариф — у этого календаря: у каждого своя оплата.
+  const clientsInPlan = usePlanAllows("book-clients", team?.id ?? null);
+  const nudgeTariff = useTariffNudge(team?.id ?? null);
   const [pickedTab, setTab] = useState<"record" | "event" | null>(null);
   const tab = clientsInPlan ? (pickedTab ?? "record") : "event";
   const openColor = (target: ColorTarget) => {

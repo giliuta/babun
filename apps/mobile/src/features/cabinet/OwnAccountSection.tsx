@@ -1,5 +1,5 @@
 import { useRouter, type Href } from "expo-router";
-import { Archive, Download, Users } from "lucide-react-native";
+import { Archive, Download } from "lucide-react-native";
 
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -13,29 +13,25 @@ import { useCurrentRole } from "@/session/tenant";
 import { useSwitchWorkspace } from "@/session/workspaces";
 import { InventoryCabinetRow } from "@/features/inventory/InventoryCabinetRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
-import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useTenantId } from "@/lib/tenant";
 import { notify } from "@/lib/notify";
-import { CAN_PAY_HERE } from "@/lib/pay-here";
 
 import { AccountScopeProvider } from "@/session/account-scope";
 import { ArchiveRow } from "./ArchiveRow";
-import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { DataExportRow } from "./DataExportRow";
 import { HistoryRow } from "./HistoryRow";
-import { TariffPaymentsRow } from "./TariffPaymentsRow";
 import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // «КОМАНДЫ» — СВОЙ АККАУНТ ЧЕЛОВЕКА, КАКОЙ БЫ АККАУНТ НИ БЫЛ ОТКРЫТ НА ТЕЛЕФОНЕ
 // (свой раздел всегда на месте). Если бы раздел
 // стоял по роли в ОТКРЫТОМ аккаунте, партнёр, открывший календарь
-// пригласившего, терял бы в Кабинете свой тариф, SMS и партнёров, пока не
+// пригласившего, терял бы в Кабинете свои SMS и реквизиты, пока не
 // тапнул свою команду.
 //
 // Открыт свой аккаунт — всё как обычно. Открыт чужой:
-//   • тариф, оплаты тарифа, SMS, реквизиты и история изменений — за СВОЙ
+//   • SMS и история изменений — за СВОЙ
 //     аккаунт (`?tenant=`), ровно как блок пригласившего (`InvitedAccounts`);
-//   • «Партнёры», «Выгрузка данных» и «Архив» сначала
+//   • «Выгрузка данных» и «Архив» сначала
 //     переводят телефон в свой аккаунт и открываются там: это страницы
 //     хозяйства аккаунта, и чужая лента под ними была бы неправдой. Подписи у
 //     них спокойные — счётчики открытого аккаунта сюда не годятся.
@@ -66,36 +62,13 @@ export function OwnAccountSection() {
       <>
         <SectionEyebrow>Команды</SectionEyebrow>
         <SectionCard>
-          {/* ТАРИФ — ПЕРВЫМ. Страницы тариф не закрывает (всё открывается,
-              блокируются только кнопки): «Партнёры» открыты всегда, серая
-              там только «Пригласить партнёра». */}
-          <TourTarget id="cabinet.tariff">
-            <TariffRow />
-          </TourTarget>
-          <Divider inset={SETTINGS_ROW_INSET} />
-          {/* ОПЛАТЫ ТАРИФА — платежи за подписку и чеки.
-              Только на сайте: страница ведёт к счетам Stripe с оплатой, а в
-              приложении из магазина покупок нет (`pay-here.ts`). */}
-          {CAN_PAY_HERE ? (
-            <>
-              <TariffPaymentsRow />
-              <Divider inset={SETTINGS_ROW_INSET} />
-            </>
-          ) : null}
-          {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ, права по каждой команде. */}
-          <TourTarget id="cabinet.partners">
-            <SettingsRow
-              tile={SETTINGS_TILE.indigo}
-              icon={Users}
-              title="Партнёры"
-              sub="Права по командам"
-              onPress={() => router.push("/cabinet/people" as Href)}
-            />
-          </TourTarget>
-          <Divider inset={SETTINGS_ROW_INSET} />
-          {/* РЕКВИЗИТЫ — единый блок на весь аккаунт. */}
-          <TourTarget id="cabinet.requisites">
-            <CabinetRequisitesRow />
+          {/* ТАРИФА, ПАРТНЁРОВ И РЕКВИЗИТОВ ЗДЕСЬ НЕТ: у каждого календаря
+              своя оплата и свои люди — они в шестерёнке календаря; реквизиты —
+              в шестерёнке «Финансов» у каждого календаря. */}
+          {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
+              календарях — он сам и каждый партнёр. */}
+          <TourTarget id="cabinet.history">
+            <HistoryRow />
           </TourTarget>
           {/* СКЛАД ОБОРУДОВАНИЯ — один на аккаунт; строка ждёт готовности. */}
           {SHOW_INVENTORY ? (
@@ -104,12 +77,6 @@ export function OwnAccountSection() {
               <InventoryCabinetRow />
             </>
           ) : null}
-          <Divider inset={SETTINGS_ROW_INSET} />
-          {/* ИСТОРИЯ ИЗМЕНЕНИЙ: кто что менял во всех
-              календарях — он сам и каждый партнёр. */}
-          <TourTarget id="cabinet.history">
-            <HistoryRow />
-          </TourTarget>
           <Divider inset={SETTINGS_ROW_INSET} />
           <TourTarget id="cabinet.sms">
             <SmsCabinetRow />
@@ -142,31 +109,13 @@ export function OwnAccountSection() {
     <AccountScopeProvider tenantId={own}>
       <SectionEyebrow>Команды</SectionEyebrow>
       <SectionCard>
-        <TariffRow tenantId={own} />
-        <Divider inset={SETTINGS_ROW_INSET} />
-        {CAN_PAY_HERE ? (
-          <>
-            <TariffPaymentsRow tenantId={own} />
-            <Divider inset={SETTINGS_ROW_INSET} />
-          </>
-        ) : null}
-        <SettingsRow
-          tile={SETTINGS_TILE.indigo}
-          icon={Users}
-          title="Партнёры"
-          sub="Права по командам"
-          onPress={openInOwn("/cabinet/people")}
-        />
-        <Divider inset={SETTINGS_ROW_INSET} />
-        <CabinetRequisitesRow tenantId={own} />
+        <HistoryRow tenantId={own} />
         {SHOW_INVENTORY ? (
           <>
             <Divider inset={SETTINGS_ROW_INSET} />
             <InventoryCabinetRow />
           </>
         ) : null}
-        <Divider inset={SETTINGS_ROW_INSET} />
-        <HistoryRow tenantId={own} />
         <Divider inset={SETTINGS_ROW_INSET} />
         <SmsCabinetRow tenantId={own} />
         <Divider inset={SETTINGS_ROW_INSET} />

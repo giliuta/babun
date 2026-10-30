@@ -1,6 +1,5 @@
 import { Fragment, type ReactNode } from "react";
-import { UserCog, Users } from "lucide-react-native";
-import { useRouter, type Href } from "expo-router";
+import { Users } from "lucide-react-native";
 
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -10,17 +9,12 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useMirror } from "@/session/mirror-state";
 import { useTeams } from "@/features/reference/queries";
 import { useMyMemberships } from "@/session/my-memberships";
-import { useMyCalendars, useSwitchWorkspace } from "@/session/workspaces";
-import { notify } from "@/lib/notify";
-import { CAN_PAY_HERE } from "@/lib/pay-here";
+import { useMyCalendars } from "@/session/workspaces";
 import { useTenantId } from "@/lib/tenant";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
-import { TariffRow } from "@/features/tariffs/TariffRow";
 
 import { AccountScopeProvider, useAccountGate, useAccountName } from "@/session/account-scope";
-import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { HistoryRow } from "./HistoryRow";
-import { TariffPaymentsRow } from "./TariffPaymentsRow";
 import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 
 // АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ, — В КАБИНЕТЕ ПАРТНЁРА: здесь идут все
@@ -29,10 +23,9 @@ import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 //
 // Под строкой приглашений — по блоку на каждый аккаунт, где человек партнёр:
 // шапка — имя аккаунта, первой строкой — его команды, ниже — только то, что
-// этот аккаунт открыл правами раздела «Кабинет»: тариф, оплаты тарифа, SMS,
-// реквизиты, история изменений, партнёры. Нет права — нет строки.
-// «Партнёры» (директор) открываются В ЭТОМ аккаунте: телефон сначала
-// переходит в него — страницы партнёров живут в открытом аккаунте. Каждая строка открывает страницу ЗА ЭТОТ
+// этот аккаунт открыл правами раздела «Кабинет»: SMS и история изменений.
+// Нет права — нет строки. Тариф и партнёры — у каждого календаря, в его
+// шестерёнке; реквизиты — в шестерёнке «Финансов» у каждого календаря. Каждая строка открывает страницу ЗА ЭТОТ
 // аккаунт (`?tenant=`), а не за тот, что открыт на телефоне, — и платят на
 // ней за него.
 
@@ -88,54 +81,17 @@ function InvitedAccountBlock({
   /** «Посмотреть его глазами»: строки — картинка, переходов нет. */
   mirrored?: boolean;
 }) {
-  const router = useRouter();
-  const activeTenant = useTenantId();
-  const memberships = useMyMemberships().data ?? [];
-  const switchWorkspace = useSwitchWorkspace();
   const name = useAccountName() ?? fallbackName ?? "Аккаунт";
-  const tariff = useAccountGate("cabinet.tariff");
-  const payments = useAccountGate("cabinet.tariff_payments");
   const sms = useAccountGate("cabinet.sms");
-  const requisites = useAccountGate("finance.settings_requisites");
   const history = useAccountGate("cabinet.history");
-  const partners = useAccountGate("company.partners");
 
   const rows: { key: string; node: ReactNode }[] = [];
-  if (seen(tariff)) rows.push({ key: "tariff", node: <TariffRow tenantId={tenantId} /> });
-  // Оплаты тарифа — только на сайте: в приложении из магазина покупок нет (`pay-here.ts`).
-  if (CAN_PAY_HERE && seen(payments)) rows.push({ key: "payments", node: <TariffPaymentsRow tenantId={tenantId} /> });
+  // Тарифа, оплат и реквизитов здесь нет: они у каждого календаря этого
+  // аккаунта — тариф в шестерёнке календаря, реквизиты в шестерёнке «Финансов».
   if (seen(sms)) rows.push({ key: "sms", node: <SmsCabinetRow tenantId={tenantId} /> });
-  if (seen(requisites)) rows.push({ key: "requisites", node: <CabinetRequisitesRow tenantId={tenantId} /> });
   if (seen(history)) rows.push({ key: "history", node: <HistoryRow tenantId={tenantId} /> });
-  if (seen(partners)) {
-    const openPartners = async () => {
-      try {
-        if (activeTenant !== tenantId) {
-          const role = memberships.find((m) => m.tenantId === tenantId)?.role;
-          await switchWorkspace.mutateAsync({
-            tenantId,
-            onboarded: true,
-            role: role === "dispatcher" ? "dispatcher" : "master",
-          });
-        }
-        router.push("/cabinet/people" as Href);
-      } catch (e) {
-        notify("Не удалось открыть", (e as Error).message);
-      }
-    };
-    rows.push({
-      key: "partners",
-      node: (
-        <SettingsRow
-          tile={SETTINGS_TILE.indigo}
-          icon={UserCog}
-          title="Партнёры"
-          sub={partners === "write" ? "Приглашает и ставит права" : "Только видит"}
-          onPress={mirrored ? undefined : () => void openPartners()}
-        />
-      ),
-    });
-  }
+  // Партнёров здесь нет: люди — у каждого календаря, директор приглашает и
+  // ставит права в шестерёнке календаря этого аккаунта.
 
   return (
     <>

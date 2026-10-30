@@ -87,7 +87,7 @@
         "why": "matched against plan names stored by the server"
       }
     ],
-    "apps/mobile/app/(dashboard)/cabinet/people/index.tsx": [
+    "apps/mobile/app/(dashboard)/(home)/calendar/partners/index.tsx": [
       {
         "text": "е",
         "why": "ё→е search normalisation"

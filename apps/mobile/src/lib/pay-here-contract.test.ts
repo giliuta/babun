@@ -6,7 +6,7 @@ import { readModuleSource } from "./module-source";
 import { test } from "node:test";
 import { LEGAL_TEXTS, LEGAL_TEXTS_APP } from "../features/legal/legal-texts";
 import { balanceWarning } from "../features/sms/sms-model";
-import { tariffAction, tariffStatus, tierLine } from "@/session/tiers";
+import { tariffAction, tariffStatus } from "@/session/tiers";
 
 // ОПЛАТА — ТОЛЬКО НА САЙТЕ (`pay-here.ts`). Приложение из
 // App Store / Google Play с кнопкой на чужую оплату отклоняют, поэтому каждая
@@ -23,17 +23,14 @@ test("оплата читает один флаг — его и переключ
   assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE: boolean = true;/);
 });
 
-test("страница «Тариф»: без флага — состояние и только бесплатный пробный, без выбора, цен и подписки", () => {
+test("тариф календаря: без флага — состояние и только бесплатный пробный, без цены, периода и подписки", () => {
   const src = read("features/tariffs/TariffScreen.tsx");
   assert.match(src, /const action = CAN_PAY_HERE \? full : full\?\.kind === "trial" \? full : null;/);
-  assert.match(src, /const showTiers = CAN_PAY_HERE;/);
-  // Цена в строке тарифа, счёт за календари с годовой ценой и цена в подписи
-  // VoiceOver — каждая под флагом (у выданного навсегда цен нет вовсе:
-  // `&& !forever` только сужает показ).
-  assert.match(src, /\{CAN_PAY_HERE(?: && !forever)? \? \(\s*<>\s*<Text[^>]*>\s*\{card\.monthly\}/);
-  assert.match(src, /\{CAN_PAY_HERE(?: && !forever)? \? \(\s*<View[^>]*>\s*<Text[^>]*>\s*\{`Рабочих календарей: /);
-  assert.match(src, /accessibilityLabel=\{CAN_PAY_HERE(?: && !forever)? \? `\$\{card\.name\}, \$\{card\.monthly\}/);
-  assert.match(src, /\{CAN_PAY_HERE && owner && state\.paid && !state\.forever \?/);
+  // Карточка цены (с ценой в подписи VoiceOver) — целиком под флагом.
+  assert.match(src, /\{CAN_PAY_HERE \? \(\s*<>\s*<SectionEyebrow>Цена<\/SectionEyebrow>\s*<PriceCard/);
+  assert.match(src, /const showPeriod =\s*CAN_PAY_HERE && /);
+  assert.match(src, /const seesPayments = CAN_PAY_HERE && /);
+  assert.match(src, /\{CAN_PAY_HERE && owner && state\.paid \?/);
   assert.match(src, /tariffStatus\(state, periodEnd, CAN_PAY_HERE\)/);
 });
 
@@ -41,12 +38,12 @@ test("пробный НЕ включается сам — только кноп�
   assert.throws(() => read("features/tariffs/AutoTrial.tsx"));
   assert.doesNotMatch(read("../app/(dashboard)/_layout.tsx"), /AutoTrial/);
   const fresh = { tier: "free", paid: false, forever: false, trial: null, trialUsed: false, pastDue: false } as const;
-  assert.equal(tariffAction(fresh, "pro")?.kind, "trial");
+  assert.equal(tariffAction(fresh)?.kind, "trial");
 });
 
 test("действие пробного на сайте — бесплатное: пока пробного не было, «Попробовать 14 дней», а не оплата", () => {
   const fresh = { tier: "free", paid: false, forever: false, trial: null, trialUsed: false, pastDue: false } as const;
-  assert.deepEqual(tariffAction(fresh, "pro"), { kind: "trial", label: "Попробовать 14 дней" });
+  assert.deepEqual(tariffAction(fresh), { kind: "trial", label: "Попробовать 14 дней" });
 });
 
 test("«Оплаты тарифа»: «Управлять подпиской» только с флагом", () => {
@@ -82,7 +79,7 @@ test("слова состояния без флага не зовут плати
 
 test("закрытое тарифом без флага — спокойная фраза, без кнопки «Тариф»", () => {
   const src = read("features/tariffs/use-tariff.ts");
-  assert.match(src, /export const TARIFF_LOCKED_HINT = CAN_PAY_HERE \? "Нужно изменить тариф" : "Недоступно для этого аккаунта";/);
+  assert.match(src, /export const TARIFF_LOCKED_HINT = CAN_PAY_HERE \? "Нужно оплатить календарь" : "Недоступно для этого аккаунта";/);
   const nudge = src.slice(src.indexOf("export function useTariffNudge"));
   const guard = nudge.search(/if \(!CAN_PAY_HERE\) \{\s*toast\(TARIFF_LOCKED_HINT, "info"\);\s*return;\s*\}/);
   assert.ok(guard > 0, "useTariffNudge без ветки приложения из магазина");
@@ -93,34 +90,33 @@ test("закрытое тарифом без флага — спокойная �
       ? readModuleSource(path.join(SRC, rel), path.join(SRC, "features/appointments/payment-tiles"))
       : read(rel);
     assert.match(file, /accessibilityHint=\{(dimmed \? )?TARIFF_LOCKED_HINT/, `${rel}: подсказка VoiceOver мимо флага`);
-    assert.doesNotMatch(file, /"Нужно изменить тариф"/, `${rel}: «Нужно изменить тариф» мимо флага`);
+    assert.doesNotMatch(file, /"Нужно оплатить календарь"/, `${rel}: «Нужно оплатить календарь» мимо флага`);
   }
 });
 
-test("тариф без флага — только имя: ни отсчёта пробного, ни «пробный закончился»", () => {
+test("тариф без флага — только состояние: ни отсчёта пробного", () => {
   const trial = { tier: "pro", paid: false, forever: false, trial: { tier: "pro", days: 9 }, trialUsed: true, pastDue: false } as const;
   const over = { tier: "free", paid: false, forever: false, trial: null, trialUsed: true, pastDue: false } as const;
-  // Сайт — как было.
-  assert.equal(tierLine("pro", { days: 9 }), "Про · пробный, ещё 9 дней");
+  // Сайт.
   assert.equal(tariffStatus(trial, null), "Пробный · ещё 9 дней");
-  assert.equal(tariffStatus(over, null), "Пробный закончился");
+  assert.equal(tariffStatus(over, null), "Не оплачен");
   // Приложение из магазина.
-  assert.equal(tierLine("pro", { days: 9 }, false), "Про");
-  assert.equal(tierLine("free", null, false), "Без тарифа");
   for (const state of [trial, over]) {
     assert.doesNotMatch(tariffStatus(state, null, false), /ещё|пробн/i);
   }
-  assert.match(read("features/tariffs/TariffRow.tsx"), /tierLine\(state\.tier, state\.trial, CAN_PAY_HERE\)/);
+  assert.match(read("features/tariffs/TariffRow.tsx"), /tariffStatus\(state, periodEnd, CAN_PAY_HERE\)/);
 });
 
-test("«Оплаты тарифа» (счета Stripe с оплатой) — только с флагом", () => {
-  const own = read("features/cabinet/OwnAccountSection.tsx");
-  const rows = own.match(/<TariffPaymentsRow\b/g) ?? [];
-  const gated = own.match(/\{CAN_PAY_HERE \? \(\s*<>\s*<TariffPaymentsRow\b/g) ?? [];
-  assert.ok(rows.length > 0);
-  assert.equal(gated.length, rows.length, "OwnAccountSection: строка оплат мимо флага");
-  assert.match(read("features/cabinet/InvitedAccounts.tsx"), /if \(CAN_PAY_HERE && seen\(payments\)\) rows\.push\(\{ key: "payments"/);
-  assert.match(readApp("(dashboard)/cabinet/payments.tsx"), /if \(!CAN_PAY_HERE\) return <Redirect href="\/cabinet" \/>;/);
+test("«Оплаты» календаря (счета Stripe с оплатой) — только с флагом", () => {
+  assert.match(read("features/tariffs/TariffScreen.tsx"), /const seesPayments = CAN_PAY_HERE && state\.paid && /);
+  assert.match(
+    readApp("(dashboard)/(home)/calendar/tariff-payments.tsx"),
+    /if \(!CAN_PAY_HERE\) return <Redirect href="\/calendar\/tariff" \/>;/,
+  );
+  // В Кабинете строк тарифа и оплат больше нет: у каждого календаря своя оплата.
+  for (const rel of ["features/cabinet/OwnAccountSection.tsx", "features/cabinet/InvitedAccounts.tsx"]) {
+    assert.doesNotMatch(read(rel), /TariffPaymentsRow|<TariffRow\b/, rel);
+  }
 });
 
 test("условия без флага — без Stripe и babun.app как места оплаты; на сайте — полные", () => {

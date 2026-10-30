@@ -87,14 +87,15 @@ export function usePaymentBlock({
   // «Документы»: «Видит» открывает выписанный, «Меняет» и выписывает.
   const docWrite = documentsLevel === "write";
   const receiptNext = docWrite ? receiptState.next : null;
-  const canUseDocuments = usePlanAllows("documents");
-  // БЕЗ ТАРИФА ЗАПИСИ КЛИЕНТОВ — ТОЛЬКО ДЛЯ ПРОСМОТРА (иначе за бесплатный пробный срок наберут клиентов,
-  // а потом перенесут). Сервер
+  // Тариф — у календаря записи: у каждого календаря своя оплата.
+  const canUseDocuments = usePlanAllows("documents", teamId);
+  // БЕЗ ОПЛАТЫ КАЛЕНДАРЯ ЗАПИСИ КЛИЕНТОВ — ТОЛЬКО ДЛЯ ПРОСМОТРА (иначе за
+  // бесплатный пробный срок наберут клиентов, а потом перенесут). Сервер
   // отказывает в правке записи (`plan:book-clients`); здесь плитки и «Часть
-  // суммы» серые, а тап поднимает плашку «Нужно изменить тариф» вместо
+  // суммы» серые, а тап поднимает плашку «Нужно оплатить календарь» вместо
   // отказа после поездки на сервер. Полученные деньги видны как были.
-  const bookingInPlan = usePlanAllows("book-clients");
-  const tariffNudge = useTariffNudge();
+  const bookingInPlan = usePlanAllows("book-clients", teamId);
+  const tariffNudge = useTariffNudge(teamId);
 
   const invoice = useMemo(
     () =>

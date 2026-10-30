@@ -58,11 +58,6 @@ export function useBookForm() {
   const scrollRef = useRef<ScrollView>(null);
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
-  // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА ТОЛЬКО СМОТРЯТ (иначе за бесплатный срок можно наставить записей наперёд и
-  // добавить туда клиентов). Страница открывается, «Сохранить» серая, тап — плашка про тариф; сервер
-  // держит то же (`tenant_free_readonly_guard`).
-  const workInPlan = usePlanAllows("book-clients");
-  const nudgeTariff = useTariffNudge();
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<BookParams>();
@@ -83,6 +78,13 @@ export function useBookForm() {
   const [teamId, setTeamId] = useState<string | null>(
     first(formParams.teamId) ?? null,
   );
+  // БЕЗ ОПЛАТЫ КАЛЕНДАРЯ ЗАПИСЬ КЛИЕНТА В НЁМ ТОЛЬКО СМОТРЯТ (иначе за
+  // бесплатный срок можно наставить записей наперёд и добавить туда
+  // клиентов). Тариф — у календаря записи: у каждого своя оплата. Страница
+  // открывается, «Сохранить» серая, тап — плашка про оплату; сервер держит то
+  // же (`tenant_free_readonly_guard`).
+  const workInPlan = usePlanAllows("book-clients", teamId);
+  const nudgeTariff = useTariffNudge(teamId);
   const look = useBookBlocks(teamId);
   const refs = useBookReferences(teamId);
   const { teams, masters, services, clients, allAppts, calendarSettings } = refs;

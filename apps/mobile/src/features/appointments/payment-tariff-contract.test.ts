@@ -27,7 +27,9 @@ describe("инвойс в оплате и тариф", () => {
   });
   test("без тарифа записи клиентов — плитки, «Часть суммы» и снятие серые и зовут плашку", () => {
     const src = block();
-    assert.match(src, /const bookingInPlan = usePlanAllows\("book-clients"\);/);
+    // Тариф — у календаря записи: у каждого календаря своя оплата.
+    assert.match(src, /const bookingInPlan = usePlanAllows\("book-clients", teamId\);/);
+    assert.match(src, /const canUseDocuments = usePlanAllows\("documents", teamId\);/);
     // Право денег — у записи «Оплата», у записи с инвойсом — «Документы».
     assert.match(src, /const moneyRight = invoicePay\.open \? docWrite : canTakeMoney;/);
     assert.match(src, /const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && moneyRight && bookingInPlan;/);

@@ -25,27 +25,6 @@ export const CABINET_CHAPTER: TourChapter = {
       text: "«Приглашения» — сюда приходят приглашения в чужие команды.",
     },
     {
-      id: "cab.tariff",
-      target: "cabinet.tariff",
-      kind: "info",
-      optional: true,
-      text: "«Тариф» — платите за календари, люди в командах бесплатно.",
-    },
-    {
-      id: "cab.partners",
-      target: "cabinet.partners",
-      kind: "info",
-      optional: true,
-      text: "«Партнёры» — люди в ваших командах. Пригласите сотрудника и отметьте, что ему можно видеть и менять в каждой команде.",
-    },
-    {
-      id: "cab.requisites",
-      target: "cabinet.requisites",
-      kind: "info",
-      optional: true,
-      text: "«Реквизиты» — данные для инвойсов и чеков.",
-    },
-    {
       id: "cab.history",
       target: "cabinet.history",
       kind: "info",

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { tierAllows, tierOf } from "@/session/tiers";
+import { useCalendarPlanAllows } from "@/session/calendar-tariffs";
 import { setDefaultCurrency } from "@babun/shared/common/utils/money";
 import {
   useMutation,
@@ -163,14 +164,19 @@ function friendlyTenantError(message: string): string {
 
 /** Разрешает ли ТАРИФ это действие в активной компании.
  *
- *  Пока профиль не загружен, отвечает «да»: экран не имеет права мигать
- *  «нельзя → можно» на холодном старте — для человека это выглядит как
- *  сломанный продукт, а настоящий замок всё равно стоит на сервере
- *  (`enforce_plan_limits`). Канон, правило 10: экран объясняет, база решает. */
-export function usePlanAllows(capability: PlanCapability): boolean {
+ *  Назван календарь — решает тариф ЭТОГО календаря (у каждого своя оплата);
+ *  не назван или его тариф ещё не пришёл — тариф аккаунта: платный, если
+ *  оплачен хоть один календарь. Пока профиль не загружен, отвечает «да»:
+ *  экран не имеет права мигать «нельзя → можно» на холодном старте — для
+ *  человека это выглядит как сломанный продукт, а настоящий замок всё равно
+ *  стоит на сервере (`enforce_plan_limits`). Канон, правило 10: экран
+ *  объясняет, база решает. */
+export function usePlanAllows(capability: PlanCapability, teamId?: string | null): boolean {
   // ТАРИФ АККАУНТА-ВЛАДЕЛЬЦА КОМАНДЫ: сервер отдаёт `tier` и
   // партнёрам — у него серое и плашка те же, что у владельца.
-  return tierAllows(tierOf(useTenant().data), capability);
+  const account = tierAllows(tierOf(useTenant().data), capability);
+  const calendar = useCalendarPlanAllows(teamId, capability);
+  return calendar ?? account;
 }
 
 export function useTenant() {

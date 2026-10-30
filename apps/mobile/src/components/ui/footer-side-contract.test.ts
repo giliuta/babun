@@ -43,7 +43,6 @@ function walk(dir: string, out: string[] = []): string[] {
 
 // Чужие зоны этой пачки: правятся своими сессиями, сторож о них помнит.
 const PENDING = new Set([
-  "app/(dashboard)/cabinet/people/index.tsx",
   "src/features/calendar/DayFinanceSheet.tsx",
   "src/features/cabinet/ChangeDetailSheet.tsx",
   "src/features/sms/SmsMessageSheet.tsx",

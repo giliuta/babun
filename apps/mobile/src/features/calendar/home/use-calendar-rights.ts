@@ -11,6 +11,8 @@ import {
   isCalendarEvent,
 } from "@/features/calendar/event-access";
 import { usePlanAllows, useTenant } from "@/session/tenant";
+import { useCalendarTariffs } from "@/session/calendar-tariffs";
+import { tierAllows } from "@/session/tiers";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useMirror } from "@/session/mirror-state";
 import type { CalendarSources } from "./use-calendar-sources";
@@ -25,6 +27,17 @@ export function useCalendarRights(deps: UseCalendarRightsDeps) {
   const canManageBookings = role === "owner" || role === "dispatcher";
   const smsInPlan = usePlanAllows("sms");
   const workInPlan = usePlanAllows("book-clients");
+  // ТАРИФ — У КАЛЕНДАРЯ ЗАПИСИ: у каждого календаря своя оплата, и запись
+  // клиента в неоплаченном только для просмотра, даже если другой календарь
+  // аккаунта оплачен. Тариф календаря ещё не пришёл — решает аккаунт.
+  const calendarTariffs = useCalendarTariffs().data;
+  const workInPlanFor = useCallback(
+    (teamId: string | null | undefined) => {
+      const row = teamId ? calendarTariffs?.get(teamId) : undefined;
+      return row ? tierAllows(row.plan, "book-clients") : workInPlan;
+    },
+    [calendarTariffs, workInPlan],
+  );
   const nudgeTariff = useTariffNudge();
   const companyName = useTenant().data?.name ?? null;
   // Метки дня — функция компании (STORY-088): выключены — тап по дате метку
@@ -64,18 +77,18 @@ export function useCalendarRights(deps: UseCalendarRightsDeps) {
     (appointment: Appointment) => {
       // Без тарифа запись клиента не двигается ни пальцем, ни растяжкой:
       // сервер её правку отклонит.
-      if (!workInPlan && !isCalendarEvent(appointment)) return false;
+      if (!workInPlanFor(appointment.team_id) && !isCalendarEvent(appointment)) return false;
       if (!isCrew) return canMutateAppointment(appointment);
       const can = actionsIn(appointment.team_id ?? null);
       return isCalendarEvent(appointment)
         ? can.events === "write" && !!actorId && appointment.created_by === actorId
         : can.move;
     },
-    [workInPlan, isCrew, canMutateAppointment, actionsIn, actorId],
+    [workInPlanFor, isCrew, canMutateAppointment, actionsIn, actorId],
   );
 
   return {
-    isCrew, canManageBookings, smsInPlan, workInPlan, nudgeTariff, companyName,
+    isCrew, canManageBookings, smsInPlan, workInPlan, workInPlanFor, nudgeTariff, companyName,
     dayLabelsOn, actionsIn, eventRightsIn, paymentHiddenFor, amountVisible, mirror,
     actorId, canMutateAppointment, canMoveAppointment,
   };

@@ -4,16 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 
-import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "@/session/tiers";
+import { CALENDAR_CARD, CALENDAR_PRICE, PARTNER_LIMIT } from "@/session/tiers";
 
-// ЦЕНА НА СТРАНИЦЕ «ТАРИФ» = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE (одна цена за
-// календарь, количество = живые календари).
+// ЦЕНА НА СТРАНИЦЕ ТАРИФА = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE (подписка у каждого
+// календаря, количество 1).
 //
-// Страница показывает цены из `tiers.ts`, а заводит цену в Stripe и
+// Страница показывает цену из `tiers.ts`, а заводит цену в Stripe и
 // списывает деньги функция `tariff-checkout` — своим списком в центах. Два
-// списка разойдутся молча: человек увидит €29,99, а заплатит другое. Этот
-// сторож читает функцию и сверяет обе стороны, а заодно лимит партнёров
-// (отказ «сначала уберите лишних» при понижении тарифа).
+// списка разойдутся молча: человек увидит €9,99, а заплатит другое. Этот
+// сторож читает функции и сверяет обе стороны.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const FN = readFileSync(path.join(ROOT, "supabase/functions/tariff-checkout/index.ts"), "utf8");
@@ -30,70 +29,62 @@ function fnPrice(period: "month" | "year"): number {
   return expr.split("*").map((part) => Number(part.trim())).reduce((a, b) => a * b, 1);
 }
 
-describe("цена за календарь: страница и Stripe", () => {
-  test("одна карточка — «Календарь», цена как у функции, в месяц и за год", () => {
-    assert.equal(TIER_CARDS.length, 1);
-    const card = TIER_CARDS[0]!;
-    assert.equal(card.monthly, "€9,99");
-    assert.equal(card.yearlyMonthly, "€7,99");
-    assert.equal(fnPrice("month"), cents(card.monthly));
-    assert.equal(fnPrice("year"), cents(card.yearlyMonthly) * 12);
-    assert.equal(cents(card.monthly), Math.round(CALENDAR_PRICE.monthly * 100));
+describe("цена календаря: страница и Stripe", () => {
+  test("карточка «Календарь», цена как у функции, в месяц и за год", () => {
+    assert.equal(CALENDAR_CARD.monthly, "€9,99");
+    assert.equal(CALENDAR_CARD.yearlyMonthly, "€7,99");
+    assert.equal(fnPrice("month"), cents(CALENDAR_CARD.monthly));
+    assert.equal(fnPrice("year"), cents(CALENDAR_CARD.yearlyMonthly) * 12);
+    assert.equal(cents(CALENDAR_CARD.monthly), Math.round(CALENDAR_PRICE.monthly * 100));
   });
 
-  test("в подписке столько календарей, сколько живых; людей не считаем", () => {
-    assert.match(FN, /"line_items\[0\]\[quantity\]": String\(quantity\)/);
-    assert.doesNotMatch(FN, /too_many_partners/);
+  test("у каждого календаря своя подписка на один календарь; людей не считаем", () => {
+    assert.match(FN, /"line_items\[0\]\[quantity\]": "1"/);
+    assert.match(FN, /"subscription_data\[metadata\]\[team_id\]": teamId/);
+    assert.match(FN, /if \(!teamId\) return json\(400, \{ error: "team_required" \}\);/);
+    assert.doesNotMatch(FN, /paidCalendars|paid_calendar_count/);
     assert.match(FN, /proration_behavior: "none"/);
-    assert.equal(TIER_LIMITS.max.partners, 1000);
+    assert.equal(PARTNER_LIMIT.max, 1000);
   });
 
-  test("сверка количества не трогает старую подписку с плоской ценой", () => {
-    // Иначе Про за €X при трёх календарях стал бы стоить 3 × €X.
-    const sync = FN.slice(FN.indexOf('if (action === "sync")'), FN.indexOf("const period: Period"));
-    const guard = sync.indexOf("/^babun_calendar_/.test(item.price?.lookup_key");
-    assert.ok(guard > 0, "sync меняет количество, не проверив цену «за календарь»");
-    assert.ok(guard < sync.indexOf('"items[0][quantity]"'), "проверка цены стоит после записи количества");
+  test("архивный календарь не платит следующий период", () => {
+    // Сразу после архива — отмена в конце срока (sync), перед счётом —
+    // страховка вебхука.
+    const sync = FN.slice(FN.indexOf('if (action === "sync")'), FN.indexOf('if (!teamId) return json(400'));
+    assert.match(sync, /cancel_at_period_end: "true",\s*"metadata\[cancelled_by\]": "archive"/);
+    // Вернули из архива — снимается только своя отмена, не владельца.
+    assert.match(sync, /!archived && sub\.cancel_at_period_end === true && ours/);
+    assert.match(WEBHOOK, /if \(event\.type !== "invoice\.upcoming"\) return;/);
+    assert.match(WEBHOOK, /if \(team\?\.is_active === true\) return;/);
   });
 
-  test("вебхук узнаёт цену за календарь и пишет число календарей", () => {
+  test("вебхук пишет подписку в строку календаря, а не в аккаунт", () => {
     assert.match(FN, /"metadata\[tier\]": PAID_TIER/);
     assert.match(FN, /const PAID_TIER = "max"/);
     assert.match(FN, /lookup_key: lookup/);
     assert.match(WEBHOOK, /\^babun_calendar_\//);
-    assert.match(WEBHOOK, /paid_calendars: item\?\.quantity \?\? null/);
-    assert.match(WEBHOOK, /"invoice\.upcoming"/);
+    assert.match(WEBHOOK, /\.from\("calendar_subscriptions"\)\s*\.upsert\(/);
+    assert.match(WEBHOOK, /onConflict: "tenant_id,team_id"/);
+    // Цена не наша — доступа нет, как бы ни называлась стадия подписки.
+    assert.match(WEBHOOK, /priceToTier\(item\?\.price\) === "free" \? "incomplete"/);
+    // Аккаунту вебхук пишет только клиента Stripe.
+    assert.match(WEBHOOK, /interface AccountFields \{\s*stripe_customer_id\?: string;\s*\}/);
     // Старый Business — по-прежнему Макс, а не бесплатный и не «business».
     assert.match(WEBHOOK, /STRIPE_PRICE_BUSINESS"\)\) return "max"/);
-  });
-});
-
-// КОЛИЧЕСТВО = КАЛЕНДАРИ С РАБОТОЙ, А НЕ «ОДИН ПРИ ОШИБКЕ». Подсчёт, который
-// при отказе чтения молча возвращает 1, выставляет счёт за один календарь при
-// пяти рабочих: ошибка должна дойти до 5xx (оплата) и до повтора Stripe
-// (вебхук перед счётом). Само правило и его сверка с приложением —
-// `paid-calendars-parity.test.ts`.
-describe("подсчёт календарей для подписки", () => {
-  test("обе функции считают общим помощником, ошибка чтения — исключение", () => {
-    const helper = readFileSync(path.join(ROOT, "supabase/functions/_shared/paid-calendars.ts"), "utf8");
-    assert.match(helper, /if \(error \|\| typeof data !== "number"\) \{\s*throw new Error/, "сбой подсчёта превращается в 1");
-    for (const [name, source] of [["tariff-checkout", FN], ["stripe-webhook", WEBHOOK]] as const) {
-      assert.match(source, /await paidCalendars\((service|sbs), tenantId\)/, `${name}: считает не общим помощником`);
-      assert.doesNotMatch(source, /typeof count === "number" \? count : 1/, `${name}: остался молчаливый откат на 1`);
-    }
   });
 });
 
 describe("период оплаты доходит до Stripe", () => {
   const CLIENT = readFileSync(path.join(ROOT, "apps/mobile/src/features/tariffs/use-tariff.ts"), "utf8");
 
-  test("приложение шлёт выбранный период, а не всегда «месяц»", () => {
+  test("приложение шлёт выбранный период и календарь", () => {
     assert.doesNotMatch(CLIENT, /period: "month"/);
-    assert.match(CLIENT, /\.\.\.\(period \? \{ period \} : null\)/);
+    assert.match(CLIENT, /\.\.\.\(input\.period \? \{ period: input\.period \} : null\)/);
+    assert.match(CLIENT, /team_id: input\.teamId/);
   });
 
   test("без периода живая подписка остаётся на своём — год не превращается в месяц", () => {
-    const live = FN.slice(FN.indexOf("if (live && tenant.stripe_subscription_id)"), FN.indexOf("// Клиент Stripe аккаунта"));
+    const live = FN.slice(FN.indexOf("if (row && LIVE_TARIFF_STATUSES.has(String(row.status)))"), FN.indexOf("// Клиент Stripe аккаунта"));
     assert.match(live, /chosen \?\? \(item\.price\?\.recurring\?\.interval === "year" \? "year" : "month"\)/);
     assert.match(FN, /body\.period === "year" \? "year" : body\.period === "month" \? "month" : null/);
   });

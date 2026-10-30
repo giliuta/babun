@@ -25,7 +25,7 @@ import type { RecordNaming } from "./use-record-naming";
 import type { VisibleAppointments } from "./use-visible-appointments";
 
 type CreateRescheduleDeps =
-  Pick<CalendarRights, "isCrew" | "workInPlan" | "nudgeTariff" | "canMoveAppointment">
+  Pick<CalendarRights, "isCrew" | "workInPlanFor" | "nudgeTariff" | "canMoveAppointment">
   & Pick<CalendarSources, "toast" | "updateAppt" | "teams" | "visibilityTenantId" | "servicesQuery">
   & Pick<VisibleAppointments, "visibleAppts" | "weekYmds">
   & Pick<CalendarGrid, "workBandFor" | "bufferMinutes">
@@ -41,7 +41,7 @@ type CreateRescheduleDeps =
  *  another own team, warn softly and offer an undo. */
 export function createReschedule(deps: CreateRescheduleDeps) {
   const {
-    isCrew, toast, workInPlan, nudgeTariff, canMoveAppointment, visibleAppts,
+    isCrew, toast, workInPlanFor, nudgeTariff, canMoveAppointment, visibleAppts,
     workBandFor, bufferMinutes, mode, weekYmds, setDay, editingApt, setEditingApt,
     updateAppt, appointmentTimeZone, teams, visibilityTenantId, servicesQuery, smsOnMove,
   } = deps;
@@ -65,7 +65,8 @@ export function createReschedule(deps: CreateRescheduleDeps) {
       toast("Запись остаётся в своей команде", "info");
       return;
     }
-    if (!workInPlan && !isCalendarEvent(apt)) {
+    // Запись клиента — и откуда, и куда: оба календаря должны быть оплачены.
+    if (!isCalendarEvent(apt) && (!workInPlanFor(apt.team_id) || !workInPlanFor(teamId))) {
       nudgeTariff();
       return;
     }

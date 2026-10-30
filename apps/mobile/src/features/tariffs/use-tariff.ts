@@ -8,19 +8,33 @@ import { useAccountProfile, useAccountScope } from "@/session/account-scope";
 import { useCurrentRole } from "@/session/tenant";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { TENANT_HEADER } from "@/lib/tenant-header";
-import { tierOf, trialLeft, trialUsed, type BillingPeriod, type TariffState, type Tier } from "@/session/tiers";
+import { useCalendarTariffs } from "@/session/calendar-tariffs";
+import {
+  calendarTariffState,
+  tierOf,
+  trialLeft,
+  trialUsed,
+  type BillingPeriod,
+  type TariffState,
+  type Tier,
+} from "@/session/tiers";
 
-// ТАРИФ АККАУНТА — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ `tiers.ts`.
+// ТАРИФ — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ `tiers.ts`.
 //
-// Тариф приезжает в профиле аккаунта (`current_tenant_profile_safe` → `tier`):
-// владельцу — со сроками пробного и рабочими командами, партнёру — только
-// действующий тариф хозяина команды. Пробный и выбор рабочих команд — двери
-// сервера (`start_trial`, `choose_working_teams`), Stripe и сроки пишет только
-// сервер (сторож `tenants_guard_billing`).
+// У аккаунта — «навсегда» и пробный: они приезжают в профиле аккаунта
+// (`current_tenant_profile_safe`), и сервер там же отдаёт `tier` — платный,
+// если оплачен хоть один календарь. У календаря — его подписка:
+// `calendar_tariffs()` отдаёт тариф каждого календаря, который человек видит
+// (владелец — все, партнёр — свои), а срок, период и отмену — владельцу и
+// партнёру с правом «Тариф». Пробный — дверь сервера (`start_trial`), Stripe
+// и сроки пишет только вебхук.
 
-export const TARIFF_HREF = "/cabinet/tariff" as Href;
+/** Страница тарифа календаря. Без `team` — календарь, открытый в календаре. */
+export function calendarTariffHref(teamId?: string | null): Href {
+  return (teamId ? `/calendar/tariff?team=${encodeURIComponent(teamId)}` : "/calendar/tariff") as Href;
+}
 
-/** Профиль аккаунта с полями тарифа, которых нет в типе строки до наката. */
+/** Профиль аккаунта с полями тарифа. */
 interface TariffProfile {
   tier?: unknown;
   plan?: string | null;
@@ -28,52 +42,49 @@ interface TariffProfile {
   trial_tier?: unknown;
   trial_ends_at?: string | null;
   trial_started_at?: string | null;
-  working_team_ids?: string[] | null;
-  subscription_status?: string | null;
-  current_period_end?: string | null;
 }
 
+/** Тариф АККАУНТА: «навсегда», пробный и оплачен ли хоть один календарь. */
 export function useTariff() {
-  // Тариф АККАУНТА СТРАНИЦЫ: в блоке пригласившего аккаунта в
-  // Кабинете — его тариф, а не того, что открыт на телефоне.
+  // Аккаунт страницы: из блока пригласившего аккаунта — его, а не того, что
+  // открыт на телефоне.
   const tenant = useAccountProfile();
   const profile = (tenant.data ?? null) as TariffProfile | null;
+  const tier = tierOf(profile);
+  const forever = !!profile?.plan_override?.trim();
+  const trial = trialLeft(profile);
   const state: TariffState = {
-    tier: tierOf(profile),
-    paid: isPaid(profile),
-    forever: !!profile?.plan_override?.trim(),
-    trial: trialLeft(profile),
+    tier,
+    // Платный аккаунт без «навсегда» и без пробного — значит, оплачен хоть
+    // один календарь.
+    paid: !forever && !trial && tier != null && tier !== "free",
+    forever,
+    trial,
     trialUsed: trialUsed(profile),
-    pastDue: !profile?.plan_override?.trim() && profile?.subscription_status === "past_due",
   };
+  return { loading: tenant.isPending, state };
+}
+
+/** Тариф одного календаря: состояние для подписи и страницы. Пока строки
+ *  нет — `tier: null`: экран не режет, решает сервер. */
+export function useCalendarTariff(teamId: string | null | undefined) {
+  const account = useTariff();
+  const tariffs = useCalendarTariffs();
+  const row = teamId ? tariffs.data?.get(teamId) : undefined;
   return {
-    loading: tenant.isPending,
-    state,
-    periodEnd: profile?.current_period_end ?? null,
-    workingChosen: profile?.working_team_ids ?? null,
+    // «Навсегда» и пробный — от аккаунта: подпись не ждёт тарифа календаря.
+    loading: account.loading || (tariffs.isPending && !account.state.forever && !account.state.trial),
+    error: tariffs.isError,
+    state: calendarTariffState(account.state, row),
+    periodEnd: row?.periodEnd ?? null,
   };
 }
 
-function isPaid(profile: TariffProfile | null): boolean {
-  if (!profile) return false;
-  if (profile.plan_override?.trim()) return true;
-  const status = profile.subscription_status;
-  return (
-    (profile.plan === "solo" || profile.plan === "pro" || profile.plan === "max") &&
-    (status === "active" || status === "trialing" || status === "past_due")
-  );
-}
-
-/** Двери тарифа — до наката их нет в типах базы. */
+/** Дверь пробного — до наката её нет в типах базы. */
 type TariffRpc = {
-  rpc: (
-    name: "start_trial" | "choose_working_teams",
-    args: { p_tier: string } | { p_team_ids: string[] },
-  ) => PromiseLike<{ error: { message?: string } | null }>;
+  rpc: (name: "start_trial", args: { p_tier: string }) => PromiseLike<{ error: { message?: string } | null }>;
 };
-/** Двери тарифа — под заголовком аккаунта СТРАНИЦЫ: свой аккаунт,
- *  открытый из Кабинета, пока на телефоне чужой, пробует и выбирает команды
- *  у себя, а не у того, что открыт. */
+/** Дверь пробного — под заголовком аккаунта СТРАНИЦЫ. */
 const tariffRpcOf = (client: typeof supabase) => client as unknown as TariffRpc;
 
 /** Отказ двери словами: сервер говорит по-русски, клиентская обёртка — нет. */
@@ -94,30 +105,17 @@ export function useStartTrial() {
   });
 }
 
-export function useChooseWorkingTeams() {
-  const qc = useQueryClient();
-  const { client } = useAccountScope();
-  return useMutation({
-    mutationFn: async (teamIds: string[]) => {
-      const { error } = await tariffRpcOf(client).rpc("choose_working_teams", { p_team_ids: teamIds });
-      if (error) throw rpcError(error);
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["tenant"] }),
-    meta: { errorHandled: true },
-  });
-}
-
 const TARIFF_PAY_DONE_URL = "https://babun.app/pay/done";
 
 /** Ответы `tariff-checkout` словами владельца. */
 const CHECKOUT_REFUSALS: Record<string, string> = {
   stripe_not_configured: "Оплата тарифа скоро появится — пока работает пробный период",
-  too_many_partners: "Сначала уберите лишних партнёров — в этом тарифе их меньше",
   forever: "Ваш тариф выдан навсегда — платить не нужно",
-  no_subscription: "Подписки ещё нет — сначала оплатите тариф",
+  no_subscription: "Подписки ещё нет — сначала оплатите календарь",
   portal_not_configured: "Управление подпиской ещё не включено — напишите нам",
   owner_only: "Тариф меняет владелец аккаунта",
-  owner_only_change: "Сменить тариф в действующей подписке может только владелец аккаунта",
+  owner_only_change: "Сменить оплату действующей подписки может только владелец аккаунта",
+  calendar_not_found: "Календаря нет — он в архиве или удалён",
 };
 
 /** Отказ функции: код лежит в теле ответа (`{ error }`), а сообщение самого
@@ -139,9 +137,11 @@ async function checkoutRefusal(error: unknown): Promise<Error> {
   return new Error("Не получилось открыть оплату. Попробуйте ещё раз");
 }
 
-function returnUrl(): { web: boolean; back: string } {
+/** Куда вернуться из Stripe: на сайте — на страницу тарифа этого
+ *  календаря, в приложении — на страницу «Оплата прошла» сайта. */
+function returnUrl(teamId?: string | null): { web: boolean; back: string } {
   const web = Platform.OS === "web" && typeof window !== "undefined";
-  return { web, back: web ? `${window.location.origin}/cabinet/tariff` : TARIFF_PAY_DONE_URL };
+  return { web, back: web ? `${window.location.origin}${calendarTariffHref(teamId) as string}` : TARIFF_PAY_DONE_URL };
 }
 
 async function openPage(url: string, web: boolean): Promise<void> {
@@ -149,32 +149,27 @@ async function openPage(url: string, web: boolean): Promise<void> {
   else await Linking.openURL(url);
 }
 
-/** Оплата тарифа — на странице Stripe в браузере (не через Apple). Подписки
- *  нет — открывается оплата; есть — сервер меняет в ней тариф и отвечает
- *  `changed` (тариф придёт вебхуком через несколько секунд). */
-export async function openTariffCheckout(
-  tier: Exclude<Tier, "free">,
-  /** Аккаунт, ЗА КОТОРЫЙ платят (блок аккаунта в Кабинете), — явно, а не
-   *  тот, что открыт на телефоне. */
-  tenantId?: string | null,
-  /** Сколько календарей оплатить: предложение «Новый календарь» платит и
-   *  за тот, что заводят (живые + 1); сервер не даст больше. */
-  calendars?: number,
-  /** Помесячно или за год — выбор на странице «Тариф». Не назван — сервер
-   *  оставляет период живой подписки (новая оплата — помесячно): так
-   *  «Новый календарь» не переводит годовую подписку на месяц. */
-  period?: BillingPeriod,
-): Promise<"opened" | "changed" | "same"> {
-  const { web, back } = returnUrl();
+/** Оплата календаря — на странице Stripe в браузере (не через Apple).
+ *  Подписки у календаря нет — открывается оплата; есть — сервер меняет её
+ *  период и отвечает `changed` (тариф придёт вебхуком через несколько
+ *  секунд). */
+export async function openTariffCheckout(input: {
+  teamId: string;
+  /** Помесячно или за год. Не назван — сервер оставляет период живой
+   *  подписки (новая оплата — помесячно). */
+  period?: BillingPeriod;
+  /** Аккаунт, ЗА КОТОРЫЙ платят, если он не тот, что открыт на телефоне. */
+  tenantId?: string | null;
+}): Promise<"opened" | "changed" | "same"> {
+  const { web, back } = returnUrl(input.teamId);
   const { data, error } = await supabase.functions.invoke("tariff-checkout", {
     body: {
       action: "checkout",
-      tier,
+      team_id: input.teamId,
       return_url: back,
-      ...(period ? { period } : null),
-      ...(calendars ? { calendars } : null),
+      ...(input.period ? { period: input.period } : null),
     },
-    ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
+    ...(input.tenantId ? { headers: { [TENANT_HEADER]: input.tenantId } } : null),
   });
   if (error) throw await checkoutRefusal(error);
   const reply = (data ?? {}) as { url?: string; changed?: boolean };
@@ -189,8 +184,8 @@ export async function openTariffCheckout(
 
 /** «Управление подпиской» — страница Stripe: карта, счета, отмена.
  *  `tenantId` — аккаунт страницы, если он не тот, что открыт на телефоне. */
-export async function openTariffPortal(tenantId?: string | null): Promise<void> {
-  const { web, back } = returnUrl();
+export async function openTariffPortal(tenantId?: string | null, teamId?: string | null): Promise<void> {
+  const { web, back } = returnUrl(teamId);
   const { data, error } = await supabase.functions.invoke("tariff-checkout", {
     body: { action: "portal", return_url: back },
     ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
@@ -202,15 +197,16 @@ export async function openTariffPortal(tenantId?: string | null): Promise<void> 
 }
 
 /** Слова закрытого тарифом — плашка и подсказка VoiceOver. В приложении из
- *  магазина — без призыва менять тариф: тариф там не выбирают и не
- *  оплачивают, и звать к покупке нельзя (App Store 3.1.3(f), `pay-here.ts`). */
-export const TARIFF_LOCKED_HINT = CAN_PAY_HERE ? "Нужно изменить тариф" : "Недоступно для этого аккаунта";
+ *  магазина — без призыва платить: звать к покупке там нельзя (App Store
+ *  3.1.3(f), `pay-here.ts`). */
+export const TARIFF_LOCKED_HINT = CAN_PAY_HERE ? "Нужно оплатить календарь" : "Недоступно для этого аккаунта";
 
-/** ПЛАШКА «НУЖНО ИЗМЕНИТЬ ТАРИФ»: закрытое тарифом видно
- *  серым, тап поднимает плашку сверху. Владельцу — с кнопкой «Тариф»;
- *  партнёру в чужой команде менять нечего — тариф у хозяина команды. В
- *  приложении из магазина — одна спокойная фраза, без кнопки «Тариф». */
-export function useTariffNudge() {
+/** ПЛАШКА «НУЖНО ОПЛАТИТЬ КАЛЕНДАРЬ»: закрытое тарифом видно серым, тап
+ *  поднимает плашку сверху. Владельцу — с кнопкой «Тариф» к странице тарифа
+ *  этого календаря (не назван — открытого в календаре); партнёру платить
+ *  нечего — календарь оплачивает владелец. В приложении из магазина — одна
+ *  спокойная фраза, без кнопки. */
+export function useTariffNudge(teamId?: string | null) {
   const toast = useToast();
   const router = useRouter();
   const { data: role } = useCurrentRole();
@@ -220,12 +216,12 @@ export function useTariffNudge() {
       return;
     }
     if (role === "owner") {
-      toast("Нужно изменить тариф", "info", {
+      toast("Нужно оплатить календарь", "info", {
         label: "Тариф",
-        onPress: () => router.push(TARIFF_HREF),
+        onPress: () => router.push(calendarTariffHref(teamId)),
       });
     } else {
-      toast("Нужно изменить тариф — его меняет владелец команды", "info");
+      toast("Нужно оплатить календарь — его оплачивает владелец", "info");
     }
-  }, [role, router, toast]);
+  }, [role, router, teamId, toast]);
 }

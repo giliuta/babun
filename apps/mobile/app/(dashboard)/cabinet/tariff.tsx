@@ -1,14 +1,8 @@
-// КАБИНЕТ → ТАРИФ — цена за календарь, пробный 14 дней и оплата в браузере.
-// Тело — в features/tariffs. С `?tenant=` — тариф аккаунта,
-// который пригласил (блок аккаунта в Кабинете): партнёр видит его и
-// платит за него по праву «Тариф».
-import { CabinetAccountRoute } from "@/session/CabinetAccountRoute";
-import { TariffScreen } from "@/features/tariffs/TariffScreen";
+// СТАРЫЙ АДРЕС ТАРИФА. Тариф — у календаря, в его шестерёнке
+// (`/calendar/tariff`); сюда ведут старые ссылки и страница «Оплата прошла»
+// прежних сборок.
+import { Redirect } from "expo-router";
 
-export default function CabinetTariffRoute() {
-  return (
-    <CabinetAccountRoute>
-      <TariffScreen />
-    </CabinetAccountRoute>
-  );
+export default function CabinetTariffRedirect() {
+  return <Redirect href="/calendar/tariff" />;
 }

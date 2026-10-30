@@ -3,7 +3,7 @@ import { Pressable, View } from "react-native";
 import { TARIFF_LOCKED_HINT, useTariffNudge } from "./use-tariff";
 
 // ЗАКРЫТОЕ ТАРИФОМ — СЕРЫМ, А НЕ СПРЯТАНО: тап открывает сверху плашку «нужно
-// изменить тариф» с кнопкой. Обёртка гасит
+// оплатить календарь» с кнопкой. Обёртка гасит
 // содержимое и перехватывает тап: вместо действия — плашка.
 //
 // В шторке плашка ложится ПОД её затемнение, и кнопку «Тариф» не нажать:
@@ -11,13 +11,16 @@ import { TARIFF_LOCKED_HINT, useTariffNudge } from "./use-tariff";
 export function TariffLocked({
   locked,
   beforeNudge,
+  teamId,
   children,
 }: {
   locked: boolean;
   beforeNudge?: () => void;
+  /** Календарь, чью оплату просит плашка; не назван — открытый в календаре. */
+  teamId?: string | null;
   children: ReactNode;
 }) {
-  const nudge = useTariffNudge();
+  const nudge = useTariffNudge(teamId);
   if (!locked) return <>{children}</>;
   return (
     <Pressable

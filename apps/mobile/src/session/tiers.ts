@@ -1,31 +1,21 @@
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 import { CALENDAR_PRICE, calendarsMonthly, calendarsYearly, euro, type BillingPeriod } from "./calendar-price";
 
-// ЦЕНА ЗА КАЛЕНДАРЬ — ЧИСТЫЙ СЛОЙ.
+// ТАРИФ — У КАЛЕНДАРЯ. ЧИСТЫЙ СЛОЙ.
 //
-//   • без оплаты — свой календарь («Личный»), события, свои финансы;
-//     клиенты, записи клиентов, услуги, документы и SMS — серым;
-//   • оплачено — €9,99 в месяц (€7,99 при оплате за год) за каждый живой
-//     календарь; всё открыто, календарей и людей без лимита, люди бесплатно.
-//     В базе это `max` («полный доступ») и `paid_calendars`;
-//   • Соло и Про — прежняя лестница: доживают старые пробные;
-//   • пробный 14 дней — один раз, без карты;
-//   • тариф — у аккаунта-владельца команды: партнёр в чужой команде работает
-//     по тарифу её владельца.
+//   • каждый календарь оплачивается своей подпиской: €9,99 в месяц (€7,99
+//     при оплате за год); один можно оплатить, другой нет; люди бесплатно;
+//   • неоплаченный календарь ведёт события; клиенты, записи клиентов,
+//     услуги, документы и SMS в нём — серым;
+//   • «навсегда» и пробный 14 дней (один раз, без карты) — у аккаунта: они
+//     открывают все его календари;
+//   • партнёр в чужом календаре работает по оплате этого календаря.
 //
-// Истина — на сервере (`tenant_effective_plan`, `enforce_plan_limits`,
-// миграция 20261001183700): экран только не предлагает закрытое и объясняет.
-// Лист без React: его читают экраны, хуки и тесты.
+// Истина — на сервере (`calendar_effective_plan`, `enforce_plan_limits`):
+// экран только не предлагает закрытое и объясняет. Лист без React: его
+// читают экраны, хуки и тесты.
 
 export type Tier = "free" | "solo" | "pro" | "max";
-
-/** ЧТО ПРЕДЛАГАЕТ СТРАНИЦА «ТАРИФ»: одна цена за календарь в любом
- *  аккаунте. Сервер держит то же: пробный — полный доступ. */
-export function tiersForKind(
-  _kind: "personal" | "company" | null | undefined,
-): readonly Exclude<Tier, "free">[] {
-  return ["max"];
-}
 
 const RANK: Record<Tier, number> = { free: 0, solo: 1, pro: 2, max: 3 };
 
@@ -37,8 +27,7 @@ export type TierFeature =
   | "masters"
   | "documents"
   | "sms"
-  | "partners"
-  | "teams";
+  | "partners";
 
 /** С какого тарифа открывается возможность. */
 const OPENS_FROM: Record<TierFeature, Tier> = {
@@ -49,22 +38,21 @@ const OPENS_FROM: Record<TierFeature, Tier> = {
   documents: "solo",
   sms: "solo",
   partners: "pro",
-  teams: "pro",
 };
 
-/** Лимиты тарифа — те же числа, что `tenant_tier_limit` на сервере. */
-export const TIER_LIMITS: Record<Tier, { teams: number; partners: number }> = {
-  free: { teams: 1, partners: 0 },
-  solo: { teams: 1, partners: 0 },
-  pro: { teams: 5, partners: 5 },
-  // Оплачено за календари: не упирается — подписка растёт следом.
-  max: { teams: 1000, partners: 1000 },
+/** Лимит партнёров аккаунта — то же число, что `tenant_tier_limit` на
+ *  сервере. Календари числом не ограничены: новый бесплатен, пока в нём нет
+ *  работы. */
+export const PARTNER_LIMIT: Record<Tier, number> = {
+  free: 0,
+  solo: 0,
+  pro: 5,
+  max: 1000,
 };
 
-/** Карточка тарифа на странице «Тариф». Цена — евро в месяц; за год — цена
+/** Карточка цены на странице тарифа. Цена — евро в месяц; за год — цена
  *  месяца при оплате на год вперёд. */
 export interface TierCard {
-  tier: Exclude<Tier, "free">;
   name: string;
   monthly: string;
   yearlyMonthly: string;
@@ -74,23 +62,21 @@ export interface TierCard {
 
 export { CALENDAR_PRICE, calendarsMonthly, calendarsYearly, type BillingPeriod } from "./calendar-price";
 
-export const TIER_CARDS: readonly TierCard[] = [
-  {
-    tier: "max",
-    name: "Календарь",
-    monthly: euro(CALENDAR_PRICE.monthly),
-    yearlyMonthly: euro(CALENDAR_PRICE.yearlyMonthly),
-    includes: ["Клиенты, записи и деньги", "Инвойсы, чеки и SMS", "Люди — бесплатно и без лимита"],
-  },
-];
+export const CALENDAR_CARD: TierCard = {
+  name: "Календарь",
+  monthly: euro(CALENDAR_PRICE.monthly),
+  yearlyMonthly: euro(CALENDAR_PRICE.yearlyMonthly),
+  includes: ["Клиенты, записи и деньги", "Инвойсы, чеки и SMS", "Люди — бесплатно и без лимита"],
+};
 
 const NAMES: Record<Tier, string> = {
   free: "Без тарифа",
   solo: "Соло",
   pro: "Про",
-  max: "Календари",
+  max: "Календарь",
 };
 
+/** Имя тарифа — в строке оплаты: «Календарь», у старых подписок «Соло» и «Про». */
 export function tierName(tier: Tier): string {
   return NAMES[tier];
 }
@@ -100,9 +86,8 @@ function isTier(value: unknown): value is Tier {
 }
 
 /** Действующий тариф из профиля аккаунта. Сервер отдаёт `tier`
- *  (владельцу и партнёрам); до наката — по старым полям: `free` — без
- *  тарифа, `pro` — Про, ручная выдача и прочее платное — Макс. Пустой план
- *  (партнёр до наката не видит тарифа) — неизвестно: `null`, и экран не
+ *  (владельцу и партнёрам): платный, если оплачен хоть один календарь.
+ *  Пустой план (партнёр не видит тарифа) — неизвестно: `null`, и экран не
  *  режет — решает сервер. */
 export function tierOf(
   profile: { tier?: unknown; plan?: string | null; plan_override?: string | null } | null | undefined,
@@ -125,16 +110,10 @@ export function tierAllows(tier: Tier | null | undefined, feature: TierFeature):
   return RANK[tier] >= RANK[OPENS_FROM[feature]];
 }
 
-/** Можно ли завести ещё одну команду при стольких живых. */
-export function canAddTeam(tier: Tier | null | undefined, liveTeams: number): boolean {
-  if (!tier) return true;
-  return liveTeams < TIER_LIMITS[tier].teams;
-}
-
 /** Можно ли пригласить ещё одного партнёра (люди и ждущие приглашения). */
 export function canAddPartner(tier: Tier | null | undefined, partners: number): boolean {
   if (!tier) return true;
-  return partners < TIER_LIMITS[tier].partners;
+  return partners < PARTNER_LIMIT[tier];
 }
 
 /** Пробный период: тариф и сколько полных дней осталось; кончился или не
@@ -156,56 +135,51 @@ export function trialUsed(profile: { trial_started_at?: string | null } | null |
   return !!profile?.trial_started_at;
 }
 
-/** Подпись тарифа в Кабинете: «Макс», «Про · пробный, ещё 9 дней», «Без
- *  тарифа». */
-export function tierLine(
-  tier: Tier | null,
-  trial: { days: number } | null,
-  /** Можно ли платить здесь (`CAN_PAY_HERE`). В приложении из магазина —
-   *  только имя тарифа: отсчёт пробного зовёт купить, а покупки там нет
-   *  (App Store 3.1.3(f)). */
-  payHere = true,
-): string {
-  if (!tier) return "—";
-  if (payHere && trial && tier !== "free") return `${NAMES[tier]} · пробный, ещё ${trial.days} ${daysWord(trial.days)}`;
-  return NAMES[tier];
-}
-
 function daysWord(n: number): string {
   // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
   return pluralRu(n, ["день", "дня", "дней"]);
 }
 
-/** Какие команды работают при этом тарифе — то же правило, что
- *  `team_is_working` на сервере: в пределах лимита работают все; сверх —
- *  выбранные владельцем первыми, свободные места добираются живыми по
- *  созданию. Остальные только смотрят: новых клиентов и записей в них нет. */
-export function workingTeamIds(
-  teams: readonly { id: string; created_at?: string | null; is_active?: boolean | null }[],
-  tier: Tier | null | undefined,
-  chosen: readonly string[] | null | undefined,
-): Set<string> {
-  const live = teams.filter((team) => team.is_active !== false);
-  if (!tier || live.length <= TIER_LIMITS[tier].teams) return new Set(live.map((team) => team.id));
-  const order = chosen ?? [];
-  const rank = (id: string) => {
-    const at = order.indexOf(id);
-    return at < 0 ? Number.POSITIVE_INFINITY : at;
-  };
-  const sorted = live.slice().sort((a, b) => {
-    const ra = rank(a.id);
-    const rb = rank(b.id);
-    if (ra !== rb) return ra < rb ? -1 : 1;
-    const byCreated = (a.created_at ?? "").localeCompare(b.created_at ?? "");
-    return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
-  });
-  return new Set(sorted.slice(0, TIER_LIMITS[tier].teams).map((team) => team.id));
+/** Строка тарифа календаря, как её отдаёт `calendar_tariffs()`. Срок, период
+ *  и отмена — только владельцу и партнёру с правом «Тариф». */
+export interface CalendarTariffRow {
+  teamId: string;
+  plan: Tier;
+  status: string | null;
+  period: BillingPeriod | null;
+  periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 }
 
-/** Состояние тарифа аккаунта для страницы «Тариф». */
+/** Разбор ответа `calendar_tariffs()`: строка без календаря или с чужим
+ *  тарифом отбрасывается, а не превращается в «бесплатно». */
+export function parseCalendarTariffs(data: unknown): Map<string, CalendarTariffRow> {
+  const out = new Map<string, CalendarTariffRow>();
+  if (!Array.isArray(data)) return out;
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const teamId = typeof row.team_id === "string" ? row.team_id : null;
+    if (!teamId || !isTier(row.plan)) continue;
+    out.set(teamId, {
+      teamId,
+      plan: row.plan,
+      status: typeof row.status === "string" ? row.status : null,
+      period: row.period === "year" ? "year" : row.period === "month" ? "month" : null,
+      periodEnd: typeof row.current_period_end === "string" ? row.current_period_end : null,
+      cancelAtPeriodEnd: row.cancel_at_period_end === true,
+    });
+  }
+  return out;
+}
+
+/** Подписка, которая сейчас даёт доступ и списывает деньги. */
+const LIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+/** Состояние тарифа одного календаря для его страницы. */
 export interface TariffState {
   tier: Tier | null;
-  /** Подписка оплачена (не пробный). */
+  /** У календаря живая подписка (не пробный аккаунта). */
   paid: boolean;
   /** Выдан навсегда — платить и пробовать нечего. */
   forever: boolean;
@@ -214,54 +188,81 @@ export interface TariffState {
   /** Продление не списалось (`past_due`): доступ ещё держится, а Stripe
    *  уже сдвинул конец периода — «Оплачен до …» было бы неправдой. */
   pastDue?: boolean;
+  /** Как платят: помесячно или за год. */
+  period?: BillingPeriod | null;
+  /** Подписку отменили: календарь работает до конца оплаченного срока. */
+  cancelling?: boolean;
 }
 
-/** Кнопка оплаты: «Оплатить €29,97 в месяц» или «Оплатить €287,64 за год». */
-function payLabel(calendars: number, period: BillingPeriod): string {
-  return period === "year"
-    ? `Оплатить ${calendarsYearly(calendars)} за год`
-    : `Оплатить ${calendarsMonthly(calendars)} в месяц`;
+/** Тариф календаря: «навсегда» и пробный — от аккаунта, подписка — своя. */
+export function calendarTariffState(
+  account: Pick<TariffState, "forever" | "trial" | "trialUsed">,
+  row: CalendarTariffRow | null | undefined,
+): TariffState {
+  const live = !!row?.status && LIVE_STATUSES.has(row.status);
+  const paid = live && !account.forever;
+  return {
+    tier: row?.plan ?? null,
+    paid,
+    forever: account.forever,
+    trial: account.trial,
+    trialUsed: account.trialUsed,
+    pastDue: paid && row?.status === "past_due",
+    period: paid ? (row?.period ?? null) : null,
+    cancelling: paid && row?.cancelAtPeriodEnd === true,
+  };
 }
 
-/** Одно действие страницы «Тариф» — в футере. Пробный — пока его не было и
- *  ничего не оплачено; дальше — оплата выбранного; подписка уже есть —
- *  переход на выбранный тариф в ней же. На своём оплаченном и на выданном
- *  навсегда кнопки нет. */
+/** Кнопка оплаты календаря: «Оплатить €9,99 в месяц» или «Оплатить €95,88 за год». */
+function payLabel(period: BillingPeriod): string {
+  return period === "year" ? `Оплатить ${calendarsYearly(1)} за год` : `Оплатить ${calendarsMonthly(1)} в месяц`;
+}
+
+/** Одно действие страницы тарифа календаря — в футере. Пробный — пока его не
+ *  было и ничего не оплачено; дальше — оплата за выбранный период; подписка
+ *  уже есть — переход на другой период в ней же. На оплаченном с тем же
+ *  периодом и на выданном навсегда кнопки нет. */
 export function tariffAction(
   state: TariffState,
-  selected: Exclude<Tier, "free">,
-  /** Живых календарей аккаунта — столько и в оплате. */
-  calendars = 1,
-  /** Как платят: помесячно или за год вперёд. */
+  /** Как платить: помесячно или за год вперёд. */
   period: BillingPeriod = "month",
 ): { kind: "trial" | "pay" | "change"; label: string } | null {
   if (state.forever) return null;
-  if (state.paid && state.tier === selected) return null;
-  if (state.paid) return { kind: "change", label: "Перейти на цену за календарь" };
+  if (state.paid) {
+    if (!state.period || state.period === period) return null;
+    return {
+      kind: "change",
+      label: period === "year" ? `Платить за год — ${calendarsYearly(1)}` : `Платить помесячно — ${calendarsMonthly(1)}`,
+    };
+  }
   if (!state.trial && !state.trialUsed) {
     return { kind: "trial", label: "Попробовать 14 дней" };
   }
-  return { kind: "pay", label: payLabel(calendars, period) };
+  return { kind: "pay", label: payLabel(period) };
 }
 
-/** ДЕЙСТВИЕ ПАРТНЁРА С «ТАРИФ: ОПЛАЧИВАЕТ» (чтобы кто-то
- *  тоже мог оплачивать, но зафиксировано за командой). Партнёр только
- *  оформляет и оплачивает тариф аккаунта, пока подписки нет: пробный,
- *  смену тарифа в живой подписке и выданный навсегда решает владелец. Имя
- *  аккаунта — в самой кнопке, чтобы не спутать со своим. */
+/** ДЕЙСТВИЕ ПАРТНЁРА С «ТАРИФ: ОПЛАЧИВАЕТ». Партнёр только оформляет оплату
+ *  календаря, пока подписки нет: пробный, смену периода в живой подписке и
+ *  выданный навсегда решает владелец. Имя аккаунта — в самой кнопке, чтобы
+ *  не спутать со своим. */
 export function partnerTariffAction(
   state: TariffState,
-  _selected: Exclude<Tier, "free">,
   accountName: string | null,
-  calendars = 1,
   period: BillingPeriod = "month",
 ): { kind: "pay"; label: string } | null {
   if (state.forever || state.paid) return null;
-  const pay = payLabel(calendars, period);
+  const pay = payLabel(period);
   return { kind: "pay", label: accountName ? `${pay} за ${accountName}` : pay };
 }
 
-/** Подпись текущего тарифа на странице: живое состояние, не пояснение. */
+const ddmm = (iso: string | null | undefined): string | null => {
+  const end = iso ? new Date(iso) : null;
+  return end && !Number.isNaN(end.getTime())
+    ? `${String(end.getDate()).padStart(2, "0")}.${String(end.getMonth() + 1).padStart(2, "0")}`
+    : null;
+};
+
+/** Подпись тарифа календаря: живое состояние, не пояснение. */
 export function tariffStatus(
   state: TariffState,
   periodEnd?: string | null,
@@ -272,14 +273,12 @@ export function tariffStatus(
   payHere = true,
 ): string {
   if (state.forever) return "Навсегда";
-  if (state.trial) return payHere ? `Пробный · ещё ${state.trial.days} ${daysWord(state.trial.days)}` : "Действует";
   if (state.pastDue) return payHere ? "Оплата не прошла — обновите карту" : "Оплата не прошла";
   if (state.paid) {
-    const end = periodEnd ? new Date(periodEnd) : null;
-    return end && !Number.isNaN(end.getTime())
-      ? `Оплачен до ${String(end.getDate()).padStart(2, "0")}.${String(end.getMonth() + 1).padStart(2, "0")}`
-      : "Оплачен";
+    const end = ddmm(periodEnd);
+    if (state.cancelling) return end ? `Отменён · работает до ${end}` : "Отменён";
+    return end ? `Оплачен до ${end}` : "Оплачен";
   }
-  if (state.trialUsed && payHere) return "Пробный закончился";
-  return "Календарь и события";
+  if (state.trial) return payHere ? `Пробный · ещё ${state.trial.days} ${daysWord(state.trial.days)}` : "Действует";
+  return "Не оплачен";
 }

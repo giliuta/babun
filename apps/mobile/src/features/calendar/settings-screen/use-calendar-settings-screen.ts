@@ -31,7 +31,6 @@ import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
 import { effectiveCalendarWindow } from "@/features/calendar/window";
 import { effectiveWorkHours, hourLabel } from "@/features/calendar/setting-options";
-import { canAddTeam } from "@/session/tiers";
 import { useTariff } from "@/features/tariffs/use-tariff";
 import { bookingSubtitle, labelsSubtitle, windowSpanHours } from "./settings-subs";
 
@@ -47,11 +46,8 @@ export function useCalendarSettingsScreen() {
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
-  const tariffState = useTariff().state;
-  const tariffTier = tariffState.tier;
-  const tariffPaid = tariffState.paid;
-  const tariffForever = tariffState.forever;
-  const canNewTeam = canAddTeam(tariffTier, teams.length);
+  // Календари числом не ограничены: новый бесплатен, пока в нём нет работы.
+  const tariffForever = useTariff().state.forever;
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
   const archiveTeam = useCalendarDelete().archive;
@@ -72,11 +68,6 @@ export function useCalendarSettingsScreen() {
   // семь дней надо видеть целиком, пока правишь один. См. шапку
   // `TeamScheduleSheet` — там же, почему это исключение из закона «настройка —
   // всегда страница».
-  // БЕЗ ПОДПИСКИ ЭТИХ ДВЕРЕЙ НЕТ. Личный календарь ведёт события и деньги;
-  // прайс и сотрудники — работа с клиентами, и она в платном тарифе. Строка,
-  // которая ведёт в закрытое, хуже отсутствия строки: человек идёт и упирается
-  // (канон, правило 10).
-  const canUseServices = usePlanAllows("services");
   const actionsIn = useCalendarActionsReader();
   const memberUpdateTeam = useMemberUpdateTeam();
   const myAccess = useMyAccess().data;
@@ -84,7 +75,6 @@ export function useCalendarSettingsScreen() {
   // шестерёнки может не быть). Правило и его причины — `settings-rows.ts`.
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [offerOpen, setOfferOpen] = useState(false);
 
   const tenantId = useTenantId();
   // СКРЫТЫЕ КАЛЕНДАРИ ВКЛЮЧАЮТ ЗДЕСЬ (тумблером в настройках календаря), поэтому шестерёнка видит и скрытые.
@@ -111,6 +101,11 @@ export function useCalendarSettingsScreen() {
     : undefined;
   const activeId = params.team ?? persisted ?? teams[0]?.id;
   const team = teams.find((x) => x.id === activeId) ?? teams[0];
+  // БЕЗ ОПЛАТЫ ЭТОГО КАЛЕНДАРЯ ДВЕРИ К ПРАЙСУ НЕТ. Неоплаченный календарь
+  // ведёт события; прайс — работа с клиентами, она в оплаченном. Строка,
+  // которая ведёт в закрытое, хуже отсутствия строки: человек идёт и упирается
+  // (канон, правило 10).
+  const canUseServices = usePlanAllows("services", team?.id ?? null);
   // СТРОКИ — ПО ПРАВАМ ЭТОЙ КОМАНДЫ: сотруднику открываются те, что владелец
   // выдал в блоке «Настройки команды».
   const rowLevel = (blockKey: string): "hidden" | "read" | "write" => {
@@ -220,9 +215,7 @@ export function useCalendarSettingsScreen() {
     settings,
     teams,
     teamsLoading,
-    tariffPaid,
     tariffForever,
-    canNewTeam,
     archiveTeam,
     toast,
     savedTick,
@@ -235,8 +228,6 @@ export function useCalendarSettingsScreen() {
     setScheduleOpen,
     createOpen,
     setCreateOpen,
-    offerOpen,
-    setOfferOpen,
     tenantId,
     calendarVisibility,
     saveCalendarOrder,

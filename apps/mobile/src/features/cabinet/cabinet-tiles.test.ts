@@ -26,8 +26,6 @@ const ROOT = [
   "./NotificationsRow.tsx",
   "./LanguageRow.tsx",
   "./HistoryRow.tsx",
-  "./CabinetRequisitesRow.tsx",
-  "./TariffPaymentsRow.tsx",
 ];
 
 describe("корень Кабинета", () => {

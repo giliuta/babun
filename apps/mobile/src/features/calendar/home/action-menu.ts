@@ -20,7 +20,7 @@ type CreateActionMenuDeps =
     | "canDelete">
   & Pick<CalendarSources, "clients">
   & Pick<CalendarRights, "canMutateAppointment" | "isCrew" | "smsInPlan" | "actionsIn"
-    | "actorId" | "eventRightsIn" | "workInPlan" | "nudgeTariff" | "paymentHiddenFor">
+    | "actorId" | "eventRightsIn" | "workInPlanFor" | "nudgeTariff" | "paymentHiddenFor">
   & Pick<CalendarClock, "todayYmd">
   & Pick<CalendarUiState, "setSmsApt" | "setSmsOpen" | "setRecolor" | "setSheetMenu">
   & Pick<QuickEvents, "copyInPlace">
@@ -32,7 +32,7 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
     openEdit, clients, canMutateAppointment, isCrew, todayYmd, openReminderMenu,
     smsInPlan, setSmsApt, setSmsOpen, actionsIn, actorId, startFreeMove, startMove,
     eventRightsIn, setRecolor, restoreCancelled, cancelVisit,
-    deleteAppointmentConfirmed, copyInPlace, workInPlan, nudgeTariff, setSheetMenu,
+    deleteAppointmentConfirmed, copyInPlace, workInPlanFor, nudgeTariff, setSheetMenu,
     clientName, recordRoute, paymentHiddenFor, canDelete,
   } = deps;
   // ─── Контекстное меню записи (долгое нажатие без движения) ──────────
@@ -217,13 +217,13 @@ export function createActionMenu(deps: CreateActionMenuDeps) {
 
     // Шапка — кто, подпись — когда. Действие ждёт ухода листа сам
     // `PickerSheet`: почти каждый пункт открывает своё окно.
-    // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА — ТОЛЬКО ДЛЯ ПРОСМОТРА: сервер
+    // БЕЗ ОПЛАТЫ КАЛЕНДАРЯ ЗАПИСЬ КЛИЕНТА — ТОЛЬКО ДЛЯ ПРОСМОТРА: сервер
     // (`appointments_free_readonly`) отклоняет любую её правку, а меню
     // предлагало перенос, цвет, статус, копию и удаление — и каждое кончалось
     // откатом с ошибкой сервера. Пункты остаются, тап — плашка «Нужно
-    // изменить тариф», как на странице записи.
+    // оплатить календарь», как на странице записи.
     const shown =
-      !event && !workInPlan
+      !event && !workInPlanFor(apt.team_id)
         ? items.map((item) => (item.view ? item : { ...item, run: nudgeTariff }))
         : items;
 

@@ -15,8 +15,8 @@ import { useThemeColors } from "@/theme/colors";
 // вернитесь в приложение. Внизу одно действие — открыть приложение.
 //
 // ТАРИФ: сюда же возвращает оплата тарифа (`?tariff=paid|cancelled`)
-// и «Управление подпиской» (`?tariff=portal`) — слова свои, кнопка ведёт в
-// Кабинет → Тариф.
+// и «Управление подпиской» (`?tariff=portal`) — слова свои, кнопка ведёт к
+// тарифу календаря.
 //
 // Страница сайта: в приложении из магазина покупок нет (App Store 3.1.3(f),
 // `pay-here.ts`), и адрес, открытый в нём ссылкой, ведёт на главную.
@@ -35,7 +35,7 @@ function PayDone() {
     ? tariff === "portal"
       ? { title: "Готово", body: "Изменения подписки дойдут до приложения через минуту. Вернитесь в Babun." }
       : cancelled
-        ? { title: "Оплата отменена", body: "Деньги не списаны. Тариф можно выбрать в приложении: Кабинет → Тариф." }
+        ? { title: "Оплата отменена", body: "Деньги не списаны. Календарь можно оплатить в приложении: шестерёнка календаря → Тариф." }
         : { title: "Оплата прошла", body: "Тариф включится через минуту. Вернитесь в приложение Babun." }
     : cancelled
       ? { title: "Оплата отменена", body: "Деньги не списаны. Пополнить можно в приложении: Кабинет → SMS." }
@@ -68,7 +68,7 @@ function PayDone() {
         </Text>
       </View>
       <View style={{ paddingHorizontal: GUTTER, paddingBottom: 16 }}>
-        <GradientButton label="Открыть Babun" onPress={() => void Linking.openURL(isTariff ? "babun://cabinet/tariff" : "babun://cabinet/sms")} />
+        <GradientButton label="Открыть Babun" onPress={() => void Linking.openURL(isTariff ? "babun://calendar/tariff" : "babun://cabinet/sms")} />
       </View>
     </Screen>
   );

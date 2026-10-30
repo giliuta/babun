@@ -1,20 +1,7 @@
-// «Оплаты тарифа» — платежи за подписку (Кабинет). Тело —
-// `features/cabinet/TariffPaymentsScreen.tsx`. С `?tenant=` — оплаты аккаунта,
-// который пригласил, по праву «Оплаты тарифа».
-//
-// Только на сайте: страница открывает счета Stripe с формой оплаты, а в
-// приложении из магазина покупок нет (App Store 3.1.3(f), `pay-here.ts`).
-// Строки к ней там нет; старая ссылка возвращает в Кабинет.
+// СТАРЫЙ АДРЕС ОПЛАТ ТАРИФА. Оплаты — у каждого календаря, на странице его
+// тарифа (`/calendar/tariff` → «Оплаты»); сюда ведут старые ссылки.
 import { Redirect } from "expo-router";
-import { CabinetAccountRoute } from "@/session/CabinetAccountRoute";
-import { TariffPaymentsScreen } from "@/features/cabinet/TariffPaymentsScreen";
-import { CAN_PAY_HERE } from "@/lib/pay-here";
 
-export default function CabinetPaymentsRoute() {
-  if (!CAN_PAY_HERE) return <Redirect href="/cabinet" />;
-  return (
-    <CabinetAccountRoute>
-      <TariffPaymentsScreen />
-    </CabinetAccountRoute>
-  );
+export default function CabinetPaymentsRedirect() {
+  return <Redirect href="/calendar/tariff" />;
 }

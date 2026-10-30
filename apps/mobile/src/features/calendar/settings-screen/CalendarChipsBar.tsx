@@ -8,7 +8,7 @@ import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 /** The calendars ribbon on top of the settings, with «Добавить» pinned right. */
 export function CalendarChipsBar({ screen }: { screen: CalendarSettingsState }) {
   const t = useThemeColors();
-  const { router, gearChips, team, rows, canNewTeam, setCreateOpen, setOfferOpen, saveCalendarOrder, tenantId } =
+  const { router, gearChips, team, rows, setCreateOpen, saveCalendarOrder, tenantId } =
     screen;
   return (
     <ScopeChips
@@ -29,18 +29,16 @@ export function CalendarChipsBar({ screen }: { screen: CalendarSettingsState }) 
       // лента остаётся лентой его календарей, без действия.
       trailing={rows.addCalendar ? (
         <Pressable
-          // ЛИМИТ КОМАНД ТАРИФА: Соло — одна, Про — 5, Макс — 50.
-          // Сверх — «Добавить» серое, тап поднимает плашку про тариф.
-          // Сверх оплаченного — предложение «Новый календарь»:
-          // цена, итог и «Оплатить» / пробный, а не плашка про тариф.
-          onPress={() => (canNewTeam ? setCreateOpen(true) : setOfferOpen(true))}
+          // Календари числом не ограничены: новый бесплатен, пока в нём
+          // нет работы, а клиенты и записи в нём — после его оплаты.
+          onPress={() => setCreateOpen(true)}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Добавить календарь"
           style={({ pressed }: { pressed: boolean }) => ({
             minHeight: 44,
             justifyContent: "center",
-            opacity: !canNewTeam ? 0.4 : pressed ? 0.5 : 1,
+            opacity: pressed ? 0.5 : 1,
           })}
         >
           <Text
