@@ -26,10 +26,10 @@ describe("шестерёнка «Финансов» по правам", () => {
           "finance.settings_accounts": "read",
           "finance.settings_categories_expense": "write",
           "finance.settings_trash": "write",
+          "finance.settings_requisites": "read",
         },
         b: {},
       },
-      { "finance.settings_requisites": "read" },
     );
     const a = financeSettingLevels({ role: "master", map: m, teamId: "a" });
     assert.equal(a.accounts, "read");
@@ -40,12 +40,12 @@ describe("шестерёнка «Финансов» по правам", () => {
     assert.equal(a.currency, "hidden");
     const b = financeSettingLevels({ role: "master", map: m, teamId: "b" });
     assert.equal(b.accounts, "hidden");
-    // Право на компанию одно — видно и под чужой командой.
-    assert.equal(b.requisites, "read");
+    // Реквизиты — у календаря: в команде без права их нет.
+    assert.equal(b.requisites, "hidden");
   });
 
-  test("строки на весь аккаунт партнёр только видит", () => {
-    const m = map({ a: {} }, { "finance.settings_currency": "write", "finance.settings_requisites": "write" });
+  test("валюту и реквизиты партнёр только видит", () => {
+    const m = map({ a: { "finance.settings_requisites": "write" } }, { "finance.settings_currency": "write" });
     const a = financeSettingLevels({ role: "master", map: m, teamId: "a" });
     assert.equal(a.currency, "read");
     assert.equal(a.requisites, "read");
@@ -56,10 +56,14 @@ describe("шестерёнка «Финансов» по правам", () => {
     assert.equal(anyFinanceSetting(levels), false);
   });
 
-  test("без команды — только строки на весь аккаунт (реквизиты, валюта)", () => {
-    const m = map({ a: { "finance.settings_accounts": "write" } }, { "finance.settings_requisites": "read" });
+  test("без команды — только строка на весь аккаунт (валюта)", () => {
+    const m = map(
+      { a: { "finance.settings_accounts": "write", "finance.settings_requisites": "read" } },
+      { "finance.settings_currency": "read" },
+    );
     const none = financeSettingLevels({ role: "master", map: m, teamId: null });
     assert.equal(none.accounts, "hidden");
-    assert.equal(none.requisites, "read");
+    assert.equal(none.requisites, "hidden");
+    assert.equal(none.currency, "read");
   });
 });

@@ -7,6 +7,7 @@ import { FieldRow, RowCaption } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
+import { CompanyCalendarsBlock } from "./CompanyCalendarsBlock";
 import { FOOTER_SIDE, GUTTER } from "@/components/ui/tokens";
 import { LogoRow } from "@/features/settings/LogoRow";
 import { PERSON_COLUMN } from "@/features/clients/contact-column";
@@ -101,10 +102,15 @@ type TextKey =
   | "contact_phone"
   | "contact_email";
 
+const NO_TEAMS: readonly { id: string; name: string }[] = [];
+const NO_TEAMS_IDS: readonly string[] = [];
+
 export function CompanySheet({
   visible,
   company,
   saving,
+  teams = NO_TEAMS,
+  teamIds = NO_TEAMS_IDS,
   onSave,
   onMakeDefault,
   onClose,
@@ -113,7 +119,12 @@ export function CompanySheet({
   /** `null` — заводим новые. */
   company: Company | null;
   saving: boolean;
-  onSave: (patch: CompanyDraft) => void;
+  /** Живые календари аккаунта — блок «Календари»; нет — нет и блока
+   *  (лист, открытый из документа). */
+  teams?: readonly { id: string; name: string }[];
+  /** Календари, что сейчас выставляют документы от этого набора. */
+  teamIds?: readonly string[];
+  onSave: (patch: CompanyDraft, teamIds: string[]) => void;
   /** Сделать этот набор основным. `undefined` — он уже основной, скрыт либо
    *  ещё не заведён: переключать нечего. */
   onMakeDefault?: () => void;
@@ -121,6 +132,7 @@ export function CompanySheet({
 }) {
   const t = useThemeColors();
   const [draft, setDraft] = useState<CompanyDraft>(EMPTY);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   // ЧЕРНОВИК ДОЖИВАЕТ ДО СЛЕДУЮЩЕГО ОТКРЫТИЯ (тот же приём, что у листа
   // объекта). Лист закрывается свайпом, тапом по фону и жестом VoiceOver, и
@@ -143,8 +155,9 @@ export function CompanySheet({
   useEffect(() => {
     if (!visible || hydratedKey === key) return;
     setDraft(readStoredDraft(storageKey) ?? companyToDraft(company));
+    setPicked(new Set(teamIds));
     setHydratedKey(key);
-  }, [visible, key, company, hydratedKey, storageKey]);
+  }, [visible, key, company, hydratedKey, storageKey, teamIds]);
 
   useEffect(() => {
     if (!storageKey || hydratedKey !== key) return;
@@ -253,7 +266,7 @@ export function CompanySheet({
             label={company ? "Сохранить" : "Добавить реквизиты"}
             loading={saving}
             disabled={!canSaveCompany(draft) || saving}
-            onPress={() => onSave(normalizeCompanyDraft(draft))}
+            onPress={() => onSave(normalizeCompanyDraft(draft), [...picked])}
           />
         </View>
       }
@@ -366,6 +379,20 @@ export function CompanySheet({
             />
           </SectionCard>
         ) : null}
+
+        <CompanyCalendarsBlock
+          teams={teams}
+          picked={picked}
+          isDefault={!!company?.is_default}
+          onToggle={(teamId, on) =>
+            setPicked((prev) => {
+              const next = new Set(prev);
+              if (on) next.add(teamId);
+              else next.delete(teamId);
+              return next;
+            })
+          }
+        />
       </ScrollView>
     </BottomSheet>
   );

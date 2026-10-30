@@ -11,9 +11,9 @@ import type { UserRole } from "@/session/role-policy";
 // 20261003171500 и 20261003235500), здесь — только вид.
 //
 // Строки шестерёнки — в её порядке и её блоками: «Деньги» (счета, удалённые
-// операции), «Категории» (доходы, расходы, долги), «Документы»
-// (реквизиты, инвойсы), «Общие» (валюта). Последние три — одни на весь
-// аккаунт: право на компанию, и партнёр их только видит.
+// операции), «Категории» (доходы, расходы, долги), «Документы» (реквизиты:
+// право на календарь, партнёр их только видит — правит наборы владелец),
+// «Общие» (валюта: одна на аккаунт, право на компанию, партнёр только видит).
 //
 // Лист без React: правило читают страница, её подстраницы и тест.
 
@@ -32,7 +32,11 @@ export type FinanceSettingLevel = "hidden" | "read" | "write";
 export type FinanceSettingLevels = Record<FinanceSettingRow, FinanceSettingLevel>;
 
 /** Строки на весь аккаунт: их право — без команды. */
-const COMPANY_ROWS: ReadonlySet<FinanceSettingRow> = new Set(["requisites", "currency"]);
+const COMPANY_ROWS: ReadonlySet<FinanceSettingRow> = new Set(["currency"]);
+/** Строки, которые партнёр только видит, что бы ни стояло в карте: правка
+ *  задела бы всех — валюта всех денег, наборы реквизитов нескольких
+ *  календарей. */
+const READ_ONLY_ROWS: ReadonlySet<FinanceSettingRow> = new Set(["requisites", "currency"]);
 
 const ROWS = Object.keys(FINANCE_SETTING_BLOCKS) as FinanceSettingRow[];
 
@@ -72,18 +76,12 @@ export function financeSettingLevels({ role, map, teamId }: FinanceSettingsInput
       scope: company ? "company" : "calendar",
       teamId,
     });
-    // Строки на весь аккаунт партнёр только видит, что бы ни стояло в карте.
-    levels[row] = gate === "write" ? (company ? "read" : "write") : gate === "read" ? "read" : "hidden";
+    levels[row] = gate === "write" ? (READ_ONLY_ROWS.has(row) ? "read" : "write") : gate === "read" ? "read" : "hidden";
   }
   return levels;
 }
 
-/** «РЕКВИЗИТЫ» — В КАБИНЕТЕ: единый блок на все компании. Право строки прежнее и закрывает
- *  страницу `/cabinet/requisites`, но шестерёнку «Финансов» оно больше не
- *  открывает: строки там нет. */
-const OUTSIDE_GEAR: ReadonlySet<FinanceSettingRow> = new Set(["requisites"]);
-
 /** Есть ли у команды хоть одна строка — иначе её нет и в ленте. */
 export function anyFinanceSetting(levels: FinanceSettingLevels): boolean {
-  return ROWS.some((row) => !OUTSIDE_GEAR.has(row) && levels[row] !== "hidden");
+  return ROWS.some((row) => levels[row] !== "hidden");
 }

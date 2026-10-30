@@ -35,15 +35,6 @@ export function accountsSettingsHref(teamId: string | null, noTeam: string): str
 }
 
 const FORMS_CATEGORY: PluralFormsRu = ["категория", "категории", "категорий"];
-const FORMS_SET: PluralFormsRu = ["набор", "набора", "наборов"];
-
-/** Дверь «Реквизиты»: «1 набор · INV-2026-005» — сколько рабочих наборов и
- *  номер следующего инвойса основного. Номер ещё едет — только наборы. */
-export function requisitesDoorLine(liveSets: number, nextNumber: string | null): string {
-  if (liveSets === 0) return "Пока нет";
-  const sets = formatCountRu(liveSets, FORMS_SET);
-  return nextNumber ? `${sets} · ${nextNumber}` : sets;
-}
 
 /** Дверь одной страницы категорий (доходы, расходы и
  *  долги — отдельными страницами): «5 категорий · 1 бюджет» либо «Пока нет».

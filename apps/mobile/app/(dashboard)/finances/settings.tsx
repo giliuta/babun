@@ -34,6 +34,7 @@ import {
 } from "@/features/finances/settings-levels";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
+import { RequisitesRow } from "@/features/companies/RequisitesRow";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { useDeletedOperations } from "@/features/finances/deleted-operations";
 import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
@@ -61,8 +62,9 @@ import { SETTINGS_ROW_INSET } from "@/components/ui/tokens";
 // «Счета» и «Реквизиты», каждая ведёт на свою страницу, где внизу «Добавить
 // категорию».
 // Блок команды назван «Деньги» — имя команды уже стоит в ленте над ним.
-// Блока «Документы» нет: страницы «Инвойсы» нет, «Реквизиты» — единый блок
-// на все команды — живут в Кабинете.
+// БЛОК «ДОКУМЕНТЫ» — «Реквизиты» выбранного календаря: от чьего имени он
+// выставляет инвойсы и чеки. Наборы одни на аккаунт, у каждого — свои
+// календари; партнёр видит только наборы своих календарей.
 
 
 const KINDS: {
@@ -121,7 +123,8 @@ export default function FinanceSettingsScreen() {
   };
   const moneyGroup = teamId !== null && (money.accounts || money.trash);
   const categoryKinds = teamId ? KINDS.filter(({ kind }) => shown(CATEGORY_KIND_ROW[kind])) : [];
-  const any = moneyGroup || categoryKinds.length > 0 || shown("currency");
+  const requisites = teamId !== null && shown("requisites");
+  const any = moneyGroup || categoryKinds.length > 0 || requisites || shown("currency");
 
   return (
     <Screen edges={["top"]}>
@@ -205,6 +208,12 @@ export default function FinanceSettingsScreen() {
                   />
                 </View>
               ))}
+            </SectionCard>
+          ) : null}
+
+          {requisites && teamId ? (
+            <SectionCard title="Документы">
+              <RequisitesRow teamId={teamId} />
             </SectionCard>
           ) : null}
 

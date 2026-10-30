@@ -9,7 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (file: string) => readFileSync(resolve(here, "..", file), "utf8");
 
 describe("год серии — год компании, а не телефона", () => {
-  for (const file of ["companies/company-sheet/SeriesBlock.tsx", "cabinet/CabinetRequisitesRow.tsx"]) {
+  for (const file of ["companies/company-sheet/SeriesBlock.tsx", "companies/RequisitesRow.tsx"]) {
     test(file, () => {
       const source = read(file);
       assert.match(source, /Number\(useBusinessToday\(\)\.slice\(0, 4\)\)/);

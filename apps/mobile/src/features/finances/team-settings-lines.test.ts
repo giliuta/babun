@@ -3,7 +3,6 @@ import { describe, test } from "node:test";
 import {
   accountsSettingsHref,
   deletedOperationsDoorLine,
-  requisitesDoorLine,
   settingsTeamId,
   teamCategoryKindLine,
 } from "./team-settings-lines";
@@ -35,13 +34,6 @@ describe("двери страниц категорий по виду", () => {
   });
 });
 
-describe("шестерёнка финансов — числа и подписи (30.09)", () => {
-  test("реквизиты — наборы и следующий номер основного", () => {
-    assert.equal(requisitesDoorLine(1, "INV-2026-106"), "1 набор · INV-2026-106");
-    assert.equal(requisitesDoorLine(3, null), "3 набора");
-    assert.equal(requisitesDoorLine(0, "INV-2026-001"), "Пока нет");
-  });
-});
 
 describe("дверь настроек над счетами — счета выбранной команды (03.10)", () => {
   test("команда выбрана — страница на ней одной", () => {

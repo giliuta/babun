@@ -17,6 +17,8 @@ import { notify } from "@/lib/notify";
 import { useAccountScope } from "@/session/account-scope";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
+import { companyTeamChanges, companyTeamIds } from "./company-calendars";
+import { useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { companyDetail, companyFilled, defaultHeir } from "./company-rules";
 import {
   companyHasDocuments,
@@ -83,6 +85,9 @@ export function RequisitesScreen() {
   const scope = useAccountScope();
   const tenantId = scope.tenantId;
   const reorder = useReorderCompanies();
+  // Календари наборов: какой от какого набора выставляет документы.
+  const liveTeams = (useTeams({ display: true }).data ?? []).filter((team) => team.is_active !== false);
+  const updateTeam = useUpdateTeam();
   const [editing, setEditing] = useState<Company | null>(null);
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -342,7 +347,9 @@ export function RequisitesScreen() {
             : undefined
         }
         onClose={() => setOpen(false)}
-        onSave={(patch) =>
+        teams={liveTeams}
+        teamIds={companyTeamIds(editing?.id ?? null, liveTeams, rows)}
+        onSave={(patch, teamIds) =>
           save.mutate(
             // Новый набор встаёт последним, а не на место первого.
             { id: editing?.id ?? null, patch: editing ? patch : { ...patch, position: rows.length } },
@@ -350,7 +357,13 @@ export function RequisitesScreen() {
               onSuccess: async (id) => {
                 // Первый видимый набор сразу становится основным: справочник,
                 // из которого нечего подставить, документу бесполезен.
+                const isDefault = live.length === 0 || !!editing?.is_default;
                 if (live.length === 0) await makeDefault.mutateAsync(id);
+                // Календари набора — после самого набора: новому нужен id.
+                const changes = companyTeamChanges({ companyId: id, isDefault, picked: teamIds, teams: liveTeams, companies: rows });
+                for (const change of changes) {
+                  await updateTeam.mutateAsync({ id: change.teamId, patch: { legal_entity_id: change.legalEntityId } });
+                }
                 setOpen(false);
               },
               onError: fail("Не сохранилось"),
