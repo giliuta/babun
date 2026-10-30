@@ -6,11 +6,18 @@ import type { BlockLayout } from "./block-layout";
 // Кегль 13 — типографический пол продукта. Лестница только ДОПИСЫВАЕТСЯ вниз
 // и никогда не переставляется: при щипке глаз не должен терять якорь.
 //
+// ПОЛОВИНКА ПИШЕТ, СКОЛЬКО ВЛЕЗЕТ. Две записи на одно время делят колонку
+// Недели пополам (~16pt под текст); прежний порог 24pt оставлял их немыми
+// цветными брусками. Теперь строка печатается от `MIN_TEXT_W` и режется
+// краем: первые буквы имени и часы уже отличают одну половинку от другой.
+//
 // ОДИН КЕГЛЬ У ВСЕХ, ХВОСТ ТАЕТ. Подгонки кегля нет: короткие имена ужимались
 // до 11pt, длинные — нет, и соседние блоки недели писали имя разным размером.
 // Не влезающая строка режется по краю, а край прячет плёнка в цвет блока
 // (`FadeTail`). У отменённой заливка полупрозрачная, плёнке спрятать нечем —
 // ей многоточие.
+const MIN_TEXT_W = 10;
+
 export function BlockText({
   layout,
   label,
@@ -30,10 +37,6 @@ export function BlockText({
 }) {
   const {
     textW,
-    nameLineW,
-    deckMore,
-    deckBadgeLow,
-    deckBadgeW,
     lastRow,
     dotReserve,
     cancelled,
@@ -47,17 +50,14 @@ export function BlockText({
   const strike = cancelled ? "line-through" : "none";
   return (
     <>
-      {textW >= 24 && nameLineW >= 24 ? (
+      {textW >= MIN_TEXT_W ? (
         <Text
           style={{
             color: nameColor,
             fontSize: 13,
             lineHeight: lineH,
             fontWeight: "700",
-            marginRight: Math.max(
-              deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
-              lastRow === "name" ? dotReserve : 0,
-            ),
+            marginRight: lastRow === "name" ? dotReserve : 0,
             textDecorationLine: strike,
           }}
           numberOfLines={1}
@@ -67,7 +67,7 @@ export function BlockText({
           {label}
         </Text>
       ) : null}
-      {showTime && textW >= 24 ? (
+      {showTime && textW >= MIN_TEXT_W ? (
         <Text
           style={{
             color: subColor,
@@ -87,7 +87,7 @@ export function BlockText({
           {timeText}
         </Text>
       ) : null}
-      {showService && textW >= 24 ? (
+      {showService && textW >= MIN_TEXT_W ? (
         <Text
           style={{
             color: subColor,

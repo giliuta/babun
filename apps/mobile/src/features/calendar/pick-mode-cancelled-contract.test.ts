@@ -13,9 +13,9 @@ import { readModuleSource } from "@/lib/module-source";
 const src = readModuleSource(path.join(__dirname, "DayView.tsx"), path.join(__dirname, "day-view"));
 
 describe("slot-pick mode hides cancelled blocks", () => {
-  test("a cancelled placement is skipped while free slots are shown", () => {
-    const loop = src.slice(src.indexOf("? placements.map((p) => {\n            // ОТМЕНЁННАЯ"));
-    assert.ok(loop.length > 0, "the block loop is where it was");
-    assert.match(loop, /if \(freeSlots !== undefined && p\.apt\.status === "cancelled"\) return null;/);
+  test("a cancelled record neither draws nor takes a lane while free slots are shown", () => {
+    assert.match(src, /const picking = freeSlots !== undefined;/);
+    assert.match(src, /a\.event_all_day !== true && !\(picking && a\.status === "cancelled"\)/);
+    assert.match(src, /lanes\.shown\.map\(\(p\) => \(/);
   });
 });
