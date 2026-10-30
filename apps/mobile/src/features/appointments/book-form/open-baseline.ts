@@ -38,6 +38,8 @@ export interface OpenRefs {
   /** Объект события при открытии (`locationId`), если он в списке. */
   eventLoc: Location | null;
   clientLocations: readonly Location[];
+  /** Есть ли на сервере колонка типа объекта события — как у формы. */
+  eventPlaceTypeLive?: boolean;
 }
 
 /** Патч записи, какой она открылась, — на справочниках `refs`. */
@@ -48,6 +50,7 @@ export function openRecordPatch(open: OpenRecord, refs: OpenRefs): Partial<Appoi
     ...math,
     isEdit: refs.isEdit,
     eventLoc: refs.eventLoc,
+    eventPlaceTypeLive: refs.eventPlaceTypeLive,
     eventTypeLabel: refs.eventTypeLabel,
     clientLocations: refs.clientLocations,
     client: refs.client,

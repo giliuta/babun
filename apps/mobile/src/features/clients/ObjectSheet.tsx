@@ -176,25 +176,35 @@ const EMPTY_PLACE: ObjectFieldsValue = {
   note: "",
 };
 
-/** ОБЪЕКТ СОБЫТИЯ БЕЗ КЛИЕНТА — ТА ЖЕ ФОРМА, ТОЛЬКО БЕЗ «ТИПА ОБЪЕКТА».
+/** ОБЪЕКТ СОБЫТИЯ БЕЗ КЛИЕНТА — ТА ЖЕ ФОРМА.
  *
- *  Такой объект живёт в самом событии (адрес, точка, заметка записи) и в
- *  базу клиентов не попадает, поэтому писателя `locations` у листа нет: он
+ *  Такой объект живёт в самом событии (адрес, точка, заметка, тип записи) и
+ *  в базу клиентов не попадает, поэтому писателя `locations` у листа нет: он
  *  отдаёт готовое значение форме события, а в базу оно уедет с «Сохранить»
- *  события. Тип объекта хранить негде — блока нет. Вид — `Shell`, как у
- *  объекта клиента: разных дизайнов одной формы нет. */
+ *  события. Тип — из «Типов объектов» команды события и только когда у записи
+ *  на сервере есть его колонка (`withType`); до наката блока типа нет. Вид —
+ *  `Shell`, как у объекта клиента: разных дизайнов одной формы нет. */
 export function PlaceSheet({
   visible,
   initial,
+  teamId = null,
+  withType = false,
   onApply,
   onClose,
 }: {
   visible: boolean;
   /** Объект, который уже стоит в событии; `null` — заводим новый. */
   initial: ObjectFieldsValue | null;
+  /** Команда события — её «Типы объектов». Без команды типа нет: справочник
+   *  у каждой команды свой, а чужой давать нельзя. */
+  teamId?: string | null;
+  /** Колонка типа у записи на сервере есть (накат). */
+  withType?: boolean;
   onApply: (value: ObjectFieldsValue) => void;
   onClose: () => void;
 }) {
+  const typed = withType && !!teamId;
+  const typeOptions = useObjectTypeOptions(typed ? teamId : null);
   const [value, setValue] = useState<ObjectFieldsValue>(initial ?? EMPTY_PLACE);
   // Каждое открытие — с того, что стоит в событии сейчас: лист остаётся
   // смонтированным, и без пересева он показывал бы прошлый ввод.
@@ -210,10 +220,10 @@ export function PlaceSheet({
       visible={visible}
       title={initial ? "Объект" : "Новый объект"}
       draft={!initial}
-      teamId={null}
+      teamId={typed ? teamId : null}
       value={value}
-      typeOptions={[]}
-      noType
+      typeOptions={typed ? typeOptions : []}
+      noType={!typed}
       onChange={(patch) => setValue((v) => ({ ...v, ...patch }))}
       flush={() => {}}
       onClose={onClose}

@@ -144,7 +144,7 @@ describe("1. событие без клиента — объект в самом
     assert.doesNotMatch(picks, /Объект заводится клиенту — выберите клиента/);
     const sheets = read("BookPickSheets.tsx");
     assert.match(sheets, /<PlaceSheet\s+visible=\{placeSheet\}/);
-    assert.match(read("../../clients/ObjectSheet.tsx"), /noType\s+onChange=/);
+    assert.match(read("../../clients/ObjectSheet.tsx"), /noType=\{!typed\}/);
   });
 });
 

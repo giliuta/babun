@@ -44,6 +44,8 @@ import {
   useRestoredBookDraft,
 } from "./use-book-draft-memory";
 import { useDeletedClientNames } from "@/features/clients/queries";
+import { useEventPlaceTypeLive } from "./use-event-place-type-live";
+import { useLocationLabels } from "@/features/settings/local-settings";
 
 /** The booking form's whole state and behaviour, composed in the order the
  *  hooks (and so their effects) always ran. `app/book/index.tsx` renders it. */
@@ -66,6 +68,8 @@ export function useBookForm() {
   // тарифом не заперты. Тариф переедет в календарь — меняется эта строка.
   const workInPlan = usePlanAllows("book-clients");
   const nudgeTariff = useTariffNudge();
+  // Колонка типа объекта события — после наката; до него типа у события нет.
+  const eventPlaceTypeLive = useEventPlaceTypeLive();
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<BookParams>();
@@ -87,6 +91,8 @@ export function useBookForm() {
     first(formParams.teamId) ?? null,
   );
   const look = useBookBlocks(teamId);
+  // «Типы объектов» команды записи — у объекта события без клиента (`event-place.ts`).
+  const { data: placeTypePresets = [] } = useLocationLabels(teamId);
   const refs = useBookReferences(teamId);
   const { teams, masters, services, clients, allAppts, calendarSettings } = refs;
   const draft = useBookDraft({
@@ -212,6 +218,7 @@ export function useBookForm() {
       ...totals,
       teamId,
       eventLoc: places.eventLocationEntry?.loc ?? null,
+      eventPlaceTypeLive,
       eventTypeLabel: eventKind.eventType?.label ?? null,
       // The note as typed right now, not the settled `comment` state.
       comment: draft.commentNow.current,
@@ -304,6 +311,7 @@ export function useBookForm() {
     eventAddress: draft.eventAddress,
     eventPlacePin: draft.eventPlacePin,
     eventPlaceNote: draft.eventPlaceNote,
+    eventPlaceTypeId: draft.eventPlaceTypeId,
     eventUrl: draft.eventUrl,
     eventReminderOffset: draft.eventReminderOffset,
     repeat: draft.repeat,
@@ -339,6 +347,7 @@ export function useBookForm() {
           eventLoc:
             places.eventLocationPool.find((row) => row.loc.id === openRecord.locationId)?.loc ?? null,
           clientLocations: places.clientLocations,
+          eventPlaceTypeLive,
         }),
       )
     : null;
@@ -464,6 +473,8 @@ export function useBookForm() {
     workInPlan,
     nudgeTariff,
     teamId,
+    eventPlaceTypeLive,
+    placeTypePresets,
     ...look,
     ...refs,
     ...draft,

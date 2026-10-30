@@ -40,14 +40,15 @@ export function placeCoords(pin: string): { lat: number | null; lng: number | nu
 }
 
 /** Строка `ObjectRow` для объекта события: та же строка, что у объекта
- *  клиента, без типа. */
-export function placeAsLocation(place: EventPlace): Location {
+ *  клиента; тип — по имени из справочника команды (`ObjectRow` найдёт его
+ *  вид по `label`). */
+export function placeAsLocation(place: EventPlace, typeName = ""): Location {
   const address = place.address.trim();
   const addressIsLink = isLikelyUrl(address);
   const pin = place.pin.trim();
   return {
     id: EVENT_PLACE_ID,
-    label: "",
+    label: typeName,
     address: addressIsLink ? "" : address,
     mapUrl: pin || (addressIsLink ? address : undefined),
     note: place.note.trim() || undefined,
@@ -56,9 +57,9 @@ export function placeAsLocation(place: EventPlace): Location {
 }
 
 /** Форма объекта, открытая на объекте события. */
-export function placeFormValue(place: EventPlace): ObjectFieldsValue {
+export function placeFormValue(place: EventPlace, typeName = ""): ObjectFieldsValue {
   return {
-    type: "",
+    type: typeName,
     target: place.address,
     parts: {},
     partsOpen: false,
@@ -76,4 +77,32 @@ export function placeFromForm(value: ObjectFieldsValue): EventPlace {
   const text = address.trim();
   if (!text && pin && !coordsOf(pin)) return { address: pin, pin: "", note: value.note.trim() };
   return { address: text, pin, note: value.note.trim() };
+}
+
+/** Тип объекта события: id из справочника команды по имени, выбранному в
+ *  форме. Нет такого имени в справочнике (удалили) — без типа. */
+export function placeTypeId(
+  presets: readonly { id: string; name: string }[],
+  typeName: string,
+): string | null {
+  const key = typeName.trim().toLowerCase();
+  if (!key) return null;
+  return presets.find((p) => p.name.trim().toLowerCase() === key)?.id ?? null;
+}
+
+/** Имя типа объекта события по id — для строки и формы. */
+export function placeTypeName(
+  presets: readonly { id: string; name: string }[],
+  typeId: string | null | undefined,
+): string {
+  return (typeId && presets.find((p) => p.id === typeId)?.name) || "";
+}
+
+/** Нет колонки на сервере: PostgREST её не знает (PGRST204 / 42703). */
+export function isMissingTypeColumn(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /address_object_type_id/i.test(error.message ?? "")
+  );
 }

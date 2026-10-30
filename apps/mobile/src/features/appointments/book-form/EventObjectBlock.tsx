@@ -8,7 +8,7 @@ import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
-import { hasEventPlace, placeAsLocation } from "./event-place";
+import { hasEventPlace, placeAsLocation, placeTypeName } from "./event-place";
 import type { BookModel } from "./use-book-form";
 
 /** Block «Объект» of an event: its client's object, or the event's own. */
@@ -25,6 +25,9 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
     setEventPlacePin,
     eventPlaceNote,
     setEventPlaceNote,
+    eventPlaceTypeId,
+    setEventPlaceTypeId,
+    placeTypePresets,
     setObjectPicker,
     setPlaceSheet,
     clientObjectsWritable,
@@ -60,6 +63,7 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
     setEventAddress("");
     setEventPlacePin("");
     setEventPlaceNote("");
+    setEventPlaceTypeId(null);
     haptics.tap();
   };
   const openPlace = () => {
@@ -121,10 +125,10 @@ export function EventObjectBlock({ form }: { form: BookModel }) {
             onAction={removePlace}
             accessibilityLabel="Убрать объект"
           >
-            <ObjectRow loc={placeAsLocation(place)} teamId={teamId} onPress={openPlace} />
+            <ObjectRow loc={placeAsLocation(place, placeTypeName(placeTypePresets, eventPlaceTypeId))} teamId={teamId} onPress={openPlace} />
           </SwipeRow>
         ) : (
-          <ObjectRow loc={placeAsLocation(place)} teamId={teamId} />
+          <ObjectRow loc={placeAsLocation(place, placeTypeName(placeTypePresets, eventPlaceTypeId))} teamId={teamId} />
         )
       ) : (
         <>

@@ -98,6 +98,10 @@ export function rowToAppointment(r: Row): Appointment {
     address_note: r.address_note,
     address_lat: r.address_lat,
     address_lng: r.address_lng,
+    // Колонки до наката нет в типах базы: читаем, если сервер её отдал.
+    ...("address_object_type_id" in r
+      ? { address_object_type_id: (r as { address_object_type_id?: string | null }).address_object_type_id ?? null }
+      : {}),
     source: (r.source ?? null) as AppointmentSource | null,
     is_online_booking: r.is_online_booking,
     cancel_reason: r.cancel_reason,
@@ -168,6 +172,11 @@ export function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     address_note: a.address_note,
     address_lat: a.address_lat,
     address_lng: a.address_lng,
+    // Тип объекта события — только заданный: до наката колонки ключ сломал
+    // бы вставку.
+    ...(a.address_object_type_id !== undefined
+      ? ({ address_object_type_id: a.address_object_type_id } as Partial<Insert>)
+      : {}),
     cancel_reason: a.cancel_reason,
     source: a.source,
     is_online_booking: a.is_online_booking,
@@ -239,6 +248,10 @@ export function appointmentToUpdate(patch: Partial<Appointment>): Update {
   if (patch.address_note !== undefined) out.address_note = patch.address_note;
   if (patch.address_lat !== undefined) out.address_lat = patch.address_lat;
   if (patch.address_lng !== undefined) out.address_lng = patch.address_lng;
+  if (patch.address_object_type_id !== undefined) {
+    (out as Update & { address_object_type_id?: string | null }).address_object_type_id =
+      patch.address_object_type_id;
+  }
   if (patch.cancel_reason !== undefined) out.cancel_reason = patch.cancel_reason;
   if (patch.source !== undefined) out.source = patch.source;
   if (patch.is_online_booking !== undefined)

@@ -49,6 +49,7 @@ interface RecordPicksInput {
   setEventAddress: Setter<string>;
   setEventPlacePin: Setter<string>;
   setEventPlaceNote: Setter<string>;
+  setEventPlaceTypeId: Setter<string | null>;
   clientLocations: Location[];
   eventLocationPool: EventLocationRow[];
   eventLocationOwner: Client | null;
@@ -89,6 +90,7 @@ export function useRecordPicks({
   setEventAddress,
   setEventPlacePin,
   setEventPlaceNote,
+  setEventPlaceTypeId,
   clientLocations,
   eventLocationPool,
   eventLocationOwner,
@@ -266,6 +268,7 @@ export function useRecordPicks({
         setEventAddress(locationAddressForBooking(loc));
         setEventPlacePin("");
         setEventPlaceNote("");
+        setEventPlaceTypeId(null);
       }
     }
     haptics.tap();

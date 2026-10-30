@@ -64,6 +64,8 @@ export interface BookDraftSnapshot {
    *  снимки их не знают — пусто. */
   eventPlacePin?: string;
   eventPlaceNote?: string;
+  /** Тип объекта события (id «Типов объектов» команды). */
+  eventPlaceTypeId?: string | null;
   eventUrl: string;
   eventReminderOffset: number | null;
   repeat: PersonalEventRepeat;

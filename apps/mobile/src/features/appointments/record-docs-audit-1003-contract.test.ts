@@ -28,7 +28,7 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     // общая кнопка карт (`ObjectRouteButton`).
     const body = src("appointments/book-form/EventObjectBlock.tsx");
     assert.doesNotMatch(body, /maps\.apple\.com/);
-    assert.match(body, /<ObjectRow loc=\{placeAsLocation\(place\)\} teamId=\{teamId\}/);
+    assert.match(body, /<ObjectRow\s+loc=\{placeAsLocation\(place, placeTypeName\(placeTypePresets, eventPlaceTypeId\)\)\}/);
     assert.match(src("clients/blocks/objects-block/ObjectRow.tsx"), /<ObjectRouteButton/);
   });
 

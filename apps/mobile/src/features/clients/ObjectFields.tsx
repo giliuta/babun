@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type Ref } from "react";
-import { Text, TextInput, View } from "react-native";
-import { MapPinned, Send, Settings2, Tag } from "lucide-react-native";
+import { TextInput, View } from "react-native";
+import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { useClientsCapabilities } from "@/session/company-scope";
 import { useArchivedTeamIds } from "@/features/clients/use-archived-teams";
 import { FieldRow } from "@/components/ui/card-rows";
 import { iconPreset } from "@/components/ui/icon-set";
-import { SelectRow } from "@/components/ui/select-rows";
+import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { SectionCard } from "@/components/ui/SectionCard";
 import {
@@ -180,18 +180,16 @@ export function ObjectFields({
 
   return (
     <>
-      {/* ТИП ОБЪЕКТА — ТА ЖЕ АРХИТЕКТУРА, ЧТО КАТЕГОРИЯ И ТИП СОБЫТИЯ: нажал
-          «добавить тип объекта» — снизу поднимается список.
+      {/* ТИП ОБЪЕКТА — «БЛОК + ШТОРКА», КАК КАТЕГОРИЯ, МЕТКА И ТИП СОБЫТИЯ:
+          тап по блоку поднимает шторку выбора, выбрал — тип применился,
+          шторка ушла, форма прежней высоты (владелец: не раскрывашкой).
 
-          НЕ ЛЕНТА ЧИПОВ `ChoiceRow`: это был бы третий диалект выбора в
-          продукте при том, что категория и тип события сведены к «блок +
-          шторка». Лента ещё и растёт: типы заводит сам бизнес, и с десятком
-          их приходилось бы листать вбок, не видя, что за краем.
-
-          СПИСОК РАСКРЫВАЕТСЯ ПОД БЛОКОМ, А НЕ ШТОРКОЙ ПОВЕРХ ЛИСТА ОБЪЕКТА:
-          два модальных окна в одном кадре — лист под ними тускнел, и «назад»
-          уводило не туда (канон AGENTS 5.1, из листа — раскрывашкой). Дверь
-          в «Типы объектов» — последней строкой того же списка. */}
+          ШТОРКА ЛОЖИТСЯ В ОКНО ЛИСТА ОБЪЕКТА (`overlayIfStacked`), а не вторым
+          окном поверх: два модальных окна iOS не показывает, и форма
+          застывала бы под невидимой шторкой (`sheet-overlay.tsx`). Дверь в
+          «Типы объектов» — шестерёнкой шапки шторки; пустой справочник ведёт
+          туда же. Повторный тап по выбранному снимает тип: объект бывает и
+          без типа. */}
       {noType ? null : (
         <ReferenceBlock
           // ФОРМА В ШТОРКЕ — плотно, чтобы тип объекта не выпадал из размера.
@@ -214,49 +212,35 @@ export function ObjectFields({
           }
           onPress={() => {
             haptics.tap();
-            setTypeSheetOpen((open) => !open);
+            setTypeSheetOpen(true);
           }}
         />
       )}
-      {typeSheetOpen && !noType ? (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 4, gap: 8 }}>
-          {typeOptions.length === 0 ? (
-            <Text style={{ paddingHorizontal: 4, fontSize: 13, color: t.sub }}>
-              Типов объектов пока нет
-            </Text>
-          ) : (
-            typeOptions.map((name) => (
-              <SelectRow
-                key={name}
-                title={name}
-                icon={iconPreset(presetByKey.get(objectTypeKey(name))?.icon) ?? Tag}
-                color={presetByKey.get(objectTypeKey(name))?.color ?? t.accent}
-                selected={name === typePreset?.name}
-                accessibilityRole="radio"
-                // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП: объект можно создать без типа —
-                // тот же жест, что у типа события.
-                onPress={() => {
-                  onChange({
-                    type: name === typePreset?.name ? "" : snapObjectType(name, typeOptions),
-                  });
-                  onCommit?.();
-                  setTypeSheetOpen(false);
-                }}
-              />
-            ))
-          )}
-          {onTypeSettings ? (
-            <SelectRow
-              title="Типы объектов"
-              icon={Settings2}
-              onPress={() => {
-                setTypeSheetOpen(false);
-                onTypeSettings();
-              }}
-            />
-          ) : null}
-        </View>
-      ) : null}
+      {noType ? null : (
+        <ValuePickerSheet
+          visible={typeSheetOpen}
+          overlayIfStacked
+          title="Тип объекта"
+          options={typeOptions.map((name) => {
+            const preset = presetByKey.get(objectTypeKey(name));
+            return {
+              id: name,
+              label: name,
+              icon: iconPreset(preset?.icon) ?? Tag,
+              color: preset?.color ?? t.accent,
+            };
+          })}
+          selectedId={typePreset?.name ?? null}
+          emptyLabel="Типов объектов пока нет"
+          onPick={(name) => {
+            onChange({ type: name ? snapObjectType(name, typeOptions) : "" });
+            onCommit?.();
+          }}
+          onSettings={onTypeSettings}
+          settingsLabel="Типы объектов"
+          onClose={() => setTypeSheetOpen(false)}
+        />
+      )}
 
       <SectionCard
         dense
