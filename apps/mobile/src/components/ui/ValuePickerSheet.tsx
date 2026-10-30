@@ -133,6 +133,7 @@ export function ValuePickerSheet({
   settingsLabel = "Настроить список",
   overlayIfStacked = false,
   onClose,
+  onExited,
 }: {
   visible: boolean;
   title: string;
@@ -147,6 +148,9 @@ export function ValuePickerSheet({
    *  поверх (`sheet-overlay.tsx`): второе модальное окно iOS не показывает. */
   overlayIfStacked?: boolean;
   onClose: () => void;
+  /** Лист уехал целиком — момент, когда выбор можно применить к листу под
+   *  ним, не перестраивая его в одном кадре с уходом этого. */
+  onExited?: () => void;
 }) {
   const t = useThemeColors();
 
@@ -156,6 +160,7 @@ export function ValuePickerSheet({
       visible={visible}
       overlayIfStacked={overlayIfStacked}
       onClose={onClose}
+      onExited={onExited}
       maxHeightRatio={SELECT_SHEET_RATIO}
       // ШАПКА — ОБЩАЯ: `BottomSheet` центрирует заголовок «на ширину
       // шестерёнки» сам и одинаково для всех шторок продукта.

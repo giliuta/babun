@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
@@ -139,6 +139,12 @@ export function ObjectFields({
   const [mapOpen, setMapOpen] = useState(false);
   /** Поднят ли список типов объекта. */
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+  // ВЫБРАННЫЙ ТИП ЖДЁТ УХОДА ШТОРКИ. Шторка открыта из листа объекта и
+  // рисуется в его окне; применённый в кадре тапа тип перестраивал форму
+  // (пустой блок → блок с типом), пока та же шторка снималась, — и Fabric
+  // ронял приложение («unmount … different index»). Тип ставится в
+  // `onExited`, когда шторки уже нет. `undefined` — выбора не было.
+  const pickedTypeRef = useRef<string | null | undefined>(undefined);
   // ВИД ТИПА — ИЗ СПРАВОЧНИКА, А НЕ ПРИДУМАННЫЙ ЗДЕСЬ. У типа объекта есть
   // свои цвет и значок (`location_labels.color/icon`), и кабинет рисует «Дом»
   // синим домиком. Покрасив строки шторки случайным цветом по имени
@@ -233,12 +239,18 @@ export function ObjectFields({
           selectedId={typePreset?.name ?? null}
           emptyLabel="Типов объектов пока нет"
           onPick={(name) => {
-            onChange({ type: name ? snapObjectType(name, typeOptions) : "" });
-            onCommit?.();
+            pickedTypeRef.current = name;
           }}
           onSettings={onTypeSettings}
           settingsLabel="Типы объектов"
           onClose={() => setTypeSheetOpen(false)}
+          onExited={() => {
+            const name = pickedTypeRef.current;
+            pickedTypeRef.current = undefined;
+            if (name === undefined) return;
+            onChange({ type: name ? snapObjectType(name, typeOptions) : "" });
+            onCommit?.();
+          }}
         />
       )}
 

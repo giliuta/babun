@@ -71,6 +71,17 @@ describe("1. тип объекта — шторкой поверх листа", 
     assert.match(fields, /onSettings=\{onTypeSettings\}/);
     assert.match(fields, /emptyLabel="Типов объектов пока нет"/);
   });
+  test("тип ставится, когда шторка уехала: форма не перестраивается в кадре её ухода", () => {
+    const fields = read("../../clients/ObjectFields.tsx");
+    // Тап только запоминает выбор — форму он не трогает.
+    assert.match(fields, /onPick=\{\(name\) => \{\s*pickedTypeRef\.current = name;\s*\}\}/);
+    // Применение — в `onExited`, после снятия шторки.
+    assert.match(
+      fields,
+      /onExited=\{\(\) => \{\s*const name = pickedTypeRef\.current;\s*pickedTypeRef\.current = undefined;\s*if \(name === undefined\) return;\s*onChange\(\{ type:/,
+    );
+    assert.match(read("../../../components/ui/ValuePickerSheet.tsx"), /onExited=\{onExited\}/);
+  });
 });
 
 describe("2. тип у объекта события", () => {
