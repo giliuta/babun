@@ -16,6 +16,7 @@ import { BookHeader } from "@/features/appointments/book-form/BookHeader";
 import { WorkBody } from "@/features/appointments/book-form/WorkBody";
 import { EventBody } from "@/features/appointments/book-form/EventBody";
 import { BookFooter } from "@/features/appointments/book-form/BookFooter";
+import { DensePage } from "@/components/ui/dense-page";
 import { BookPickSheets } from "@/features/appointments/book-form/BookPickSheets";
 import { BookEditSheets } from "@/features/appointments/book-form/BookEditSheets";
 
@@ -143,7 +144,11 @@ function BookForm() {
             />
           ) : null}
 
-          {kind === "work" ? <WorkBody form={form} /> : <EventBody form={form} />}
+          {/* ЗАПИСЬ И СОБЫТИЕ — ПЛОТНОЙ СТРАНИЦЕЙ: блоков до девяти, и воздух
+              между ними и в строках складывался в пустые зазоры. */}
+          <DensePage value>
+            {kind === "work" ? <WorkBody form={form} /> : <EventBody form={form} />}
+          </DensePage>
         </ScrollView>
 
         <BookFooter form={form} />

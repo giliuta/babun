@@ -7,7 +7,7 @@ import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import type { BookModel } from "./use-book-form";
-import { hasEventPlace, placeFormValue, placeFromForm } from "./event-place";
+import { hasEventPlace, placeFormValue, placeFromForm, placeTypeId, placeTypeName } from "./event-place";
 import { SETTLED_STAYS, settledVisit } from "@/features/calendar/home/appointment-rules";
 
 /** Sheets that pick what the record is about: time, object, client, services. */
@@ -52,6 +52,10 @@ export function BookPickSheets({ form }: { form: BookModel }) {
     setEventPlacePin,
     eventPlaceNote,
     setEventPlaceNote,
+    eventPlaceTypeId,
+    setEventPlaceTypeId,
+    eventPlaceTypeLive,
+    placeTypePresets,
     clientLocations,
     pickLocation,
     clientObjectsWritable,
@@ -172,9 +176,14 @@ export function BookPickSheets({ form }: { form: BookModel }) {
       {kind === "event" ? (
         <PlaceSheet
           visible={placeSheet}
+          teamId={teamId}
+          withType={eventPlaceTypeLive}
           initial={
             !locationId && hasEventPlace({ address: eventAddress, pin: eventPlacePin, note: eventPlaceNote })
-              ? placeFormValue({ address: eventAddress, pin: eventPlacePin, note: eventPlaceNote })
+              ? placeFormValue(
+                  { address: eventAddress, pin: eventPlacePin, note: eventPlaceNote },
+                  placeTypeName(placeTypePresets, eventPlaceTypeId),
+                )
               : null
           }
           onApply={(value) => {
@@ -183,6 +192,8 @@ export function BookPickSheets({ form }: { form: BookModel }) {
             setEventAddress(place.address);
             setEventPlacePin(place.pin);
             setEventPlaceNote(place.note);
+            // Тип — id справочника команды события по выбранному имени.
+            if (eventPlaceTypeLive) setEventPlaceTypeId(placeTypeId(placeTypePresets, value.type));
             haptics.tap();
           }}
           onClose={() => setPlaceSheet(false)}

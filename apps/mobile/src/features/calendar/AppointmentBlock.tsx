@@ -16,7 +16,6 @@ import { useUnstretchedStyle } from "@/features/calendar/zoom";
 import { pct } from "@/features/calendar/grid-units";
 import {
   BlockGlass,
-  DeckBadge,
   FadeTail,
   LiveTimeBadge,
   moneyWords,
@@ -59,9 +58,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   editing = false,
   dayW,
   onEdit,
-  deckIndex,
-  deckSize,
-  clashMore,
   onMenu,
   onReschedule,
 }: AppointmentBlockProps) {
@@ -78,9 +74,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     label,
     service,
     offLabelColor,
-    deckIndex,
-    deckSize,
-    clashMore,
     editing,
     overdue,
     reschedulable: !!onReschedule,
@@ -92,7 +85,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     visStart,
     visEnd,
     frame,
-    deckMore,
     left,
     width,
     cancelled,
@@ -102,7 +94,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     bw,
     markSize,
     topHandle,
-    deckBadgeLow,
     money,
     fadeRows,
   } = layout;
@@ -296,14 +287,6 @@ export const AppointmentBlock = memo(function AppointmentBlock({
           />
           {greyCancel ? null : <BlockGlass />}
           {liveStart ? <LiveTimeBadge liveStart={liveStart} /> : null}
-          {deckMore > 0 ? (
-            <DeckBadge
-              deckMore={deckMore}
-              deckBadgeLow={deckBadgeLow}
-              color={colors.solid}
-              clash={(clashMore ?? 0) > 0}
-            />
-          ) : null}
 
           {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
             <OffLabelDot color={offLabelColor} />

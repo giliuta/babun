@@ -356,20 +356,20 @@ describe("повторный аудит календаря 03.10", () => {
     }
   });
 
-  test("сетка: линия «сейчас» на своём времени, шаг колонки без +1, стопка с самым ранним началом", () => {
+  test("сетка: линия «сейчас» на своём времени, шаг колонки без +1, «+N» с самым ранним началом", () => {
     const day = dayGrid();
     assert.match(day, /top: pct\(nowMin, totalMin\),[\s\S]{0,400}?marginTop: -4\.5,/);
     assert.match(day, /dayW=\{compact && laneW > 0 \? laneW : undefined\}/);
-    assert.match(day, /minToHM\(Math\.min\(\.\.\.deckOpen\.map\(\(p\) => p\.startMin\)\)\)/);
+    assert.match(day, /`\$\{minToHM\(card\.startMin\)\} · \$\{pluralize\(card\.members\.length/);
     assert.match(day, /onOverflow=\{\(\) => setAllDayList\(allDayOf\(apptsFor\(dateAt\(off\)\)\)\)\}/);
   });
 
-  test("растяжка за край суток — до края, а не молчаливый откат; имя стопки — по живой ширине", () => {
+  test("растяжка за край суток — до края, а не молчаливый откат; имя — и в половинке колонки", () => {
     const src = block();
     assert.match(src, /const ns = Math\.max\(0, edge === "top"/);
     assert.match(src, /const ne = Math\.min\(24 \* 60, edge === "bottom"/);
     assert.doesNotMatch(src, /if \(ns < 0 \|\| ne > 24 \* 60/);
-    assert.match(src, /\{textW >= 24 && nameLineW >= 24/);
+    assert.match(src, /\{textW >= MIN_TEXT_W \? \(/);
   });
 
   test("первая запись предлагается по часам команды", () => {

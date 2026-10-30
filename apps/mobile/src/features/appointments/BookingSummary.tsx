@@ -8,6 +8,7 @@ import { AlertTriangle, ChevronRight } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 import { humanDayMaybeYear } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { durationLabel } from "@/lib/service-format";
@@ -43,6 +44,7 @@ export function TotalRow({
   onPress?: () => void;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   const note =
     discountAmount > 0
       ? `Скидка −${formatEURExact(discountAmount)}`
@@ -59,7 +61,7 @@ export function TotalRow({
         onPress ? "Открывает услуги, количество и скидку" : undefined
       }
       style={({ pressed }) => ({
-        minHeight: 56,
+        minHeight: densePage ? 40 : 56,
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
@@ -131,8 +133,9 @@ export function WhenRow({
   onPress?: () => void;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   return (
-    <View className="mx-4 mt-2">
+    <View className={`mx-4 ${densePage ? "mt-1" : "mt-2"}`}>
       <Card style={{ flexDirection: "row", alignItems: "stretch" }}>
         {/* У ВРЕМЕНИ НЕТ СВОЕГО ЦВЕТА. Цветной
             корешок называет ЧЕЙ выезд; час дня ничей, и полоска рядом с ним
@@ -145,7 +148,7 @@ export function WhenRow({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            paddingVertical: 10,
+            paddingVertical: densePage ? 5 : 10,
             paddingHorizontal: 12,
             backgroundColor: pressed && onPress ? t.pressed : "transparent",
           })}

@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
+import { DensePage } from "./dense-page";
 import { GUTTER } from "@/components/ui/tokens";
 import { useReduceMotion } from "@/lib/reduce-motion";
 import {
@@ -319,7 +320,8 @@ export function BottomSheet({
   );
 
   const layers = (
-    <>
+    // Лист — своя страница: плотность записи под ним сюда не проходит.
+    <DensePage value={false}>
         <AnimatedPressable
           onPress={() => {
             haptics.tap();
@@ -362,7 +364,7 @@ export function BottomSheet({
             {shown.banner}
           </View>
         ) : null}
-    </>
+    </DensePage>
   );
 
   if (asOverlay) {

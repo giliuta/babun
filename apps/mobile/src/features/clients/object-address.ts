@@ -124,9 +124,10 @@ export function composeAddress(
  *  улица места, подъезд, этаж, квартира и город, через «·», как в свёрнутом
  *  «Точном адресе» листа. ИНДЕКСА В СТРОКЕ НЕТ: он для почты, мастеру на
  *  выезде не нужен, а строка с ним обрезалась на городе. Без частей — строка
- *  адреса как есть, уточнения нет. ОБЪЕКТ ТОЛЬКО С ТОЧКОЙ — «Точка на карте»,
- *  а не сырая ссылка `maps.app.goo.gl/…`: её не прочесть, а маршрут и так
- *  строится по пину. Сама ссылка — в поле листа и в копировании. */
+ *  адреса как есть, уточнения нет. ОБЪЕКТ ТОЛЬКО СО ССЫЛКОЙ — САМА ССЫЛКА
+ *  текстом (решение владельца): не «Точка на карте», а то, что вставили, —
+ *  по ней видно, какая это карта и куда она ведёт. Строка одна и режется
+ *  хвостом с «…» там, где её рисуют (`ObjectRow`, `SelectRow`). */
 export function addressLines(
   loc: { address?: string | null; mapUrl?: string | null; addressParts?: AddressParts | null } | null | undefined,
 ): { main: string; detail: string } {
@@ -137,7 +138,7 @@ export function addressLines(
   }
   const address = (loc?.address ?? "").trim();
   if (address && !isLikelyUrl(address)) return { main: address, detail: "" };
-  return { main: address || (loc?.mapUrl ?? "").trim() ? "Точка на карте" : "", detail: "" };
+  return { main: address || (loc?.mapUrl ?? "").trim(), detail: "" };
 }
 
 /** Адрес для маршрута по тексту: у объекта с частями — геокодируемая часть,

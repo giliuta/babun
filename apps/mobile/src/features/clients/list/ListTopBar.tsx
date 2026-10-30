@@ -8,6 +8,7 @@ import { clientsSettingsHref } from "@/session/clients-company";
 import { ALL_TEAMS, toggleTeamChoice } from "@/features/clients/team-scope";
 import { haptics } from "@/lib/haptics";
 import type { ClientsList } from "./use-clients-list";
+import { clientsSearchPlaceholder } from "./search-placeholder";
 
 /** Top of the list: the selection header in bulk mode, otherwise the
  *  search bar with settings and filters, and the team ribbon under it. */
@@ -29,6 +30,8 @@ export function ListTopBar({ list }: { list: ClientsList }) {
     teamChips,
     teamChoice,
     setSavedTeam,
+    data,
+    isLoading,
   } = list;
   return (
     <>
@@ -131,18 +134,17 @@ export function ListTopBar({ list }: { list: ClientsList }) {
 
           <TourTarget id="clients.search" shape="control" flex>
           {/* ПОИСК ОДИН НА ПРОДУКТ — `SelectSearch`, тот же, что в шторках.
-              Приём Jobber: активные фильтры меняют плейсхолдер — статус
-              «список отфильтрован» виден даже без открытия панели. */}
+              В подсказке — сколько клиентов в списке сейчас (команда и
+              фильтры), `search-placeholder.ts`: фильтр, сузивший список, виден
+              числом даже без открытия панели. */}
           <SelectSearch
             bare
             value={query}
             onChange={setQuery}
             onClear={() => setQuery("")}
-            placeholder={
-              result.activeCount > 0
-                ? "Поиск среди отфильтрованных"
-                : "Имя, телефон, адрес"
-            }
+            placeholder={clientsSearchPlaceholder(
+              isLoading || data === undefined ? null : result.filtered.length,
+            )}
             accessibilityLabel="Поиск клиентов"
             autoCapitalize="none"
           />

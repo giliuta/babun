@@ -4,7 +4,7 @@ type SbError = { message?: string; code?: string };
 
 export function mapAuthError(
   e: SbError,
-  kind: "signin" | "signup" | "reset" | "code" | "send" = "signin",
+  kind: "signin" | "signup" | "reset" | "code" | "send" | "totp" = "signin",
 ): string {
   const m = (e.message ?? "").toLowerCase();
   const c = (e.code ?? "").toLowerCase();
@@ -36,6 +36,14 @@ export function mapAuthError(
   // одним «Token has expired or is invalid» (`otp_expired`).
   // Письмо с кодом не ушло (сброс, вход по коду, «Отправить ещё раз»).
   if (kind === "send") return "Не удалось отправить письмо. Попробуйте ещё раз";
+
+  // Код из приложения-аутентификатора: неверный (`mfa_verification_failed`)
+  // или вызов кода устарел (`mfa_challenge_expired`) — человеку одно и то же.
+  if (kind === "totp") {
+    if (c.includes("mfa") || m.includes("totp") || m.includes("invalid") || m.includes("expired"))
+      return "Неверный код. Введите код, который сейчас в приложении";
+    return "Не удалось проверить код. Попробуйте ещё раз";
+  }
 
   if (kind === "code") {
     if (c.includes("otp") || m.includes("token") || m.includes("expired") || m.includes("invalid"))

@@ -78,14 +78,13 @@ describe("blockLayout", () => {
     assert.ok(l.fadeRows.includes(0), "a long name fades instead of wrapping");
   });
 
-  test("top card of a deck carries «+N»; low card puts it on the name row", () => {
-    const tall = blockLayout({ ...base, laneW: 50, deckIndex: 2, deckSize: 3, placed: one("10:00", "11:00") });
-    assert.equal(tall.deckMore, 2);
-    assert.equal(tall.deckBadgeLow, true);
-    const short = blockLayout({ ...base, laneW: 50, hourH: 20, deckIndex: 2, deckSize: 3, placed: one("10:00", "11:00") });
-    assert.equal(short.deckBadgeLow, false);
-    assert.equal(short.nameLineW, short.textW - short.deckBadgeW);
-    const under = blockLayout({ ...base, laneW: 50, deckIndex: 0, deckSize: 3, placed: one("10:00", "11:00") });
-    assert.equal(under.deckMore, 0);
+  test("half of a week column: tightest padding, room for the first letters", () => {
+    const half = { ...one("10:00", "11:00"), colIndex: 1, colCount: 2 };
+    const l = blockLayout({ ...base, laneW: 50, placed: half });
+    assert.equal(l.width, 22);
+    assert.equal(l.pad, 2);
+    assert.ok(l.textW >= 10, `text room ${l.textW}`);
+    assert.deepEqual(l.fadeRows, [], "too narrow to fade — the row is clipped");
   });
+
 });

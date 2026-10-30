@@ -3,6 +3,7 @@ import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { IconCircle } from "./IconCircle";
 import { ICON } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "./dense-page";
 
 // СТРОКА «ВЫБРАТЬ …» — ОДНА НА КЛИЕНТА, ОБЪЕКТ И УСЛУГУ.
 // Три пустых состояния формы отвечают на один вопрос «кого / куда / что», и
@@ -37,9 +38,11 @@ export function ChooseRow({
   onPress: () => void;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
+  const tight = compact || densePage;
   return (
     <Pressable
-      className={`flex-row items-center px-4 ${compact ? "py-2" : "py-3.5"}`}
+      className={`flex-row items-center px-4 ${tight ? "py-2" : "py-3.5"}`}
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       accessibilityRole="button"

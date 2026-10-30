@@ -19,6 +19,7 @@ import { useOpenMemberContacts } from "@/features/clients/use-member-contacts";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 
 // БЛОК «КЛИЕНТ» — ОДИН НА ПРОДУКТ.
 //
@@ -80,6 +81,7 @@ export function ClientBlock({
   deletedName?: string | null;
 }) {
   const t = useThemeColors();
+  const rowPad = useDensePage() ? "py-1" : "py-2.5";
   const tenantId = useTenantId();
   const { open } = useOpenMemberContacts();
   // Открытый номер лежит в памяти — поверх строки окна.
@@ -103,7 +105,7 @@ export function ClientBlock({
       {shown ? (
         <View className="flex-row items-center">
           <Pressable
-            className="flex-1 flex-row items-center px-4 py-2.5"
+            className={`flex-1 flex-row items-center px-4 ${rowPad}`}
             disabled={!onPick && !onOpenCard}
             onPress={
               onPick
@@ -205,7 +207,7 @@ export function ClientBlock({
         </View>
       ) : deletedName ? (
         <Pressable
-          className="px-4 py-2.5"
+          className={`px-4 ${rowPad}`}
           disabled={!onPick}
           onPress={
             onPick

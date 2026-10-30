@@ -76,6 +76,13 @@ export function serviceLineActions({
   const setQty = (id: string, qty: number) => {
     if (qty < 1) {
       setServiceIds((p) => p.filter((x) => x !== id));
+      // УБРАННАЯ УСЛУГА, ВЗЯТАЯ СНОВА, — ОДНА: смахнутая строка «×3» иначе
+      // возвращалась бы из выбора теми же тремя.
+      setOverrides((p) => {
+        if (p[id]?.qty == null) return p;
+        const { qty: _dropped, ...rest } = p[id];
+        return { ...p, [id]: rest };
+      });
       return;
     }
     // Правка количества снимает замок сохранённой строки (`overrideWithQuantity`);

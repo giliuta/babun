@@ -11,8 +11,6 @@ export type BlockLayout = {
   visStart: number;
   visEnd: number;
   frame: BlockFrame;
-  deckMore: number;
-  deckBadgeW: number;
   left: number;
   width: number;
   cancelled: boolean;
@@ -33,8 +31,6 @@ export type BlockLayout = {
   /** Строки (0 имя, 1 время, 2 услуга), чей край тает: не влезают. */
   fadeRows: number[];
   lastRow: ReturnType<typeof blockLadder>["lastRow"];
-  deckBadgeLow: boolean;
-  nameLineW: number;
   dotReserve: number;
 };
 
@@ -48,10 +44,7 @@ export function blockLayout({
   label,
   service,
   offLabelColor,
-  deckIndex,
   overdue,
-  deckSize,
-  clashMore = 0,
   editing,
   reschedulable,
 }: {
@@ -64,10 +57,6 @@ export function blockLayout({
   label: string;
   service: string | null;
   offLabelColor: string | null;
-  deckIndex?: number;
-  deckSize?: number;
-  /** Верхняя карточка накладки без стопки — значок «+N» и у неё. */
-  clashMore?: number;
   editing: boolean;
   /** Не закрыта в срок — время жирное, и шире. */
   overdue: boolean;
@@ -83,19 +72,9 @@ export function blockLayout({
   // a negative top and vanishing above the grid.
   const visStart = Math.max(startMin, winStart);
   const visEnd = Math.min(endMin, winEnd);
-  // МЕСТО В КОЛОНКЕ — `blockFrame` (layout.ts, под тестом): в Дне записи
-  // рядом с растяжкой вправо, в узкой Неделе — «веером» поверх друг друга.
-  const frame = blockFrame(
-    placed,
-    laneW,
-    GAP,
-    deckSize && deckSize > 1 ? { index: deckIndex ?? 0, size: deckSize } : undefined,
-  );
-  // Верхняя карточка стопки несёт «+N» — сколько записей под ней.
-  // Накладка вне стопки (Неделя «веером», День «рядом») — тот же значок.
-  const deckMore =
-    deckSize && deckSize > 1 && deckIndex === deckSize - 1 ? deckSize - 1 : clashMore;
-  const deckBadgeW = deckMore > 0 ? 20 : 0;
+  // МЕСТО В КОЛОНКЕ — `blockFrame` (layout.ts, под тестом): записи на одно
+  // время делят колонку дорожками, поздно начавшаяся в узкой — «веером».
+  const frame = blockFrame(placed, laneW, GAP);
   const { left, width } = frame;
   const cancelled = apt.status === "cancelled";
   const completed = apt.status === "completed";
@@ -106,7 +85,9 @@ export function blockLayout({
   // Третья ступень паддинга (3pt) в колонке недели уже 60pt — как у чипов
   // «весь день» (`chipPad`): имя из шести букв («Андрей») влезает целиком,
   // а не обрывается на «Андре».
-  const pad = width >= 96 ? 6 : width >= 60 ? 4 : 3;
+  // Половинка колонки Недели (~22pt) — паддинг 2: каждая точка там — лишняя
+  // буква имени.
+  const pad = width >= 96 ? 6 : width >= 60 ? 4 : width >= 30 ? 3 : 2;
   // ТОЛЩИНА — ВЕСЬ СИГНАЛ ПРОСРОЧКИ, И ЭТО ЕДИНСТВЕННЫЙ КАНАЛ, КОТОРЫЙ
   // УСИЛИВАЕТСЯ ПРИ СУЖЕНИИ. Кант 1 → 2pt меняет долю канта в площади плитки:
   // 21pt (две наложенные записи в Неделе) 13.6 % → 26.4 %, неделя 46pt
@@ -159,13 +140,6 @@ export function blockLayout({
   // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
   // адрес, и на карточке, где последней осталась услуга (или время), её хвост
   // заезжал под точку.
-  // «+N» стопки: внизу, если под именем есть ещё строка; иначе сверху, и
-  // тогда имя отступает на ширину значка.
-  const deckBadgeLow = deckMore > 0 && rowsFit >= 2;
-  // ШИРИНА ПЕРВОЙ СТРОКИ ИМЕНИ — после значка «+N» сверху. Значок резервировался
-  // уже ПОСЛЕ гейта 24pt: у верхней карточки стопки в Неделе (две короткие
-  // записи в одно время) имени оставалось ~14pt — «А…». Гейт меряет то, что останется имени на самом деле.
-  const nameLineW = textW - (deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
   // Строки, чей край тает: только те, что не влезают. Плёнка по всей кромке
@@ -173,8 +147,8 @@ export function blockLayout({
   const timeText = textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start;
   const fadeRows: number[] = [];
   if (!cancelled && textW >= 24) {
-    const nameW = nameLineW - (lastRow === "name" ? dotReserve : 0);
-    if (nameLineW >= 24 && textOverflows(label, nameW, { bold: true })) fadeRows.push(0);
+    const nameW = textW - (lastRow === "name" ? dotReserve : 0);
+    if (textOverflows(label, nameW, { bold: true })) fadeRows.push(0);
     if (
       ladder.showTime &&
       textOverflows(timeText, textW - (lastRow === "time" ? dotReserve : 0), { bold: overdue })
@@ -190,8 +164,6 @@ export function blockLayout({
     visStart,
     visEnd,
     frame,
-    deckMore,
-    deckBadgeW,
     left,
     width,
     cancelled,
@@ -210,8 +182,6 @@ export function blockLayout({
     showService,
     fadeRows,
     lastRow,
-    deckBadgeLow,
-    nameLineW,
     dotReserve,
   };
 }

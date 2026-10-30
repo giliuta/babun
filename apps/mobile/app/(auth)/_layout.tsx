@@ -15,7 +15,7 @@ function AccountLoading() {
 }
 
 export default function AuthLayout() {
-  const { session } = useSession();
+  const { session, secondStepPending } = useSession();
   const gate = useOnboardingGate();
   const pendingInvitation = usePendingInvitationToken();
   const segments = useSegments();
@@ -30,6 +30,17 @@ export default function AuthLayout() {
   const onResetPassword = path[1] === "reset-password";
   const onAccountMissing = path[1] === "account-missing";
   const onFinishSignup = path[1] === "finish-signup";
+  const onSecondStep = path[1] === "mfa";
+
+  // ДВУХФАКТОРНЫЙ ВХОД: первый шаг пройден — только экран кода, с какого бы
+  // экрана группы ни пришли (вход, сброс пароля, «Почти готово»). Код
+  // принят — сессия публикуется, и ниже гейт ведёт как обычно. Без ожидания
+  // кода экран кода пуст — назад ко входу.
+  if (secondStepPending) {
+    if (!onSecondStep) return <Redirect href="/mfa" />;
+  } else if (!session && onSecondStep) {
+    return <Redirect href="/login" />;
+  }
 
   // ВЫШЕДШИЙ НЕ ЖДЁТ НА ЗАПАСНОМ ЭКРАНЕ. Запасной экран — для вошедшего, чьи данные не открылись;
   // гейт ниже уводит только ВОШЕДШИХ, а без сессии экран показывал загрузку
@@ -78,6 +89,7 @@ export default function AuthLayout() {
           «сбегать» с него (гейт выше всё равно вернёт). */}
       <Stack.Screen name="account-missing" options={{ gestureEnabled: false }} />
       <Stack.Screen name="finish-signup" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="mfa" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }

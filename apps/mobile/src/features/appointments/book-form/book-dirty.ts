@@ -18,6 +18,7 @@ export interface DraftDirtyInput {
   /** Точка и заметка объекта события без клиента. */
   eventPlacePin?: string;
   eventPlaceNote?: string;
+  eventPlaceTypeId?: string | null;
   eventUrl: string;
   eventReminderOffset: number | null;
   eventColor: string | null;
@@ -56,6 +57,7 @@ export function draftDirty({
   eventAddress,
   eventPlacePin = "",
   eventPlaceNote = "",
+  eventPlaceTypeId = null,
   eventUrl,
   eventReminderOffset,
   eventColor,
@@ -100,6 +102,7 @@ export function draftDirty({
       eventAddress.trim().length > 0 ||
       eventPlacePin.trim().length > 0 ||
       eventPlaceNote.trim().length > 0 ||
+      eventPlaceTypeId != null ||
       eventUrl.trim().length > 0 ||
       eventReminderOffset != null ||
       eventColor != null ||

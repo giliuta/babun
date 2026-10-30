@@ -16,7 +16,6 @@ import {
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
-import { haptics } from "@/lib/haptics";
 import { PickerQty } from "./booking-pickers/PickerQty";
 import { useThemeColors } from "@/theme/colors";
 import type { Service } from "@/features/services/queries";
@@ -177,15 +176,12 @@ export function ServicePicker({
           later: "Прайс команды появится, когда связь вернётся.",
         })
       : null;
-  // ТАП ПО СТРОКЕ — ВЗЯТЬ; КОЛИЧЕСТВО И СНЯТИЕ — СТЕППЕРОМ.
-  //
-  // Тап по строке ДОБАВЛЯЛ бы ещё одну — тогда три чистки были бы тремя тапами.
-  // А снимал бы выбранную — тогда промах мимо «+» на название стирал услугу
-  // вместе с набранным «×3». Поэтому строка только берёт услугу, а «− 3 +»
-  // считает её и снимает: «−» на единице убирает строку.
+  // КОЛИЧЕСТВО — ТОЛЬКО «−» И «+». Строка сама не нажимается: «− 0 +» стоит
+  // у каждой услуги, «+» на нуле берёт её, «−» на единице снимает. Строка,
+  // которая брала услугу по тапу, ловила промахи мимо «+» — палец попадал на
+  // название, и услуга добавлялась или лист вёл себя не так, как ждали.
   const take = (id: string) => {
     if (selectedIds.includes(id)) return;
-    haptics.tap();
     onToggle(id);
   };
 
@@ -274,7 +270,7 @@ export function ServicePicker({
               // многовыборный», но ценой того, что выбор услуги выглядел бы не как
               // выбор клиента, объекта и метки. Поэтому кружок со значком услуги — тем же, что
               // в блоке «Услуги» на записи, — а многовыборность читается
-              // тонировкой строки и степпером количества у взятой услуги.
+              // тонировкой взятой строки и степпером количества у каждой.
               <SelectRow
                 key={s.id}
                 icon={Briefcase}
@@ -285,20 +281,13 @@ export function ServicePicker({
                     : `${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)} · ${durationLabel(s.duration_minutes)}`
                 }
                 selected={on}
-                accessibilityRole="checkbox"
-                accessibilityLabel={`${s.name}, ${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)}${
-                  on ? `, взято ${qty ?? 1}` : ""
-                }`}
-                onPress={() => take(s.id)}
                 trailing={
-                  on ? (
-                    <PickerQty
-                      name={s.name}
-                      qty={qty ?? 1}
-                      onChange={(next) => onQtyChange(s.id, next)}
-                      onRemove={() => onToggle(s.id)}
-                    />
-                  ) : undefined
+                  <PickerQty
+                    name={s.name}
+                    qty={on ? (qty ?? 1) : 0}
+                    onChange={(next) => (on ? onQtyChange(s.id, next) : take(s.id))}
+                    onRemove={() => onToggle(s.id)}
+                  />
                 }
               />
             );

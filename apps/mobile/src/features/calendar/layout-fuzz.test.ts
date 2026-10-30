@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { blockFrame, decksFor, layoutDay } from "./layout";
+import { blockFrame, fitLanes, layoutDay, moreFrame } from "./layout";
 
 // ЖЁСТКАЯ ПРОВЕРКА РАСКЛАДКИ ДНЯ («ломать то, что пользователь не делает»): тысячи случайных дней — пустые и битые времена, конец раньше
 // начала, 24:00, десятки записей в одну минуту — и узкие колонки Недели.
@@ -37,28 +37,37 @@ describe("раскладка дня под нагрузкой", () => {
       const day = randomDay(1 + Math.floor(rand() * 40));
       const placed = layoutDay(day);
       assert.equal(placed.length, day.length);
+      for (const p of placed) {
+        assert.ok(Number.isFinite(p.startMin) && Number.isFinite(p.endMin), "время — число");
+        assert.ok(p.endMin > p.startMin, "у блока есть высота");
+        assert.ok(p.colIndex >= 0 && p.colIndex + p.colSpan <= p.colCount, "колонка в пределах");
+      }
       for (const laneW of [44, 52, 90, 139, 140, 360]) {
-        const decks = decksFor(placed, laneW);
-        for (const p of placed) {
-          assert.ok(Number.isFinite(p.startMin) && Number.isFinite(p.endMin), "время — число");
-          assert.ok(p.endMin > p.startMin, "у блока есть высота");
-          assert.ok(p.colIndex >= 0 && p.colIndex + p.colSpan <= p.colCount, "колонка в пределах");
-          const f = blockFrame(p, laneW, 3, decks.get(p.apt.id));
-          assert.ok(f.width > 0, `ширина ${f.width} при колонке ${laneW} и стопке ${decks.get(p.apt.id)?.size}`);
+        const { shown, more } = fitLanes(placed, laneW);
+        assert.equal(
+          shown.length + more.reduce((n, m) => n + m.members.length, 0),
+          placed.length,
+          "каждая запись — на сетке или в «+N»",
+        );
+        const frames = [
+          ...shown.map((p) => ({ p, f: blockFrame(p, laneW, 3) })),
+          ...more.map((m) => ({ p: { ...m, colSpan: 1, cluster: -1 }, f: moreFrame(m, laneW, 3) })),
+        ];
+        for (const { p, f } of frames) {
+          assert.ok(p.colIndex >= 0 && p.colIndex + p.colSpan <= p.colCount, "дорожка в пределах");
+          assert.ok(f.width > 0, `ширина ${f.width} при колонке ${laneW}`);
           assert.ok(f.left >= 0 && f.left + f.width <= laneW + 0.001, "внутри колонки");
         }
-        if (laneW >= 140) {
-          // «Рядом» не налезают; «веер» лежит поверх намеренно.
-          const beside = (x: (typeof placed)[number]) =>
-            !blockFrame(x, laneW, 3, decks.get(x.apt.id)).overlapped;
-          for (const a of placed) {
-            for (const b of placed) {
-              if (a === b || a.cluster !== b.cluster || !beside(a) || !beside(b)) continue;
-              const timeOverlap = a.startMin < b.endMin && b.startMin < a.endMin;
-              const colOverlap =
-                a.colIndex < b.colIndex + b.colSpan && b.colIndex < a.colIndex + a.colSpan;
-              assert.ok(!(timeOverlap && colOverlap), "пересекающиеся записи налезли друг на друга");
-            }
+        // «Рядом» не налезают; «веер» лежит поверх намеренно.
+        const beside = frames.filter(({ f }) => !f.overlapped);
+        for (const a of beside) {
+          for (const b of beside) {
+            if (a === b) continue;
+            const timeOverlap = a.p.startMin < b.p.endMin && b.p.startMin < a.p.endMin;
+            const colOverlap =
+              a.p.colIndex < b.p.colIndex + b.p.colSpan && b.p.colIndex < a.p.colIndex + a.p.colSpan;
+            const sameLanes = a.p.colCount === b.p.colCount;
+            assert.ok(!(timeOverlap && colOverlap && sameLanes), "пересекающиеся записи налезли друг на друга");
           }
         }
       }

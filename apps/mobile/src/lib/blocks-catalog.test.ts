@@ -139,18 +139,19 @@ describe("библиотека блоков указывает на живой �
   // нему станет вредно. Поэтому каждое число проверяется в источнике.
   test("отступы и кегли блока в коде те же, что в каталоге", () => {
     const card = readFileSync(resolve(APP, "src/components/ui/SectionCard.tsx"), "utf8");
-    assert.match(card, /dense \? "mt-1\.5" : "mt-2"/, "промежуток между блоками поехал");
+    assert.match(card, /densePage \? "mt-1" : dense \? "mt-1\.5" : "mt-2"/, "промежуток между блоками поехал");
     assert.match(card, /marginHorizontal: GUTTER/, "боковое поле блока больше не GUTTER");
     assert.match(card, /relative flex-row items-center px-4/, "команда блока больше не абсолютом относительно шапки");
-    assert.match(card, /dense \? "pb-0 pt-1\.5" : "pb-0\.5 pt-2\.5"/, "отступы подписи блока поехали");
+    assert.match(card, /densePage \? "pb-0 pt-1" : dense \? "pb-0 pt-1\.5" : "pb-0\.5 pt-2\.5"/, "отступы подписи блока поехали");
     assert.match(card, /fontSize: 11,/, "кегль подписи блока больше не 11");
     assert.match(card, /letterSpacing: 0\.6,/, "трекинг подписи блока поехал");
     // Команда блока стоит АБСОЛЮТОМ — иначе подпись съезжает на 6px у блоков
     // с иконкой, и «по пикселям одинаково» перестаёт быть правдой.
     assert.match(card, /position: "absolute"/, "команда блока вернулась в поток");
     assert.match(card, /right: 16/);
-    // В плотной шапке (форма в шторке) подпись на 4 выше — и команда тоже.
-    assert.match(card, /top: dense \? 3 : 7/);
+    // В плотной шапке (форма в шторке) подпись на 4 выше — и команда тоже;
+    // на плотной странице (запись) ещё на 2.
+    assert.match(card, /top: densePage \? 1 : dense \? 3 : 7/);
     assert.match(card, /size=\{ICON\.command\}/, "команда блока больше не ICON.command");
     assert.match(card, /gap: 16/);
     assert.match(card, /className="p-4 pt-2"/, "внутренние отступы тела блока поехали");
@@ -163,7 +164,8 @@ describe("библиотека блоков указывает на живой �
     assert.match(circle, /size = 34/, "кружок двери блока больше не 34pt");
 
     const choose = readFileSync(resolve(APP, "src/components/ui/ChooseRow.tsx"), "utf8");
-    assert.match(choose, /compact \? "py-2" : "py-3\.5"/, "высота двери блока поехала");
+    assert.match(choose, /const tight = compact \|\| densePage;/, "дверь на плотной странице не плотная");
+    assert.match(choose, /tight \? "py-2" : "py-3\.5"/, "высота двери блока поехала");
     assert.match(choose, /marginLeft: 12,/, "отступ подписи от кружка поехал");
     assert.match(choose, /fontSize: 17,/, "кегль двери блока больше не 17");
     assert.match(choose, /size=\{compact \? 30 : 34\}/, "плотный кружок двери поехал");
@@ -189,7 +191,7 @@ describe("библиотека блоков указывает на живой �
 
     const note = readFileSync(resolve(APP, "src/components/blocks/InlineNoteField.tsx"), "utf8");
     assert.match(note, /marginHorizontal: 12,/);
-    assert.match(note, /paddingVertical: 9,/);
+    assert.match(note, /paddingVertical: densePage \? 5 : 9,/);
     assert.match(note, /fontSize: 15,/);
     assert.match(note, /backgroundColor: t\.surface,/);
 

@@ -11,18 +11,28 @@ import { setShownSessionUserId } from "@/lib/active-tenant";
 import { clearQueriesLeftBySignOut, handleAuthEvent } from "@/lib/auth-clear";
 import { queryClient } from "@/lib/query-client";
 import { supabase } from "@/lib/supabase";
+import { needsSecondStep } from "@/lib/mfa/assurance";
 import { shouldPublishSession, signedOutNow } from "./session-publish";
 
-type SessionState = { session: Session | null; loading: boolean };
+type SessionState = {
+  session: Session | null;
+  loading: boolean;
+  /** Вошёл первым шагом, ждём код из приложения-аутентификатора. Сессия
+   *  до кода наружу не отдаётся: для всего приложения человек ещё не вошёл,
+   *  и гейт входа ведёт на экран кода (`(auth)/mfa`). */
+  secondStepPending: boolean;
+};
 
 const SessionContext = createContext<SessionState>({
   session: null,
   loading: true,
+  secondStepPending: false,
 });
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [secondStepPending, setSecondStepPending] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -36,10 +46,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         .then(async () => {
           await handleAuthEvent(event, next);
           if (!mounted) return;
+          // ДВУХФАКТОРНЫЙ ВХОД: сессия первого шага до кода не публикуется —
+          // ни дашборд, ни один его запрос не стартует с токеном `aal1`.
+          const pending = needsSecondStep(next);
+          setSecondStepPending(pending);
           // Обновлённый токен того же человека дерево не перерисовывает:
           // экраны читают из сессии человека, а не токен (`session-publish.ts`).
           setSession((prev) =>
-            shouldPublishSession(event, prev, next) ? next : prev,
+            pending ? null : shouldPublishSession(event, prev, next) ? next : prev,
           );
           setLoading(false);
         })
@@ -48,6 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           // the signed-out gate is safer than exposing another tenant's data.
           if (!mounted) return;
           setSession(null);
+          setSecondStepPending(false);
           setLoading(false);
         });
     };
@@ -96,7 +111,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [shownUserId]);
 
   return (
-    <SessionContext.Provider value={{ session, loading }}>
+    <SessionContext.Provider value={{ session, loading, secondStepPending }}>
       {children}
     </SessionContext.Provider>
   );

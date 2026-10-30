@@ -37,6 +37,7 @@ export function PaymentTile({
   amount,
   amountColor,
   compact,
+  height,
   disabled,
   onPress,
   onLongPress,
@@ -63,6 +64,8 @@ export function PaymentTile({
   /** Значок в строку с именем, сумма под ними — 44pt вместо 56 (панель «Счета», форма операции и оплата записи — одной
    *  плашкой, иконка слева). У оплаченной плитки на месте значка галка. */
   compact?: boolean;
+  /** Своя высота плитки: плотная страница записи держит её ниже. */
+  height?: number;
   disabled?: boolean;
   onPress: () => void;
   /** Долгое нажатие — вторая дверь плитки, если она у места есть (панель
@@ -97,11 +100,11 @@ export function PaymentTile({
       }
       style={({ pressed }) => ({
         width,
-        height: compact
+        height: height ?? (compact
           ? TILE_HEIGHT_COMPACT
           : paid || amount
             ? TILE_HEIGHT_PAID
-            : TILE_HEIGHT,
+            : TILE_HEIGHT),
         borderRadius: t.radius.card,
         backgroundColor: paid
           ? `${t.success}1f`

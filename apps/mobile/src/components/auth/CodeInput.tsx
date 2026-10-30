@@ -15,8 +15,10 @@ export const CodeInput = forwardRef<
     onChange: (code: string) => void;
     onComplete: (code: string) => void;
     disabled?: boolean;
+    /** Чей код — для озвучки: из письма или из приложения-аутентификатора. */
+    label?: string;
   }
->(function CodeInput({ value, onChange, onComplete, disabled }, ref) {
+>(function CodeInput({ value, onChange, onComplete, disabled, label = "Код из письма" }, ref) {
   const t = useAuthTheme();
   const [focused, setFocused] = useState(false);
 
@@ -28,7 +30,7 @@ export const CodeInput = forwardRef<
 
   return (
     <Pressable
-      accessibilityLabel="Код из письма"
+      accessibilityLabel={label}
       onPress={() => (ref && typeof ref !== "function" ? ref.current?.focus() : undefined)}
       style={{ flexDirection: "row", gap: 8 }}
     >
@@ -72,7 +74,7 @@ export const CodeInput = forwardRef<
         autoComplete="one-time-code"
         maxLength={EMAIL_CODE_LENGTH}
         caretHidden
-        accessibilityLabel="Код из письма"
+        accessibilityLabel={label}
         style={{
           position: "absolute",
           top: 0,

@@ -1,14 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import { useWindowDimensions, View } from "react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
 import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { useThemeColors } from "@/theme/colors";
-import {
-  clashBadgeHolders,
-  decksFor,
-  layoutDay,
-  type PlacedAppt,
-} from "@/features/calendar/layout";
+import { fitLanes, layoutDay, type MoreCard } from "@/features/calendar/layout";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { CalendarClock } from "lucide-react-native";
 import { useBlockColors } from "@/features/calendar/status-colors";
@@ -23,6 +17,7 @@ import { DEFAULT_END, DEFAULT_START, DEFAULT_STEP } from "./constants";
 import type { DayColumnProps } from "./day-column-props";
 import { FreeSlotCubes } from "./FreeSlotCubes";
 import { HourCells } from "./HourCells";
+import { MoreBlock } from "./MoreBlock";
 import { NowLine } from "./NowLine";
 import { workWash } from "./work-wash";
 import { recordComment } from "@/features/calendar/record-title";
@@ -50,6 +45,10 @@ import { recordComment } from "@/features/calendar/record-title";
 // и перерисовка экрана без смены данных колонки не должна их трогать. Полоса
 // графика, записи дня и свободные слоты приходят новыми объектами с тем же
 // содержимым — их сравнение по содержимому объяснено в `grid-memo.ts`.
+/** Шапка списка «+N» и её озвучка: с какого времени и сколько записей. */
+const moreTitle = (card: MoreCard) =>
+  `${minToHM(card.startMin)} · ${pluralize(card.members.length, "запись", "записи", "записей")}`;
+
 export const DayColumn = memo(function DayColumn({
   dateYmd,
   appointments,
@@ -100,26 +99,27 @@ export const DayColumn = memo(function DayColumn({
   const winEndMin = endHour * 60;
   const totalMin = winEndMin - winStartMin;
 
-  // СТОПКИ узкой колонки (Неделя): записи на одно время — одна карточка с
-  // «+N»; тап открывает их списком.
-  const [deckOpen, setDeckOpen] = useState<PlacedAppt[] | null>(null);
+  // ЗАПИСИ НА ОДНО ВРЕМЯ — ДОРОЖКАМИ (`fitLanes`): каждая своей долей
+  // колонки, не поместившиеся — карточкой «+N»; тап по ней открывает их списком.
+  const [moreOpen, setMoreOpen] = useState<MoreCard | null>(null);
+  // ОТМЕНЁННАЯ В РЕЖИМЕ ВЫБОРА ВРЕМЕНИ НЕ РИСУЕТСЯ И ДОРОЖКИ НЕ ЗАНИМАЕТ.
+  // Время она не держит — под ней лежит зелёный кубик, а карточка ложилась
+  // сверху: зачёркнутое имя и «11:00» кубика читались одно поверх другого,
+  // и тап по кубику открывал отменённую запись.
+  const picking = freeSlots !== undefined;
   const placements = useMemo(
     () =>
-      layoutDay(appointments.filter((a) => a.event_all_day !== true)).filter(
-        (p) => p.endMin > winStartMin && p.startMin < winEndMin,
-      ),
-    [appointments, winStartMin, winEndMin],
+      layoutDay(
+        appointments.filter(
+          (a) => a.event_all_day !== true && !(picking && a.status === "cancelled"),
+        ),
+      ).filter((p) => p.endMin > winStartMin && p.startMin < winEndMin),
+    [appointments, winStartMin, winEndMin, picking],
   );
-
-  const decks = useMemo(() => decksFor(placements, laneW), [placements, laneW]);
-  const clashBadges = useMemo(() => clashBadgeHolders(placements, decks), [placements, decks]);
-  const openDeck = (apt: Appointment) => {
-    const deck = decks.get(apt.id);
-    if (!deck) return onEdit(apt);
-    // Тик уже дал сам блок (`openWithTick`): второй здесь давал бы двойную
-    // вибрацию на тап по стопке.
-    setDeckOpen(deck.members);
-  };
+  const lanes = useMemo(
+    () => fitLanes(placements, laneW, editingId),
+    [placements, laneW, editingId],
+  );
 
   const nowMin =
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
@@ -213,20 +213,10 @@ export const DayColumn = memo(function DayColumn({
       ) : null}
 
       {laneW > 0
-        ? placements.map((p) => {
-            // ОТМЕНЁННАЯ В РЕЖИМЕ ВЫБОРА ВРЕМЕНИ НЕ РИСУЕТСЯ.
-            // Время она не держит — под ней лежит зелёный кубик, а карточка
-            // ложилась сверху: зачёркнутое имя и «11:00» кубика читались одно
-            // поверх другого, и тап по кубику открывал отменённую запись.
-            if (freeSlots !== undefined && p.apt.status === "cancelled") return null;
-            const deck = decks.get(p.apt.id);
-            return (
+        ? lanes.shown.map((p) => (
             <AppointmentBlock
               key={p.apt.id}
               placed={p}
-              deckIndex={deck?.index}
-              deckSize={deck?.size}
-              clashMore={clashBadges.get(p.apt.id)}
               hourH={hourH}
               laneW={laneW}
               startHour={startHour}
@@ -245,27 +235,37 @@ export const DayColumn = memo(function DayColumn({
               // уезжала на 6pt мимо колонки.
               dayW={compact && laneW > 0 ? laneW : undefined}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
-              // Тап по стопке — список её записей, а не первая попавшаяся.
-              onEdit={deck ? openDeck : onEdit}
+              onEdit={onEdit}
               onReschedule={
                 canReschedule?.(p.apt) === false ? undefined : onReschedule
               }
             />
-            );
-          })
+          ))
+        : null}
+
+      {laneW > 0
+        ? lanes.more.map((card) => (
+            <MoreBlock
+              key={card.key}
+              card={card}
+              laneW={laneW}
+              winStart={winStartMin}
+              winEnd={winEndMin}
+              lineH={lineH}
+              colors={blockColors(
+                (card.members.find((m) => m.apt.status !== "cancelled") ?? card.members[0]).apt,
+              )}
+              label={moreTitle(card)}
+              onOpen={setMoreOpen}
+            />
+          ))
         : null}
 
       <PickerSheet
-        visible={deckOpen != null}
-        // Начало стопки — самое раннее из её записей: первой в стопке лежит
-        // самая короткая, и шапка показывала её время.
-        title={
-          deckOpen
-            ? `${minToHM(Math.min(...deckOpen.map((p) => p.startMin)))} · ${pluralize(deckOpen.length, "запись", "записи", "записей")}`
-            : ""
-        }
-        onClose={() => setDeckOpen(null)}
-        items={(deckOpen ?? []).map((p) => ({
+        visible={moreOpen != null}
+        title={moreOpen ? moreTitle(moreOpen) : ""}
+        onClose={() => setMoreOpen(null)}
+        items={(moreOpen?.members ?? []).map((p) => ({
           id: p.apt.id,
           label: clientName(p.apt) || recordComment(p.apt) || "Запись",
           hint: `${p.apt.time_start}–${p.apt.time_end}`,

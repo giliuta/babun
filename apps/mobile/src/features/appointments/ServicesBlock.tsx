@@ -3,8 +3,10 @@ import { Briefcase } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 import { TotalRow } from "./BookingSummary";
 import { QtyBadge } from "./QtyBadge";
 
@@ -51,6 +53,7 @@ export function ServicesBlock({
   discountAmount,
   onPickServices,
   onPickLine,
+  onRemoveLine,
   onOpenTotal,
   showMoney = true,
 }: {
@@ -73,6 +76,9 @@ export function ServicesBlock({
   /** Тап по строке правит САМУ СТРОКУ (позиция инвойса — свой текст, своё
    *  описание). Не передан — тап открывает список услуг заново. */
   onPickLine?: (lineId: string) => void;
+  /** Смахнуть строку влево — «Удалить», как в листе «Итого»: убрать услугу,
+   *  не открывая выбора. Нет — строка не смахивается. */
+  onRemoveLine?: (lineId: string) => void;
   /** Нет — «Итого» только читается. */
   onOpenTotal?: () => void;
   /** Деньги строк и «Итого». Нет права видеть сумму — ни цены за штуку, ни
@@ -80,6 +86,8 @@ export function ServicesBlock({
   showMoney?: boolean;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
+  const rowPad = densePage ? "py-1" : "py-2.5";
   const openTotal = onOpenTotal
     ? () => {
         onOpenTotal();
@@ -113,18 +121,14 @@ export function ServicesBlock({
         </>
       ) : (
         <>
-          {lines.map((line, index) => (
-            <View
-              key={line.id}
-              // Волосок — МЕЖДУ строками, не под шапкой «УСЛУГИ»: у остальных
-              // карточек под надписью линии нет.
-              style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
-            >
-              {/* ТАП ПО УСЛУГЕ ОТКРЫВАЕТ СПИСОК УСЛУГ ЗАНОВО (строки «Добавить услугу» нет: тап по выбранной
-                  услуге открывает список). Та же грамматика, что у
-                  клиента и объекта: строка выбранного и есть дверь к выбору. */}
+          {lines.map((line, index) => {
+            // ТАП ПО УСЛУГЕ ОТКРЫВАЕТ СПИСОК УСЛУГ ЗАНОВО (строки «Добавить
+            // услугу» нет: тап по выбранной услуге открывает список). Та же
+            // грамматика, что у клиента и объекта: строка выбранного и есть
+            // дверь к выбору.
+            const row = (
               <Pressable
-                className="flex-row items-center px-4 py-2.5"
+                className={`flex-row items-center px-4 ${rowPad}`}
                 disabled={!lineTap}
                 onPress={() => {
                   if (!lineTap) return;
@@ -132,6 +136,9 @@ export function ServicesBlock({
                   haptics.tap();
                 }}
                 style={({ pressed }) => ({
+                  // Строка без второй строки на плотной странице не тоньше
+                  // пальца.
+                  minHeight: densePage ? 44 : undefined,
                   backgroundColor: pressed && lineTap ? t.pressed : "transparent",
                 })}
                 accessibilityRole={lineTap ? "button" : "text"}
@@ -183,8 +190,29 @@ export function ServicesBlock({
                   </>
                 ) : null}
               </Pressable>
-            </View>
-          ))}
+            );
+            return (
+              <View
+                key={line.id}
+                // Волосок — МЕЖДУ строками, не под шапкой «УСЛУГИ»: у остальных
+                // карточек под надписью линии нет.
+                style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
+              >
+                {onRemoveLine ? (
+                  <SwipeRow
+                    label="Удалить"
+                    color={t.danger}
+                    onAction={() => onRemoveLine(line.id)}
+                    accessibilityLabel={`Удалить услугу ${line.name}`.trim()}
+                  >
+                    {row}
+                  </SwipeRow>
+                ) : (
+                  row
+                )}
+              </View>
+            );
+          })}
           {/* ДВЕРЬ ДЛЯ ВТОРОЙ ПОЗИЦИИ — ТА ЖЕ СТРОКА, ЧТО В ПУСТОМ БЛОКЕ.
               Своей клавиши у блока нет: у пустого состояния и у списка одна
               грамматика. */}
