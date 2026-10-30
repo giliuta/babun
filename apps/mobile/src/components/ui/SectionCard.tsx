@@ -5,6 +5,7 @@ import { Card } from "./Card";
 import { GUTTER, ICON } from "./tokens";
 import { capsText } from "./caps-text";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "./dense-page";
 
 interface SectionCardAction {
   label: string;
@@ -55,10 +56,12 @@ export function SectionCard({
   children: ReactNode;
 }) {
   const t = useThemeColors();
+  // Плотная страница (запись, событие) сжимает все свои блоки разом.
+  const densePage = useDensePage();
   const actions = action ? (Array.isArray(action) ? action : [action]) : [];
   return (
     <View
-      className={`${dense ? "mt-1.5" : "mt-2"} ${className}`}
+      className={`${densePage ? "mt-1" : dense ? "mt-1.5" : "mt-2"} ${className}`}
       style={{ marginHorizontal: GUTTER }}
     >
       <Card>
@@ -75,7 +78,7 @@ export function SectionCard({
           // шапки то же, тише только воздух.
           <View
             className={`relative flex-row items-center px-4 ${
-              dense ? "pb-0 pt-1.5" : "pb-0.5 pt-2.5"
+              densePage ? "pb-0 pt-1" : dense ? "pb-0 pt-1.5" : "pb-0.5 pt-2.5"
             }`}
             // Пилюля «Ещё N» (22pt) на 3pt ниже шапки: без подъёма белая
             // плашка первой строки ложилась поверх и срезала ей низ.
@@ -108,7 +111,7 @@ export function SectionCard({
                   // Значок `ICON.command` (18) по центру подписи (11pt, строка
                   // ~13): 10 сверху у шапки минус половина разницы высот; в
                   // плотной шапке сверху 6 — значок на те же 4 выше.
-                  top: dense ? 3 : 7,
+                  top: densePage ? 1 : dense ? 3 : 7,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 16,

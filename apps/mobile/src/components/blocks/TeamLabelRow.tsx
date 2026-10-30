@@ -8,6 +8,7 @@ import { Bookmark, Users } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { Card } from "@/components/ui/Card";
 
@@ -75,13 +76,17 @@ export function TeamLabelRow({
   onEditLabel?: () => void;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   return (
     // ДВА ПОЛНОЦЕННЫХ БЛОКА, А НЕ ОДИН СО ШВОМ.
     // Волосок делил карточку на две половинки одного предмета, а
     // команда и метка — предметы разные: кто едет и куда. Рядом они стоят
     // потому, что отвечают на один вопрос и вместе занимают одну строку
     // экрана.
-    <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
+    <View
+      className={`mx-4 ${densePage ? "mt-1" : "mt-2"}`}
+      style={{ flexDirection: "row", gap: densePage ? 4 : 8 }}
+    >
       <IdentityCard
         icon={teamIcon}
         color={teamColor}
@@ -171,6 +176,7 @@ export function IdentityCard({
   accessibilityHint: string;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   // ЦВЕТ ЗАПИСИ — ТОЛЬКО #RRGGBB. Токены темы записаны в `rgba()`, и приписать
   // к ним альфу строкой нельзя: `rgba(11,18,32,0.64)1f` — не цвет, и RN красит
   // кружок ТЁМНЫМ. Именно так пустая «Метка» получила почти чёрный диск с
@@ -192,7 +198,7 @@ export function IdentityCard({
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
-        paddingVertical: 9,
+        paddingVertical: densePage ? 4 : 9,
         paddingHorizontal: 10,
         backgroundColor: pressed && onPress ? t.pressed : "transparent",
       })}

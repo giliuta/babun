@@ -6,6 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 import { TotalRow } from "./BookingSummary";
 import { QtyBadge } from "./QtyBadge";
 
@@ -85,6 +86,8 @@ export function ServicesBlock({
   showMoney?: boolean;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
+  const rowPad = densePage ? "py-1" : "py-2.5";
   const openTotal = onOpenTotal
     ? () => {
         onOpenTotal();
@@ -125,7 +128,7 @@ export function ServicesBlock({
             // дверь к выбору.
             const row = (
               <Pressable
-                className="flex-row items-center px-4 py-2.5"
+                className={`flex-row items-center px-4 ${rowPad}`}
                 disabled={!lineTap}
                 onPress={() => {
                   if (!lineTap) return;
@@ -133,6 +136,9 @@ export function ServicesBlock({
                   haptics.tap();
                 }}
                 style={({ pressed }) => ({
+                  // Строка без второй строки на плотной странице не тоньше
+                  // пальца.
+                  minHeight: densePage ? 44 : undefined,
                   backgroundColor: pressed && lineTap ? t.pressed : "transparent",
                 })}
                 accessibilityRole={lineTap ? "button" : "text"}

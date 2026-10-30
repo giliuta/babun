@@ -6,6 +6,7 @@ import { addressLines, objectTarget, routeAddress } from "@/features/clients/obj
 import { formatShortDateRu } from "@/features/clients/format";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { useDensePage } from "@/components/ui/dense-page";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { PICKER_RADIUS } from "@/components/ui/picker-grid";
 import { useLocationLabels } from "@/features/settings/local-settings";
@@ -102,6 +103,7 @@ export function ObjectRow({
   teamId?: string | null;
 }) {
   const t = useThemeColors();
+  const densePage = useDensePage();
   const target = objectTarget(loc);
   // ТИП ОБЪЕКТА — ЗНАЧКОМ: цвет и значок из «Типов объектов»; типа нет —
   // домик.
@@ -131,8 +133,8 @@ export function ObjectRow({
         gap: 12,
         paddingLeft: 16,
         paddingRight: 12,
-        paddingVertical: 10,
-        minHeight: 60,
+        paddingVertical: densePage ? 4 : 10,
+        minHeight: densePage ? 44 : 60,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
       }}
